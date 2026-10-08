@@ -403,7 +403,13 @@ class SettingsWindow(ctk.CTk):
             border_color=self.skin.border, border_width=1,
             corner_radius=self.skin.radius, wrap="word")
         self.blockers_box.pack(anchor="w", padx=14, pady=(0, 10))
-        self.blockers_box.configure(state="disabled")
+        # NOT state="disabled": that repaints every tag the same flat
+        # color (measured - the red vanished). It stays enabled so the
+        # tag colors live, and reads as a report by swallowing edits
+        for seq in ("<Key>", "<<Paste>>", "<<Cut>>", "<<Undo>>",
+                    "<Control-v>", "<Control-V>", "<Control-x>",
+                    "<Control-X>", "<Control-z>", "<Control-Z>"):
+            self.blockers_box.bind(seq, lambda event: "break")
 
     # ----------------------------------------------------------- helpers ---
     @staticmethod
@@ -641,16 +647,21 @@ class SettingsWindow(ctk.CTk):
         if not rows:
             rows.append(("nothing pins the display; the camera guards it",
                          "ok"))
-        colors = {"danger": (self.skin.danger, self.skin.danger),
-                  "warn": (self.skin.paused, self.skin.paused),
-                  "sub": (self.skin.subtext, self.skin.subtext),
-                  "ok": (self.skin.ok, self.skin.ok)}
+        colors = {"danger": self.skin.danger, "warn": self.skin.paused,
+                  "sub": self.skin.subtext, "ok": self.skin.ok}
         box = self.blockers_box
-        box.configure(state="normal")        # it reads as a report only
-        box.delete("1.0", "end")             # to the user; scripts edit
-        for text, mood in rows:              # it between disable calls
-            box.insert("end", text + "\n", tags=colors[mood])
-        box.configure(state="disabled")
+        # customtkinter 6 turns tags= into a bare tag NAME and leaves
+        # foreground empty (measured: tags on char 1.0 = ('#ff5d5d',)
+        # with fg "") - the color goes on the inner tk.Text, per mood
+        inner = getattr(box, "_textbox", box)
+        for mood, color in colors.items():
+            try:
+                inner.tag_configure(mood, foreground=color)
+            except Exception:
+                pass
+        box.delete("1.0", "end")
+        for text, mood in rows:
+            box.insert("end", text + "\n", tags=mood)
 
     @staticmethod
     def _idle():

@@ -141,6 +141,8 @@ def check():
     app._update_blockers()
     text = app.blockers_box.get("1.0", "end")
     assert "holding the display" in text and "msedgewebview2" in text, text
+    fg = app.blockers_box._textbox.tag_cget("danger", "foreground")
+    assert str(fg).lower().startswith("#"), ("danger tag uncolored", fg)
     app.power_switch.select()
     app._power_assistant_changed()
 
