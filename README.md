@@ -121,13 +121,26 @@ otherwise).
 
 ```powershell
 .venv\Scripts\python.exe -m pip install insightface
-.venv\Scripts\python.exe -m pip uninstall -y onnxruntime
-.venv\Scripts\python.exe -m pip install onnxruntime-gpu   # after every
-                                                          # pip upgrade
 .venv\Scripts\python.exe -m awaywatch enroll --name you
 ```
 
+insightface shares the project's `onnxruntime` wheel, and the
+DirectML flavor (requirements.txt) also ships the CPU provider, so
+there is no after-every-upgrade swap dance anymore.
+
 ## Things this machine taught us
+
+* the DEFAULT PyPI `onnxruntime` wheel has **no GPU provider at all**:
+  requesting `CUDAExecutionProvider` from it is not an error, just a
+  warning on stderr that `pythonw` never shows - the session silently
+  ran on CPU forever. `get_session` now asks strictly from
+  `get_available_providers()`; `onnxruntime-directml` is the wheel that
+  makes this app GPU-capable with zero extra dlls
+* yolo11n at 640 px, measured: DirectML ~40 ms/inference vs CPU ~30 ms
+  on this box - at nano size the per-call overhead eats the GPU win,
+  so the device picker is about CPU load, not wake latency. And DML
+  `device_id` follows DXGI adapter order, which need not match the
+  nvidia-smi order the tray menu shows
 
 * raw `SC_MONITORPOWER` broadcasts do **not** emit `GUID_MONITOR_ON`
   notifications — display state is tracked from commands, input activity

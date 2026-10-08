@@ -1,9 +1,9 @@
 """Optional known-faces gate (insightface).
 
 Only registered identities count as presence when faces.enabled is true;
-the person detector alone is the default. When insightface IS installed,
-its CPU onnxruntime must be swapped again after every pip upgrade:
-    pip uninstall -y onnxruntime && pip install onnxruntime-gpu
+the person detector alone is the default. insightface rides along on the
+project's onnxruntime wheel - the DirectML flavor (requirements.txt)
+also ships the CPU provider, so no swap dance after installs anymore.
 """
 
 from __future__ import annotations
@@ -26,8 +26,7 @@ class FaceGate:
         except ImportError as e:
             raise RuntimeError(
                 "faces.enabled is true but insightface is not installed; "
-                "run: pip install insightface (then re-install "
-                "onnxruntime-gpu)") from e
+                "run: pip install insightface") from e
         self.app = FaceAnalysis(allowed_modules=["detection", "recognition"])
         self.app.prepare(providers=list(providers))
         self.db = os.path.join(CONFIG_DIR, "faces.npz")

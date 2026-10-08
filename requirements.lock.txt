@@ -1,7 +1,7 @@
 customtkinter==6.0.0
 darkdetect==0.8.0
 numpy==2.2.6
-onnxruntime==1.23.2
+onnxruntime-directml==1.23.0
 opencv-python==5.0.0.93
 pillow==12.3.0
 pystray==0.19.5

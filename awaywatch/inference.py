@@ -3,10 +3,10 @@
 find_model: looks for a *.onnx under models/ and downloads once if the
 directory is empty (try each mirror, keep the first file over 1 MB, log
 where it came from and how long it took).
-get_session: provider list is per config - CUDA first when wanted, CPU
-always last; when the CUDA provider cannot load we fall back to CPU and
-say so loudly, because a dark screen with a silent crash is worse than a
-slow detection.
+get_session: provider list is built from what the installed onnxruntime
+wheel actually has (get_available_providers) - CUDA or DirectML first
+when wanted, CPU always last; requesting a provider the wheel lacks is
+only a stderr warning pythonw never shows, so we never request blind.
 """
 
 from __future__ import annotations
@@ -102,14 +102,30 @@ def download_model(name="yolo11n", root=MODELS_ROOT):
 
 
 def get_session(path, device="auto", device_id=0, verbose=False):
-    """Build an InferenceSession; CUDA when asked, CPU as the floor.
-    device_id picks the adapter (multi-GPU boxes: the 5090 is not
-    device 0), nvidia-smi order == CUDA order."""
+    """Build an InferenceSession; GPU when the installed wheel has a GPU
+    provider, CPU as the floor. Requesting an EP the wheel lacks is only
+    a warning on ORT's stderr (invisible in a pythonw app), so we ask
+    strictly from get_available_providers(): CUDA when the gpu wheel is
+    installed, else DirectML (the directml wheel; any D3D12 adapter, no
+    CUDA toolkit, no cuDNN dlls). device_id picks the adapter - CUDA
+    order is nvidia-smi order, DML order is DXGI order, which can differ.
+    """
     import onnxruntime
+    avail = onnxruntime.get_available_providers()
     providers = ["CPUExecutionProvider"]
     if device in ("auto", "cuda"):
-        providers.insert(0, ("CUDAExecutionProvider",       # cuda first,
-                             {"device_id": int(device_id)}))  # with its id
+        gpu = []
+        if "CUDAExecutionProvider" in avail:
+            gpu.append(("CUDAExecutionProvider",
+                        {"device_id": str(int(device_id))}))
+        if "DmlExecutionProvider" in avail:
+            gpu.append(("DmlExecutionProvider",
+                        {"device_id": str(int(device_id))}))
+        if not gpu:
+            log.warning("device is %r but this onnxruntime wheel has no "
+                        "gpu provider (available: %s); CPU only",
+                        device, ", ".join(avail))
+        providers = gpu + providers
     if device == "cpu":
         providers = ["CPUExecutionProvider"]
     if verbose:
@@ -117,9 +133,9 @@ def get_session(path, device="auto", device_id=0, verbose=False):
     try:
         session = onnxruntime.InferenceSession(path, providers=providers)
     except Exception as e:
-        log.warning("CUDA unavailable (%s); falling back to CPU", e)
+        log.warning("GPU unavailable (%s); falling back to CPU", e)
         session = onnxruntime.InferenceSession(
             path, providers=["CPUExecutionProvider"])
-    log.info("session running on %s (cuda device %s)",
+    log.info("session running on %s (device %s)",
              session.get_providers(), device_id)
     return session

@@ -4,17 +4,19 @@
 
 opencv-python>=4.10          # capture + preview (imshow needs the GUI build)
 numpy>=1.26
-onnxruntime>=1.20            # CPU execution provider (works in any venv)
+onnxruntime-directml>=1.20 ; platform_system == 'Windows'   # one wheel: CPU + DirectML GPU provider, no CUDA toolkit or cuDNN dlls needed
+onnxruntime>=1.20 ; platform_system != 'Windows'            # CPU only elsewhere
 pystray>=0.19.4              # system tray icon (pip install pystray, PyPI)
 pillow>=10                   # tray icon + settings window images
 customtkinter>=6             # settings window (the modern skin)
 tomli>=2                     # config parsing (python<3.11 has no tomllib)
 # (no tomli writer on PyPI; we emit config.toml ourselves in config.py)
 
-# optional: CUDA execution provider for the RTX GPUs.
-# after each `pip install` upgrade, swap the runtime like InsightFace docs advise:
-#   pip uninstall -y onnxruntime && pip install onnxruntime-gpu
-# and the cuDNN/cuBLAS dlls (onnxruntime finds them with os.add_dll_directory):
+# optional: CUDA provider instead of DirectML (measured on the 5090 box:
+# DirectML yolo11n ~40 ms vs CPU ~30 ms vs CUDA expected low single-digit;
+# the gpu wheel has the same swap-after-every-upgrade dance and wants
+# cuDNN/cuBLAS dlls on top):
+#   pip uninstall -y onnxruntime-directml && pip install onnxruntime-gpu
 # onnxruntime-gpu>=1.20
 # nvidia-cudnn-cu12>=9 ; platform_system == 'windows'
 
