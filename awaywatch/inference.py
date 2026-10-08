@@ -31,6 +31,32 @@ MODELS_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                            "models")
 
 
+def cuda_gpus():
+    """(id, name) per adapter. nvidia-smi enumerates in the order CUDA
+    sees the cards, so these ids are the device_id the provider option
+    expects. Empty list when there is no nvidia-smi (or no NVIDIA
+    driver)."""
+    import subprocess
+    try:
+        out = subprocess.run(["nvidia-smi", "-L"], capture_output=True,
+                             timeout=10).stdout.decode("utf-8", "replace")
+    except Exception:
+        return []
+    gpus = []
+    for line in out.splitlines():
+        # "GPU 0: NVIDIA GeForce RTX 6000 Ada ... (UUID: ...)"
+        head, sep, rest = line.partition(": ")
+        if not sep or not head.startswith("GPU "):
+            continue
+        try:
+            gid = int(head.split()[1])
+        except (IndexError, ValueError):
+            continue
+        name = rest.split(" (UUID")[0].strip()
+        gpus.append((gid, name))
+    return gpus
+
+
 def find_model(name="yolo11n", root=MODELS_ROOT):
     """Any *.onnx that smells like the requested model wins; the name
     filter comes first, the directory listing second."""
@@ -76,11 +102,14 @@ def download_model(name="yolo11n", root=MODELS_ROOT):
 
 
 def get_session(path, device="auto", device_id=0, verbose=False):
-    """Build an InferenceSession; CUDA when asked, CPU as the floor."""
+    """Build an InferenceSession; CUDA when asked, CPU as the floor.
+    device_id picks the adapter (multi-GPU boxes: the 5090 is not
+    device 0), nvidia-smi order == CUDA order."""
     import onnxruntime
     providers = ["CPUExecutionProvider"]
     if device in ("auto", "cuda"):
-        providers.insert(0, "CUDAExecutionProvider")   # cuda always first
+        providers.insert(0, ("CUDAExecutionProvider",       # cuda first,
+                             {"device_id": int(device_id)}))  # with its id
     if device == "cpu":
         providers = ["CPUExecutionProvider"]
     if verbose:
@@ -91,5 +120,6 @@ def get_session(path, device="auto", device_id=0, verbose=False):
         log.warning("CUDA unavailable (%s); falling back to CPU", e)
         session = onnxruntime.InferenceSession(
             path, providers=["CPUExecutionProvider"])
-    log.info("session running on %s", session.get_providers())
+    log.info("session running on %s (cuda device %s)",
+             session.get_providers(), device_id)
     return session

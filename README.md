@@ -19,6 +19,7 @@ notice the camera blinking and something malicious watching it.
 | `min_hits` (2) consecutive positive frames | camera released **before** the screens wake (the device is exclusive) |
 | screens wake on their own (mouse jiggle) | `wake_policy = "re_off"` (default) turns them off again after `re_off_grace_sec` unless `min_hits` people show up; `"leave_on"` hands them back for `leave_on_grace_sec` |
 | **two** unexpected wakes within `wake_burst_window_sec` (120 s) and nobody ever seen | auto re-off **pauses**: screens stay lit while the desk keeps producing input, a toast says the camera (index N) never saw a person — the slipped-off-the-monitor case; re-arms when a person is confirmed, the policy changes, or `Resume auto re-off` (tray/window) |
+| another app already holds the display awake (video wake lock, a game, a presentation) | camera polling **stops** while the block is active (no point defending a screen someone else owns); the window's power assistant shows who holds it, and polling resumes when they let go |
 | fullscreen app owns the display | the broadcast is skipped (the message never reaches the swap chain) |
 
 Timers, camera modes (`boot_per_poll` / `always_on`, one choice per
@@ -36,6 +37,15 @@ frame the detector judged (via a thread-safe frame slot), so you tune
 against exactly what the model sees. "live preview" holds the camera
 open at ~5 fps; the hold is a *lease* the window renews while visible,
 so closing it (or crashing) releases the device.
+
+The Behavior card has a **power assistant** checkbox: `powercfg
+/requests` requires administrator privileges, so the app cannot simply
+ask. Ticking the box registers a tiny scheduled task (one UAC confirm,
+yours to give) that dumps `powercfg /requests` to a file the app reads
+silently afterwards — who keeps the display awake is listed under the
+box, and camera polling stops while a display-class blocker is alive.
+Unticking removes the task. With the box off, the app never elevates
+anything and simply keeps polling (fail open).
 
 Skins are the seam for the two looks. `ui.skin` picks one
 (`theme.get_skin`); a `Skin` is only a palette + the style kwargs each
@@ -102,6 +112,11 @@ otherwise).
   silently killed every monitor-off under `pythonw` where the traceback
   could never be seen — every such entry point is called with its real
   `...W` suffix here
+* `powercfg /requests` **requires administrator privileges** even to
+  *read* (measured on Windows 11 26220; no user-mode API escapes it).
+  The power assistant is the classic workaround: a once-registered
+  HIGHEST-task that the non-elevated app starts with `schtasks /Run`
+  (no UAC after the one-time confirm) and reads via a dump file
 * message-only windows receive notifications only on the thread that
   created the window, and that thread must have created a message queue
   (`PeekMessage`) first; every handle is `c_void_p` so 64-bit values never

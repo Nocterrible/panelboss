@@ -81,6 +81,11 @@ class PresenceMonitor:
         self.wake_times = []                  # unexpected wakes, recent
         self.re_off_paused = False            # burst tripped; stays lit
         self.notifier = None                  # cli wires icon.notify
+        self.power_cfg = config["power"]
+        self.blockers = {"error": "not checked yet", "display": [],
+                         "other": []}          # window reads this live
+        self.blockers_until = 0.0             # throttle for powercfg
+        self.display_held_reported = False
 
     # ------------------------------------------------------------------ run
     def run(self):
@@ -136,8 +141,34 @@ class PresenceMonitor:
             self.grace_until = now + self.recovery[
                 "leave_on_grace_sec"]    # the desk is still hot: stay lit
         if now >= self.next_poll:
+            if self.power_cfg["skip_camera_when_blocked"]:
+                self._check_blockers(now)
+                if self.blockers["display"]:
+                    # some app already pins the screens; polling to
+                    # defend them is wasted light and cpu
+                    self.next_poll = now + self.power_cfg["poll_sec"]
+                    return
             present, score = self._poll()
             self._schedule_on_poll(now, present, score)
+
+    def _check_blockers(self, now):
+        """Throttled powercfg peek; unknown means unblocked (see power)."""
+        if now < self.blockers_until:
+            return
+        self.blockers_until = now + self.power_cfg["poll_sec"]
+        from . import power
+        self.blockers = power.requests(
+            self.power_cfg["ignore"],
+            self.power_cfg.get("assistant_task", False))
+        held = bool(self.blockers["display"])
+        if held:
+            self.absent_since = None   # absence restarts when they let go
+        if held and not self.display_held_reported:
+            log.info("apps hold the display awake (%s); the camera waits",
+                     "; ".join(self.blockers["display"])[:300])
+        elif not held and self.display_held_reported:
+            log.info("the display is free again; the camera resumes")
+        self.display_held_reported = held
 
     def _schedule_on_poll(self, now, present, score):
         if present:
@@ -416,6 +447,10 @@ class PresenceMonitor:
                     self._pause_re_off()
                 else:
                     self._resume_re_off("manual resume (tray/window)")
+            elif action == "power_assistant":
+                self.power_cfg["assistant_task"] = bool(value)
+                from . import config
+                config.write_config(self.cfg)
             elif action == "camera":
                 self.camera_cfg["index"] = int(value)
                 self._release_camera()             # the next poll opens the
@@ -424,25 +459,29 @@ class PresenceMonitor:
                 config.write_config(self.cfg)
                 log.info("camera switched to index %s", value)
             elif action == "device":
-                self._set_device(value)
+                self.inference_cfg["device"] = name
+                self._rebuild_detector()
+            elif action == "device_id":
+                self.inference_cfg["device_id"] = int(value)
+                self._rebuild_detector()        # same provider, new card
 
-    def _set_device(self, name):
-        """Rebuild the detector on a new provider; a CUDA request on a
-        CPU-only onnxruntime falls back to CPU inside get_session and
-        the log says which one actually loaded."""
-        if self.inference_cfg["device"] == name:
-            return
-        self.inference_cfg["device"] = name
+    def _rebuild_detector(self):
+        """Re-open the session with whatever device/device_id/confidence
+        the config dicts hold now; a CUDA request on a CPU-only
+        onnxruntime (or a GPU id that does not exist) falls back to CPU
+        inside get_session and the log says which provider loaded."""
         from . import config
         try:
             from . import detector as detector_module
             self.detector = detector_module.PersonDetector(
                 model=self.inference_cfg["model"],
-                device=name,
+                device=self.inference_cfg["device"],
                 device_id=self.inference_cfg["device_id"],
                 conf=self.inference_cfg["confidence"])
-            log.info("detector rebuilt on device=%s providers=%s",
-                     name, self.detector.session.get_providers())
+            log.info("detector rebuilt (device=%s id=%s providers=%s)",
+                     self.inference_cfg["device"],
+                     self.inference_cfg["device_id"],
+                     self.detector.session.get_providers())
         except Exception:
             log.exception("detector rebuild failed; keeping the old one")
         config.write_config(self.cfg)

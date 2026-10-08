@@ -73,6 +73,18 @@ DEFAULTS = {
         "fullscreen": True,     # do not send the off broadcast while a fullscreen game owns the display,
                                 # the message is swallowed by the swapchain
     },
+    "power": {
+        "skip_camera_when_blocked": True,  # if another app already holds the
+                                           # display awake, the camera does not
+                                           # poll to defend it
+        "assistant_task": False,   # opt-in: registers an elevated scheduled
+                                   # task so powercfg /requests can be read
+                                   # without running the app as admin
+                                   # (one UAC confirm when ticked)
+        "poll_sec": 5,             # how often to re-run powercfg /requests when idle
+        "ignore": [],              # substrings; processes powercfg names but that
+                                   # are not real blockers on this machine
+    },
     "faces": {
         "enabled": False,       # only registered identities count as presence (insightface)
     },

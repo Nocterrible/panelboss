@@ -170,6 +170,21 @@ class SettingsWindow(ctk.CTk):
         menu.grid(row=0, column=1, sticky="e")
         menu.set(dict(DEVICE_KEYS)[self.cfg["inference"]["device"]])
 
+        from .. import inference
+        self.gpu_ids = inference.cuda_gpus()
+        if not self.gpu_ids:
+            self.gpu_ids = [(n, "") for n in range(4)]
+        labels = ["%s %s" % (gid, name[:32]) for gid, name in self.gpu_ids]
+        row = self._row(box, "cuda gpu id")
+        gpu_menu = ctk.CTkOptionMenu(row, values=labels, width=200,
+                                     command=self._gpu_changed,
+                                     **self.skin.menu_style())
+        gpu_menu.grid(row=0, column=1, sticky="e")
+        for gid, name in self.gpu_ids:
+            if gid == self.cfg["inference"]["device_id"]:
+                self._set_menu(gpu_menu, "%s %s" % (gid, name[:32]))
+                break
+
         row = self._row(box, "confidence")
         self.conf_label = ctk.CTkLabel(row, font=self.skin.font(12),
                                        **self.skin.text_style("sub"))
@@ -189,8 +204,9 @@ class SettingsWindow(ctk.CTk):
             command=self._min_hits_changed, **self.skin.segmented_style())
         hits.set(str(self.cfg["inference"]["min_hits"]))
         hits.grid(row=0, column=1, sticky="e")
-        ctk.CTkLabel(box, text="changing model or device_id needs a "
-                     "restart", font=self.skin.font(10),
+        ctk.CTkLabel(box, text="device and gpu id apply immediately; "
+                     "changing the model needs a restart",
+                     font=self.skin.font(10),
                      **self.skin.text_style("sub")).pack(anchor="w", pady=(6, 0))
 
     def _build_timers(self):
@@ -248,6 +264,38 @@ class SettingsWindow(ctk.CTk):
             command=lambda: self.monitor.events.put(("reoff", False)),
             **self.skin.secondary())
         self.reoff_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        self.power_msg = ""                      # install/uninstall result
+        self.power_msg_ts = 0.0
+        self.power_switch = ctk.CTkSwitch(
+            box, text="power assistant: see which apps pin the display "
+                      "(needs administrator privileges once, for a "
+                      "scheduled task)",
+            font=self.skin.font(12), command=self._power_assistant_changed,
+            progress_color=self.skin.accent,
+            border_color=self.skin.border)
+        if self.cfg["power"]["assistant_task"]:
+            self.power_switch.select()
+        self.power_switch.pack(anchor="w", pady=(6, 0))
+        self.blockers_label = ctk.CTkLabel(
+            box, text="", font=self.skin.font(10), justify="left",
+            wraplength=420, **self.skin.text_style("sub"))
+        self.blockers_label.pack(anchor="w", pady=(2, 0))
+
+    def _power_assistant_changed(self):
+        """Registering the task costs one UAC prompt - the price of the
+        tick, paid on a worker thread so the window stays alive."""
+        want = bool(self.power_switch.get())
+
+        def work():
+            from .. import power
+            ok, msg = power.install() if want else power.uninstall()
+            self.cfg["power"]["assistant_task"] = bool(ok and want)
+            self.monitor.events.put(("power_assistant", bool(ok and want)))
+            if not ok:
+                self.power_msg = msg
+                self.power_msg_ts = time.time()
+                self.after(0, lambda: self.power_switch.set(not want))
+        threading.Thread(target=work, daemon=True).start()
 
     def _build_general(self):
         box = self._card(self.left, "General")
@@ -342,6 +390,12 @@ class SettingsWindow(ctk.CTk):
         name = DEVICE_BY_LABEL[label]
         self.cfg["inference"]["device"] = name
         self.monitor.events.put(("device", name))
+        self._save()
+
+    def _gpu_changed(self, label):
+        gid = int(str(label).split(" ")[0])
+        self.cfg["inference"]["device_id"] = gid
+        self.monitor.events.put(("device_id", gid))
         self._save()
 
     def _confidence_changed(self, value):
@@ -512,6 +566,27 @@ class SettingsWindow(ctk.CTk):
             text="PAUSED (camera slipped?)" if paused_re else "on")
         self.reoff_button.configure(
             state="normal" if paused_re else "disabled")
+        self._update_blockers()
+
+    def _update_blockers(self):
+        b = getattr(self.monitor, "blockers", None) or {}
+        lines = []
+        if self.power_msg and time.time() - self.power_msg_ts < 25:
+            lines.append(self.power_msg)
+        err = b.get("error")
+        held = b.get("display") or []
+        others = b.get("other") or []
+        if err:
+            lines.append(err)
+        elif held:
+            lines.append("holding the display: "
+                         + "; ".join(x[:48] for x in held[:3]))
+        if others:
+            lines.append("sleep only (fine): "
+                         + "; ".join(x[:48] for x in others[:3]))
+        if not (err or held or others) and not lines:
+            lines.append("nothing pins the display; the camera guards it")
+        self.blockers_label.configure(text="\n".join(lines))
 
     @staticmethod
     def _idle():

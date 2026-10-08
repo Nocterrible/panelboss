@@ -91,8 +91,17 @@ class Tray(threading.Thread):
             pystray.MenuItem("leave on after wake",
                              action=lambda i: self._policy("leave_on"),
                              checked=self._policy_checker("leave_on")))
+        from . import inference
+        gpus = inference.cuda_gpus() or [(n, "gpu %s" % n)
+                                         for n in range(4)]
+        gpu_menu = pystray.Menu(*[
+            pystray.MenuItem("gpu %s: %s" % (gid, name),
+                             action=self._gpu_picker(gid),
+                             checked=self._gpu_checker(gid))
+            for gid, name in gpus])
         return pystray.Menu(
             pystray.MenuItem("Detection device", devices),
+            pystray.MenuItem("CUDA GPU id", gpu_menu),
             pystray.MenuItem("Camera", self._camera_menu()),
             pystray.MenuItem("Wake policy", policies),
             pystray.Menu.SEPARATOR,
@@ -147,6 +156,17 @@ class Tray(threading.Thread):
     def _policy_checker(self, name):
         def check(item):
             return self.config["recovery"]["wake_policy"] == name
+        return check
+
+    def _gpu_picker(self, gid):
+        def action(icon):
+            self.config["inference"]["device_id"] = gid
+            self.events.put(("device_id", gid))
+        return action
+
+    def _gpu_checker(self, gid):
+        def check(item):
+            return self.config["inference"]["device_id"] == gid
         return check
 
     def _camera_picker(self, index):
