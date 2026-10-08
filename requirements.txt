@@ -1,0 +1,21 @@
+# ICU Presence Detector - direct dependencies.
+# Reproducible installs happen in the project-local .venv (never the base env).
+# Pinned versions are resolved/locked by scripts/setup.ps1 -> requirements.lock.txt.
+
+opencv-python>=4.10          # capture + preview (imshow needs the GUI build)
+numpy>=1.26
+onnxruntime>=1.20            # CPU execution provider (works in any venv)
+pystray>=0.19.4              # system tray icon (pip install pystray, PyPI)
+pillow>=10                   # tray icon rendering
+tomli>=2                     # config parsing (python<3.11 has no tomllib)
+# (no tomli writer on PyPI; we emit config.toml ourselves in config.py)
+
+# optional: CUDA execution provider for the RTX GPUs.
+# after each `pip install` upgrade, swap the runtime like InsightFace docs advise:
+#   pip uninstall -y onnxruntime && pip install onnxruntime-gpu
+# and the cuDNN/cuBLAS dlls (onnxruntime finds them with os.add_dll_directory):
+# onnxruntime-gpu>=1.20
+# nvidia-cudnn-cu12>=9 ; platform_system == 'windows'
+
+# optional: face identities (only known faces count as presence)
+# insightface>=0.7.3

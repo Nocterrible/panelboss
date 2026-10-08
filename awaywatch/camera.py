@@ -1,0 +1,119 @@
+"""Webcam handling.
+
+- find_camera: prefers name_contains, then index, then the first device
+  that opens (the config index always comes after the name match)
+- warmup: auto-exposure starts as soon as the device opens; we discard the
+  first frames so the detector never sees a half-dark image
+- modes: boot-per-poll while the screens are on (the record LED blinks so
+  you can always notice something watching the camera), held open between
+  polls while the screens are dark
+"""
+
+from __future__ import annotations
+
+import logging
+import subprocess
+import time
+
+import cv2
+
+log = logging.getLogger("camera")
+
+
+def camera_names():
+    """Friendly names via PnP. Enum order does not necessarily match the
+    OpenCV indexes; it is used for reporting and the optional name_contains
+    match only."""
+    cmd = ("(Get-PnpDevice -Class Camera).FriendlyName")
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command", cmd],
+                              capture_output=True, timeout=10)
+        try:
+            names = out.stdout.decode("utf-8").splitlines()
+        except UnicodeDecodeError:               # the console encoding is
+            names = out.stdout.decode("cp850",   # never utf-16, whatever
+                errors="replace").splitlines()     # the driver claims
+    except Exception:
+        return []
+    return [n.strip().rstrip(",") for n in names if n.strip()]
+
+
+def enumerate_cameras(start=0, stop=8):
+    """Which indexes can be opened at all."""
+    found = []
+    for index in range(start, stop):
+        cap = cv2.VideoCapture(index)
+        opened = cap.isOpened()
+        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        cap.release()
+        found.append((index, opened, width))
+    return found
+
+
+def find_camera(index=-1, name_contains=None, fallback=0):
+    """Returns the first usable index. names beat indexes beat fallback."""
+    name_contains = name_contains or []
+    names = camera_names()
+    indexes = [i for i, opened, _ in enumerate_cameras() if opened]
+    # apply name matcher
+    if name_contains:
+        matches = [n for n in names
+                   if any(c.lower() in n.lower() for c in name_contains)]
+        if matches:
+            idx = names.index(matches[0])
+            indexes.insert(0, idx)
+    if index is not None and index >= 0:
+        indexes.insert(0, index)   # the config index comes second
+    indexes.append(fallback)       # and we always fall back to something
+    for idx in indexes:
+        cap = cv2.VideoCapture(idx)
+        if cap.isOpened():
+            cap.release()
+            log.debug(f"camera {idx} opens cleanly")
+            return idx
+    raise RuntimeError("no camera opened; check privacy settings")
+
+
+class Camera:
+    """One open device. Kept alive between polls when configured so, or
+    booted per poll to let the LED rest."""
+
+    def __init__(self, index=0, warmup=4, width=1280, height=720,
+                 verbose=False):
+        self.index = index
+        self.warmup = warmup
+        self.started = time.perf_counter()
+        self.cap = cv2.VideoCapture(index)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        elapsed = time.perf_counter() - self.started
+        log.debug("camera %s opened after %.2f s", index, elapsed)
+
+    def warm_up(self, frames=None):
+        """Discard the auto-exposure settle frames."""
+        frames = self.warmup if frames is None else frames
+        got = 0
+        for _ in range(frames):
+            ok, _frame = self.cap.read()
+            if ok:
+                got += 1
+        return got
+
+    def read(self, timeout=3):
+        """One frame, or None when the device died mid-poll."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            ok, frame = self.cap.read()
+            if ok:
+                return frame
+            time.sleep(0.05)
+        return None
+
+    def release(self):
+        if self.cap is not None and self.cap.isOpened():
+            self.cap.release()
+
+    def is_open(self):
+        return self.cap is not None and self.cap.isOpened()

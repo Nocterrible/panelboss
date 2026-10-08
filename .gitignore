@@ -1,0 +1,19 @@
+# environments
+.venv/
+setup.json
+
+# models (downloaded by scripts/setup.ps1)
+models/*.onnx
+
+# runtime state
+logs/
+__pycache__/
+*.pyc
+
+# build artifacts
+build/
+dist/
+*.egg-info
+
+# optional extras
+.faces/
