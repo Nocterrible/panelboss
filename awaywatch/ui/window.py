@@ -306,9 +306,8 @@ class SettingsWindow(ctk.CTk):
         if win is not None:
             try:
                 if win.winfo_exists():
-                    win.lift()
-                    win.focus_force()
-                    return win
+                    win._claim_focus()          # the trick that works,
+                    return win                    # not a bare lift
             except Exception:
                 pass
         from . import overrides
@@ -450,7 +449,8 @@ class SettingsWindow(ctk.CTk):
         self._shield_img = ctk.CTkImage(
             light_image=shield_pil(16), dark_image=shield_pil(16),
             size=(16, 16))
-        ctk.CTkLabel(prow, image=self._shield_img, fg_color="transparent",
+        ctk.CTkLabel(prow, text="", image=self._shield_img,
+                     fg_color="transparent",
                      width=22).pack(side="left")
         self.power_switch = ctk.CTkSwitch(
             prow, text="powercfg assistant: wait out other display locks",

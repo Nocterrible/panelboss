@@ -62,6 +62,7 @@ def rows_from(result):
 class OverridesWindow(ctk.CTkToplevel):
     def __init__(self, cfg, monitor, skin, parent=None):
         super().__init__(master=parent, fg_color=skin.panel)
+        self._parent = parent
         self.title("manage powercfg overrides")
         self.geometry("580x540")
         self.cfg, self.monitor, self.skin = cfg, monitor, skin
@@ -91,6 +92,33 @@ class OverridesWindow(ctk.CTkToplevel):
                                          width=150, command=self._save,
                                          **skin.primary())
         self._refresh()
+        # Windows re-activates the parent right after a toplevel maps
+        # (measured: this window appeared on top and the settings
+        # window yanked focus straight back). transient() declares
+        # the parent/child pair so the child also *stays* above it,
+        # and the topmost-blink is the trick that actually wins the
+        # activation round (plain lift/focus_force lose it).
+        if parent is not None:
+            try:
+                self.transient(parent)
+            except Exception:
+                pass
+        self.after(30, self._claim_focus)
+
+    def _claim_focus(self):
+        try:
+            self.attributes("-topmost", True)
+            self.lift()
+            self.focus_force()
+            self.after(140, self._drop_topmost)
+        except Exception:
+            pass                            # closed inside 30 ms
+
+    def _drop_topmost(self):
+        try:                                # the window may be gone by
+            self.attributes("-topmost", False)   # now; a raise here is a
+        except Exception:                   # traceback pythonw never
+            pass                            # lets anybody see
 
     # ------------------------------------------------------------- rows ---
     def _refresh(self, src=None):
