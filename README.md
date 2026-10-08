@@ -80,6 +80,13 @@ otherwise).
 * exclusive-fullscreen games swallow the standby broadcast
 * NVIDIA Broadcast/VCAMDS drivers spam stdout when any camera opens; the
   noise is the driver, not us (redirect it, it is harmless)
+* pystray is a trap: the constructor is `Icon(name, icon=, title=,
+  menu=)` — the image keyword is `icon=` and a wrong `image=` is
+  swallowed by `**kwargs`; the icon starts HIDDEN and the default setup
+  callback is what sets `visible = True`, so passing your own `setup=`
+  silences NIM_ADD entirely (the Shell never sees the icon; pystray
+  logs nothing). `scripts\visible_test.py` spies on `Shell_NotifyIcon`
+  and prints every code/result if the icon vanishes again
 * PnP camera order and OpenCV indexes do not necessarily match; use
   `camera.index` or `camera.name_contains`
 * model weights (yolo11n.onnx, 10.7 MB) download once into `models\`;

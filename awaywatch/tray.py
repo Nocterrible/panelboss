@@ -59,7 +59,8 @@ class Tray(threading.Thread):
             pystray.MenuItem("Quit", action=self._quit))
         try:
             self.icon = pystray.Icon(name="ICU Presence Detector",
-                                     image=_image("active"),
+                                     icon=_image("active"),
+                                     title="ICU Presence Detector",
                                      menu=menu)
             self.icon.run(setup=self._ready)   # the callback always runs
                                                # after the icon
@@ -68,6 +69,11 @@ class Tray(threading.Thread):
                           "console; the failure would otherwise vanish")
 
     def _ready(self, icon):
+        icon.visible = True       # pystray starts hidden and the default
+                                  # setup function (which we replaced by
+                                  # passing setup=) is what shows it; the
+                                  # class docstring says so. NIM_ADD never
+                                  # reaches the Shell otherwise.
         log.info("tray icon ready")
         try:
             icon.notify("ICU Presence Detector",
