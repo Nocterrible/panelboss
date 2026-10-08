@@ -38,9 +38,11 @@ against exactly what the model sees. "live preview" holds the camera
 open at ~5 fps; the hold is a *lease* the window renews while visible,
 so closing it (or crashing) releases the device.
 
-The Camera card has a **power assistant** checkbox: `powercfg
-/requests` requires administrator privileges, so the app cannot simply
-ask. Ticking the box registers a tiny scheduled task (one admin
+The Camera card has a **powercfg assistant** switch (marked with the
+UAC shield, drawn to match the system icon, because ticking it means
+one admin confirm): `powercfg /requests` requires administrator
+privileges, so the app cannot simply ask. Ticking the box registers a
+tiny scheduled task (one admin
 confirm - silent when UAC is set to never notify) that runs as SYSTEM,
 completely invisible, and dumps `powercfg /requests` and
 `powercfg -requestsoverride` to a file the app reads silently
@@ -48,8 +50,14 @@ afterwards — who keeps the display awake is listed under the box, and
 camera polling stops while a display-class blocker is alive. A holder
 the user previously silenced with `powercfg -requestsoverride` shows
 grey and prefixed `*OVERRIDE`: Windows itself ignores overridden
-requests, so the app never pauses the camera for them. Unticking
-removes the task. With the box off, the app never elevates anything
+requests, so the app never pauses the camera for them. While the
+switch is on, a **manage powercfg overrides** button appears below it:
+a window listing every live request and every override, one toggle
+each (a request that is also overridden consolidates into a single
+row), changes staged locally until **apply** shows up - one elevated
+batch of `powercfg /requestsoverride` adds/DELETEs, verified against a
+fresh dump like everything else here. Unticking the switch removes the
+task and the button. With the box off, the app never elevates anything
 and simply keeps polling (fail open).
 
 Skins are the seam for the two looks. `ui.skin` picks one

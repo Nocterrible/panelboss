@@ -28,6 +28,7 @@ from PIL import Image
 
 from .. import config
 from . import theme
+from .shield import shield_pil
 
 log = logging.getLogger("ui")
 
@@ -285,6 +286,35 @@ class SettingsWindow(ctk.CTk):
             log.exception("assistant adoption crashed")  # pythonw has no
             # stderr: without this the whole thread's answer evaporated
             # silently, which is exactly how "does not persist" was born
+        self._assistant_ui(real)
+
+    def _assistant_ui(self, on):
+        """Everything that lives and dies with the assistant switch."""
+        try:
+            if on:
+                if not self.overrides_button.winfo_manager():
+                    self.overrides_button.pack(anchor="w", padx=14,
+                                               pady=(0, 10))
+            else:
+                self.overrides_button.pack_forget()
+        except Exception:
+            pass                        # still building, or already gone
+
+    def _show_overrides(self):
+        """One manager window; opening it again just lifts the old one."""
+        win = getattr(self, "_overrides_win", None)
+        if win is not None:
+            try:
+                if win.winfo_exists():
+                    win.lift()
+                    win.focus_force()
+                    return win
+            except Exception:
+                pass
+        from . import overrides
+        self._overrides_win = overrides.OverridesWindow(
+            self.cfg, self.monitor, self.skin, parent=self)
+        return self._overrides_win
 
     def _power_assistant_changed(self):
         """Tick ON registers the task (one UAC confirm, which can flash
@@ -301,6 +331,7 @@ class SettingsWindow(ctk.CTk):
             ok, msg = power.install() if want else power.uninstall()
             self.cfg["power"]["assistant_task"] = bool(ok and want)
             self.monitor.events.put(("power_assistant", bool(ok and want)))
+            self.ui_events.put(("assistant_ui", bool(ok and want)))
             if not ok:
                 self.power_msg = msg
                 self.power_msg_ts = time.time()
@@ -410,13 +441,23 @@ class SettingsWindow(ctk.CTk):
                     "<Control-X>", "<Control-z>", "<Control-Z>"):
             self.blockers_box.bind(seq, lambda event: "break")
         # the switch below the report, not above the preview: the
-        # blockers ARE the story of this card, the switch only feeds it
+        # blockers ARE the story of this card, the switch only feeds it;
+        # the UAC shield before the label is the honest hint that
+        # ticking it involves one admin confirm (drawn to match the
+        # system icon: quartered blue/amber, silver cross, see ui.shield)
+        prow = ctk.CTkFrame(card, fg_color="transparent")
+        prow.pack(anchor="w", padx=14)
+        self._shield_img = ctk.CTkImage(
+            light_image=shield_pil(16), dark_image=shield_pil(16),
+            size=(16, 16))
+        ctk.CTkLabel(prow, image=self._shield_img, fg_color="transparent",
+                     width=22).pack(side="left")
         self.power_switch = ctk.CTkSwitch(
-            card, text="power assistant: wait out other display locks",
+            prow, text="powercfg assistant: wait out other display locks",
             font=self.skin.font(12), command=self._power_assistant_changed,
             progress_color=self.skin.accent,
             border_color=self.skin.border)
-        self.power_switch.pack(anchor="w", padx=14, pady=(0, 10))
+        self.power_switch.pack(side="left")
         if self.cfg["power"]["assistant_task"]:
             self.power_switch.select()
         # the switch must show REALITY (the task store), not the config
@@ -442,6 +483,13 @@ class SettingsWindow(ctk.CTk):
             # thread once the loop exists.
             self.ui_events.put(("assistant_truth", real))
         threading.Thread(target=truth, daemon=True).start()
+        # the overrides manager exists only while the assistant does:
+        # its entire data source is the assistant's dump, so the button
+        # joins and leaves with the switch, never lies about having data
+        self.overrides_button = ctk.CTkButton(
+            card, text="manage powercfg overrides", width=250,
+            command=self._show_overrides, **self.skin.secondary())
+        self._assistant_ui(bool(self.cfg["power"]["assistant_task"]))
 
     # ----------------------------------------------------------- helpers ---
     @staticmethod
@@ -636,6 +684,8 @@ class SettingsWindow(ctk.CTk):
                 self.focus_force()
             if message == "assistant_truth":
                 self._assistant_truth(_value)
+            if message == "assistant_ui":
+                self._assistant_ui(_value)
             if message == "cameras":
                 self._apply_cameras(_value)
 

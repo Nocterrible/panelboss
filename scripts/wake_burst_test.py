@@ -8,6 +8,9 @@ import numpy as np
 from awaywatch import config
 
 cfg = config.get_config(verbose=False)
+_scratch = os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml")
+config.write_config = (                       # never scribble the live
+    lambda c, path=None, _w=config.write_config: _w(c, _scratch))
 cfg["power"]["assistant_task"] = False       # never consult the real
 cfg["recovery"]["wake_policy"] = "re_off"     # task store in a test
 cfg["recovery"]["wake_burst_count"] = 2

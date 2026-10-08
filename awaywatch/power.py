@@ -83,6 +83,35 @@ def _tidy(text):
     return re.sub(r"^(?:\\Device\\[^\\]+|\\\?\?)\\", "", text)
 
 
+def _guess_caller(text):
+    low = text.lower()
+    if low.startswith("process") or ".exe" in low or "\\" in low:
+        return "process"
+    return "other"
+
+
+def _object_for(caller, text):
+    """What powercfg /requestsoverride wants as the object name: an
+    image name for processes (their own old manual entries used bare
+    names), the friendly name without the ROOT(...) parenthetical for
+    drivers - measured against the entries this machine already has."""
+    base = text.split(" - ", 1)[0].strip()
+    low = base.lower()
+    for mark in ("[process] ", "[driver] ", "[service] "):
+        if low.startswith(mark):
+            base = base[len(mark):].strip()
+            break
+    if caller == "process":
+        tail = base.replace("/", "\\").split("\\")[-1].strip()
+        for tok in tail.split():
+            if tok.lower().endswith(".exe"):
+                return tok
+        return tail or base
+    if caller in ("driver", "service"):
+        return base.split(" (")[0].strip()
+    return base
+
+
 def _parse(text):
     """Sections at column 0 ending in ':'; entries inside them.
 
@@ -92,25 +121,34 @@ def _parse(text):
     rule is positional: a non-marker line directly after an entry line
     (one per entry) is that entry's reason and joins it, giving one
     honest line like "Users\\...\\opera.exe - Video Wake Lock".
-    Whatever the shape, both layouts land in the same buckets."""
+    Whatever the shape, both layouts land in the same buckets, and
+    every emitted line is ALSO recorded structured (caller/object/
+    request) for the overrides manager - powercfg needs those, not the
+    pretty text."""
     display = []
     other = []
+    entries = []
     section = "unknown"
     mine = _own_pid_tokens()
     pending = None                  # entry awaiting its reason line
     pending_mine = False
+    pending_caller = "other"
 
-    def put(item):
+    def put(item, caller=None):
         item = _tidy(item)
+        caller = caller or _guess_caller(item)
+        entries.append({"caller": caller, "object": _object_for(caller, item),
+                        "request": section.upper(), "text": item,
+                        "overridden": False})
         if any(word in section.lower() for word in DISPLAY_WORDS):
             display.append(item)
         else:
             other.append("%s: %s" % (section, item))
 
     def flush():
-        nonlocal pending, pending_mine
+        nonlocal pending, pending_mine, pending_caller
         if pending is not None and not pending_mine:
-            put(pending)
+            put(pending, pending_caller)
         pending = None
         pending_mine = False
 
@@ -126,26 +164,29 @@ def _parse(text):
             continue
         if low.startswith(("[process]", "[driver]", "[service]")):
             flush()
+            pending_caller = low[1:].split("]")[0].strip()
             # [PROCESS] is pure prefix noise; [DRIVER] stays - it is
             # the only hint of WHO (the (ROOT\MEDIA...) suffix is it)
             pending = (stripped.split("]", 1)[1].strip()
-                       if low.startswith("[process]") else stripped)
+                       if pending_caller == "process" else stripped)
             pending_mine = any(t in low for t in mine)
             continue
         if any(t in low for t in mine):
             flush()                        # our own keep-awake...
             pending = stripped             # ...and now its reason too
             pending_mine = True
+            pending_caller = _guess_caller(stripped)
             continue
         if pending is not None:
             if not pending_mine:
-                put("%s - %s" % (pending, stripped))
+                put("%s - %s" % (pending, stripped), pending_caller)
             pending = None
             continue
         put(stripped)
     flush()
     return {"error": None, "display": display, "other": other,
-            "overridden": []}
+            "overridden": [], "requests": entries,
+            "override_entries": []}
 
 
 def _overrides(text):
@@ -153,16 +194,30 @@ def _overrides(text):
     machine where audio drivers sat under [DRIVER] ... SYSTEM): bare
     [CATEGORY] headers, then "<friendly name> <TYPE>" per line."""
     entries = []
+    cat = "other"
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith("["):
+        if not stripped:
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            cat = stripped[1:-1].strip().lower()
             continue
         toks = stripped.split()
         types = set(t.upper() for t in toks if t.upper() in OVERRIDE_TYPES)
         name = " ".join(t for t in toks if t.upper() not in types)
         if name:
-            entries.append((name.lower(), types))
+            entries.append({"cat": cat if cat in
+                            ("process", "driver", "service") else "other",
+                            "name": name.lower(), "types": types})
     return entries
+
+
+def _ov_hit(item, ovs, words):
+    low = item.lower()
+    for o in ovs:
+        if o["name"] in low and any(w in o["types"] for w in words):
+            return True
+    return False
 
 
 def _report(text):
@@ -172,36 +227,89 @@ def _report(text):
     the red bucket entirely and returns as "*OVERRIDE <line>": the
     point of an override is that Windows itself ignores that request,
     so it must not pause the camera either - the window only lists it
-    grey to explain why something looks blocked but is not."""
+    grey to explain why something looks blocked but is not. The same
+    verdict is stamped onto the structured entries (one matcher, no
+    string-identity games), and the override list itself rides along
+    for the manager window."""
     req, found, ovr = text.partition(OVERRIDE_MARK)
     result = _parse(req)
     if not found:                          # a dump from the old .bat
         return result
     ovs = _overrides(ovr)
 
-    def hit(item, words):
-        low = item.lower()
-        for name, types in ovs:
-            if name in low and any(w in types for w in words):
-                return True
-        return False
-
     display, other, overridden = [], [], []
     for x in result["display"]:
-        if hit(x, ("DISPLAY", "CONSOLE")):
+        if _ov_hit(x, ovs, ("DISPLAY", "CONSOLE")):
             overridden.append("*OVERRIDE " + x)
         else:
             display.append(x)
     for x in result["other"]:
         sect = x.split(":", 1)[0].strip().upper()
-        if sect and hit(x, (sect,)):
+        if sect and _ov_hit(x, ovs, (sect,)):
             overridden.append("*OVERRIDE " + x)
         else:
             other.append(x)
+    for e in result["requests"]:
+        sect = e["request"]
+        e["overridden"] = _ov_hit(
+            e["text"], ovs, ("DISPLAY", "CONSOLE")
+            if any(w in sect.lower() for w in DISPLAY_WORDS) else (sect,))
     result["display"] = display
     result["other"] = other
     result["overridden"] = overridden
+    result["override_entries"] = ovs
     return result
+
+
+# request types powercfg /requestsoverride actually accepts (measured:
+# it rejects the rest, and PERFBOOST/ACTIVELOCKSCREEN lines are not
+# overridable objects anyway)
+OVERRIDEABLE = ("DISPLAY", "SYSTEM", "AWAYMODE", "AWAYMODEIDLERESCHEDULE",
+                "EXECUTION")
+
+
+def apply_script(ops):
+    """The elevated half: one generated .ps1 (the quoting layers that
+    killed every inline attempt are skipped by writing a file)."""
+    lines = ["$ErrorActionPreference='SilentlyContinue'"]
+    for op in ops:
+        obj = str(op["object"]).replace("'", "''")
+        act = "" if op["add"] else "DELETE "
+        lines.append('& powercfg.exe /requestsoverride %s%s "%s" %s'
+                     % (act, str(op["caller"]).upper(), obj, op["request"]))
+    return "\r\n".join(lines) + "\r\n"
+
+
+def _entry_matches(o, op):
+    obj = str(op["object"]).replace("/", "\\").split("\\")[-1].lower()
+    obj = obj.split()[0] if obj.split() else obj
+    n = o["name"]
+    return (n == obj or n in obj or obj in n) and op["request"] in o["types"]
+
+
+def apply_overrides(ops, assistant=True, timeout=120):
+    """Add/remove overrides elevated, then BELIEVE ONLY THE DUMP:
+    elevation is a handoff, so every few seconds the assistant task
+    re-reads powercfg and the wanted end-state is checked against it -
+    consent refused shows up as the honest timeout error."""
+    if not ops:
+        return True, "nothing to change", {}
+    if not _elevate_ps(apply_script(ops), name="overrides_apply.ps1"):
+        return False, ("applying overrides needs administrator "
+                       "privileges; the confirm was refused, cancelled, "
+                       "or never clicked"), {}
+    end = time.time() + timeout
+    fresh = {}
+    while time.time() < end:
+        time.sleep(3)
+        fresh = requests(assistant=assistant)
+        ents = fresh.get("override_entries") or []
+        if all(any(_entry_matches(o, op) for o in ents) == bool(op["add"])
+               for op in ops):
+            return True, "overrides updated", fresh
+    return False, ("applying overrides needs administrator "
+                   "privileges; the confirm was refused, cancelled, "
+                   "or never clicked"), fresh
 
 
 def _run(args, timeout=15):
@@ -421,7 +529,8 @@ def requests(ignore=(), assistant=False):
 
 
 def _filtered(result, ignore):
-    """The ignore list trims known noise from every bucket."""
+    """The ignore list trims known noise from every bucket (and from
+    the structured entries the manager window reads)."""
     if not ignore:
         return result
     keep = lambda line: not any(n in line.lower() for n in ignore)
@@ -429,4 +538,7 @@ def _filtered(result, ignore):
             "display": [x for x in result["display"] if keep(x)],
             "other": [x for x in result["other"] if keep(x)],
             "overridden": [x for x in result.get("overridden", [])
-                           if keep(x)]}
+                           if keep(x)],
+            "requests": [e for e in result.get("requests", [])
+                         if keep(e["text"])],
+            "override_entries": result.get("override_entries", [])}

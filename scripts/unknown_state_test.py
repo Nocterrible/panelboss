@@ -7,6 +7,7 @@
    wakes on presence
 5) our own OFF echo (0.0 while already off) -> no re-adoption churn
 """
+import os
 import sys
 import types
 
@@ -15,6 +16,12 @@ from awaywatch import config, display
 from awaywatch.state import PresenceMonitor
 
 cfg = config.get_config(verbose=False)
+# state.flushes the WHOLE cfg on some paths - redirect every write to
+# scratch, or these tests flip the live assistant flag off again
+# (measured: they did, minutes before "the setting does not persist")
+_scratch = os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml")
+config.write_config = (
+    lambda c, path=None, _w=config.write_config: _w(c, _scratch))
 # pin the assistant OFF for these scenarios: the live config now
 # honestly says true, and then every _on_phase would consult the REAL
 # task store - state would correctly wait for whatever apps hold the

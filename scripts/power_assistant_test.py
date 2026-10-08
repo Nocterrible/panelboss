@@ -83,6 +83,40 @@ assert any("Legacy Kernel Caller" in x for x in res2["other"]), res2
 assert any("opera.exe" in x for x in res2["display"]), res2  # untouched
 print("override demotion OK:", res["overridden"], "|", res2["overridden"])
 
+# 1d) manager model: powercfg needs structured caller/object/request,
+#     the pair consolidates into ONE row, and the elevated script
+#     quotes like the entries powercfg itself lists
+e_ms = [e for e in res["requests"] if "msedgewebview2" in e["text"]][0]
+assert e_ms["caller"] == "process" and e_ms["object"] == "msedgewebview2.exe"
+assert e_ms["request"] == "DISPLAY" and e_ms["overridden"] is True
+e_dr = [e for e in res2["requests"] if "SteelSeries" in e["text"]][0]
+assert e_dr["caller"] == "driver" and e_dr["request"] == "SYSTEM"
+assert e_dr["object"] == "SteelSeries Sonar Virtual Audio Device"
+assert e_dr["overridden"] is True
+assert any(o["name"] == "steelseries sonar virtual audio device"
+           and "SYSTEM" in o["types"] and o["cat"] == "driver"
+           for o in res2["override_entries"]), res2["override_entries"]
+script = power.apply_script([
+    {"add": True, "caller": "process", "object": "opera.exe",
+     "request": "DISPLAY"},
+    {"add": False, "caller": "driver", "object": "Legacy Kernel Caller",
+     "request": "SYSTEM"}])
+assert '/requestsoverride PROCESS "opera.exe" DISPLAY' in script, script
+assert ('/requestsoverride DELETE DRIVER "Legacy Kernel Caller" SYSTEM'
+        in script), script
+from awaywatch.ui import overrides as OV
+rows = OV.rows_from(res2)
+steel = [r for r in rows if "SteelSeries" in r["label"]]
+assert len(steel) == 1 and steel[0]["active"] and steel[0]["overridden"], rows
+assert any("opera.exe" in r["label"] and r["active"]
+           and not r["overridden"] and r["overridable"] for r in rows), rows
+ov_only = [r for r in rows if r["object"] == "msedgewebview2.exe"]
+assert len(ov_only) == 1 and not ov_only[0]["active"]
+assert ov_only[0]["overridden"] and ov_only[0]["caller"] == "process", rows
+lkc = [r for r in rows if "Legacy Kernel" in r["label"]]
+assert len(lkc) == 1 and lkc[0]["active"] and not lkc[0]["overridden"], rows
+print("override manager model OK (%d rows)" % len(rows))
+
 # 2) live machine, unelevated, no assistant: explicit admin message
 r = power.requests()
 assert r["error"] and "administrator privileges" in r["error"], r
@@ -193,41 +227,82 @@ fm.blockers = {"error": None, "display": ["msedgewebview2.exe Video Lock"],
 power.install = lambda: (True, "registered (test)")
 power.uninstall = lambda: (True, "assistant removed (test)")
 app = W.SettingsWindow(cfg, fm, queue.Queue())
+FAILED = []
+
+
+def _fail(where):
+    """A raised assert inside an after() callback would otherwise
+    leave mainloop running forever (a silent 300 s hang is how this
+    suite likes to "fail"); record it, print it, let the chains wind
+    down and exit nonzero."""
+    FAILED.append(where)
+    __import__("traceback").print_exc()
 
 
 def check():
-    fm.blockers = {"error": None, "display": ["msedgewebview2.exe Lock"],
-                   "other": [],
-                   "overridden": ["*OVERRIDE opera.exe - Video Wake Lock"]}
-    app._update_blockers()
-    text = app.blockers_box.get("1.0", "end")
-    assert "holding the display" in text and "msedgewebview2" in text, text
-    assert "*OVERRIDE opera.exe" in text, text   # grey + honest label
-    fg = app.blockers_box._textbox.tag_cget("danger", "foreground")
-    assert str(fg).lower().startswith("#"), ("danger tag uncolored", fg)
-    # the truth-bridge: a worker thread's answer rides ui_events (its
-    # self.after(0) could land BEFORE app.mainloop exists and die with
-    # "main thread is not in main loop", pythonw eating the traceback -
-    # the measured root cause of "the assistant does not persist")
-    app.ui_events.put(("assistant_truth", True))
-    app._drain_ui_events()
-    assert bool(app.power_switch.get()) is True, "truth did not reach switch"
-    assert cfg["power"]["assistant_task"] is True, "truth did not reach cfg"
-    app.power_switch.select()
-    app._power_assistant_changed()
+    try:
+        fm.blockers = res2                       # structured: the manager
+        app._update_blockers()                   # pane reads it too
+        text = app.blockers_box.get("1.0", "end")
+        assert "holding the display" in text and "opera.exe" in text, text
+        assert "*OVERRIDE" in text and "SteelSeries" in text, text
+        fg = app.blockers_box._textbox.tag_cget("danger", "foreground")
+        assert str(fg).lower().startswith("#"), ("danger tag uncolored", fg)
+        # the truth-bridge: a worker thread's answer rides ui_events (its
+        # self.after(0) could land BEFORE app.mainloop exists and die with
+        # "main thread is not in main loop", pythonw eating the traceback -
+        # the measured root cause of "the assistant does not persist")
+        app.ui_events.put(("assistant_truth", True))
+        app._drain_ui_events()
+        assert bool(app.power_switch.get()) is True, "truth did not reach switch"
+        assert cfg["power"]["assistant_task"] is True, "truth did not reach cfg"
+        # the manager button lives and dies with the assistant
+        assert app.overrides_button.winfo_manager() != "", "button lost"
+        app._assistant_ui(False)
+        assert app.overrides_button.winfo_manager() == "", "button off-screen"
+        app._assistant_ui(True)
+        w1 = app._show_overrides()
+        assert w1 is app._show_overrides(), "second manager window opened"
+        app._ov_win = w1
+        app.power_switch.select()
+        app._power_assistant_changed()
+    except Exception:
+        _fail("check")
 
 
 def after_install():
-    evs = []
-    while not fm.events.empty():
-        evs.append(fm.events.get())
-    assert ("power_assistant", True) in evs, evs
-    assert cfg["power"]["assistant_task"] is True
-    app.destroy()
+    try:
+        evs = []
+        while not fm.events.empty():
+            evs.append(fm.events.get())
+        assert ("power_assistant", True) in evs, evs
+        assert cfg["power"]["assistant_task"] is True
+        ow = app._ov_win
+        key = next(r["key"] for r in ow.rows if "SteelSeries" in r["label"])
+        ow._toggled(key, False)             # kill that override
+        assert len(ow._diff()) == 1, ow._diff()
+        assert ow._diff()[0]["add"] is False  # -> a DELETE op queued
+        assert ow.save_button.winfo_manager() != "", "apply button hid"
+        ow._toggled(key, True)              # put it back
+        assert ow._diff() == []
+        assert ow.save_button.winfo_manager() == "", "apply button overstayed"
+    except Exception:
+        _fail("after_install")
+    finally:
+        for w in (getattr(app, "_ov_win", None), app):
+            try:
+                w.destroy()
+            except Exception:
+                pass
 
 
 app.after(600, check)
 app.after(1800, after_install)
+app.after(20000, lambda: (FAILED.append("watchdog"), app.destroy()))
 app.mainloop()
-print("window OK (blockers render, switch installs via fakes)")
+if FAILED:
+    print("WINDOW TEST FAILED in", FAILED)
+    sys.exit(1)
+print("window OK (blockers render, switch installs via fakes, "
+      "manager window behaves)")
 print("ALL POWER ASSISTANT TESTS OK")
