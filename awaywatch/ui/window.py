@@ -359,10 +359,17 @@ class SettingsWindow(ctk.CTk):
             self.power_switch.select()
         # the switch must show REALITY (the task store), not the config
         # rumor - the task can outlive or predate the config flag, and
-        # /Query costs ~2 s here, so ask in background
+        # /Query costs ~2 s here, so ask in background; the answer may
+        # also be sampled while an install is mid-flight (delete then
+        # create), so a first "gone" gets re-asked before believed
         def truth():
             from .. import power
             real = power.task_installed()
+            for _ in range(3):
+                if real:
+                    break
+                time.sleep(2)
+                real = power.task_installed()
             self.after(0, lambda: self._assistant_truth(real))
         threading.Thread(target=truth, daemon=True).start()
         self.blockers_label = ctk.CTkLabel(
