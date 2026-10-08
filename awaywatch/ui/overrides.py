@@ -1,16 +1,28 @@
 """Manage powercfg overrides.
 
-Lists every live power request and every override on the machine, one
-row each with a toggle; a holder that is also overridden (the usual
-state after a lifetime of powercfg tinkering) consolidates into ONE
-row saying both. Toggling queues the matching powercfg
-/requestsoverride add/remove; the Save button only appears while a
-change waits, and applying it is the same handoff-elevate-then-verify
-dance the assistant install uses (truth comes from a fresh dump, never
-from the exit code). The data source is the assistant dump, so this
-window is only opened while the powercfg assistant is on."""
+One row per object (a process, driver or service that either holds a
+power request or owns an override entry), and a CHECKBOX PER REQUEST
+TYPE - the per-object typelist is the unit powercfg itself thinks in,
+and the set form REPLACES the whole list (measured), so a row shows
+every type's box and apply ships each changed object's complete
+wanted list, survivors included.
+
+The row list ACCUMULATES while the window is open: requests flicker
+(a video wake lock blinks with tab visibility), so any object seen
+holding since the window opened stays on the books - the 'held'
+flags latch. The checkboxes always mirror the LATEST truth (an entry
+that vanished really is gone), and refresh re-reads the assistant
+dump and folds in whatever new popped up while the user was reading.
+
+Changes stage locally until the apply button shows up; applying is
+the same handoff-elevate-then-verify dance the assistant install uses
+(truth comes from a fresh dump, never from the exit code). The data
+source is the assistant dump, so this window is only opened while the
+powercfg assistant is on."""
 import logging
 import threading
+import time
+from tkinter import BooleanVar
 
 import customtkinter as ctk
 
@@ -20,43 +32,66 @@ log = logging.getLogger("ui")
 
 TRIO = ("process", "driver", "service")
 
+NAMES = {"DISPLAY": "display", "SYSTEM": "system",
+         "AWAYMODE": "awaymode", "EXECUTION": "execution",
+         "AWAYMODEIDLERESCHEDULE": "idle-reschedule",
+         "PERFBOOST": "perfboost", "CONSOLE": "console"}
+
 
 def _base(name):
-    return (str(name).replace("/", "\\").split("\\")[-1].lower().split()
-            or [""])[0] if str(name).split() else ""
+    toks = str(name).replace("/", "\\").split("\\")[-1].lower().split()
+    return toks[0] if toks else ""
 
 
-def rows_from(result):
-    """Pure model: one row per (request | override-per-type). A
-    request already overridden claims its override entry, so the pair
-    never shows twice."""
-    rows = []
-    claimed = set()
+def merge_seen(seen, result):
+    """Fold one powercfg read into the session's accumulating view.
+
+    'overridden' is always the latest truth - a vanished entry is
+    gone, the listing is complete every time; 'active' LATCHES,
+    because a holder that flickered out between two reads was really
+    here, and the whole point is to not forget the 3 a.m. display
+    lock that only blinks into existence. Types the set form cannot
+    express (perfboost, console - measured: silently dropped on
+    write) land in 'drops': shown, never toggleable by us."""
+    fresh, order = {}, []
+
+    def touch(caller, obj, base):
+        key = (caller, base)
+        if key not in fresh:
+            fresh[key] = {"key": key, "caller": caller, "object": obj,
+                          "label": obj[:70], "active": set(),
+                          "overridden": set(), "drops": set()}
+            order.append(key)
+        return fresh[key]
+
     for e in (result or {}).get("requests") or []:
-        caller, obj, req = e["caller"], e["object"], e["request"]
-        rows.append({"key": (caller, obj, req),
-                     "label": e["text"][:70],
-                     "caller": caller, "object": obj, "request": req,
-                     "active": True,
-                     "overridden": bool(e.get("overridden")),
-                     "overridable": caller in TRIO
-                                    and req in power.OVERRIDEABLE})
+        base = _base(e["object"]) or str(e["object"]).lower()
+        g = touch(e["caller"], e["object"], base)
+        g["active"].add(e["request"])
         if e.get("overridden"):
-            b = _base(obj) or obj.lower()
-            for o in (result.get("override_entries") or []):
-                if b and (b in o["name"] or o["name"] in b):
-                    claimed.add(id(o))
+            g["overridden"].add(e["request"])
     for o in (result or {}).get("override_entries") or []:
-        if id(o) in claimed:
-            continue
-        for t in sorted(o["types"]):
-            rows.append({"key": ("override", o["cat"], o["name"], t),
-                         "label": o["name"][:70],
-                         "caller": o["cat"], "object": o["name"],
-                         "request": t, "active": False, "overridden": True,
-                         "overridable": o["cat"] in TRIO
-                                        and t in power.OVERRIDEABLE})
-    return rows
+        base = _base(o["name"])
+        g = next((fresh[k] for k in order
+                  if fresh[k]["caller"] == o["cat"]
+                  and (base == k[1] or base in k[1] or k[1] in base)),
+                 None)
+        if g is None:
+            g = touch(o["cat"], o["name"], base)
+        g["overridden"] |= set(o["types"])
+        g["drops"] |= set(o["types"]) - set(power.OVERRIDEABLE)
+    for k in order:
+        g = fresh[k]
+        old = seen.get(k)
+        if old is not None:
+            g["active"] |= old["active"]     # latch survives refresh
+        seen[k] = g
+    for k, old in seen.items():
+        if k not in fresh:
+            old["overridden"] = set()        # truth says: gone
+            old["drops"] = set()
+            # active stays latched: still on the books while open
+    return seen
 
 
 class OverridesWindow(ctk.CTkToplevel):
@@ -64,19 +99,28 @@ class OverridesWindow(ctk.CTkToplevel):
         super().__init__(master=parent, fg_color=skin.panel)
         self._parent = parent
         self.title("manage powercfg overrides")
-        self.geometry("580x540")
+        self.geometry("620x560")
         self.cfg, self.monitor, self.skin = cfg, monitor, skin
-        self.desired = {}                       # key -> wanted override
+        self.seen = {}                        # (caller, base) -> group
+        self.desired = {}                     # (caller, base, type) -> want
         self._busy = False
-        ctk.CTkLabel(self, text="manage powercfg overrides",
+        self._reading = False
+        head = ctk.CTkFrame(self, fg_color="transparent")
+        head.pack(fill="x", padx=14, pady=(10, 0))
+        ctk.CTkLabel(head, text="manage powercfg overrides",
                      font=skin.font(15, "bold"),
-                     **skin.text_style()).pack(anchor="w", padx=14,
-                                               pady=(10, 0))
+                     **skin.text_style()).pack(side="left")
+        self.refresh_button = ctk.CTkButton(head, text="refresh",
+                                            width=86, font=skin.font(11),
+                                            command=self._read_in,
+                                            **skin.secondary())
+        self.refresh_button.pack(side="right")
         ctk.CTkLabel(
-            self, text="toggles mark what should be overridden; the "
-            "apply button elevates once and the result is verified "
-            "from a fresh powercfg read",
-            font=skin.font(10), wraplength=520, justify="left",
+            self, text="checked = overridden (live truth); 'held' = seen "
+            "holding since this window opened; emptying every box clears "
+            "the override. The list accumulates while open - refresh "
+            "folds in whatever new popped up.",
+            font=skin.font(10), wraplength=560, justify="left",
             **skin.text_style("sub")).pack(anchor="w", padx=14, pady=(2, 6))
         self.listing = ctk.CTkScrollableFrame(
             self, fg_color="transparent",
@@ -89,9 +133,13 @@ class OverridesWindow(ctk.CTkToplevel):
                                    **skin.text_style("sub"))
         self.status.pack(side="left")
         self.save_button = ctk.CTkButton(bar, text="apply overrides",
-                                         width=150, command=self._save,
+                                         width=160, command=self._save,
                                          **skin.primary())
-        self._refresh()
+        merge_seen(self.seen, self.monitor.blockers)
+        self.status.configure(text="%d objects from the live dump - "
+                                   "refresh folds in new ones"
+                              % len(self.seen))
+        self._redraw()
         # Windows re-activates the parent right after a toplevel maps
         # (measured: this window appeared on top and the settings
         # window yanked focus straight back). transient() declares
@@ -121,83 +169,154 @@ class OverridesWindow(ctk.CTkToplevel):
             pass                            # lets anybody see
 
     # ------------------------------------------------------------- rows ---
-    def _refresh(self, src=None):
+    def _redraw(self):
         for w in self.listing.winfo_children():
             w.destroy()
-        self.desired.clear()
-        rows = rows_from(src if src is not None else self.monitor.blockers)
-        self.rows = rows
-        if not rows:
+        if not self.seen:
             ctk.CTkLabel(self.listing,
                          text="no power data yet - the powercfg "
                               "assistant must be ticking",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(anchor="w",
                                                              pady=8)
-        for r in rows:
+        for g in sorted(self.seen.values(), key=lambda x: x["label"]):
             row = ctk.CTkFrame(self.listing, fg_color="transparent")
-            row.pack(fill="x", pady=2)
-            txt = ctk.CTkFrame(row, fg_color="transparent")
-            txt.pack(side="left", fill="x", expand=True)
+            row.pack(fill="x", pady=3)
             ctk.CTkLabel(
-                txt, anchor="w", justify="left",
-                text=("*OVERRIDE " if r["overridden"] else "")
-                     + r["label"],
+                row, anchor="w", text=g["label"],
                 font=self.skin.font(11),
-                text_color=(self.skin.danger if r["active"]
-                            and r["request"] == "DISPLAY" else
-                            self.skin.paused if r["overridden"]
+                text_color=(self.skin.danger
+                            if "DISPLAY" in g["active"]
+                            and "DISPLAY" not in g["overridden"]
+                            else self.skin.paused if g["overridden"]
                             else self.skin.text)).pack(anchor="w")
-            state = "holding the display now" if (r["active"]
-                                                  and r["request"] ==
-                                                  "DISPLAY") else \
-                ("holding now" if r["active"] else "not holding now")
-            ctk.CTkLabel(txt, anchor="w", justify="left",
-                         text="%s %s · %s%s" % (
-                             r["caller"], r["request"].title(), state,
-                             "" if r["overridable"]
-                             else " · not overridable"),
+            bits = [g["caller"]]
+            if g["overridden"]:
+                bits.append("overridden: " + ", ".join(
+                    NAMES.get(t, t.lower())
+                    for t in sorted(g["overridden"])))
+            else:
+                bits.append("not overridden")
+            ctk.CTkLabel(row, anchor="w", text=" · ".join(bits),
                          font=self.skin.font(10),
                          **self.skin.text_style("sub")).pack(anchor="w")
-            if r["overridable"]:
-                sw = ctk.CTkSwitch(row, text="", width=36,
-                                   progress_color=self.skin.accent,
-                                   border_color=self.skin.border)
-                sw.pack(side="right", padx=(6, 0))
-                sw.select() if r["overridden"] else sw.deselect()
-                sw.configure(command=lambda k=r["key"], s=sw:
-                             self._toggled(k, bool(s.get())))
+            boxes = ctk.CTkFrame(row, fg_color="transparent")
+            boxes.pack(anchor="w")
+            live = g["caller"] in TRIO
+            # grid, 3 per row: the scrollable frame scrolls vertically
+            # only, one long row of pack(side=left) would clip off-canvas
+            # (this ctk's checkbox colors are fg/hover/checkmark - the
+            # checkbox_checked_color names of newer releases raise,
+            # measured; and text MUST be given or the widget prints
+            # its class name)
+            for i, t in enumerate(power.OVERRIDEABLE):
+                var = BooleanVar(value=bool(self.desired.get(
+                    g["key"] + (t,), t in g["overridden"])))
+                cb = ctk.CTkCheckBox(
+                    boxes, font=self.skin.font(10), width=172,
+                    text_color=self.skin.text,
+                    text=NAMES.get(t, t.lower())
+                         + (" held" if t in g["active"] else ""),
+                    variable=var, checkbox_width=14, checkbox_height=14,
+                    fg_color=self.skin.accent,
+                    hover_color=self.skin.accent_hover,
+                    border_color=self.skin.border,
+                    command=lambda k=g["key"], t=t, v=var:
+                    self._toggled(k, t, bool(v.get())))
+                if not live:
+                    cb.configure(state="disabled")
+                cb.grid(row=i // 3, column=i % 3, sticky="w")
+            j = len(power.OVERRIDEABLE)
+            for t in sorted(g["drops"]):    # perfboost/console class:
+                cb = ctk.CTkCheckBox(       # the set form DROPS them
+                    boxes, font=self.skin.font(10), width=172,  # (measured) -
+                    text_color=self.skin.subtext,               # visible, never
+                    text=NAMES.get(t, t.lower())                # ours to touch
+                         + " (drops on edit)",
+                    variable=BooleanVar(value=True),
+                    checkbox_width=14, checkbox_height=14,
+                    fg_color=self.skin.button,
+                    hover_color=self.skin.button,
+                    border_color=self.skin.border,
+                    state="disabled")
+                cb.grid(row=j // 3, column=j % 3, sticky="w")
+                j += 1
         self._sync()
 
     # ------------------------------------------------------------ diff ----
-    def _toggled(self, key, want):
-        self.desired[key] = want
+    def _toggled(self, key, t, want):
+        self.desired[key + (t,)] = want
         self._sync()
 
     def _diff(self):
+        by = {}
+        for (caller, base, t), want in self.desired.items():
+            by.setdefault((caller, base), {})[t] = want
         ops = []
-        for r in getattr(self, "rows", []):
-            want = self.desired.get(r["key"])
-            if want is not None and bool(want) != r["overridden"]:
-                ops.append({"add": bool(want), "caller": r["caller"],
-                            "object": r["object"],
-                            "request": r["request"]})
+        for g in getattr(self, "seen", {}).values():
+            ch = by.get(g["key"])
+            if not ch:
+                continue
+            now = set(g["overridden"]) & set(power.OVERRIDEABLE)
+            types = set(now)
+            for t, want in ch.items():
+                if want:
+                    types.add(t)
+                else:
+                    types.discard(t)
+            if types == now:
+                continue                    # toggled off and back on
+            ops.append({"caller": g["caller"], "object": g["object"],
+                        "types": sorted(types)})
         return ops
 
     def _sync(self):
         n = len(self._diff())
         if n and not self._busy:
-            self.save_button.configure(
-                text="apply overrides (%d)" % n)
+            self.save_button.configure(text="apply overrides (%d)" % n)
             if not self.save_button.winfo_manager():
-                self.save_button.pack(side="right")
+                self.save_button.pack(side="right", padx=(0, 8))
             self.status.configure(
-                text="changes pending - apply elevates once",
+                text="%d object(s) staged - apply elevates once" % n,
                 text_color=self.skin.subtext)
         else:
             self.save_button.pack_forget()
 
     # ------------------------------------------------------------- apply --
+    def _read_in(self):
+        """Fresh dump on a worker (the assistant task needs a few
+        seconds to re-run and write it); answers ride after() which
+        is safe - this click proves the mainloop is alive."""
+        if self._reading:
+            return
+        self._reading = True
+        self.refresh_button.configure(text="reading...")
+
+        def work():
+            try:
+                rep = power.requests(assistant=bool(
+                    self.cfg["power"]["assistant_task"]))
+                self.after(0, lambda: self._merged(rep))
+            except Exception:
+                log.exception("overrides refresh crashed")
+        threading.Thread(target=work, daemon=True).start()
+
+    def _merged(self, rep):
+        try:
+            self.refresh_button.configure(text="refresh")
+            merge_seen(self.seen, rep)
+            if rep.get("error"):
+                self.status.configure(text=rep["error"],
+                                      text_color=self.skin.paused)
+            else:
+                self.status.configure(
+                    text="%d objects seen since opened - read %s" % (
+                        len(self.seen), time.strftime("%H:%M:%S")),
+                    text_color=self.skin.subtext)
+            self._redraw()
+        except Exception:
+            log.exception("override merge crashed")
+
     def _save(self):
         ops = self._diff()
         if not ops or self._busy:
@@ -221,7 +340,10 @@ class OverridesWindow(ctk.CTkToplevel):
 
     def _applied(self, ok, msg, fresh):
         self._busy = False
+        self.desired.clear()
         self.status.configure(text=msg,
                               text_color=self.skin.ok if ok
                               else self.skin.paused)
-        self._refresh(fresh or None)
+        if fresh and not fresh.get("error"):
+            merge_seen(self.seen, fresh)
+        self._redraw()

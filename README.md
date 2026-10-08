@@ -52,11 +52,25 @@ the user previously silenced with `powercfg -requestsoverride` shows
 grey and prefixed `*OVERRIDE`: Windows itself ignores overridden
 requests, so the app never pauses the camera for them. While the
 switch is on, a **manage powercfg overrides** button appears below it:
-a window listing every live request and every override, one toggle
-each (a request that is also overridden consolidates into a single
-row), changes staged locally until **apply** shows up - one elevated
-batch of `powercfg /requestsoverride` adds/DELETEs, verified against a
-fresh dump like everything else here. Unticking the switch removes the
+a window with one row per object (process, driver or service that
+holds a request or owns an override - a holder that is also overridden
+is one row saying both), and a **checkbox per request type**: the
+per-object typelist is the unit powercfg thinks in, and the set form
+replaces the whole list, so apply ships each changed object's complete
+wanted list, survivors included. Checked = overridden (live truth);
+a `held` flag marks types seen holding since the window opened. The
+row list **accumulates while open** - requests flicker, so nothing is
+forgotten between reads - and a **refresh** button folds in whatever
+new popped up while the user was reading. Types beyond the five the
+set form can express (perfboost, console) show as locked boxes marked
+*drops on edit* (measured: the set form silently discards them).
+Changes stage locally until **apply** shows up - one elevated
+batch of `powercfg /requestsoverride` sets, verified against a fresh
+dump like everything else here. Removal is the same set form with no
+request types (`powercfg /requestsoverride PROCESS chrome.exe`): the
+documented `DELETE` keyword does not exist in this build (measured -
+Invalid Parameters).
+Unticking the switch removes the
 task and the button. With the box off, the app never elevates anything
 and simply keeps polling (fail open).
 
@@ -174,6 +188,31 @@ otherwise).
   `*OVERRIDE ...` line: the whole point of an override is that Windows
   ignores that request, so the app must not pause the camera for it
   either
+* `powercfg /requestsoverride DELETE ...` (the documented removal
+  form) does **not** exist in this build - `Invalid Parameters` with
+  or without types, measured in a hidden elevated run where the error
+  was otherwise invisible. Removal is the SET form with no request
+  types (`powercfg /requestsoverride PROCESS chrome.exe`), which
+  deletes the registry value under
+  `HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerRequestOverride\`
+  outright; and the set form **replaces** the whole typelist, so
+  touching one type of a multi-type entry must re-list the others
+* the set form silently **drops types beyond the five** (display,
+  system, awaymode, idle-reschedule, execution): asking for
+  `DISPLAY PERFBOOST` stored `0x1`, no error, the perfboost bit
+  simply never existed - entries carrying such bits lose them on any
+  edit through the CLI, so the manager shows them locked as
+  "drops on edit"
+* customtkinter's checkbox kwargs are `fg_color`/`hover_color`/
+  `checkmark_color` in the pinned release - the `checkbox_checked_color`
+  names newer docs show raise `ValueError` at construction; and every
+  ctk widget prints its CLASS NAME as placeholder text unless `text`
+  is given (the "CTkLabel" ghost over the shield icon)
+* `destroy()` tears children down while Tk still runs the queue, so
+  a self-rescheduling UI tick will reschedule itself on the
+  half-dead interpreter forever (endless "ui tick failed" traceback
+  loop, mainloop never returns) - a "dying" flag checked before each
+  tick is what lets the window actually end
 * `CREATE_NO_WINDOW` is a **process creation flag**, not a
   `STARTUPINFO.dwFlags` bit - stuffing it into startupinfo looks
   plausible, compiles, and does nothing. And since 24H2 the *default

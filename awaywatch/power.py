@@ -270,28 +270,48 @@ OVERRIDEABLE = ("DISPLAY", "SYSTEM", "AWAYMODE", "AWAYMODEIDLERESCHEDULE",
 
 def apply_script(ops):
     """The elevated half: one generated .ps1 (the quoting layers that
-    killed every inline attempt are skipped by writing a file)."""
+    killed every inline attempt are skipped by writing a file).
+
+    op = {"caller", "object", "types"}: ONE set form per object -
+    the set form REPLACES the whole typelist (measured), so callers
+    ship the COMPLETE wanted list, survivors included; an empty list
+    clears the override (the documented DELETE keyword does not
+    exist in this build - Invalid Parameters, measured in a hidden
+    elevated run - and the empty set form deletes the registry
+    DWORD outright). Types beyond the accepted five (perfboost,
+    console) are silently DROPPED by the set form (measured:
+    DISPLAY PERFBOOST stored 0x1), so ops never carry them."""
     lines = ["$ErrorActionPreference='SilentlyContinue'"]
     for op in ops:
         obj = str(op["object"]).replace("'", "''")
-        act = "" if op["add"] else "DELETE "
-        lines.append('& powercfg.exe /requestsoverride %s%s "%s" %s'
-                     % (act, str(op["caller"]).upper(), obj, op["request"]))
+        types = sorted(set(op.get("types") or []))
+        lines.append('& powercfg.exe /requestsoverride %s "%s"%s'
+                     % (str(op["caller"]).upper(), obj,
+                        (" " + " ".join(types)) if types else ""))
     return "\r\n".join(lines) + "\r\n"
 
 
-def _entry_matches(o, op):
+def _entry_types(ents, op):
+    """What the dump currently says THIS object is overridden for
+    (empty set when absent) - the end-state check compares whole
+    typelists, not single types, because the set form replaces all."""
     obj = str(op["object"]).replace("/", "\\").split("\\")[-1].lower()
     obj = obj.split()[0] if obj.split() else obj
-    n = o["name"]
-    return (n == obj or n in obj or obj in n) and op["request"] in o["types"]
+    for o in ents:
+        if o["cat"] != str(op["caller"]).lower():
+            continue
+        n = o["name"]
+        if n == obj or n in obj or obj in n:
+            return set(o["types"])
+    return set()
 
 
 def apply_overrides(ops, assistant=True, timeout=120):
-    """Add/remove overrides elevated, then BELIEVE ONLY THE DUMP:
+    """Set the wanted typelists elevated, then BELIEVE ONLY THE DUMP:
     elevation is a handoff, so every few seconds the assistant task
-    re-reads powercfg and the wanted end-state is checked against it -
-    consent refused shows up as the honest timeout error."""
+    re-reads powercfg and each object's live typelist must equal the
+    wanted one (empty wanted = entry gone) - consent refused shows
+    up as the honest timeout error."""
     if not ops:
         return True, "nothing to change", {}
     if not _elevate_ps(apply_script(ops), name="overrides_apply.ps1"):
@@ -304,8 +324,8 @@ def apply_overrides(ops, assistant=True, timeout=120):
         time.sleep(3)
         fresh = requests(assistant=assistant)
         ents = fresh.get("override_entries") or []
-        if all(any(_entry_matches(o, op) for o in ents) == bool(op["add"])
-               for op in ops):
+        if all(_entry_types(ents, op) & set(OVERRIDEABLE)
+               == set(op.get("types") or []) for op in ops):
             return True, "overrides updated", fresh
     return False, ("applying overrides needs administrator "
                    "privileges; the confirm was refused, cancelled, "

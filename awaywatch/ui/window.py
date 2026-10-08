@@ -646,7 +646,18 @@ class SettingsWindow(ctk.CTk):
                 break
 
     # -------------------------------------------------------------- tick ---
+    def destroy(self):
+        """destroy() tears children down first while Tk still processes
+        the queue - a pending tick then reschedules itself on the
+        half-dead interpreter forever (measured: an endless "ui tick
+        failed" loop whose mainloop never returned). Flag the dying
+        state and the chain just quits."""
+        self._dying = True
+        super().destroy()
+
     def _tick_ui(self):
+        if getattr(self, "_dying", False):
+            return
         try:
             self._tick_inner()
         except Exception:

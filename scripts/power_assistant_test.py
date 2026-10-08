@@ -97,25 +97,53 @@ assert any(o["name"] == "steelseries sonar virtual audio device"
            and "SYSTEM" in o["types"] and o["cat"] == "driver"
            for o in res2["override_entries"]), res2["override_entries"]
 script = power.apply_script([
-    {"add": True, "caller": "process", "object": "opera.exe",
-     "request": "DISPLAY"},
-    {"add": False, "caller": "driver", "object": "Legacy Kernel Caller",
-     "request": "SYSTEM"}])
-assert '/requestsoverride PROCESS "opera.exe" DISPLAY' in script, script
-assert ('/requestsoverride DELETE DRIVER "Legacy Kernel Caller" SYSTEM'
-        in script), script
+    {"caller": "process", "object": "opera.exe", "types": ["DISPLAY"]},
+    {"caller": "driver", "object": "Legacy Kernel Caller", "types": []},
+    {"caller": "process", "object": "dual.exe",
+     "types": ["DISPLAY", "SYSTEM"]}])
+lines = script.splitlines()
+# one set per object carrying the COMPLETE wanted typelist (survivors
+# re-listed, because the set form REPLACES); empty = clear (measured:
+# the documented DELETE keyword does not exist, and the empty set
+# form deletes the registry value outright)
+assert ('& powercfg.exe /requestsoverride PROCESS "opera.exe" DISPLAY'
+        in lines), script
+assert ('& powercfg.exe /requestsoverride DRIVER "Legacy Kernel Caller"'
+        in lines), script
+assert ('& powercfg.exe /requestsoverride PROCESS "dual.exe" DISPLAY SYSTEM'
+        in lines), script
 from awaywatch.ui import overrides as OV
-rows = OV.rows_from(res2)
-steel = [r for r in rows if "SteelSeries" in r["label"]]
-assert len(steel) == 1 and steel[0]["active"] and steel[0]["overridden"], rows
-assert any("opera.exe" in r["label"] and r["active"]
-           and not r["overridden"] and r["overridable"] for r in rows), rows
-ov_only = [r for r in rows if r["object"] == "msedgewebview2.exe"]
-assert len(ov_only) == 1 and not ov_only[0]["active"]
-assert ov_only[0]["overridden"] and ov_only[0]["caller"] == "process", rows
-lkc = [r for r in rows if "Legacy Kernel" in r["label"]]
-assert len(lkc) == 1 and lkc[0]["active"] and not lkc[0]["overridden"], rows
-print("override manager model OK (%d rows)" % len(rows))
+seen = OV.merge_seen({}, res2)
+steel = next(g for g in seen.values() if "SteelSeries" in g["label"])
+assert steel["overridden"] == {"SYSTEM"}, seen   # one row saying both
+assert steel["active"] == {"SYSTEM"}, seen
+opera = next(g for g in seen.values() if "opera.exe" in g["label"])
+assert opera["overridden"] == set() and opera["active"] == {"DISPLAY"}, seen
+web = next(g for g in seen.values() if g["object"] == "msedgewebview2.exe")
+assert web["overridden"] == {"DISPLAY"} and web["active"] == set(), seen
+lkc = next(g for g in seen.values() if "Legacy Kernel" in g["label"])
+assert lkc["overridden"] == set() and lkc["active"] == {"SYSTEM"}, seen
+# accumulation: a later read where an object VANISHED keeps its row
+# (active latches) but the override truth is gone - the listing is
+# complete every time
+seen = OV.merge_seen(seen, {"requests": [], "override_entries": []})
+assert len(seen) == 4, seen
+assert steel["active"] == {"SYSTEM"} and steel["overridden"] == set(), seen
+# and a brand-NEW holder in a later read folds in on refresh
+seen = OV.merge_seen(seen, {"requests": [
+    {"caller": "process", "object": "newbie.exe", "request": "DISPLAY",
+     "text": "newbie.exe", "overridden": False}],
+    "override_entries": []})
+assert any("newbie.exe" in g["label"] for g in seen.values()), seen
+# multi-type entries and a drop type: perfboost shows but the set
+# form cannot express it (measured: DISPLAY PERFBOOST stored 0x1)
+seen2 = OV.merge_seen({}, {"requests": [], "override_entries": [
+    {"cat": "process", "name": "dual.exe",
+     "types": {"DISPLAY", "SYSTEM", "PERFBOOST"}}]})
+d = next(iter(seen2.values()))
+assert d["overridden"] == {"DISPLAY", "SYSTEM", "PERFBOOST"}, d
+assert d["drops"] == {"PERFBOOST"}, d
+print("override manager model OK (%d objects seen)" % len(seen))
 
 # 2) live machine, unelevated, no assistant: explicit admin message
 r = power.requests()
@@ -278,14 +306,29 @@ def after_install():
         assert ("power_assistant", True) in evs, evs
         assert cfg["power"]["assistant_task"] is True
         ow = app._ov_win
-        key = next(r["key"] for r in ow.rows if "SteelSeries" in r["label"])
-        ow._toggled(key, False)             # kill that override
-        assert len(ow._diff()) == 1, ow._diff()
-        assert ow._diff()[0]["add"] is False  # -> a DELETE op queued
+        steel = next(g for g in ow.seen.values()
+                     if "SteelSeries" in g["label"])
+        ow._toggled(steel["key"], "DISPLAY", True)   # a second type
+        ops = ow._diff()
+        assert ops == [{"caller": "driver", "object": steel["object"],
+                        "types": ["DISPLAY", "SYSTEM"]}], ops
+        # (SYSTEM survives the REPLACE - the whole wanted list ships)
         assert ow.save_button.winfo_manager() != "", "apply button hid"
-        ow._toggled(key, True)              # put it back
-        assert ow._diff() == []
+        ow._toggled(steel["key"], "DISPLAY", False)  # back out
+        assert ow._diff() == [], ow._diff()
         assert ow.save_button.winfo_manager() == "", "apply button overstayed"
+        ow._toggled(steel["key"], "SYSTEM", False)   # empty the last box
+        assert ow._diff()[0]["types"] == [], ow._diff()
+        # refresh accumulates without forgetting: a new object folds
+        # in, latched 'held' survives, override truth wins
+        ow._merged({"requests": [
+            {"caller": "process", "object": "newbie.exe",
+             "request": "EXECUTION", "text": "newbie.exe",
+             "overridden": False}],
+            "override_entries": []})
+        assert any("newbie.exe" in g["label"] for g in ow.seen.values())
+        assert ow.seen[steel["key"]]["active"] == {"SYSTEM"}   # latched
+        assert ow.seen[steel["key"]]["overridden"] == set()    # truth
     except Exception:
         _fail("after_install")
     finally:
