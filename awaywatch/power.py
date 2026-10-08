@@ -79,7 +79,13 @@ def _parse(text):
 
 
 def _run(args, timeout=15):
-    return subprocess.run(args, capture_output=True, timeout=timeout)
+    """Console children of pythonw would each get their own window -
+    a flashing, focus-stealing terminal every poll cycle otherwise.
+    CREATE_NO_WINDOW (0x08000000) keeps every probe silent."""
+    si = subprocess.STARTUPINFO()
+    si.dwFlags = 0x08000000
+    return subprocess.run(args, capture_output=True, timeout=timeout,
+                          startupinfo=si)
 
 
 def _need_elevation(args):
@@ -132,8 +138,10 @@ def install():
     except Exception:
         pass
     action = 'cmd /c powercfg /requests > "%s" 2>&1' % path
-    args = ["/Create", "/TN", TASK_NAME, "/SC", "ONDEMAND", "/RL",
-            "HIGHEST", "/TR", action, "/F"]
+    # SYSTEM + "run whether or not logged on" means session 0: no cmd
+    # window ever. SYSTEM also walks past powercfg's admin check.
+    args = ["/Create", "/TN", TASK_NAME, "/SC", "ONDEMAND", "/RU",
+            "SYSTEM", "/RL", "HIGHEST", "/TR", action, "/F"]
     if not _verified(args, installed=True, timeout=CONFIRM_TIMEOUT):
         return False, ("the power assistant needs administrator "
                        "privileges to register its scheduled task; the "
