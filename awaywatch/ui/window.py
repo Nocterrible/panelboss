@@ -267,9 +267,14 @@ class SettingsWindow(ctk.CTk):
         self.reoff_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
 
     def _power_assistant_changed(self):
-        """Registering the task costs one UAC prompt - the price of the
-        tick, paid on a worker thread so the window stays alive."""
+        """Tick ON registers the task (one UAC confirm, which can flash
+        up behind this borderless window); tick OFF deletes it. Both
+        paid on a worker thread so the window stays alive."""
         want = bool(self.power_switch.get())
+        self.power_msg = ("waiting for the admin confirm - check the "
+                          "taskbar if no prompt is visible"
+                          if want else "removing the scheduled task...")
+        self.power_msg_ts = time.time()
 
         def work():
             from .. import power

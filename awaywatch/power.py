@@ -24,6 +24,12 @@ import time
 
 TASK_NAME = "ICU-Presence-PowerRequests"
 
+# consent dialogs wait for humans; this is how long we give the task
+# store to reflect a create/delete before calling it a refusal
+CONFIRM_TIMEOUT = 180
+REMOVE_TIMEOUT = 90
+CHECK_SEC = 2.0
+
 # section names that mean "the screens themselves are being held awake";
 # System/Awaymode/multimedia only hold sleep off, the monitor can still
 # darken, so they are listed for information but never block polling
@@ -78,15 +84,34 @@ def _run(args, timeout=15):
 
 def _need_elevation(args):
     """One UAC prompt is the deal we struck with the user (they ticked
-    the box). Returns the process exit code, or -1 on trouble."""
+    the box). The exit code is a rumor - Start-Process -Verb RunAs can
+    lose the child handle, so callers verify reality with
+    task_installed() afterwards instead of trusting rc."""
     quoted = ", ".join("'" + a.replace("'", "''") + "'" for a in args)
     ps = ("exit (Start-Process -FilePath schtasks.exe -ArgumentList @(%s) "
-          "-Verb RunAs -Wait -PassThru).ExitCode" % quoted)
+          "-Verb RunAs -WindowStyle Hidden -Wait -PassThru).ExitCode" % quoted)
     try:
-        return _run(["powershell.exe", "-NoProfile", "-NonInteractive",
-                     "-Command", ps], timeout=120).returncode
+        _run(["powershell.exe", "-NoProfile", "-NonInteractive",
+              "-Command", ps], timeout=300)
     except Exception:
-        return -1
+        pass
+
+
+def _verified(action_args, installed=True, timeout=CONFIRM_TIMEOUT):
+    """Do the thing (direct, then elevated), then ask the task store -
+    the store cannot lie the way exit codes do."""
+    try:
+        rc = _run(["schtasks.exe"] + action_args, timeout=20).returncode
+    except Exception:
+        rc = 1
+    if rc != 0:
+        _need_elevation(action_args)     # consent may take a minute
+    end = time.time() + timeout
+    while time.time() < end:
+        if task_installed() == installed:
+            return True
+        time.sleep(CHECK_SEC)
+    return False
 
 
 def task_installed():
@@ -98,8 +123,8 @@ def task_installed():
 
 
 def install():
-    """Register (elevated, one prompt) + start the assistant. Returns
-    (ok, message)."""
+    """Tick ON: the task exists when this returns True (verified by
+    query, not by exit code), elevated if the app itself is not."""
     path = result_path()
     folder = os.path.dirname(path)
     try:
@@ -109,32 +134,22 @@ def install():
     action = 'cmd /c powercfg /requests > "%s" 2>&1' % path
     args = ["/Create", "/TN", TASK_NAME, "/SC", "ONDEMAND", "/RL",
             "HIGHEST", "/TR", action, "/F"]
-    try:
-        rc = _run(["schtasks.exe"] + args, timeout=20).returncode
-    except Exception:
-        rc = 1
-    if rc != 0:
-        rc = _need_elevation(args)
-    if rc != 0:
-        return False, ("registering the power assistant requires "
-                       "administrator privileges (one UAC confirm), and it "
-                       "was refused or cancelled")
+    if not _verified(args, installed=True, timeout=CONFIRM_TIMEOUT):
+        return False, ("the power assistant needs administrator "
+                       "privileges to register its scheduled task; the "
+                       "confirm was refused, cancelled, or never clicked")
     return _start()
 
 
 def uninstall():
+    """Tick OFF: the task is gone when this returns True - verified."""
     if not task_installed():
         return True, "nothing was registered"
     args = ["/Delete", "/TN", TASK_NAME, "/F"]
-    try:
-        rc = _run(["schtasks.exe"] + args, timeout=20).returncode
-    except Exception:
-        rc = 1
-    if rc != 0:
-        rc = _need_elevation(args)
-    if rc != 0:
-        return False, ("removing the power assistant requires "
-                       "administrator privileges (one UAC confirm)")
+    if not _verified(args, installed=False, timeout=REMOVE_TIMEOUT):
+        return False, ("removing the power assistant needs administrator "
+                       "privileges; the confirm was refused, cancelled, "
+                       "or never clicked")
     return True, "assistant removed"
 
 
