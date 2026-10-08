@@ -65,6 +65,9 @@ DEFAULTS = {
         "wake_policy": "re_off",     # "re_off" | "leave_on": what to do when the display is
                                      # back on (key press, mouse jiggle) but nobody is in front of it
         "leave_on_grace_sec": 180,   # ignored unless wake_policy is "leave_on"
+        "wake_burst_count": 2,       # this many unexpected wakes within the window below ...
+        "wake_burst_window_sec": 120,  # ... pauses auto re-off (the camera probably
+                                       # slipped and is looking at a wall)
     },
     "guards": {
         "fullscreen": True,     # do not send the off broadcast while a fullscreen game owns the display,

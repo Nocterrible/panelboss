@@ -232,12 +232,16 @@ def wait_for(on=True, timeout=1.0):
 
 
 def turn_off():
-    """DPMS standby: the same state the power plan timeout uses."""
+    """DPMS standby: the same state the power plan timeout uses.
+    The W suffix is not decoration: user32.dll exports
+    SendMessageTimeoutA/W, never the bare macro name, and ctypes
+    raises AttributeError for names a C header only #defines."""
     log.debug("sending SC_MONITORPOWER(2) ...")
     user32 = u32
-    user32.SendMessageTimeout(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER,
-                              MONITOR_OFF, SMTO_NORMAL, SMTO_TIMEOUT_MS,
-                              ctypes.byref(ctypes.c_ulong()))
+    user32.SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND,
+                               SC_MONITORPOWER, MONITOR_OFF, SMTO_NORMAL,
+                               SMTO_TIMEOUT_MS,
+                               ctypes.byref(ctypes.c_ulong()))
     if watcher:
         watcher.state = 0.0
 
@@ -252,8 +256,9 @@ def wake(timeout=2.0):
     camera and input activity.
     """
     for attempt in range(3):
-        u32.SendMessageTimeout(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER,
-                                MONITOR_ON, SMTO_NORMAL, SMTO_TIMEOUT_MS,
+        u32.SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND,
+                                SC_MONITORPOWER, MONITOR_ON, SMTO_NORMAL,
+                                SMTO_TIMEOUT_MS,
                                 ctypes.byref(ctypes.c_ulong()))
         if wait_for(True, timeout=0.5):
             break

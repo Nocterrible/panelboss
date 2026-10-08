@@ -78,6 +78,9 @@ class PresenceMonitor:
         self.last_present = 0.0
         self.preview_until = 0.0              # debug window lease
         self.previewing = False
+        self.wake_times = []                  # unexpected wakes, recent
+        self.re_off_paused = False            # burst tripped; stays lit
+        self.notifier = None                  # cli wires icon.notify
 
     # ------------------------------------------------------------------ run
     def run(self):
@@ -129,6 +132,9 @@ class PresenceMonitor:
             self.next_poll = now                # the gate just opened;
                                                    # the camera always starts
                                                    # here
+        if self.re_off_paused and idle <= 2 * self.timers["re_off_grace_sec"]:
+            self.grace_until = now + self.recovery[
+                "leave_on_grace_sec"]    # the desk is still hot: stay lit
         if now >= self.next_poll:
             present, score = self._poll()
             self._schedule_on_poll(now, present, score)
@@ -138,6 +144,9 @@ class PresenceMonitor:
             self.absent_since = None
             self.last_present = now
             self.hits += 1
+            if (self.re_off_paused
+                    and self.hits >= self.inference_cfg["min_hits"]):
+                self._resume_re_off("the camera saw somebody again")
             self.next_poll = now + self.timers["present_recheck_sec"]
             return
         if self.absent_since is None:
@@ -294,23 +303,79 @@ class PresenceMonitor:
     def _notice_screens(self, now, value):
         """The screens came up on their own (or went dark)."""
         if self.state == "off" and value == 1.0:
+            self.wake_times = [t for t in self.wake_times
+                               if now - t <= self.recovery[
+                                   "wake_burst_window_sec"]]
+            self.wake_times.append(now)
+            self.state = "counting"
+            self.hits = 0
+            self.next_poll = now + self.on_poll()
+            self.absent_since = None             # start a fresh count
+            if self.re_off_paused:
+                self.grace_until = now + self.recovery[
+                    "leave_on_grace_sec"]    # lit while the desk is hot
+                log.info("unexpected wake while auto re-off is paused; "
+                         "the screens stay lit")
+                return
+            if (self.recovery["wake_policy"] == "re_off"
+                    and len(self.wake_times)
+                    >= self.recovery["wake_burst_count"]):
+                self._pause_re_off()
+                return
             if self.recovery["wake_policy"] == "leave_on":
                 self.grace_until = now + self.recovery[
                     "leave_on_grace_sec"]
                 log.info("leave_on: screens handed back, grace until then")
             else:
                 self.re_off_deadline = now + self.timers["re_off_grace_sec"]
-                self.absent_since = None         # start a fresh count
                 log.info("unexpected wake; nobody in front of the "
                           "screens; turning them off again after %.0f s if "
                           "still nobody shows up",
                           self.timers["re_off_grace_sec"])
-            self.state = "counting"
-            self.hits = 0
-            self.next_poll = now + self.on_poll()
         elif self.state != "off" and value == 0.0:
             log.info("the power plan turned the screens off early")
             self._screens_off(now)
+
+    def _pause_re_off(self):
+        """Two unexpected wakes with nobody ever seen: the classic
+        symptom is a slipped camera looking at the wall. Keep the
+        screens lit and tell the human; a confirmed person, a policy
+        change or a manual resume re-arms the auto off."""
+        now = time.monotonic()
+        self.re_off_paused = True
+        self.grace_until = now + self.recovery["leave_on_grace_sec"]
+        window = self.recovery["wake_burst_window_sec"]
+        log.warning("auto re-off paused: %d unexpected wakes in %s s and "
+                    "nobody ever confirmed (camera index %s pointing at "
+                    "a wall?)", len(self.wake_times), window,
+                    self.camera_cfg["index"])
+        burst = len(self.wake_times) >= self.recovery["wake_burst_count"]
+        if self.notifier is not None and burst:
+            try:
+                self.notifier(
+                    "auto re-off paused: the screens woke %d times in "
+                    "%d s but the camera (index %s) never saw a person. "
+                    "If it slipped off the monitor, point it back; auto "
+                    "off resumes as soon as it sees somebody (or from "
+                    "the tray / window)." % (
+                        len(self.wake_times), window,
+                        self.camera_cfg["index"]))
+            except Exception:
+                pass                             # the notice is a courtesy
+
+    def _resume_re_off(self, reason):
+        if not self.re_off_paused:
+            return
+        self.re_off_paused = False
+        self.grace_until = 0.0
+        self.wake_times = []
+        self.re_off_deadline = math.inf
+        log.info("auto re-off resumed (%s)", reason)
+        if self.notifier is not None:
+            try:
+                self.notifier("auto re-off resumed (%s)" % reason)
+            except Exception:
+                pass
 
     def _drain_tray(self):
         while True:
@@ -342,8 +407,15 @@ class PresenceMonitor:
                 self.snooze_until = time.monotonic() + value * 60
             elif action == "wake_policy":
                 self.recovery["wake_policy"] = value
+                self.wake_times = []
+                self._resume_re_off("the wake policy changed")
                 from . import config
                 config.write_config(self.cfg)
+            elif action == "reoff":
+                if value:
+                    self._pause_re_off()
+                else:
+                    self._resume_re_off("manual resume (tray/window)")
             elif action == "camera":
                 self.camera_cfg["index"] = int(value)
                 self._release_camera()             # the next poll opens the

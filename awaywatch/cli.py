@@ -114,6 +114,8 @@ def _run(cfg):
     icon = tray.Tray(monitor.events, cfg, ui_events=ui_events)
     icon.start()                            # the tray always runs beside
                                             # the monitor
+    monitor.notifier = icon.notify          # burst warnings reach the
+                                            # user, not just the log
     # Tk must own the main thread, so the monitor loop drops to a
     # worker; display (its own thread) and tray are untouched.
     worker = threading.Thread(target=monitor.run, daemon=True,

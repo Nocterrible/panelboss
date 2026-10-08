@@ -238,6 +238,16 @@ class SettingsWindow(ctk.CTk):
         if self.cfg["guards"]["fullscreen"]:
             self.fullscreen_switch.select()
         self.fullscreen_switch.pack(anchor="w", pady=6)
+        row = self._row(box, "auto re-off")
+        self.reoff_label = ctk.CTkLabel(row, text="on",
+                                        font=self.skin.font(12),
+                                        **self.skin.text_style("sub"))
+        self.reoff_label.grid(row=0, column=1, sticky="e")
+        self.reoff_button = ctk.CTkButton(
+            row, text="resume now", width=110,
+            command=lambda: self.monitor.events.put(("reoff", False)),
+            **self.skin.secondary())
+        self.reoff_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
 
     def _build_general(self):
         box = self._card(self.left, "General")
@@ -497,6 +507,11 @@ class SettingsWindow(ctk.CTk):
             % (idle, age, len(slot[1]) if slot else 0))
         self.pause_button.configure(
             text="Resume" if self.monitor.paused else "Pause")
+        paused_re = getattr(self.monitor, "re_off_paused", False)
+        self.reoff_label.configure(
+            text="PAUSED (camera slipped?)" if paused_re else "on")
+        self.reoff_button.configure(
+            state="normal" if paused_re else "disabled")
 
     @staticmethod
     def _idle():

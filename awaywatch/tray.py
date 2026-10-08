@@ -99,6 +99,10 @@ class Tray(threading.Thread):
             pystray.MenuItem("Settings...", action=self._settings),
             pystray.MenuItem("Pause", action=self._pause),
             pystray.MenuItem("Resume", action=self._resume),
+            pystray.MenuItem("Pause auto re-off",
+                             action=lambda i: self.events.put(("reoff", True))),
+            pystray.MenuItem("Resume auto re-off",
+                             action=lambda i: self.events.put(("reoff", False))),
             pystray.MenuItem("Snooze 10 min", action=lambda i: self._snooze(10)),
             pystray.MenuItem("Snooze 30 min", action=lambda i: self._snooze(30)),
             pystray.MenuItem("Snooze 60 min", action=lambda i: self._snooze(60)),
@@ -171,6 +175,14 @@ class Tray(threading.Thread):
 
     def _quit(self, icon=None):
         self.events.put(("quit", True))
+
+    def notify(self, message):
+        """Balloon from the state machine (burst warnings and such)."""
+        if self.icon is not None:
+            try:
+                self.icon.notify(message, "ICU Presence Detector")
+            except Exception:
+                pass                        # notifications are a courtesy
 
     def set_state(self, state):
         """Recolor the circle; the full UI overhaul wires this later."""

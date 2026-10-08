@@ -18,6 +18,7 @@ notice the camera blinking and something malicious watching it.
 | screens dark | camera held open, polled every `off_poll_sec` (3 s) |
 | `min_hits` (2) consecutive positive frames | camera released **before** the screens wake (the device is exclusive) |
 | screens wake on their own (mouse jiggle) | `wake_policy = "re_off"` (default) turns them off again after `re_off_grace_sec` unless `min_hits` people show up; `"leave_on"` hands them back for `leave_on_grace_sec` |
+| **two** unexpected wakes within `wake_burst_window_sec` (120 s) and nobody ever seen | auto re-off **pauses**: screens stay lit while the desk keeps producing input, a toast says the camera (index N) never saw a person — the slipped-off-the-monitor case; re-arms when a person is confirmed, the policy changes, or `Resume auto re-off` (tray/window) |
 | fullscreen app owns the display | the broadcast is skipped (the message never reaches the swap chain) |
 
 Timers, camera modes (`boot_per_poll` / `always_on`, one choice per
@@ -96,6 +97,11 @@ otherwise).
   and the camera; the power sink still listens for power-plan transitions
 * `SendMessageTimeout` with `uTimeout=0` waits forever; some app on the
   system never pumps its queue — every call carries a timeout
+* ctypes finds **exports**, not C header macros: `user32.SendMessageTimeout`
+  raises `AttributeError` (the dll only exports the A/W variants), which
+  silently killed every monitor-off under `pythonw` where the traceback
+  could never be seen — every such entry point is called with its real
+  `...W` suffix here
 * message-only windows receive notifications only on the thread that
   created the window, and that thread must have created a message queue
   (`PeekMessage`) first; every handle is `c_void_p` so 64-bit values never
