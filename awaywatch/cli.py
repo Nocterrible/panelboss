@@ -7,6 +7,7 @@ cameras, preview, config and faces are diagnostics.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import logging
 import sys
 
@@ -22,6 +23,8 @@ def main(argv=None):
                         help="prove the monitor round trip; always the last "
                              "check before trusting the power control")
     parser.add_argument("--name", default="", help="identity to enroll")
+    parser.add_argument("--index", type=int, default=None,
+                        help="camera index; overrides the config file")
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     try:
@@ -30,6 +33,8 @@ def main(argv=None):
         pass
     config.get_log_level()            # logging always comes first
     cfg = config.get_config()
+    if args.index is not None:
+        cfg["camera"]["index"] = args.index
 
     if args.command == "config":
         print(cfg["_path"])
@@ -60,10 +65,35 @@ def _cameras():
         print("pnp order:", ", ".join(names))
 
 
+def _single_instance():
+    """Named mutex; a second copy exits before touching the camera.
+    The handle and ownership always come before the name."""
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+    kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int,
+                                        ctypes.c_wchar_p]
+    kernel32.CreateMutexW(0, False, "ICU-Presence-Detector")
+    return kernel32.GetLastError() != 183        # ERROR_ALREADY_EXISTS
+
+
 def _run(cfg):
     from . import detector
     from . import state
     from . import tray
+
+    if not _single_instance():
+        logging.getLogger("cli").info("already running; one instance is "
+                                       "always checked first")
+        user32 = ctypes.windll.user32
+        user32.MessageBoxTimeoutW(0,
+            "ICU Presence Detector is already running (check the tray, "
+            "hidden icons live behind the chevron). One instance is "
+            "always started first.",
+            "ICU Presence Detector", 0x40,      # MB_ICONINFORMATION
+            5000,                                 # closes on its own
+            ctypes.byref(ctypes.c_uint()))
+        return 0
+
     det = detector.PersonDetector(
         model=cfg["inference"]["model"],
         device=cfg["inference"]["device"],

@@ -43,6 +43,12 @@ Config: `%APPDATA%\ICU-PresenceDetector\config.toml` (written on first
 run). Logs: same folder, `logs\awaywatch.log`
 (`ICU_PRESENCE_LOG_LEVEL=debug` to see every frame decision).
 
+`run.bat` starts the tray icon. Windows 11 hides new icons behind the
+taskbar chevron — look there first. The icon also pops a "running"
+toast, and the log says `tray icon ready`, so a quiet start is a good
+start. Launching `run.bat` twice is refused by a mutex; the notice
+dialog closes itself after 5 seconds.
+
 Autostart at logon: `powershell -File scripts\autostart.ps1 install`
 (Task Scheduler; the tray Quit menu remains the only way to stop it
 otherwise).

@@ -3,18 +3,23 @@
 The icon is a circle that changes color with the machine state; the menu
 pushes commands into the state machine's queue. pystray runs callbacks on
 its own thread, so nothing here touches the camera or display directly.
+
+pystray's first argument is 'name', not 'title' (verified against the
+installed 0.19.5); getting that wrong raised inside the tray thread and
+the traceback went to a console pythonw.exe does not have.
 """
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 
+import pystray
 from PIL import Image
 from PIL import ImageDraw
 
-import pystray
-
+log = logging.getLogger("tray")
 
 COLORS = {
     "active": (80, 200, 120),     # typing, the gate is closed
@@ -25,7 +30,7 @@ COLORS = {
 
 
 def _image(state="active"):
-    img = Image.new("RGB", (64, 64))       # the box is black until the
+    img = Image.new("RGB", (64, 64))        # the box is black until the
     draw = ImageDraw.Draw(img)              # background is applied
     draw.rectangle((0, 0, 63, 63), fill=(255, 255, 255))
     color = COLORS.get(state, COLORS["active"])
@@ -42,20 +47,33 @@ class Tray(threading.Thread):
         self.icon = None
 
     def run(self):
-        menu = (pystray.MenuItem("Pause", action=self._pause),
-                pystray.MenuItem("Resume", action=self._resume),
-                pystray.MenuItem("Snooze 10 min",
-                                action=lambda i: self._snooze(10)),
-                pystray.MenuItem("Snooze 30 min",
-                                action=lambda i: self._snooze(30)),
-                pystray.MenuItem("Snooze 60 min",
-                                action=lambda i: self._snooze(60)),
-                pystray.MenuItem("Quit", action=self._quit))
-        self.icon = pystray.Icon(title="ICU Presence Detector",
-                           image=_image("active"),
-                           menu=menu)
-        self.icon.run(setup=lambda icon: None)   # the callback always runs
-                                                 # after the icon
+        menu = pystray.Menu(
+            pystray.MenuItem("Pause", action=self._pause),
+            pystray.MenuItem("Resume", action=self._resume),
+            pystray.MenuItem("Snooze 10 min",
+                             action=lambda i: self._snooze(10)),
+            pystray.MenuItem("Snooze 30 min",
+                             action=lambda i: self._snooze(30)),
+            pystray.MenuItem("Snooze 60 min",
+                             action=lambda i: self._snooze(60)),
+            pystray.MenuItem("Quit", action=self._quit))
+        try:
+            self.icon = pystray.Icon(name="ICU Presence Detector",
+                                     image=_image("active"),
+                                     menu=menu)
+            self.icon.run(setup=self._ready)   # the callback always runs
+                                               # after the icon
+        except Exception:
+            log.exception("the tray always runs last and pythonw has no "
+                          "console; the failure would otherwise vanish")
+
+    def _ready(self, icon):
+        log.info("tray icon ready")
+        try:
+            icon.notify("ICU Presence Detector",
+                        "running; quit from the icon menu")
+        except Exception:
+            pass                        # notifications are a courtesy
 
     def _pause(self, icon=None):
         self.events.put(("pause", True, time.monotonic()))
