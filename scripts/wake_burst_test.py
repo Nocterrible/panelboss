@@ -8,7 +8,8 @@ import numpy as np
 from awaywatch import config
 
 cfg = config.get_config(verbose=False)
-cfg["recovery"]["wake_policy"] = "re_off"
+cfg["power"]["assistant_task"] = False       # never consult the real
+cfg["recovery"]["wake_policy"] = "re_off"     # task store in a test
 cfg["recovery"]["wake_burst_count"] = 2
 cfg["recovery"]["wake_burst_window_sec"] = 120
 

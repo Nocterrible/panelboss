@@ -157,13 +157,24 @@ finally:
     power.requests = real_requests
 print("state gate OK (blocked waits, absence resets, throttle, resume)")
 
-# 5) events: power_assistant opt-in persists into the shared cfg
-mon.events.put(("power_assistant", True))
-mon._drain_tray()
-assert cfg["power"]["assistant_task"] is True
-mon.events.put(("power_assistant", False))
-mon._drain_tray()
-assert cfg["power"]["assistant_task"] is False
+# 5) events: power_assistant opt-in persists into the shared cfg -
+#    but _drain_tray calls write_config(cfg) with NO path, so left to
+#    itself this test scribbles assistant_task=false over the LIVE
+#    config every run (measured: it did, and the next instance booted
+#    assistant-off while the task sat Ready, feeding the pane stale
+#    admin errors). Redirect every write to a scratch file.
+_saved_wc = config.write_config
+config.write_config = lambda c, path=None: _saved_wc(
+    c, os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml"))
+try:
+    mon.events.put(("power_assistant", True))
+    mon._drain_tray()
+    assert cfg["power"]["assistant_task"] is True
+    mon.events.put(("power_assistant", False))
+    mon._drain_tray()
+    assert cfg["power"]["assistant_task"] is False
+finally:
+    config.write_config = _saved_wc
 print("event persistence OK")
 
 # 6) window: blockers text renders; switch round-trips through fakes
@@ -194,6 +205,14 @@ def check():
     assert "*OVERRIDE opera.exe" in text, text   # grey + honest label
     fg = app.blockers_box._textbox.tag_cget("danger", "foreground")
     assert str(fg).lower().startswith("#"), ("danger tag uncolored", fg)
+    # the truth-bridge: a worker thread's answer rides ui_events (its
+    # self.after(0) could land BEFORE app.mainloop exists and die with
+    # "main thread is not in main loop", pythonw eating the traceback -
+    # the measured root cause of "the assistant does not persist")
+    app.ui_events.put(("assistant_truth", True))
+    app._drain_ui_events()
+    assert bool(app.power_switch.get()) is True, "truth did not reach switch"
+    assert cfg["power"]["assistant_task"] is True, "truth did not reach cfg"
     app.power_switch.select()
     app._power_assistant_changed()
 

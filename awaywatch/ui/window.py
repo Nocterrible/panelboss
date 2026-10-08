@@ -269,10 +269,22 @@ class SettingsWindow(ctk.CTk):
     def _assistant_truth(self, real):
         """Adopt the task store's answer as the switch state and tell
         the monitor, so config, UI and reality cannot disagree."""
-        if bool(self.power_switch.get()) != real:
-            self.power_switch.set(real)          # set() is click-free
-            self.cfg["power"]["assistant_task"] = real
-            self.monitor.events.put(("power_assistant", real))
+        try:
+            was = bool(self.power_switch.get())
+            log.info("assistant adoption: switch says %s, store says %s",
+                     was, real)
+            if was != real:
+                self.power_switch.set(real)          # set() is click-free
+                self.cfg["power"]["assistant_task"] = real
+                self.monitor.events.put(("power_assistant", real))
+                self._save()                         # the file learned the
+                # truth too, or a test that scribbled assistant_task=false
+                # over it keeps whispering lies to every future instance
+                # until some unrelated widget change happens to save it
+        except Exception:
+            log.exception("assistant adoption crashed")  # pythonw has no
+            # stderr: without this the whole thread's answer evaporated
+            # silently, which is exactly how "does not persist" was born
 
     def _power_assistant_changed(self):
         """Tick ON registers the task (one UAC confirm, which can flash
@@ -326,7 +338,17 @@ class SettingsWindow(ctk.CTk):
 
     # ------------------------------------------------- camera + preview ---
     def _build_right(self):
-        card = ctk.CTkFrame(self._body, **self.skin.panel_style())
+        # scrollable like its left twin: the card now carries preview +
+        # report + switch stacked, and the window cannot promise that
+        # height fits - unscrollable, the power switch was simply born
+        # below the clip edge (seen live: the pane complained about
+        # admin rights while the box to fix it was off-screen). The
+        # textbox keeps its own wheel (ctk excludes it from column
+        # scroll), everything else scrolls the card.
+        card = ctk.CTkScrollableFrame(
+            self._body, scrollbar_button_color=self.skin.button,
+            scrollbar_fg_color=self.skin.panel,
+            **self.skin.panel_style())
         card.pack(side="right", fill="both", expand=True)
         ctk.CTkLabel(card, text="Camera", font=self.skin.font(15, "bold"),
                      **self.skin.text_style()).pack(anchor="w", padx=14,
@@ -410,7 +432,15 @@ class SettingsWindow(ctk.CTk):
                     break
                 time.sleep(2)
                 real = power.task_installed()
-            self.after(0, lambda: self._assistant_truth(real))
+            log.info("assistant truth: task store says %s", real)
+            # NOT self.after(0, ...): this thread can beat app.mainloop
+            # (measured: schtasks answered while the constructor still
+            # ran) and tkinter then raises "main thread is not in main
+            # loop" - pythonw ate the traceback, the answer evaporated,
+            # and the switch drifted from reality forever. The queue is
+            # thread-safe whenever; _tick_ui drains it on the main
+            # thread once the loop exists.
+            self.ui_events.put(("assistant_truth", real))
         threading.Thread(target=truth, daemon=True).start()
 
     # ----------------------------------------------------------- helpers ---
@@ -544,7 +574,7 @@ class SettingsWindow(ctk.CTk):
                 log.exception("camera scan failed")
                 found = []
             try:
-                self.after(0, self._apply_cameras, found)
+                self.ui_events.put(("cameras", found))
             except Exception:
                 pass                    # the window closed mid-scan
         threading.Thread(target=worker, daemon=True, name="ui-scan").start()
@@ -604,6 +634,10 @@ class SettingsWindow(ctk.CTk):
                 self.deiconify()
                 self.lift()
                 self.focus_force()
+            if message == "assistant_truth":
+                self._assistant_truth(_value)
+            if message == "cameras":
+                self._apply_cameras(_value)
 
     def _update_status(self, now, slot):
         state = self.monitor.state

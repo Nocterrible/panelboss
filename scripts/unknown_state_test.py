@@ -15,6 +15,12 @@ from awaywatch import config, display
 from awaywatch.state import PresenceMonitor
 
 cfg = config.get_config(verbose=False)
+# pin the assistant OFF for these scenarios: the live config now
+# honestly says true, and then every _on_phase would consult the REAL
+# task store - state would correctly wait for whatever apps hold the
+# real display right now, and the asserts would be testing the desk,
+# not the code
+cfg["power"]["assistant_task"] = False
 sent = []
 display.wake = lambda *a, **k: sent.append("wake")
 display.turn_off = lambda *a, **k: sent.append("off")

@@ -138,6 +138,15 @@ otherwise).
   slider while ShellExecuteW returned instantly. Elevation is a
   handoff, never an answer: every path re-asks the task store
   (`/Query`) for the truth afterwards
+* `widget.after()` from a worker thread is NOT a safe "post to UI":
+  when the thread answered fast (schtasks replied while the window
+  constructor still ran, before `app.mainloop()` existed), tkinter
+  raised `RuntimeError: main thread is not in main loop`, pythonw ate
+  the traceback, and the answer evaporated - the assistant switch
+  drifted from reality and the setting "did not persist". Cross-thread
+  replies must ride the event QUEUE the periodic main-thread tick
+  drains; a queue is thread-safe whenever, `after` only once the loop
+  exists
 * a `.bat` written from a python string doubles `%%` expansions **only
   if** the python string itself goes through the `%` operator: a plain
   literal `"%%~dp0"` writes `%%~dp0` into the file, and cmd hands it on

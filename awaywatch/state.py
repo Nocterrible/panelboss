@@ -507,6 +507,7 @@ class PresenceMonitor:
                                                    # last week's reading
                 from . import config
                 config.write_config(self.cfg)
+                log.info("assistant flag written to disk: %s", bool(value))
             elif action == "camera":
                 self.camera_cfg["index"] = int(value)
                 self._release_camera()             # the next poll opens the
