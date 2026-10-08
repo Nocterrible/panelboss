@@ -1,19 +1,24 @@
-"""Barebones system tray; full UI overhaul is scheduled later.
+"""System tray: barebones but with the settings that matter.
 
 The icon is a circle that changes color with the machine state; the menu
-pushes commands into the state machine's queue. pystray runs callbacks on
-its own thread, so nothing here touches the camera or display directly.
+carries the levers (detection device, camera, wake policy, pause/snooze).
+pystray runs callbacks on its own pump thread, so nothing here touches
+the camera or display directly; everything is persisted through the
+state machine's queue and config.write_config.
 
-pystray's first argument is 'name', not 'title' (verified against the
-installed 0.19.5); getting that wrong raised inside the tray thread and
-the traceback went to a console pythonw.exe does not have.
+pystray traps, all measured the hard way:
+* Icon(name, icon=, title=, menu=) - the image keyword is icon= and a
+  wrong image= is swallowed by **kwargs
+* the icon starts HIDDEN; passing setup= replaces the default callback
+  that sets visible=True, so NIM_ADD never reaches the Shell
+* the menu HMENU is built by update_menu(); the constructor bypasses it
+  and a right-click before any left-click shows nothing
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-import time
 
 import pystray
 from PIL import Image
@@ -47,33 +52,20 @@ class Tray(threading.Thread):
         self.icon = None
 
     def run(self):
-        menu = pystray.Menu(
-            pystray.MenuItem("Pause", action=self._pause),
-            pystray.MenuItem("Resume", action=self._resume),
-            pystray.MenuItem("Snooze 10 min",
-                             action=lambda i: self._snooze(10)),
-            pystray.MenuItem("Snooze 30 min",
-                             action=lambda i: self._snooze(30)),
-            pystray.MenuItem("Snooze 60 min",
-                             action=lambda i: self._snooze(60)),
-            pystray.MenuItem("Quit", action=self._quit))
         try:
             self.icon = pystray.Icon(name="ICU Presence Detector",
                                      icon=_image("active"),
                                      title="ICU Presence Detector",
-                                     menu=menu)
-            self.icon.run(setup=self._ready)   # the callback always runs
-                                               # after the icon
+                                     menu=self._build_menu())
+            self.icon.run(setup=self._ready)
         except Exception:
             log.exception("the tray always runs last and pythonw has no "
                           "console; the failure would otherwise vanish")
 
     def _ready(self, icon):
-        icon.visible = True       # pystray starts hidden and the default
-                                  # setup function (which we replaced by
-                                  # passing setup=) is what shows it; the
-                                  # class docstring says so. NIM_ADD never
-                                  # reaches the Shell otherwise.
+        icon.visible = True       # pystray starts hidden; our setup
+                                  # replaced the default one that shows it
+        icon.update_menu()        # and the constructor skipped the HMENU
         log.info("tray icon ready")
         try:
             icon.notify("ICU Presence Detector",
@@ -81,17 +73,98 @@ class Tray(threading.Thread):
         except Exception:
             pass                        # notifications are a courtesy
 
+    # ------------------------------------------------------------- menu ---
+    def _build_menu(self):
+        devices = pystray.Menu(
+            pystray.MenuItem("auto", action=lambda i: self._device("auto"),
+                             checked=self._device_checker("auto")),
+            pystray.MenuItem("CPU", action=lambda i: self._device("cpu"),
+                             checked=self._device_checker("cpu")),
+            pystray.MenuItem("CUDA GPU",
+                             action=lambda i: self._device("cuda"),
+                             checked=self._device_checker("cuda")))
+        policies = pystray.Menu(
+            pystray.MenuItem("re-off after wake",
+                             action=lambda i: self._policy("re_off"),
+                             checked=self._policy_checker("re_off")),
+            pystray.MenuItem("leave on after wake",
+                             action=lambda i: self._policy("leave_on"),
+                             checked=self._policy_checker("leave_on")))
+        return pystray.Menu(
+            pystray.MenuItem("Detection device", devices),
+            pystray.MenuItem("Camera", self._camera_menu()),
+            pystray.MenuItem("Wake policy", policies),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Pause", action=self._pause),
+            pystray.MenuItem("Resume", action=self._resume),
+            pystray.MenuItem("Snooze 10 min", action=lambda i: self._snooze(10)),
+            pystray.MenuItem("Snooze 30 min", action=lambda i: self._snooze(30)),
+            pystray.MenuItem("Snooze 60 min", action=lambda i: self._snooze(60)),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Quit", action=self._quit))
+
+    def _camera_menu(self):
+        """Which index opens; the PnP names come after the indexes and
+        are unreliable (documented in the README)."""
+        from . import camera
+        names = camera.camera_names()
+        items = []
+        for index, opened, width in camera.enumerate_cameras():
+            if not opened:
+                continue
+            label = "index %s (%s px wide)" % (index, int(width))
+            if index < len(names):
+                label += " %s" % names[index]
+            items.append(pystray.MenuItem(
+                label, action=self._camera_picker(index),
+                checked=self._camera_checker(index)))
+        if not items:
+            return pystray.Menu(pystray.MenuItem("no camera opens",
+                                                 action=lambda i: None,
+                                                 enabled=False))
+        return pystray.Menu(*items)
+
+    # ---------------------------------------------------------- actions ---
+    def _device(self, name):
+        self.config["inference"]["device"] = name
+        self.events.put(("device", name))
+
+    def _device_checker(self, name):
+        def check(item):
+            return self.config["inference"]["device"] == name
+        return check
+
+    def _policy(self, name):
+        self.config["recovery"]["wake_policy"] = name
+        self.events.put(("wake_policy", name))
+
+    def _policy_checker(self, name):
+        def check(item):
+            return self.config["recovery"]["wake_policy"] == name
+        return check
+
+    def _camera_picker(self, index):
+        def action(icon):
+            self.config["camera"]["index"] = index
+            self.events.put(("camera", index))
+        return action
+
+    def _camera_checker(self, index):
+        def check(item):
+            return self.config["camera"]["index"] == index
+        return check
+
     def _pause(self, icon=None):
-        self.events.put(("pause", True, time.monotonic()))
+        self.events.put(("pause", True))
 
     def _resume(self, icon=None):
-        self.events.put(("pause", False, time.monotonic()))
+        self.events.put(("pause", False))
 
     def _snooze(self, minutes, icon=None):
-        self.events.put(("snooze", minutes, time.monotonic()))
+        self.events.put(("snooze", minutes))
 
     def _quit(self, icon=None):
-        self.events.put(("quit", True, time.monotonic()))
+        self.events.put(("quit", True))
 
     def set_state(self, state):
         """Recolor the circle; the full UI overhaul wires this later."""

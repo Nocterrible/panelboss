@@ -37,6 +37,7 @@ class PresenceMonitor:
         self.camera_cfg = config["camera"]
         self.guards = config["guards"]
         self.recovery = config["recovery"]
+        self.inference_cfg = config["inference"]
         self.detector = detector
         self.faces = faces
         self.events = queue.Queue()        # tray commands land here
@@ -264,3 +265,33 @@ class PresenceMonitor:
                 self.recovery["wake_policy"] = value
                 from . import config
                 config.write_config(self.cfg)
+            elif action == "camera":
+                self.camera_cfg["index"] = int(value)
+                self._release_camera()             # the next poll opens the
+                                                   # chosen one
+                from . import config
+                config.write_config(self.cfg)
+                log.info("camera switched to index %s", value)
+            elif action == "device":
+                self._set_device(value)
+
+    def _set_device(self, name):
+        """Rebuild the detector on a new provider; a CUDA request on a
+        CPU-only onnxruntime falls back to CPU inside get_session and
+        the log says which one actually loaded."""
+        if self.inference_cfg["device"] == name:
+            return
+        self.inference_cfg["device"] = name
+        from . import config
+        try:
+            from . import detector as detector_module
+            self.detector = detector_module.PersonDetector(
+                model=self.inference_cfg["model"],
+                device=name,
+                device_id=self.inference_cfg["device_id"],
+                conf=self.inference_cfg["confidence"])
+            log.info("detector rebuilt on device=%s providers=%s",
+                     name, self.detector.session.get_providers())
+        except Exception:
+            log.exception("detector rebuild failed; keeping the old one")
+        config.write_config(self.cfg)

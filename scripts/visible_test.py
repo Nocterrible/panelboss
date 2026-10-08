@@ -40,6 +40,9 @@ icon = pystray.Icon(name="VISIBLE TEST", icon=img,
 
 def show(icon):
     icon.visible = True           # the docs say the icon starts hidden
+    icon.update_menu()            # the constructor sets _menu directly; the
+    # win32 backend only builds the HMENU via update_menu
+    print("menu handle:", icon._menu_handle is not None)
 
 
 t = threading.Thread(target=lambda: icon.run(setup=show), daemon=True)
