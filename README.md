@@ -28,7 +28,8 @@ phase) and the wake policy all live in the config file.
 ```powershell
 git clone <this repo> ; cd ICU-PresenceDetector
 powershell -File scripts\setup.ps1     # .venv + pinned deps + weights
-.venv\Scripts\pythonw.exe -m awaywatch # run with the tray icon
+run.bat                                 # or double-click: tray + monitor
+update.bat                              # pull + reinstall + relock
 ```
 
 Diagnose first:
