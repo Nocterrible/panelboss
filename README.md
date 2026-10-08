@@ -213,6 +213,13 @@ otherwise).
   half-dead interpreter forever (endless "ui tick failed" traceback
   loop, mainloop never returns) - a "dying" flag checked before each
   tick is what lets the window actually end
+ * `cv2.VideoCapture` opened DURING the display standby transition
+  hands back an open-yet-FROZEN handle: `isOpened()` is true, frames
+  never flow again (probe: opening after the panels are dark always
+  streams fine, ~4-21 s per open). So the held `always_on` stream
+  rides through the transition untouched, and any handle whose read
+  times out is treated as dead whatever `is_open()` swears - keeping
+  the corpse meant forever-silent dark polling and mouse-only wakes
 * `CREATE_NO_WINDOW` is a **process creation flag**, not a
   `STARTUPINFO.dwFlags` bit - stuffing it into startupinfo looks
   plausible, compiles, and does nothing. And since 24H2 the *default

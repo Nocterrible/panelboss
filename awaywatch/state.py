@@ -264,7 +264,17 @@ class PresenceMonitor:
             return
         display.keep_awake(True)                 # the box stays up while we
                                                  # poll with dark screens
-        self._release_camera()
+        # mode always_on: the stream rides THROUGH the standby
+        # transition, never released. Reopening inside the transition
+        # is the race that produced forever-dead cameras (measured:
+        # the handle says open, frames never flow again; a probe that
+        # opens AFTER the panels are dark always streams fine). If the
+        # device died mid-count we retry once right now, while the
+        # screens are still lit and an honest open is cheap.
+        if self.camera_cfg["mode_off"] == "always_on":
+            self._hold_camera()
+        else:
+            self._release_camera()
         display.turn_off()
         if self.absent_since is None:
             elapsed = 0
@@ -317,7 +327,15 @@ class PresenceMonitor:
             if cam is None or not cam.is_open():
                 cam = self.camera = self._new_camera()
                 cam.warm_up()
-            return cam.read()
+            frame = cam.read()
+            if frame is None and self.camera is not None:
+                # a handle that stopped flowing IS a dead handle,
+                # whatever is_open() swears (measured: the standby
+                # transition leaves open-yet-frozen cameras behind;
+                # reading the corpse every poll forever is exactly
+                # the "no LED, no wake, mouse required" symptom)
+                self._release_camera()
+            return frame
         except Exception:
             log.exception("grab failed; treating this poll as no frame")
             self._release_camera()               # half-dead device: next

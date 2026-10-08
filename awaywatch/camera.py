@@ -6,7 +6,10 @@
   first frames so the detector never sees a half-dark image
 - modes: boot-per-poll while the screens are on (the record LED blinks so
   you can always notice something watching the camera), held open between
-  polls while the screens are dark
+  polls while the screens are dark - and the held stream rides THROUGH the
+  standby transition: an open issued DURING the panels' sleep can come
+  back open-yet-frozen forever (measured), so we never close across it,
+  and any handle that stops delivering frames is released and reopened
 """
 
 from __future__ import annotations
@@ -122,7 +125,9 @@ class Camera:
         return None
 
     def release(self):
-        if self.cap is not None and self.cap.isOpened():
+        if self.cap is not None:
+            # ask even a never-opened or open-yet-frozen cap to let go;
+            # cv2 handles all three without complaint
             self.cap.release()
 
     def is_open(self):
