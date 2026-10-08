@@ -13,11 +13,18 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import threading
 import time
 
 import cv2
 
 log = logging.getLogger("camera")
+
+# the NVIDIA virtual camera driver dies when two threads open devices
+# at the same time (measured: interprocess mutex timeout, then OpenCV
+# raises a C++ exception); every open and every enumerate goes through
+# this lock, so at most one thread touches the device tree
+_open_lock = threading.RLock()
 
 
 def camera_names():
@@ -42,10 +49,11 @@ def enumerate_cameras(start=0, stop=8):
     """Which indexes can be opened at all."""
     found = []
     for index in range(start, stop):
-        cap = cv2.VideoCapture(index)
-        opened = cap.isOpened()
-        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        cap.release()
+        with _open_lock:                 # one open at a time, always
+            cap = cv2.VideoCapture(index)
+            opened = cap.isOpened()
+            width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+            cap.release()
         found.append((index, opened, width))
     return found
 
@@ -66,11 +74,12 @@ def find_camera(index=-1, name_contains=None, fallback=0):
         indexes.insert(0, index)   # the config index comes second
     indexes.append(fallback)       # and we always fall back to something
     for idx in indexes:
-        cap = cv2.VideoCapture(idx)
-        if cap.isOpened():
-            cap.release()
-            log.debug(f"camera {idx} opens cleanly")
-            return idx
+        with _open_lock:                 # one open at a time, always
+            cap = cv2.VideoCapture(idx)
+            if cap.isOpened():
+                cap.release()
+                log.debug(f"camera {idx} opens cleanly")
+                return idx
     raise RuntimeError("no camera opened; check privacy settings")
 
 
@@ -83,11 +92,12 @@ class Camera:
         self.index = index
         self.warmup = warmup
         self.started = time.perf_counter()
-        self.cap = cv2.VideoCapture(index)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        with _open_lock:                 # the driver hates concurrent
+            self.cap = cv2.VideoCapture(index)   # opens: lock the whole
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)   # device tree
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         elapsed = time.perf_counter() - self.started
         log.debug("camera %s opened after %.2f s", index, elapsed)
 

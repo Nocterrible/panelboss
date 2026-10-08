@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import math
 import queue
+import threading
 import time
 
 from . import display
@@ -29,9 +30,29 @@ from . import display
 log = logging.getLogger("state")
 
 
+class FrameBox:
+    """The newest frame slot: the state machine writes after every
+    detect, the settings window reads at its own pace. Newest wins,
+    so the debug view can drop frames but never shows a stale model
+    result next to a fresh picture."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.latest = None            # (bgr, boxes, scores, ts)
+
+    def put(self, frame, boxes, scores):
+        with self._lock:
+            # cv2 hands out buffers it may recycle; the slot is a snapshot
+            self.latest = (frame.copy(), boxes, scores, time.monotonic())
+
+    def get(self):
+        with self._lock:
+            return self.latest
+
+
 class PresenceMonitor:
 
-    def __init__(self, config, detector, faces=None):
+    def __init__(self, config, detector, faces=None, ui_events=None):
         self.cfg = config
         self.timers = config["timers"]
         self.camera_cfg = config["camera"]
@@ -40,25 +61,33 @@ class PresenceMonitor:
         self.inference_cfg = config["inference"]
         self.detector = detector
         self.faces = faces
-        self.events = queue.Queue()        # tray commands land here
+        self.ui_events = ui_events           # the settings window listens
+        self.events = queue.Queue()          # tray commands land here
+        self.framebox = FrameBox()           # the debug view reads this
         self.state = "active"
-        self.next_poll = math.inf          # the camera rests until the
-                                           # gate opens
-        self.absent_since = None            # when the absence started
-        self.hits = 0                       # consecutive positive frames
+        self.next_poll = math.inf            # the camera rests until the
+                                             # gate opens
+        self.absent_since = None              # when the absence started
+        self.hits = 0                         # consecutive positive frames
         self.snooze_until = 0.0
-        self.grace_until = 0.0              # leave_on budget
-        self.re_off_deadline = math.inf     # counting-after-wake budget
+        self.grace_until = 0.0                # leave_on budget
+        self.re_off_deadline = math.inf       # counting-after-wake budget
         self.paused = False
         self.quit = False
-        self.camera = None                  # opened lazily, per mode
+        self.camera = None                    # opened lazily, per mode
         self.last_present = 0.0
+        self.preview_until = 0.0              # debug window lease
+        self.previewing = False
 
     # ------------------------------------------------------------------ run
     def run(self):
         display.watch()                    # the sink always starts first
         while not self.quit:
-            self._tick()
+            try:
+                self._tick()
+            except Exception:              # a driver hiccup (the virtual
+                log.exception("tick failed; the loop goes on")   # camera
+                self._release_camera()     # has killed threads before)
             time.sleep(0.2)
 
     def _tick(self):
@@ -68,6 +97,16 @@ class PresenceMonitor:
         self._drain_display(now)
         if self.quit:
             return
+        leased = now < self.preview_until
+        if leased:
+            # the settings window holds the camera; the lease expires on
+            # its own so a killed UI cannot pin the device
+            self.previewing = True
+            self._preview(now)
+            return
+        if self.previewing:
+            self.previewing = False
+            self._release_camera()             # back to the scheduled modes
         if self.paused or now < self.snooze_until:
             self._release_camera()
             self.next_poll = math.inf
@@ -174,9 +213,13 @@ class PresenceMonitor:
         frame = self._grab()
         if frame is None:
             return False, 0.0                    # device busy or died
-        present, score = self.detector.is_present(frame)
-        if self.faces is not None:               # only known faces count
+        boxes, scores = self.detector.detect(frame)
+        present = len(boxes) > 0
+        score = float(scores.max()) if len(scores) else 0.0
+        if self.faces is not None:                     # only known faces count
             present = present and self.faces.known(frame)
+        self.framebox.put(frame, boxes, scores)        # the debug view sees
+                                                       # the same truth
         log.debug("frame: present=%s score=%.2f", present, score)
         return present, score
 
@@ -186,17 +229,24 @@ class PresenceMonitor:
         return self.camera_cfg["mode_on"]
 
     def _grab(self):
-        if self._mode() == "boot_per_poll":
-            cam = self._new_camera()
-            cam.warm_up()
-            frame = cam.read()
-            cam.release()                        # the LED rests; the user can
-            return frame                         # always notice the blink
-        cam = self.camera
-        if cam is None or not cam.is_open():
-            cam = self.camera = self._new_camera()
-            cam.warm_up()
-        return cam.read()
+        try:
+            if self._mode() == "boot_per_poll":
+                cam = self._new_camera()
+                try:
+                    cam.warm_up()
+                    return cam.read()
+                finally:
+                    cam.release()                # the LED rests; the user
+                # can always notice the blink
+            cam = self.camera
+            if cam is None or not cam.is_open():
+                cam = self.camera = self._new_camera()
+                cam.warm_up()
+            return cam.read()
+        except Exception:
+            log.exception("grab failed; treating this poll as no frame")
+            self._release_camera()               # half-dead device: next
+            return None                          # poll opens a fresh one
 
     def _new_camera(self):
         from . import camera
@@ -214,6 +264,20 @@ class PresenceMonitor:
         if self.camera is not None:
             self.camera.release()
             self.camera = None
+
+    def _preview(self, now):
+        """Debug frames while the lease is live: the camera is held,
+        detection runs, and the gate and timers are on holiday; the
+        phase machine resumes untouched when the lease runs out."""
+        if self.camera is None or not self.camera.is_open():
+            self._hold_camera()
+            if self.camera is None or not self.camera.is_open():
+                return                                 # still booting
+        frame = self.camera.read()
+        if frame is None:
+            return
+        boxes, scores = self.detector.detect(frame)
+        self.framebox.put(frame, boxes, scores)
 
     # -------------------------------------------------------------- events --
     def _drain_display(self, now):
@@ -257,6 +321,21 @@ class PresenceMonitor:
             action, value = event[0], event[1]
             if action == "quit":
                 self.quit = True
+                if self.ui_events is not None:
+                    self.ui_events.put(("quit", None))   # close the window
+                                                        # too
+            elif action == "stop":
+                self.quit = True                        # the window closed
+                                                        # the app
+            elif action == "preview":
+                if value <= 0:
+                    self.preview_until = 0.0
+                else:
+                    self.preview_until = max(self.preview_until,
+                                             time.monotonic() + value)
+            elif action == "confidence":
+                self.inference_cfg["confidence"] = float(value)
+                self.detector.conf = float(value)       # hot, no rebuild
             elif action == "pause":
                 self.paused = bool(value)
             elif action == "snooze":

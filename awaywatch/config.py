@@ -73,6 +73,11 @@ DEFAULTS = {
     "faces": {
         "enabled": False,       # only registered identities count as presence (insightface)
     },
+    "ui": {
+        "enabled": True,        # settings window on start; false = headless
+        "skin": "modern",       # "modern" (the unfun one) | "fun" (palette stub for now)
+        "preview_width": 420,   # debug camera panel width in px
+    },
 }
 
 

@@ -21,7 +21,26 @@ notice the camera blinking and something malicious watching it.
 | fullscreen app owns the display | the broadcast is skipped (the message never reaches the swap chain) |
 
 Timers, camera modes (`boot_per_poll` / `always_on`, one choice per
-phase) and the wake policy all live in the config file.
+phase) and the wake policy are all editable from the settings window
+(or the config file — same values).
+
+## Settings window & skins
+
+`run.bat` opens a CustomTkinter window (main thread; the monitor loop
+and the tray run on workers). Everything applies live — sliders write
+the same config dicts the loop reads every tick — and persist to
+`config.toml` after a short rest. The **Camera** panel shows a live
+debug view next to the index picker: the picture is literally the last
+frame the detector judged (via a thread-safe frame slot), so you tune
+against exactly what the model sees. "live preview" holds the camera
+open at ~5 fps; the hold is a *lease* the window renews while visible,
+so closing it (or crashing) releases the device.
+
+Skins are the seam for the two looks. `ui.skin` picks one
+(`theme.get_skin`); a `Skin` is only a palette + the style kwargs each
+widget asks for, so layout lives in `window.py` and a new look is one
+file. `modern` is the unfun default; `fun` is a palette stub awaiting
+its real design. Switching is live.
 
 ## Setup (portable, never touches the base env)
 
@@ -43,11 +62,16 @@ Config: `%APPDATA%\ICU-PresenceDetector\config.toml` (written on first
 run). Logs: same folder, `logs\awaywatch.log`
 (`ICU_PRESENCE_LOG_LEVEL=debug` to see every frame decision).
 
-`run.bat` starts the tray icon. Windows 11 hides new icons behind the
-taskbar chevron — look there first. The icon also pops a "running"
-toast, and the log says `tray icon ready`, so a quiet start is a good
-start. Launching `run.bat` twice is refused by a mutex; the notice
-dialog closes itself after 5 seconds.
+`run.bat` starts the settings window plus the tray icon. The window
+is where everything is tuned (see below); closing it with ✕ hides it to
+the tray, and tray → `Settings...` brings it back. Windows 11 hides new
+icons behind the taskbar chevron — look there first. The icon also pops
+a "running" toast, and the log says `tray icon ready`, so a quiet start
+is a good start. Launching `run.bat` twice is refused by a mutex; the
+notice dialog closes itself after 5 seconds.
+
+Headless (tray only, no window): `ui.enabled = false` in the config or
+`python -m awaywatch run --no-ui`.
 
 Autostart at logon: `powershell -File scripts\autostart.ps1 install`
 (Task Scheduler; the tray Quit menu remains the only way to stop it
@@ -80,6 +104,12 @@ otherwise).
 * exclusive-fullscreen games swallow the standby broadcast
 * NVIDIA Broadcast/VCAMDS drivers spam stdout when any camera opens; the
   noise is the driver, not us (redirect it, it is harmless)
+* two threads calling `cv2.VideoCapture()` at once (the monitor polling
+  while the settings window enumerates indexes) makes the VCAMDS driver
+  throw `Interprocess mutex timeout ... owner died without unlocking`
+  and OpenCV raise a C++ exception that kills the thread; every open and
+  enumerate now goes through one `camera._open_lock`, and the state loop
+  survives a failed grab instead of dying with it
 * pystray is a trap: the constructor is `Icon(name, icon=, title=,
   menu=)` — the image keyword is `icon=` and a wrong `image=` is
   swallowed by `**kwargs`; the icon starts HIDDEN and the default setup
@@ -94,6 +124,8 @@ otherwise).
 
 ## Status
 
-v1 is the state machine + barebones tray. The full UI overhaul (live
-status, per-timer tuning, log viewer) is scheduled for v2; the queue is
-already long.
+v1: state machine + tray + settings window (CustomTkinter) with the
+embedded debug camera view, live-apply controls and the skin seam
+(`modern` today, `fun` is a palette stub awaiting its design). Still
+scheduled: fun-skin details, per-event log viewer, face-identity gate
+ polish.

@@ -45,9 +45,10 @@ def _image(state="active"):
 
 class Tray(threading.Thread):
 
-    def __init__(self, queue_, config):
+    def __init__(self, queue_, config, ui_events=None):
         super().__init__(daemon=True, name="tray")
         self.events = queue_
+        self.ui_events = ui_events             # "open" the window requests
         self.config = config
         self.icon = None
 
@@ -95,6 +96,7 @@ class Tray(threading.Thread):
             pystray.MenuItem("Camera", self._camera_menu()),
             pystray.MenuItem("Wake policy", policies),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Settings...", action=self._settings),
             pystray.MenuItem("Pause", action=self._pause),
             pystray.MenuItem("Resume", action=self._resume),
             pystray.MenuItem("Snooze 10 min", action=lambda i: self._snooze(10)),
@@ -153,6 +155,10 @@ class Tray(threading.Thread):
         def check(item):
             return self.config["camera"]["index"] == index
         return check
+
+    def _settings(self, icon=None):
+        if self.ui_events is not None:
+            self.ui_events.put(("open", None))    # the window listens
 
     def _pause(self, icon=None):
         self.events.put(("pause", True))

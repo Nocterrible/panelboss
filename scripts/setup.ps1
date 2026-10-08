@@ -23,7 +23,7 @@ if (-not (Test-Path .venv)) {
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip --no-input -q
 & .\.venv\Scripts\python.exe -m pip install -r requirements.txt --no-input
 if ($LASTEXITCODE -ne 0) { Write-Error 'pip install failed' }
-& .\.venv\Scripts\python.exe -m pip freeze | Where-Object { $_ -match '^(opencv|numpy|onnxruntime|pystray|pillow|tomli)' } | Set-Content requirements.lock.txt
+& .\.venv\Scripts\python.exe -m pip freeze | Where-Object { $_ -match '^(opencv|numpy|onnxruntime|pystray|pillow|tomli|customtkinter|darkdetect)' } | Set-Content requirements.lock.txt
 
 # 3. the weights (10.7 MB); the mirrors are tried in order and the first
 #    that returns a file over 1 MB wins

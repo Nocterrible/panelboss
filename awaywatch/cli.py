@@ -9,7 +9,9 @@ from __future__ import annotations
 import argparse
 import ctypes
 import logging
+import queue
 import sys
+import threading
 
 from . import config
 
@@ -25,6 +27,8 @@ def main(argv=None):
     parser.add_argument("--name", default="", help="identity to enroll")
     parser.add_argument("--index", type=int, default=None,
                         help="camera index; overrides the config file")
+    parser.add_argument("--no-ui", action="store_true",
+                        help="start headless; the tray alone")
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     try:
@@ -35,6 +39,8 @@ def main(argv=None):
     cfg = config.get_config()
     if args.index is not None:
         cfg["camera"]["index"] = args.index
+    if args.no_ui:
+        cfg["ui"]["enabled"] = False
 
     if args.command == "config":
         print(cfg["_path"])
@@ -103,18 +109,43 @@ def _run(cfg):
     if cfg["faces"]["enabled"]:
         from . import faces as faces_module
         faces = faces_module.FaceGate()
-    monitor = state.PresenceMonitor(cfg, det, faces)
-    icon = tray.Tray(monitor.events, cfg)
+    ui_events = queue.Queue()               # tray <-> window messages
+    monitor = state.PresenceMonitor(cfg, det, faces, ui_events=ui_events)
+    icon = tray.Tray(monitor.events, cfg, ui_events=ui_events)
     icon.start()                            # the tray always runs beside
                                             # the monitor
+    # Tk must own the main thread, so the monitor loop drops to a
+    # worker; display (its own thread) and tray are untouched.
+    worker = threading.Thread(target=monitor.run, daemon=True,
+                              name="monitor")
+    worker.start()
     try:
-        monitor.run()
+        _drive(cfg, monitor, worker, ui_events)
     except KeyboardInterrupt:
-        pass
+        monitor.events.put(("quit", True))
     finally:
+        # a window crash must not pin the camera: stop the loop first
+        monitor.events.put(("stop", True))
+        worker.join(3)
         monitor._release_camera()
         icon.stop()                          # the tray stops after the run
     return 0
+
+
+def _drive(cfg, monitor, worker, ui_events):
+    """The main thread either runs the window or parks for headless."""
+    from . import ui
+    if cfg["ui"].get("enabled", True) and ui.is_available():
+        try:
+            ui.run(cfg, monitor, ui_events)   # blocks until the window
+        except Exception:                     # dies; pythonw has no
+            logging.getLogger("ui").exception(  # stderr: a traceback
+                "settings window died")       # must reach the log
+    else:
+        logging.getLogger("cli").info("no ui; running headless beside the "
+                                       "tray")
+        while worker.is_alive():             # headless: park main, let
+            worker.join(0.5)                 # the tray be the only lever
 
 
 def _enroll(cfg, name):
