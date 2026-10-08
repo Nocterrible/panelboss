@@ -152,6 +152,17 @@ otherwise).
   created the window, and that thread must have created a message queue
   (`PeekMessage`) first; every handle is `c_void_p` so 64-bit values never
   truncate through `int`
+* **nobody can cheaply ask whether the monitors are lit** - Windows
+  only *broadcasts* power transitions; there is no user-mode "display
+  on?" call worth its cost. So a fresh instance must never assume on
+  (a restart during a dark spell silently loses the wake - measured:
+  off at 14:08, restarts after, screens stayed dark on a sleeping
+  desk): the machine starts `unknown`, resolves it from the first
+  broadcast, or from a one-time **idempotent** `SC_MONITORPOWER ON`
+  at the first proof of life (typing or a camera hit - ON onto lit
+  screens is a documented no-op), and an external OFF broadcast is
+  *adopted* into the off state so a power-plan sleep cannot leave the
+  app believing in lit screens it will never wake
 * `GetLastInputInfo` is per-session; a locked workstation counts as idle
 * exclusive-fullscreen games swallow the standby broadcast
 * NVIDIA Broadcast/VCAMDS drivers spam stdout when any camera opens; the

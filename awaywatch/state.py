@@ -64,7 +64,13 @@ class PresenceMonitor:
         self.ui_events = ui_events           # the settings window listens
         self.events = queue.Queue()          # tray commands land here
         self.framebox = FrameBox()           # the debug view reads this
-        self.state = "active"
+        # the screens' true state is unknowable at startup: the watcher
+        # only learns from broadcasts, so a fresh instance that begins
+        # while the monitors are dark (previous instance turned them
+        # off, power plan did, a restart between) must not claim "on"
+        # and then never wake - "unknown" behaves like counting but
+        # takes the free SC_MONITORPOWER ON at the first proof of life
+        self.state = "unknown"
         self.next_poll = math.inf            # the camera rests until the
                                              # gate opens
         self.absent_since = None              # when the absence started
@@ -128,11 +134,17 @@ class PresenceMonitor:
     # ------------------------------------------------------- screens are on
     def _on_phase(self, now, idle):
         if idle < self.timers["idle_gate_sec"]:
+            if self.state == "unknown":
+                self._force_on(now, "fresh input after a boot that did not "
+                                    "know the screens' state")
+                return
             self.state = "active"
             self.absent_since = None
             self.next_poll = math.inf      # the camera rests; typing won
             return
-        if self.state == "active":
+        unknown_start = self.state == "unknown"   # the poll below may
+                                                   # resolve that question
+        if self.state in ("active", "unknown"):
             self.state = "counting"
             self.next_poll = now                # the gate just opened;
                                                    # the camera always starts
@@ -149,6 +161,10 @@ class PresenceMonitor:
                     self.next_poll = now + self.power_cfg["poll_sec"]
                     return
             present, score = self._poll()
+            if unknown_start and present:
+                self._force_on(now, "somebody sits at a desk whose screens"
+                                    " the app cannot prove are lit")
+                return
             self._schedule_on_poll(now, present, score)
 
     def _check_blockers(self, now):
@@ -207,6 +223,20 @@ class PresenceMonitor:
                     self._wake(now, score)
             else:
                 self.hits = 0
+
+    def _force_on(self, now, reason):
+        """SC_MONITORPOWER ON when the truth was unknown: on lit screens
+        the broadcast is a no-op Windows itself sends on resume; on a
+        dark desk a restart hid, it is the wake the state machine could
+        not deduce. Free insurance, taken once per boot."""
+        log.info("%s - sending the harmless power-on", reason)
+        self._release_camera()                   # exclusive device, same
+        display.wake()                           # dance as _wake
+        display.keep_awake(False)
+        self.state = "active"
+        self.absent_since = None
+        self.hits = 0
+        self.next_poll = now + self.timers["present_recheck_sec"]
 
     def _wake(self, now, score):
         log.info("waking after %.0f s of absence (score %.2f)",
@@ -333,6 +363,24 @@ class PresenceMonitor:
 
     def _notice_screens(self, now, value):
         """The screens came up on their own (or went dark)."""
+        if value == 0.0:
+            if self.state != "off":
+                # darkened externally (power-plan timeout, somebody's
+                # Fn key, a resume glitch): adopt the truth, or the
+                # machine would keep believing in lit screens and
+                # never wake them for the person it can see
+                log.info("screens went dark unasked; the camera will "
+                         "wake them for whoever shows up")
+                self.state = "off"
+                self.hits = 0
+                self.next_poll = now + self.timers["off_poll_sec"]
+                if self.camera_cfg["mode_off"] == "always_on":
+                    self._hold_camera()
+            return
+        if self.state == "unknown":
+            self.state = "counting"          # an on-broadcast answers
+            self.next_poll = now + self.on_poll()   # the boot question
+            return
         if self.state == "off" and value == 1.0:
             self.wake_times = [t for t in self.wake_times
                                if now - t <= self.recovery[
