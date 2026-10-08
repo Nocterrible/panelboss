@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import queue
+import textwrap
 import threading
 import time
 
@@ -264,22 +265,6 @@ class SettingsWindow(ctk.CTk):
             command=lambda: self.monitor.events.put(("reoff", False)),
             **self.skin.secondary())
         self.reoff_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
-        self.power_msg = ""                      # install/uninstall result
-        self.power_msg_ts = 0.0
-        self.power_switch = ctk.CTkSwitch(
-            box, text="power assistant: see which apps pin the display "
-                      "(needs administrator privileges once, for a "
-                      "scheduled task)",
-            font=self.skin.font(12), command=self._power_assistant_changed,
-            progress_color=self.skin.accent,
-            border_color=self.skin.border)
-        if self.cfg["power"]["assistant_task"]:
-            self.power_switch.select()
-        self.power_switch.pack(anchor="w", pady=(6, 0))
-        self.blockers_label = ctk.CTkLabel(
-            box, text="", font=self.skin.font(10), justify="left",
-            wraplength=420, **self.skin.text_style("sub"))
-        self.blockers_label.pack(anchor="w", pady=(2, 0))
 
     def _power_assistant_changed(self):
         """Registering the task costs one UAC prompt - the price of the
@@ -343,6 +328,20 @@ class SettingsWindow(ctk.CTk):
             progress_color=self.skin.accent,
             border_color=self.skin.border)
         self.live_switch.pack(anchor="w", padx=14, pady=(4, 8))
+        self.power_msg = ""                      # install/uninstall result
+        self.power_msg_ts = 0.0
+        self.power_switch = ctk.CTkSwitch(
+            card, text="power assistant: wait out other display locks",
+            font=self.skin.font(12), command=self._power_assistant_changed,
+            progress_color=self.skin.accent,
+            border_color=self.skin.border)
+        self.power_switch.pack(anchor="w", padx=14)
+        if self.cfg["power"]["assistant_task"]:
+            self.power_switch.select()
+        self.blockers_label = ctk.CTkLabel(
+            card, text="", font=self.skin.font(10), justify="left",
+            **self.skin.text_style("sub"))
+        self.blockers_label.pack(anchor="w", padx=14, pady=(2, 4))
         self.preview_frame = ctk.CTkFrame(card, fg_color=self.skin.field_bg,
                                           corner_radius=self.skin.radius)
         self.preview_frame.pack(pady=(0, 4), padx=14)
@@ -584,9 +583,18 @@ class SettingsWindow(ctk.CTk):
         if others:
             lines.append("sleep only (fine): "
                          + "; ".join(x[:48] for x in others[:3]))
+        if not bool(self.power_switch.get()) and not (err or held):
+            lines.append("off: powercfg needs admin, so nothing is "
+                         "checked and polling never pauses; tick to "
+                         "register a scheduled task (one admin confirm)")
         if not (err or held or others) and not lines:
             lines.append("nothing pins the display; the camera guards it")
-        self.blockers_label.configure(text="\n".join(lines))
+        # tkinter wraps by pixels but breaks words anywhere: pre-wrap at
+        # word boundaries and hand the label clean lines
+        wrapped = []
+        for line in lines:
+            wrapped.extend(textwrap.wrap(line, width=68) or [""])
+        self.blockers_label.configure(text="\n".join(wrapped))
 
     @staticmethod
     def _idle():
