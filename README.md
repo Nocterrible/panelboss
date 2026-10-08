@@ -117,6 +117,14 @@ otherwise).
   The power assistant is the classic workaround: a once-registered
   HIGHEST-task that the non-elevated app starts with `schtasks /Run`
   (no UAC after the one-time confirm) and reads via a dump file
+* `CREATE_NO_WINDOW` is a **process creation flag**, not a
+  `STARTUPINFO.dwFlags` bit - stuffing it into startupinfo looks
+  plausible, compiles, and does nothing. And since 24H2 the *default
+  terminal* applies: every console a `pythonw` child forgets to hide
+  opens as a **Windows Terminal window that steals focus** (captured
+  with an EnumWindows watcher blinking every 2 s - the confirmation
+  loop querying schtasks). Console children of a GUI app must get
+  `creationflags=CREATE_NO_WINDOW` like a load-bearing wall
 * message-only windows receive notifications only on the thread that
   created the window, and that thread must have created a message queue
   (`PeekMessage`) first; every handle is `c_void_p` so 64-bit values never

@@ -79,13 +79,14 @@ def _parse(text):
 
 
 def _run(args, timeout=15):
-    """Console children of pythonw would each get their own window -
-    a flashing, focus-stealing terminal every poll cycle otherwise.
-    CREATE_NO_WINDOW (0x08000000) keeps every probe silent."""
-    si = subprocess.STARTUPINFO()
-    si.dwFlags = 0x08000000
+    """CREATE_NO_WINDOW is a PROCESS creation flag - STARTUPINFO
+    .dwFlags knows nothing about it (that wrong slot is exactly why
+    the popups survived the first fix). On Windows 11 25H2 any console
+    that does get created is hosted by Windows Terminal, which pops
+    AND steals focus, so this flag is load-bearing for the every-couple
+    -seconds probes."""
     return subprocess.run(args, capture_output=True, timeout=timeout,
-                          startupinfo=si)
+                          creationflags=subprocess.CREATE_NO_WINDOW)
 
 
 def _need_elevation(args):
