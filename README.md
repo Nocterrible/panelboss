@@ -42,11 +42,15 @@ The Camera card has a **power assistant** checkbox: `powercfg
 /requests` requires administrator privileges, so the app cannot simply
 ask. Ticking the box registers a tiny scheduled task (one admin
 confirm - silent when UAC is set to never notify) that runs as SYSTEM,
-completely invisible, and dumps `powercfg /requests` to a file the app
-reads silently afterwards — who keeps the display awake is listed
-under the box, and camera polling stops while a display-class blocker
-is alive. Unticking removes the task. With the box off, the app never
-elevates anything and simply keeps polling (fail open).
+completely invisible, and dumps `powercfg /requests` and
+`powercfg -requestsoverride` to a file the app reads silently
+afterwards — who keeps the display awake is listed under the box, and
+camera polling stops while a display-class blocker is alive. A holder
+the user previously silenced with `powercfg -requestsoverride` shows
+grey and prefixed `*OVERRIDE`: Windows itself ignores overridden
+requests, so the app never pauses the camera for them. Unticking
+removes the task. With the box off, the app never elevates anything
+and simply keeps polling (fail open).
 
 Skins are the seam for the two looks. `ui.skin` picks one
 (`theme.get_skin`); a `Skin` is only a palette + the style kwargs each
@@ -140,6 +144,19 @@ otherwise).
   as *literal text* - the SYSTEM task then "successfully" wrote
   `C:\Windows\System32\%~dp0power_requests.txt` forever while the real
   dump file aged (found via that exact junk file sitting in System32)
+* `powercfg /requests` on current Windows prints FLAT: `[PROCESS]
+  <path>` / `[DRIVER] <name>` markers at column 0 with the reason alone
+  on the next line - no indentation exists to lean on, so reason lines
+  pair with the entry above positionally (one per entry) and the
+  `\Device\HarddiskVolume8\` prefix is volume noise the parser trims
+* `powercfg -requestsoverride` bare (the listing, needs admin, so the
+  dump task writes it under a `REQUESTSOVERRIDEMARK` line) shows
+  `[CATEGORY]` headers then `<friendly name> <TYPE>` per line. A live
+  holder whose name and request type appear there was silenced by the
+  user themselves - it leaves the gating bucket and returns as a grey
+  `*OVERRIDE ...` line: the whole point of an override is that Windows
+  ignores that request, so the app must not pause the camera for it
+  either
 * `CREATE_NO_WINDOW` is a **process creation flag**, not a
   `STARTUPINFO.dwFlags` bit - stuffing it into startupinfo looks
   plausible, compiles, and does nothing. And since 24H2 the *default

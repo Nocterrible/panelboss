@@ -34,6 +34,55 @@ assert not any(x.startswith("[PROCESS]") for x in parsed["display"])
 assert any("AUDIO" in x for x in parsed["other"]), parsed
 print("parser OK:", parsed["display"], "|", parsed["other"])
 
+# 1b) the REAL flat dump off this machine: reason lines pair into the
+#     entry above them (one per entry), \Device\ volume noise trimmed,
+#     [DRIVER] kept as the who-is-it hint, a marker with no reason
+#     (Legacy Kernel Caller) stands alone
+LIVE = r"""DISPLAY:
+[PROCESS] \Device\HarddiskVolume8\Users\user\AppData\Local\Programs\Opera GX\opera.exe
+Video Wake Lock
+
+SYSTEM:
+[DRIVER] SteelSeries Sonar Virtual Audio Device (ROOT\MEDIA\0000)
+An audio stream is currently in use.
+[DRIVER] Legacy Kernel Caller
+
+AWAYMODE:
+None.
+"""
+live = power._parse(LIVE)
+assert any(x == "Users\\user\\AppData\\Local\\Programs\\Opera GX"
+               "\\opera.exe - Video Wake Lock"
+           for x in live["display"]), live["display"]
+assert not any("HarddiskVolume" in x
+               for x in live["display"] + live["other"]), live
+assert any(x == "SYSTEM: [DRIVER] SteelSeries Sonar Virtual Audio "
+                "Device (ROOT\\MEDIA\\0000) - An audio stream is "
+                "currently in use." for x in live["other"]), live["other"]
+assert any(x == "SYSTEM: [DRIVER] Legacy Kernel Caller"
+           for x in live["other"]), live["other"]
+assert not any("None" in x or "AWAYMODE" in x
+               for x in live["display"] + live["other"]), live
+print("flat-format parser OK:", live["display"], "|", live["other"])
+
+# 1c) manual powercfg -requestsoverride entries demote their holders:
+#     out of the gating buckets, back as grey "*OVERRIDE ..." lines
+OVR = ("[PROCESS]\n\nmsedgewebview2.exe DISPLAY\n\n[DRIVER]\n"
+       "SteelSeries Sonar Virtual Audio Device SYSTEM\n")
+res = power._report(SAMPLE + "\n" + power.OVERRIDE_MARK + "\n" + OVR)
+assert any(x.startswith("*OVERRIDE") and "msedgewebview2" in x
+           for x in res["overridden"]), res
+assert not any("msedgewebview2" in x for x in res["display"]), res
+assert any("explorer.exe" in x and not x.startswith("*")
+           for x in res["display"]), res
+res2 = power._report(LIVE + "\n" + power.OVERRIDE_MARK + "\n" + OVR)
+assert any(x.startswith("*OVERRIDE") and "SteelSeries" in x
+           for x in res2["overridden"]), res2
+assert not any("SteelSeries" in x for x in res2["other"]), res2
+assert any("Legacy Kernel Caller" in x for x in res2["other"]), res2
+assert any("opera.exe" in x for x in res2["display"]), res2  # untouched
+print("override demotion OK:", res["overridden"], "|", res2["overridden"])
+
 # 2) live machine, unelevated, no assistant: explicit admin message
 r = power.requests()
 assert r["error"] and "administrator privileges" in r["error"], r
@@ -137,10 +186,12 @@ app = W.SettingsWindow(cfg, fm, queue.Queue())
 
 def check():
     fm.blockers = {"error": None, "display": ["msedgewebview2.exe Lock"],
-                   "other": []}
+                   "other": [],
+                   "overridden": ["*OVERRIDE opera.exe - Video Wake Lock"]}
     app._update_blockers()
     text = app.blockers_box.get("1.0", "end")
     assert "holding the display" in text and "msedgewebview2" in text, text
+    assert "*OVERRIDE opera.exe" in text, text   # grey + honest label
     fg = app.blockers_box._textbox.tag_cget("danger", "foreground")
     assert str(fg).lower().startswith("#"), ("danger tag uncolored", fg)
     app.power_switch.select()

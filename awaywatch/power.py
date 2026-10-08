@@ -37,6 +37,7 @@ polling continues, and the error string is what the window shows.
 
 import ctypes
 import os
+import re
 import subprocess
 import time
 
@@ -56,6 +57,14 @@ DISPLAY_WORDS = ("display", "monitor", "console")
 # an assistant dump older than this is a broken/removed task, not news
 STALE_SEC = 60
 
+# the line the dump task writes between the two reports; requests end,
+# overrides end, both parsed from the same file
+OVERRIDE_MARK = "REQUESTSOVERRIDEMARK"
+
+# request types as powercfg spells them in the override listing
+OVERRIDE_TYPES = ("SYSTEM", "DISPLAY", "AWAYMODE", "AWAYMODEIDLERESCHEDULE",
+                  "EXECUTION", "PERFBOOST", "CONSOLE")
+
 
 def result_path():
     """Where the scheduled task drops its report; per-user, stable."""
@@ -68,32 +77,131 @@ def _own_pid_tokens():
     return ("0x%x" % pid, "0x%X" % pid, str(pid))
 
 
+def _tidy(text):
+    """Drop the \\Device\\HarddiskVolume8\\ / \\??\\ noise: nobody reads
+    volumes, they read the tail of the path."""
+    return re.sub(r"^(?:\\Device\\[^\\]+|\\\?\?)\\", "", text)
+
+
 def _parse(text):
-    """Sections at column 0 ending in ':'; items inside them. Newer
-    powercfg uses DISPLAY: / SYSTEM: headers with [PROCESS] lines and a
-    reason line below; both layouts parse."""
+    """Sections at column 0 ending in ':'; entries inside them.
+
+    Newer powercfg (measured) prints FLAT: "[PROCESS] <path>" and
+    "[DRIVER] <name>" markers at column 0 with the reason alone on the
+    next line - indentation exists only in old layouts, so the pairing
+    rule is positional: a non-marker line directly after an entry line
+    (one per entry) is that entry's reason and joins it, giving one
+    honest line like "Users\\...\\opera.exe - Video Wake Lock".
+    Whatever the shape, both layouts land in the same buckets."""
     display = []
     other = []
     section = "unknown"
     mine = _own_pid_tokens()
+    pending = None                  # entry awaiting its reason line
+    pending_mine = False
+
+    def put(item):
+        item = _tidy(item)
+        if any(word in section.lower() for word in DISPLAY_WORDS):
+            display.append(item)
+        else:
+            other.append("%s: %s" % (section, item))
+
+    def flush():
+        nonlocal pending, pending_mine
+        if pending is not None and not pending_mine:
+            put(pending)
+        pending = None
+        pending_mine = False
+
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.lower() in ("none", "none.", "no"):
+        low = stripped.lower()
+        if not stripped or low in ("none", "none.", "no"):
+            flush()                        # the reason never came: fine
             continue
         if not line[0].isspace() and stripped.endswith(":"):
+            flush()
             section = stripped[:-1]
             continue
-        low = stripped.lower()
-        if any(token in low for token in mine):
-            continue                     # our own keep-awake, not news
-        if low.startswith("[process] "):
-            stripped = stripped[len("[PROCESS] "):]
-            low = stripped.lower()
-        if any(word in section.lower() for word in DISPLAY_WORDS):
-            display.append(stripped)
+        if low.startswith(("[process]", "[driver]", "[service]")):
+            flush()
+            # [PROCESS] is pure prefix noise; [DRIVER] stays - it is
+            # the only hint of WHO (the (ROOT\MEDIA...) suffix is it)
+            pending = (stripped.split("]", 1)[1].strip()
+                       if low.startswith("[process]") else stripped)
+            pending_mine = any(t in low for t in mine)
+            continue
+        if any(t in low for t in mine):
+            flush()                        # our own keep-awake...
+            pending = stripped             # ...and now its reason too
+            pending_mine = True
+            continue
+        if pending is not None:
+            if not pending_mine:
+                put("%s - %s" % (pending, stripped))
+            pending = None
+            continue
+        put(stripped)
+    flush()
+    return {"error": None, "display": display, "other": other,
+            "overridden": []}
+
+
+def _overrides(text):
+    """powercfg -requestsoverride with no arguments (measured, on the
+    machine where audio drivers sat under [DRIVER] ... SYSTEM): bare
+    [CATEGORY] headers, then "<friendly name> <TYPE>" per line."""
+    entries = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("["):
+            continue
+        toks = stripped.split()
+        types = set(t.upper() for t in toks if t.upper() in OVERRIDE_TYPES)
+        name = " ".join(t for t in toks if t.upper() not in types)
+        if name:
+            entries.append((name.lower(), types))
+    return entries
+
+
+def _report(text):
+    """One assistant dump (requests, marker, overrides) -> the buckets.
+
+    A holder the user silenced with powercfg -requestsoverride leaves
+    the red bucket entirely and returns as "*OVERRIDE <line>": the
+    point of an override is that Windows itself ignores that request,
+    so it must not pause the camera either - the window only lists it
+    grey to explain why something looks blocked but is not."""
+    req, found, ovr = text.partition(OVERRIDE_MARK)
+    result = _parse(req)
+    if not found:                          # a dump from the old .bat
+        return result
+    ovs = _overrides(ovr)
+
+    def hit(item, words):
+        low = item.lower()
+        for name, types in ovs:
+            if name in low and any(w in types for w in words):
+                return True
+        return False
+
+    display, other, overridden = [], [], []
+    for x in result["display"]:
+        if hit(x, ("DISPLAY", "CONSOLE")):
+            overridden.append("*OVERRIDE " + x)
         else:
-            other.append("%s: %s" % (section, stripped))
-    return {"error": None, "display": display, "other": other}
+            display.append(x)
+    for x in result["other"]:
+        sect = x.split(":", 1)[0].strip().upper()
+        if sect and hit(x, (sect,)):
+            overridden.append("*OVERRIDE " + x)
+        else:
+            other.append(x)
+    result["display"] = display
+    result["other"] = other
+    result["overridden"] = overridden
+    return result
 
 
 def _run(args, timeout=15):
@@ -176,6 +284,22 @@ def _action_bat():
     return os.path.join(os.path.dirname(result_path()), "power_dump.bat")
 
 
+def _dump_bat_text():
+    """The bat's body: BOTH powercfg reports into one file, marker in
+    between (the requests end, the manual overrides end).
+
+    Single % on purpose: this is a plain string (no % format operator
+    ever touches it), and inside a .bat %%~dp0 is the literal text
+    "%~dp0" - the task then "successfully" wrote
+    C:\Windows\System32\%~dp0power_requests.txt forever. Also echo on
+    a word, never "=word": a leading = makes echo sulk."""
+    return ("@echo off\r\n"
+            "powercfg /requests > \"%~dp0power_requests.txt\" 2>&1\r\n"
+            "echo " + OVERRIDE_MARK + " >> \"%~dp0power_requests.txt\"\r\n"
+            "powercfg /requestsoverride >> "
+            "\"%~dp0power_requests.txt\" 2>&1\r\n")
+
+
 def install():
     """Tick ON: the task exists AND is visible+runnable to this
     (non-elevated) process when this returns True."""
@@ -187,12 +311,7 @@ def install():
     bat = _action_bat()
     try:
         with open(bat, "w") as f:
-            # single % on purpose: this is a plain string (no % format
-            # operator), and inside a .bat %%~dp0 is the literal text
-            # "%~dp0" - the task then "successfully" wrote
-            # C:\Windows\System32\%~dp0power_requests.txt forever
-            f.write("@echo off\r\npowercfg /requests > "
-                    "\"%~dp0power_requests.txt\" 2>&1\r\n")
+            f.write(_dump_bat_text())
     except Exception:
         return False, "could not write the assistant action"
     if not _elevate_ps(create_script(bat)):
@@ -235,10 +354,14 @@ def _start():
 
 
 def requests(ignore=(), assistant=False):
-    """{"error": None or str, "display": [str], "other": [str]}.
+    """{"error": None or str, "display": [str], "other": [str],
+    "overridden": [str]}.
 
-    display: processes holding a DISPLAY-class request (the gate)
-    other:   everything else, shown in the window as context
+    display:    processes holding a DISPLAY-class request (the gate)
+    other:      everything else, shown in the window as context
+    overridden: holders the user manually silenced with powercfg
+                -requestsoverride, prefixed "*OVERRIDE " and shown
+                grey - they never gate anything
     """
     ignore = tuple(s.lower() for s in ignore)
     # 1. elevated app: ask powercfg directly
@@ -247,15 +370,21 @@ def requests(ignore=(), assistant=False):
         out = _run(["powercfg.exe", "/requests"])
         text = out.stdout.decode("utf-8", "replace")
         if out.returncode == 0 and "administrator" not in text.lower():
-            direct = _parse(text)
+            try:
+                ovr = _run(["powercfg.exe", "/requestsoverride"])
+                text += "\n%s\n%s" % (
+                    OVERRIDE_MARK, ovr.stdout.decode("utf-8", "replace"))
+            except Exception:
+                pass                       # requests alone still gates
+            direct = _report(text)
         else:
             direct = {"error": "powercfg /requests requires administrator "
                               "privileges (tick the power assistant box to "
                               "read it through a scheduled task)",
-                      "display": [], "other": []}
+                      "display": [], "other": [], "overridden": []}
     except Exception as e:
         direct = {"error": "powercfg failed: %s" % e,
-                  "display": [], "other": []}
+                  "display": [], "other": [], "overridden": []}
     if direct["error"] is None or not assistant:
         return _filtered(direct, ignore)
     # 2. assistant: trigger a fresh dump, read the file it writes
@@ -271,7 +400,6 @@ def requests(ignore=(), assistant=False):
                 break
         except OSError:
             break                      # missing file: handled below
-        time.sleep if False else None
         time.sleep(0.4)
     try:
         age = time.time() - os.path.getmtime(path)
@@ -281,22 +409,24 @@ def requests(ignore=(), assistant=False):
         return {"error": "the power assistant has not reported yet; the "
                          "checkbox registers a scheduled task, tick it "
                          "off and on again if nothing arrives",
-                "display": [], "other": []}
+                "display": [], "other": [], "overridden": []}
     if age > STALE_SEC:
         return {"error": "the power assistant went quiet (task deleted?), "
                          "re-tick it in the window",
-                "display": [], "other": []}
+                "display": [], "other": [], "overridden": []}
     if "administrator" in text.lower() or not text.strip():
         return {"error": "the scheduled task cannot reach powercfg either",
-                "display": [], "other": []}
-    return _filtered(_parse(text), ignore)
+                "display": [], "other": [], "overridden": []}
+    return _filtered(_report(text), ignore)
 
 
 def _filtered(result, ignore):
-    """The ignore list trims known noise from both buckets."""
+    """The ignore list trims known noise from every bucket."""
     if not ignore:
         return result
     keep = lambda line: not any(n in line.lower() for n in ignore)
     return {"error": result["error"],
             "display": [x for x in result["display"] if keep(x)],
-            "other": [x for x in result["other"] if keep(x)]}
+            "other": [x for x in result["other"] if keep(x)],
+            "overridden": [x for x in result.get("overridden", [])
+                           if keep(x)]}

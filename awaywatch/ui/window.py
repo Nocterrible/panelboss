@@ -357,29 +357,6 @@ class SettingsWindow(ctk.CTk):
         self.live_switch.pack(anchor="w", padx=14, pady=(4, 8))
         self.power_msg = ""                      # install/uninstall result
         self.power_msg_ts = 0.0
-        self.power_switch = ctk.CTkSwitch(
-            card, text="power assistant: wait out other display locks",
-            font=self.skin.font(12), command=self._power_assistant_changed,
-            progress_color=self.skin.accent,
-            border_color=self.skin.border)
-        self.power_switch.pack(anchor="w", padx=14)
-        if self.cfg["power"]["assistant_task"]:
-            self.power_switch.select()
-        # the switch must show REALITY (the task store), not the config
-        # rumor - the task can outlive or predate the config flag, and
-        # /Query costs ~2 s here, so ask in background; the answer may
-        # also be sampled while an install is mid-flight (delete then
-        # create), so a first "gone" gets re-asked before believed
-        def truth():
-            from .. import power
-            real = power.task_installed()
-            for _ in range(3):
-                if real:
-                    break
-                time.sleep(2)
-                real = power.task_installed()
-            self.after(0, lambda: self._assistant_truth(real))
-        threading.Thread(target=truth, daemon=True).start()
         self.preview_frame = ctk.CTkFrame(card, fg_color=self.skin.field_bg,
                                           corner_radius=self.skin.radius)
         self.preview_frame.pack(pady=(0, 4), padx=14)
@@ -410,6 +387,31 @@ class SettingsWindow(ctk.CTk):
                     "<Control-v>", "<Control-V>", "<Control-x>",
                     "<Control-X>", "<Control-z>", "<Control-Z>"):
             self.blockers_box.bind(seq, lambda event: "break")
+        # the switch below the report, not above the preview: the
+        # blockers ARE the story of this card, the switch only feeds it
+        self.power_switch = ctk.CTkSwitch(
+            card, text="power assistant: wait out other display locks",
+            font=self.skin.font(12), command=self._power_assistant_changed,
+            progress_color=self.skin.accent,
+            border_color=self.skin.border)
+        self.power_switch.pack(anchor="w", padx=14, pady=(0, 10))
+        if self.cfg["power"]["assistant_task"]:
+            self.power_switch.select()
+        # the switch must show REALITY (the task store), not the config
+        # rumor - the task can outlive or predate the config flag, and
+        # /Query costs ~2 s here, so ask in background; the answer may
+        # also be sampled while an install is mid-flight (delete then
+        # create), so a first "gone" gets re-asked before believed
+        def truth():
+            from .. import power
+            real = power.task_installed()
+            for _ in range(3):
+                if real:
+                    break
+                time.sleep(2)
+                real = power.task_installed()
+            self.after(0, lambda: self._assistant_truth(real))
+        threading.Thread(target=truth, daemon=True).start()
 
     # ----------------------------------------------------------- helpers ---
     @staticmethod
@@ -627,6 +629,7 @@ class SettingsWindow(ctk.CTk):
         err = b.get("error")
         held = b.get("display") or []
         others = b.get("other") or []
+        over = b.get("overridden") or []     # "*OVERRIDE ..." already
         rows = []                            # (text, mood) - moods are
         if self.power_msg and time.time() - self.power_msg_ts < 25:
             rows.append((self.power_msg, "warn"))
@@ -636,6 +639,10 @@ class SettingsWindow(ctk.CTk):
             rows.append(("holding the display - the camera waits:",
                          "danger"))
             rows += [("  " + x[:80], "danger") for x in held[:6]]
+        if over:
+            rows.append(("user-overridden in powercfg - camera does "
+                         "not wait for these:", "sub"))
+            rows += [(x[:88], "sub") for x in over[:6]]
         if others:
             rows.append(("sleep only (fine): "
                          + "; ".join(x[:48] for x in others[:3]), "sub"))
