@@ -138,6 +138,11 @@ class PresenceMonitor:
                 self._force_on(now, "fresh input after a boot that did not "
                                     "know the screens' state")
                 return
+            if self.power_cfg.get("assistant_task"):
+                # the window reads monitor.blockers live; without a
+                # check here the readout would freeze the moment the
+                # user touches the keyboard (throttled inside)
+                self._check_blockers(now)
             self.state = "active"
             self.absent_since = None
             self.next_poll = math.inf      # the camera rests; typing won
@@ -497,6 +502,9 @@ class PresenceMonitor:
                     self._resume_re_off("manual resume (tray/window)")
             elif action == "power_assistant":
                 self.power_cfg["assistant_task"] = bool(value)
+                self.blockers_until = 0.0          # the toggle must show
+                                                   # its result, not the
+                                                   # last week's reading
                 from . import config
                 config.write_config(self.cfg)
             elif action == "camera":

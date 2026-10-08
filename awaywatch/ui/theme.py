@@ -39,6 +39,7 @@ class Skin:
     counting: str = "#d9a13c"
     off: str = "#5b6470"
     paused: str = "#e0662f"
+    danger: str = "#ff5d5d"           # a real display holder on screen
     # preview overlay (cv2 is BGR)
     box_bgr: tuple = (140, 200, 60)
     # chrome

@@ -139,7 +139,7 @@ def check():
     fm.blockers = {"error": None, "display": ["msedgewebview2.exe Lock"],
                    "other": []}
     app._update_blockers()
-    text = app.blockers_label.cget("text")
+    text = app.blockers_box.get("1.0", "end")
     assert "holding the display" in text and "msedgewebview2" in text, text
     app.power_switch.select()
     app._power_assistant_changed()

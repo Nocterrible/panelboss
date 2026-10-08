@@ -298,6 +298,14 @@ class SettingsWindow(ctk.CTk):
                 # never learns the truth until its expiry timer ends it
                 self.power_msg = ""
                 self.power_msg_ts = 0.0
+                try:    # read through the assistant we just created (or
+                        # honestly say admin after deleting it), instead
+                        # of letting last week's error string linger
+                    self.monitor.blockers = power.requests(
+                        self.cfg["power"]["ignore"],
+                        assistant=bool(ok and want))
+                except Exception:
+                    pass
                 self.after(0, self._update_blockers)
         threading.Thread(target=work, daemon=True).start()
 
@@ -372,10 +380,6 @@ class SettingsWindow(ctk.CTk):
                 real = power.task_installed()
             self.after(0, lambda: self._assistant_truth(real))
         threading.Thread(target=truth, daemon=True).start()
-        self.blockers_label = ctk.CTkLabel(
-            card, text="", font=self.skin.font(10), justify="left",
-            **self.skin.text_style("sub"))
-        self.blockers_label.pack(anchor="w", padx=14, pady=(2, 4))
         self.preview_frame = ctk.CTkFrame(card, fg_color=self.skin.field_bg,
                                           corner_radius=self.skin.radius)
         self.preview_frame.pack(pady=(0, 4), padx=14)
@@ -388,7 +392,18 @@ class SettingsWindow(ctk.CTk):
         self.preview_info = ctk.CTkLabel(card, text="",
                                          font=self.skin.font(10),
                                          **self.skin.text_style("sub"))
-        self.preview_info.pack(anchor="w", padx=14, pady=(0, 10))
+        self.preview_info.pack(anchor="w", padx=14, pady=(0, 4))
+        # the blockers pane: below the preview, as wide as it is, and
+        # scrollable so a crowded powercfg report never overflows the
+        # card; the only RED lines are the ones that actually hold the
+        # display (what pauses the camera) - everything else is news
+        self.blockers_box = ctk.CTkTextbox(
+            card, height=132, width=int(self.cfg["ui"]["preview_width"]),
+            font=self.skin.font(10), fg_color=self.skin.field_bg,
+            border_color=self.skin.border, border_width=1,
+            corner_radius=self.skin.radius, wrap="word")
+        self.blockers_box.pack(anchor="w", padx=14, pady=(0, 10))
+        self.blockers_box.configure(state="disabled")
 
     # ----------------------------------------------------------- helpers ---
     @staticmethod
@@ -603,32 +618,39 @@ class SettingsWindow(ctk.CTk):
 
     def _update_blockers(self):
         b = getattr(self.monitor, "blockers", None) or {}
-        lines = []
-        if self.power_msg and time.time() - self.power_msg_ts < 25:
-            lines.append(self.power_msg)
         err = b.get("error")
         held = b.get("display") or []
         others = b.get("other") or []
-        if err:
-            lines.append(err)
-        elif held:
-            lines.append("holding the display: "
-                         + "; ".join(x[:48] for x in held[:3]))
+        rows = []                            # (text, mood) - moods are
+        if self.power_msg and time.time() - self.power_msg_ts < 25:
+            rows.append((self.power_msg, "warn"))
+        if err:                              # palette keys, nothing more
+            rows.append((err, "warn"))
+        if held:
+            rows.append(("holding the display - the camera waits:",
+                         "danger"))
+            rows += [("  " + x[:80], "danger") for x in held[:6]]
         if others:
-            lines.append("sleep only (fine): "
-                         + "; ".join(x[:48] for x in others[:3]))
+            rows.append(("sleep only (fine): "
+                         + "; ".join(x[:48] for x in others[:3]), "sub"))
         if not bool(self.power_switch.get()) and not (err or held):
-            lines.append("off: powercfg needs admin, so nothing is "
+            rows.append(("off: powercfg needs admin, so nothing is "
                          "checked and polling never pauses; tick to "
-                         "register a scheduled task (one admin confirm)")
-        if not (err or held or others) and not lines:
-            lines.append("nothing pins the display; the camera guards it")
-        # tkinter wraps by pixels but breaks words anywhere: pre-wrap at
-        # word boundaries and hand the label clean lines
-        wrapped = []
-        for line in lines:
-            wrapped.extend(textwrap.wrap(line, width=68) or [""])
-        self.blockers_label.configure(text="\n".join(wrapped))
+                         "register a scheduled task (one admin confirm)",
+                         "sub"))
+        if not rows:
+            rows.append(("nothing pins the display; the camera guards it",
+                         "ok"))
+        colors = {"danger": (self.skin.danger, self.skin.danger),
+                  "warn": (self.skin.paused, self.skin.paused),
+                  "sub": (self.skin.subtext, self.skin.subtext),
+                  "ok": (self.skin.ok, self.skin.ok)}
+        box = self.blockers_box
+        box.configure(state="normal")        # it reads as a report only
+        box.delete("1.0", "end")             # to the user; scripts edit
+        for text, mood in rows:              # it between disable calls
+            box.insert("end", text + "\n", tags=colors[mood])
+        box.configure(state="disabled")
 
     @staticmethod
     def _idle():
