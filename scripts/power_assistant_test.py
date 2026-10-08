@@ -41,7 +41,15 @@ assert r["display"] == [] and r["other"] == []
 print("unelevated fail-open OK:", r["error"])
 
 # 3) assistant on but task never registered: honest "not reported"
-r = power.requests(assistant=True)
+#    (point the dump path at nowhere - a machine WITH the assistant
+#    installed has a real, current file there)
+_real_rp = power.result_path
+power.result_path = lambda: os.path.join(os.environ.get("TEMP", "."),
+                                         "absent", "power_requests.txt")
+try:
+    r = power.requests(assistant=True)
+finally:
+    power.result_path = _real_rp
 assert r["error"] and "not reported yet" in r["error"], r
 print("assistant-uninstalled path OK:", r["error"][:60], "...")
 

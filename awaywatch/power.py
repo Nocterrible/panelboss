@@ -9,15 +9,33 @@ The trouble: powercfg /requests needs elevation; unelevated it prints
 no official non-admin user-mode API (measured, Windows 11 26220).
 
 The workaround (classic "elevated shortcut without the UAC prompt"):
-register a Task Scheduler task ONCE with /RL HIGHEST - which costs one
-UAC prompt, and the settings window only does that when the user ticks
-the power assistant box. Afterwards a NON-elevated app may start its
-own task with `schtasks /Run` silently, and the task dumps fresh
-powercfg output to a file we read. Everything still fails open: any
-problem means "unblocked", camera polling continues, and the error
-string is what the settings window shows.
+register a Task Scheduler task that runs as SYSTEM (session 0, no
+console ever) ONCE per tick of the checkbox - which costs one consent,
+and only when the user ticks the power assistant box. Afterwards the
+non-elevated app may start its own task with `schtasks /Run` silently,
+and the task dumps fresh powercfg output to a file we read.
+
+Two machine-specific walls this path had to solve, both measured:
+  * `schtasks /Create` rejects /SC ONDEMAND outright (invalid schedule
+    type). A DAILY trigger at 03:07, which we never rely on, passes
+    parsing; the app drives cadence with /Run.
+  * tasks created from an elevated context get a security descriptor
+    of exactly "O:BA" - invisible AND unrunnable to the same user's
+    filtered (medium-IL) token. The fix that worked: the task's own SD
+    (not the file NTSD - icacls on the task file does nothing for
+    TaskScheduler!) rewritten via the Schedule.Service COM object:
+    `SetSecurityDescriptor(sddl, 0)` - flag 1 errors - granting the
+    installing user GRGX (query + execute).
+Elevation itself goes through ShellExecuteW("runas") on a generated
+.ps1 - Start-Process -Verb RunAs from a pythonw process, under the
+"Never notify" UAC slider, was the thing that hung; ShellExecuteW just
+returns and the truth is polled from the task store either way.
+
+Everything still fails open: any problem means "unblocked", camera
+polling continues, and the error string is what the window shows.
 """
 
+import ctypes
 import os
 import subprocess
 import time
@@ -89,33 +107,55 @@ def _run(args, timeout=15):
                           creationflags=subprocess.CREATE_NO_WINDOW)
 
 
-def _need_elevation(args):
-    """One UAC prompt is the deal we struck with the user (they ticked
-    the box). The exit code is a rumor - Start-Process -Verb RunAs can
-    lose the child handle, so callers verify reality with
-    task_installed() afterwards instead of trusting rc."""
-    quoted = ", ".join("'" + a.replace("'", "''") + "'" for a in args)
-    ps = ("exit (Start-Process -FilePath schtasks.exe -ArgumentList @(%s) "
-          "-Verb RunAs -WindowStyle Hidden -Wait -PassThru).ExitCode" % quoted)
+def _elevate_ps(body, name="assistant_task.ps1"):
+    """Run $body elevated. A generated file, not a -Command string: the
+    quoting layers (python -> powershell -> Start-Process -> cmd -> the
+    /TR value) is where every earlier attempt died. ShellExecuteW
+    returns as soon as the handoff happens; never trust its number -
+    callers verify against the task store."""
+    path = os.path.join(os.path.dirname(result_path()), name)
     try:
-        _run(["powershell.exe", "-NoProfile", "-NonInteractive",
-              "-Command", ps], timeout=300)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(body)
     except Exception:
-        pass
+        return False
+    ret = ctypes.windll.shell32.ShellExecuteW(
+        None, "runas", "powershell.exe",
+        "-NoProfile -ExecutionPolicy Bypass -File \"%s\"" % path,
+        None, 0)
+    return ret > 32
 
 
-def _verified(action_args, installed=True, timeout=CONFIRM_TIMEOUT):
-    """Do the thing (direct, then elevated), then ask the task store -
-    the store cannot lie the way exit codes do."""
-    try:
-        rc = _run(["schtasks.exe"] + action_args, timeout=20).returncode
-    except Exception:
-        rc = 1
-    if rc != 0:
-        _need_elevation(action_args)     # consent may take a minute
+def create_script(bat):
+    """The elevated half of install(): create the task AND grant the
+    non-elevated app query+execute rights on it (SD otherwise O:BA)."""
+    return (
+        "$ErrorActionPreference='SilentlyContinue'\r\n"
+        "& schtasks.exe /Create /TN %(name)s /SC DAILY /ST 03:07 "
+        "/RU SYSTEM /RL HIGHEST /TR \"%(bat)s\" /F | Out-Null\r\n"
+        "Start-Sleep -Seconds 1\r\n"
+        "$svc = New-Object -ComObject Schedule.Service\r\n"
+        "$svc.Connect()\r\n"
+        "$task = $svc.GetFolder('\\').GetTasks(0) | Where-Object "
+        "{ $_.Name -eq '%(name)s' }\r\n"
+        "if ($task) {\r\n"
+        "  $sid = ((whoami.exe /user /fo csv /nh) -replace '\"','' "
+        "-split ',')[1]\r\n"
+        "  try { $task.SetSecurityDescriptor("
+        "\"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGX;;;$sid)\", 0) } catch {}\r\n"
+        "}\r\n") % {"name": TASK_NAME, "bat": bat}
+
+
+def delete_script():
+    return ("& schtasks.exe /Delete /TN %s /F | Out-Null\r\n" % TASK_NAME)
+
+
+def _poll(want, timeout):
+    """Ask the task store - it cannot lie the way exit codes do."""
     end = time.time() + timeout
     while time.time() < end:
-        if task_installed() == installed:
+        if task_installed() == want:
             return True
         time.sleep(CHECK_SEC)
     return False
@@ -129,21 +169,37 @@ def task_installed():
         return False
 
 
+def _action_bat():
+    """The task's action: one no-spaces .bat that runs powercfg and
+    writes the dump next to it. /TR can then be a bare path - the
+    quoting-free form that the elevation layers survive."""
+    return os.path.join(os.path.dirname(result_path()), "power_dump.bat")
+
+
 def install():
-    """Tick ON: the task exists when this returns True (verified by
-    query, not by exit code), elevated if the app itself is not."""
+    """Tick ON: the task exists AND is visible+runnable to this
+    (non-elevated) process when this returns True."""
     path = result_path()
-    folder = os.path.dirname(path)
     try:
-        os.makedirs(folder, exist_ok=True)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
     except Exception:
         pass
-    action = 'cmd /c powercfg /requests > "%s" 2>&1' % path
-    # SYSTEM + "run whether or not logged on" means session 0: no cmd
-    # window ever. SYSTEM also walks past powercfg's admin check.
-    args = ["/Create", "/TN", TASK_NAME, "/SC", "ONDEMAND", "/RU",
-            "SYSTEM", "/RL", "HIGHEST", "/TR", action, "/F"]
-    if not _verified(args, installed=True, timeout=CONFIRM_TIMEOUT):
+    bat = _action_bat()
+    try:
+        with open(bat, "w") as f:
+            # single % on purpose: this is a plain string (no % format
+            # operator), and inside a .bat %%~dp0 is the literal text
+            # "%~dp0" - the task then "successfully" wrote
+            # C:\Windows\System32\%~dp0power_requests.txt forever
+            f.write("@echo off\r\npowercfg /requests > "
+                    "\"%~dp0power_requests.txt\" 2>&1\r\n")
+    except Exception:
+        return False, "could not write the assistant action"
+    if not _elevate_ps(create_script(bat)):
+        return False, ("the power assistant needs administrator "
+                       "privileges to register its scheduled task; the "
+                       "confirm was refused, cancelled, or never clicked")
+    if not _poll(True, CONFIRM_TIMEOUT):
         return False, ("the power assistant needs administrator "
                        "privileges to register its scheduled task; the "
                        "confirm was refused, cancelled, or never clicked")
@@ -154,8 +210,14 @@ def uninstall():
     """Tick OFF: the task is gone when this returns True - verified."""
     if not task_installed():
         return True, "nothing was registered"
-    args = ["/Delete", "/TN", TASK_NAME, "/F"]
-    if not _verified(args, installed=False, timeout=REMOVE_TIMEOUT):
+    try:
+        rc = _run(["schtasks.exe", "/Delete", "/TN", TASK_NAME, "/F"],
+                  timeout=20).returncode
+    except Exception:
+        rc = 1
+    if rc != 0 or task_installed():
+        _elevate_ps(delete_script(), name="assistant_remove.ps1")
+    if not _poll(False, REMOVE_TIMEOUT):
         return False, ("removing the power assistant needs administrator "
                        "privileges; the confirm was refused, cancelled, "
                        "or never clicked")
@@ -199,6 +261,18 @@ def requests(ignore=(), assistant=False):
     # 2. assistant: trigger a fresh dump, read the file it writes
     path = result_path()
     _start()
+    # the SYSTEM task needs ~1-2 s to rewrite the file; reading the
+    # mtime the instant after /Run would call a healthy assistant
+    # "quiet" every time we come back from a quiet spell
+    end = time.time() + 5
+    while time.time() < end:
+        try:
+            if time.time() - os.path.getmtime(path) < 20:
+                break
+        except OSError:
+            break                      # missing file: handled below
+        time.sleep if False else None
+        time.sleep(0.4)
     try:
         age = time.time() - os.path.getmtime(path)
         with open(path, encoding="utf-8", errors="replace") as f:

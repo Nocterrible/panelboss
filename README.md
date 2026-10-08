@@ -38,14 +38,15 @@ against exactly what the model sees. "live preview" holds the camera
 open at ~5 fps; the hold is a *lease* the window renews while visible,
 so closing it (or crashing) releases the device.
 
-The Behavior card has a **power assistant** checkbox: `powercfg
+The Camera card has a **power assistant** checkbox: `powercfg
 /requests` requires administrator privileges, so the app cannot simply
-ask. Ticking the box registers a tiny scheduled task (one UAC confirm,
-yours to give) that dumps `powercfg /requests` to a file the app reads
-silently afterwards — who keeps the display awake is listed under the
-box, and camera polling stops while a display-class blocker is alive.
-Unticking removes the task. With the box off, the app never elevates
-anything and simply keeps polling (fail open).
+ask. Ticking the box registers a tiny scheduled task (one admin
+confirm - silent when UAC is set to never notify) that runs as SYSTEM,
+completely invisible, and dumps `powercfg /requests` to a file the app
+reads silently afterwards — who keeps the display awake is listed
+under the box, and camera polling stops while a display-class blocker
+is alive. Unticking removes the task. With the box off, the app never
+elevates anything and simply keeps polling (fail open).
 
 Skins are the seam for the two looks. `ui.skin` picks one
 (`theme.get_skin`); a `Skin` is only a palette + the style kwargs each
@@ -115,8 +116,30 @@ otherwise).
 * `powercfg /requests` **requires administrator privileges** even to
   *read* (measured on Windows 11 26220; no user-mode API escapes it).
   The power assistant is the classic workaround: a once-registered
-  HIGHEST-task that the non-elevated app starts with `schtasks /Run`
-  (no UAC after the one-time confirm) and reads via a dump file
+  task that the non-elevated app starts with `schtasks /Run` (no UAC
+  after the one-time confirm) and reads via a dump file. Getting that
+  task registered on this machine needed three measured facts:
+  `schtasks /Create` rejects `/SC ONDEMAND` (no such schedule type -
+  use a dummy `DAILY /ST 03:07` and drive cadence with `/Run`);
+  a task created from the elevated context arrives with security
+  descriptor `O:BA`, invisible AND unrunnable to the same user's
+  filtered token (`icacls` on the task FILE fixes nothing -
+  TaskScheduler checks the task's own SD), so the installing script
+  rewrites it via `Schedule.Service` COM:
+  `SetSecurityDescriptor("D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGX;;;SID)",
+  0)` - the 0-flag and the trustee at SDDL field 6 both matter; and
+  elevation should go through `ShellExecuteW("runas", "powershell",
+  "-File script.ps1")`, because `Start-Process -Verb RunAs -Wait`
+  spawned from a `pythonw` process hung under the "Never notify" UAC
+  slider while ShellExecuteW returned instantly. Elevation is a
+  handoff, never an answer: every path re-asks the task store
+  (`/Query`) for the truth afterwards
+* a `.bat` written from a python string doubles `%%` expansions **only
+  if** the python string itself goes through the `%` operator: a plain
+  literal `"%%~dp0"` writes `%%~dp0` into the file, and cmd hands it on
+  as *literal text* - the SYSTEM task then "successfully" wrote
+  `C:\Windows\System32\%~dp0power_requests.txt` forever while the real
+  dump file aged (found via that exact junk file sitting in System32)
 * `CREATE_NO_WINDOW` is a **process creation flag**, not a
   `STARTUPINFO.dwFlags` bit - stuffing it into startupinfo looks
   plausible, compiles, and does nothing. And since 24H2 the *default

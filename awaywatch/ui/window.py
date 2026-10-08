@@ -266,6 +266,14 @@ class SettingsWindow(ctk.CTk):
             **self.skin.secondary())
         self.reoff_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
 
+    def _assistant_truth(self, real):
+        """Adopt the task store's answer as the switch state and tell
+        the monitor, so config, UI and reality cannot disagree."""
+        if bool(self.power_switch.get()) != real:
+            self.power_switch.set(real)          # set() is click-free
+            self.cfg["power"]["assistant_task"] = real
+            self.monitor.events.put(("power_assistant", real))
+
     def _power_assistant_changed(self):
         """Tick ON registers the task (one UAC confirm, which can flash
         up behind this borderless window); tick OFF deletes it. Both
@@ -285,6 +293,12 @@ class SettingsWindow(ctk.CTk):
                 self.power_msg = msg
                 self.power_msg_ts = time.time()
                 self.after(0, lambda: self.power_switch.set(not want))
+            else:
+                # the waiting line must die on success too, or the user
+                # never learns the truth until its expiry timer ends it
+                self.power_msg = ""
+                self.power_msg_ts = 0.0
+                self.after(0, self._update_blockers)
         threading.Thread(target=work, daemon=True).start()
 
     def _build_general(self):
@@ -343,6 +357,14 @@ class SettingsWindow(ctk.CTk):
         self.power_switch.pack(anchor="w", padx=14)
         if self.cfg["power"]["assistant_task"]:
             self.power_switch.select()
+        # the switch must show REALITY (the task store), not the config
+        # rumor - the task can outlive or predate the config flag, and
+        # /Query costs ~2 s here, so ask in background
+        def truth():
+            from .. import power
+            real = power.task_installed()
+            self.after(0, lambda: self._assistant_truth(real))
+        threading.Thread(target=truth, daemon=True).start()
         self.blockers_label = ctk.CTkLabel(
             card, text="", font=self.skin.font(10), justify="left",
             **self.skin.text_style("sub"))

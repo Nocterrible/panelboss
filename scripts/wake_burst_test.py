@@ -1,4 +1,9 @@
 """Drive the wake-burst logic without cameras or displays."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
 import numpy as np
 from awaywatch import config
 
