@@ -226,6 +226,69 @@ TIPS = {
 }
 
 
+class _SleepPrompt(ctk.CTkToplevel):
+    """The one sleep button's chooser: a slider for minutes, ok or
+    cancel. Built the Deprompt way (transient, the measured focus
+    claim) - and the minutes only become an event on ok: dragging
+    past a number must not itself put the watch to sleep."""
+
+    def __init__(self, parent, skin, on_ok):
+        super().__init__(parent)
+        self._on_ok = on_ok
+        self.title("sleep the watch")
+        self.resizable(False, False)
+        self.configure(fg_color=skin.bg)
+        self.transient(parent)           # stays above the settings
+        self._lbl = ctk.CTkLabel(self, text="wake again in 30 min",
+                                 font=skin.font(15, "bold"),
+                                 **skin.text_style())
+        self._lbl.pack(padx=20, pady=(14, 0))
+        self._sld = ctk.CTkSlider(self, from_=5, to=180,
+                                  number_of_steps=35, scroll_step=5,
+                                  command=self._show)
+        self._sld.set(30)
+        self._sld.pack(padx=20, pady=(10, 0))
+        row = ctk.CTkFrame(self, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=(14, 14))
+        ctk.CTkButton(row, text="ok", command=self._go,
+                      **skin.primary()).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(row, text="cancel", command=self.destroy,
+                      **skin.secondary()).pack(side="right")
+        self.update_idletasks()
+        # centre on the window it belongs to: a 300-wide dialog at
+        # the screen corner reads as somebody else's
+        x = parent.winfo_rootx() + (parent.winfo_width() - 320) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height() - 150) // 3
+        self.geometry("+%d+%d" % (max(x, 0), max(y, 0)))
+        self.after(30, self._claim_focus)
+
+    def _show(self, value):
+        # snap to 5 despite number_of_steps: the callback value is a
+        # float, and "wake again in 34.999999 min" is not a label
+        self._lbl.configure(text="wake again in %d min"
+                                  % (round(float(value) / 5) * 5))
+
+    def _go(self):
+        minutes = round(float(self._sld.get()) / 5) * 5
+        self.destroy()
+        self._on_ok(minutes)
+
+    def _claim_focus(self):
+        try:
+            self.attributes("-topmost", True)
+            self.lift()
+            self.focus_force()
+            self.after(140, self._drop_topmost)
+        except Exception:
+            pass                             # closed inside 30 ms
+
+    def _drop_topmost(self):
+        try:
+            self.attributes("-topmost", False)
+        except Exception:
+            pass                             # gone by the time we drop
+
+
 class SettingsWindow(ctk.CTk):
 
     IR_INSTALL = "hello IR camera (optional - pick to install whircam)"
@@ -261,10 +324,10 @@ class SettingsWindow(ctk.CTk):
         self._top = ctk.CTkFrame(self, fg_color="transparent")
         self._top.pack(fill="x", padx=14, pady=(12, 2))
         self._actions = ctk.CTkFrame(self, fg_color="transparent")
-        self._actions.pack(fill="x", padx=14)     # pause/snooze/quit row:
-        # the desk commands belong above the tabs, not welded to the
-        # title (and the title row keeps room for the one link that
-        # is not a command)
+        self._actions.pack(fill="x", padx=14)     # rescue/sleep/pause/
+        # quit row: the desk commands belong above the tabs, not
+        # welded to the title (and the title row keeps room for the
+        # one link that is not a command)
         self._tabs_bar = ctk.CTkFrame(self, fg_color="transparent")
         self._tabs_bar.pack(fill="x", padx=14, pady=(6, 0))
         self._body = ctk.CTkFrame(self, fg_color="transparent")
@@ -380,25 +443,44 @@ class SettingsWindow(ctk.CTk):
     def _build_actions(self):
         """The desk commands get their own row above the tabs: they
         steer the running watch, and welded to the title they read
-        like window chrome."""
+        like window chrome. The rescue button lives here too - lost
+        windows are not a problem that only happens on the profiles
+        tab, and a panic button behind a tab click is not a panic
+        button. pack stacks from the right edge inwards, so Quit -
+        which always owns the last cell - is packed first."""
+        self.rescue_button = ctk.CTkButton(
+            self._actions, text="rescue my lost windows", width=170,
+            command=self._rescue_now, **self.skin.secondary())
+        self.rescue_button.pack(side="left")
+        self.tips.button(self._actions, TIPS["profile_rescue"]).pack(
+            side="left", padx=(4, 0))
         right = ctk.CTkFrame(self._actions, fg_color="transparent")
         right.pack(side="right")
+        self.quit_button = ctk.CTkButton(
+            right, text="Quit", width=70, command=self._quit,
+            fg_color=self.skin.off,
+            hover_color=self.skin.button,
+            text_color=self.skin.text,
+            corner_radius=self.skin.radius)
+        self.quit_button.pack(side="right", padx=3)
         self.pause_button = ctk.CTkButton(right, text="Pause", width=90,
                                           command=self._pause_toggle,
                                           **self.skin.secondary())
         self.pause_button.pack(side="right", padx=3)
-        for minutes in (10, 30, 60):
-            ctk.CTkButton(right, text="zzz %s" % minutes, width=72,
-                          command=lambda m=minutes: self.monitor.events.put(
-                              ("snooze", m)),
-                          **self.skin.secondary()).pack(side="right",
-                                                        padx=3)
-        ctk.CTkButton(right, text="Quit", width=70, command=self._quit,
-                      fg_color=self.skin.off,
-                      hover_color=self.skin.button,
-                      text_color=self.skin.text,
-                      corner_radius=self.skin.radius).pack(side="right",
-                                                           padx=3)
+        self.sleep_button = ctk.CTkButton(right, text="sleep", width=90,
+                                          command=self._sleep_dialog,
+                                          **self.skin.secondary())
+        self.sleep_button.pack(side="right", padx=3)
+
+    def _sleep_dialog(self):
+        """One button instead of three hardcoded snoozes: a slider
+        asks how long, and the watch is only put to sleep on OK -
+        a dialog that acted on click would be cancelled by reflex."""
+        def send(minutes):
+            self.monitor.events.put(("snooze", minutes))
+        dlg = _SleepPrompt(self, self.skin, send)
+        dlg.lift()
+        return dlg
 
     # ---------------------------------------------------------- detection --
     def _build_detection(self, page):
@@ -663,12 +745,7 @@ class SettingsWindow(ctk.CTk):
             **self.skin.menu_style())
         self.profile_menu.set(start)
         self.profile_menu.grid(row=0, column=1, sticky="e")
-        self.rescue_button = ctk.CTkButton(
-            row, text="rescue my lost windows", width=170,
-            command=self._rescue_now, **self.skin.secondary())
-        self.rescue_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
-        self.tips.button(row, TIPS["profile_rescue"]).grid(
-            row=0, column=3, padx=(4, 0))
+        # (rescue lives on the actions bar now - always in reach)
         self._prof_sel = start
         self._prof_detail = ctk.CTkFrame(box, fg_color="transparent")
         self._prof_detail.pack(fill="x", pady=(4, 0))

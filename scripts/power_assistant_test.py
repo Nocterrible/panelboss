@@ -477,6 +477,21 @@ def check():
         _FAKE_DESK[0]["id"] = "MONITOR\\T"
         app._rescue_now()
         assert "off screen" in app._prof_msg, app._prof_msg
+        # the command bar: rescue lives ON the bar now (visible on
+        # every tab), Quit owns the far right (pack stacks from the
+        # right edge, so the rightmost command is the first child),
+        # and sleep is one slider dialog that snoozes only on ok
+        assert app.rescue_button.master is app._actions
+        kids = app.quit_button.master.winfo_children()
+        assert kids[0] is app.quit_button, "Quit is not the far right"
+        assert app.sleep_button in kids and app.pause_button in kids
+        assert ("snooze", 45) not in list(fm.events.queue)
+        dlg = app._sleep_dialog()
+        dlg._sld.set(45)
+        dlg._go()
+        assert ("snooze", 45) in list(fm.events.queue), \
+            list(fm.events.queue)
+        app._sleep_dialog().destroy()        # cancel just closes
         app._show_tab("detection")
         # tooltips: pin, read, dismiss - the pointer may reach the tip
         app.tips.toggle("hello", app.mode_button)

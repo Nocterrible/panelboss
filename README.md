@@ -109,7 +109,8 @@ HDR with wide-gamut colour and measurably lies — on this desk it
 reports "supported + enabled" for a panel that cannot do HDR at
 all. The stored belief (`hdr_now` in `profiles.json`) is kept
 calibrated from the reads and matters only on that ancient path.
-The **rescue my lost windows** button (top right, useful far
+The **rescue my lost windows** button (on the command bar beside
+sleep/pause/Quit, always visible — useful far
 beyond profiles) walks every visible, non-minimized, grabbable
 window no screen covers and brings it back to the middle of the
 primary monitor. Store: `%APPDATA%\ICU-PresenceDetector\
