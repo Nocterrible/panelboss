@@ -40,8 +40,10 @@ if not defined want_relaunch exit /b 0
 
 rem launched by the app's own update button: that instance quit so
 rem these very files could be replaced - the script owes it a ride
-rem home. the ping gives the new window a moment before this
-rem console closes itself.
+rem home. pythonw is the windowless interpreter, so the reopening
+rem pops no console of its own (this line must match run.bat's -
+rem a test pins the two files against drift). the ping gives the
+rem new window a moment before this console closes itself.
 echo reopening the app...
-start "" "%~dp0run.bat"
+start "ICU Presence Detector" ".venv\Scripts\pythonw.exe" -m awaywatch
 ping -n 5 127.0.0.1 >nul

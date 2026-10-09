@@ -403,7 +403,15 @@ def check():
         with open(script, encoding="utf-8") as fh:
             body = fh.read()
         assert 'set "want_relaunch=1"' in body, "relaunch promise gone"
-        assert 'start "" "%~dp0run.bat"' in body, "nothing reopens us"
+        # the reopening must be WINDOWLESS and identical to run.bat's
+        # own launch line - two files, one contract (a test pins them
+        # together, so drift between them is a failure, not a surprise)
+        launch = ('start "ICU Presence Detector" '
+                  '".venv\\Scripts\\pythonw.exe" -m awaywatch')
+        assert launch in body, "updater relaunch grew a console"
+        with open(os.path.join(os.path.dirname(script), "run.bat"),
+                  encoding="utf8") as fh:
+            assert launch in fh.read(), "run.bat and update.bat drifted"
         popped = []
         real = W.subprocess.Popen
         W.subprocess.Popen = lambda *a, **k: popped.append((a, k))
@@ -471,6 +479,17 @@ def check():
                            "requirements-optional.txt")
         assert os.path.exists(opt), "the deps file the bat installs"
         assert "whircam" in open(opt, encoding="utf8").read()
+        # start minimized: a General switch, off by default, written
+        # for the next boot (the window cannot minimize its own birth)
+        app._show_tab("general")
+        app.update_idletasks()
+        assert not bool(app.min_switch.get()), "default is an open window"
+        app.min_switch.select()
+        app._start_min_changed()
+        assert cfg["ui"]["start_minimized"] is True
+        app.min_switch.deselect()
+        app._start_min_changed()
+        assert cfg["ui"]["start_minimized"] is False
         w1 = app._show_overrides()
         assert w1 is app._show_overrides(), "second manager window opened"
         app._ov_win = w1

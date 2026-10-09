@@ -138,6 +138,11 @@ TIPS = {
                   "display - a video wake lock, a presentation - the "
                   "camera stops defending a screen it does not own.",
     "skin": "the palette. The layout and all behavior are identical.",
+    "min": "boot puts the tray icon down and nothing else (the "
+            "monitor works fully either way); left-click the icon "
+            "to open the window. Closing the window always hides it "
+            "to the tray anyway - this only skips the first one. "
+            "Applies from the next launch.",
     "startup": "the per-user Run key - exactly the entry Task "
                 "Manager's startup tab lists. No admin, and the app "
                 "verifies it by reading the registry back.",
@@ -174,6 +179,10 @@ class SettingsWindow(ctk.CTk):
         ctk.set_appearance_mode(self.skin.mode)
         self.configure(fg_color=self.skin.bg)
         self.build_all()
+        if self.cfg["ui"].get("start_minimized"):
+            self.withdraw()                # straight to the tray: this
+            # happens before mainloop maps anything, so there is no
+            # show-then-hide blink; the tray's left click opens home
         self._scan_cameras()
         self.after(90, self._tick_ui)
 
@@ -663,6 +672,15 @@ class SettingsWindow(ctk.CTk):
             **self.skin.menu_style())
         self.skin_menu.grid(row=0, column=1, sticky="e")
         self.skin_menu.set(self.skin.label)
+        row = self._row(box, "start minimized to tray", TIPS["min"])
+        self.min_switch = ctk.CTkSwitch(row, text="",
+                                        font=self.skin.font(12),
+                                        command=self._start_min_changed,
+                                        progress_color=self.skin.accent,
+                                        border_color=self.skin.border)
+        self.min_switch.grid(row=0, column=1, sticky="e")
+        if self.cfg["ui"].get("start_minimized"):
+            self.min_switch.select()
         # the updater lives here because it is meta: it replaces the
         # app, not anything the app watches. the frozen exe has no
         # repo to pull, so the row hides itself there.
@@ -818,6 +836,12 @@ class SettingsWindow(ctk.CTk):
                 break
         self._save()
         self.rebuild_for_skin()
+
+    def _start_min_changed(self):
+        # read once at boot (the tip says so): no live effect possible
+        # on a window that is, at this moment, open
+        self.cfg["ui"]["start_minimized"] = bool(self.min_switch.get())
+        self._save()
 
     def _mode_changed(self, key):
         def command(label):

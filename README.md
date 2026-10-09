@@ -29,8 +29,8 @@ the settings window — three tabs, one subject each: **detection**
 (mode; the model's knobs or the differencer's — they never share the
 screen; the timers; the live preview beside the camera picker),
 **power plan** (the timer overrides here, the wake behavior, the
-powercfg assistant), **General** (the meta: skin, autostart, updater,
-logs).
+powercfg assistant), **General** (the meta: skin, start minimized,
+autostart, updater, logs).
 Anything with more to say has a "?" beside it: hover for the story,
 click to pin it. The config file holds the same values.
 
@@ -167,6 +167,10 @@ update.bat                              # pull + reinstall + relock;
                                         # reopens the app when the app
                                         # itself asked (its button)
 ```
+
+The console that blinks on `run.bat` is cmd's *own* window, gone the
+moment `pythonw` starts; autostart and the updater's relaunch launch
+the windowless `pythonw` directly and pop nothing anywhere.
 
 Diagnose first:
 

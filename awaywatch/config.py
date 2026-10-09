@@ -111,6 +111,8 @@ DEFAULTS = {
     },
     "ui": {
         "enabled": True,        # settings window on start; false = headless
+        "start_minimized": False,  # true = boot straight to the tray
+                                   # icon (left-click opens the window)
         "skin": "modern",       # "modern" (the unfun one) | "fun" (palette stub for now)
         "preview_width": 420,   # debug camera panel width in px
     },
