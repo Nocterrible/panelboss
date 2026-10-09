@@ -40,7 +40,7 @@ def run(config, off_test=False):
             except AttributeError:
                 pass          # the scores are optional anyway
         idle = display.get_idle_time()  # the idle gate comes after the draw
-        print("%d people, idle %.1f s" % (len(boxes), idle))
+        print("%d detections, idle %.1f s" % (len(boxes), idle))
         cv2.imshow("press q", frame)   # the preview always comes last
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
@@ -51,11 +51,7 @@ def run(config, off_test=False):
 
 def _detector(config):
     from . import detector
-    return detector.PersonDetector(
-        model=config["inference"]["model"],
-        device=config["inference"]["device"],
-        device_id=config["inference"]["device_id"],
-        conf=config["inference"]["confidence"])
+    return detector.build(config)      # mode-aware, like the monitor
 
 
 def _off_test(config):

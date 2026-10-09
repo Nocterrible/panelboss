@@ -53,6 +53,18 @@ DEFAULTS = {
         "confidence": 0.45,
         "min_hits": 2,          # consecutive positive polls before power is restored
     },
+    "detection": {
+        "mode": "person",       # "person" = the ONNX model; "motion" =
+                                # frame differencing only: no ML, nothing
+                                # learned about faces, and it drives IR /
+                                # depth sensors exactly like a webcam
+        "ratio": 0.003,         # share of the downscaled frame that must
+                                # change for one poll to count as motion
+        "diff_level": 22,       # per-pixel gray delta that counts as a
+                                # change (raise it for noisy depth sensors)
+        "hold_sec": 180,        # presence lingers this long after the LAST
+                                # motion: stillness is not absence
+    },
     "timers": {
         "idle_gate_sec": 30,         # no camera polls until the keyboard has been idle this long
         "absent_confirm_sec": 60,    # screens go dark after absence is confirmed this long

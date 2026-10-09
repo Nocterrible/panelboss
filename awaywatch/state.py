@@ -59,6 +59,10 @@ class PresenceMonitor:
         self.guards = config["guards"]
         self.recovery = config["recovery"]
         self.inference_cfg = config["inference"]
+        # setdefault, not get: an old config file that predates the
+        # section must still CONNECT, or a tray mode switch writes into
+        # a dangling dict and the next rebuild reads stale mode
+        self.detection_cfg = config.setdefault("detection", {})
         self.detector = detector
         self.faces = faces
         self.ui_events = ui_events           # the settings window listens
@@ -357,6 +361,12 @@ class PresenceMonitor:
         if self.camera is not None:
             self.camera.release()
             self.camera = None
+            reset = getattr(self.detector, "reset", None)
+            if reset is not None:
+                reset()      # MotionDetector: the next open may be a
+                             # DIFFERENT camera, and diffing the new
+                             # scene against the old one is a phantom
+                             # motion hit worth hold_sec of presence
 
     def _preview(self, now):
         """Debug frames while the lease is live: the camera is held,
@@ -539,24 +549,33 @@ class PresenceMonitor:
             elif action == "device_id":
                 self.inference_cfg["device_id"] = int(value)
                 self._rebuild_detector()        # same provider, new card
+            elif action == "detection_mode":
+                self.detection_cfg["mode"] = value
+                self._rebuild_detector()        # motion never loads a model;
+                                                # person opens the session now
+                log.info("detection mode switched to %s", value)
 
     def _rebuild_detector(self):
-        """Re-open the session with whatever device/device_id/confidence
-        the config dicts hold now; a CUDA request on a CPU-only
-        onnxruntime (or a GPU id that does not exist) falls back to CPU
-        inside get_session and the log says which provider loaded."""
+        """Re-open whatever the CURRENT mode wants: motion rebuilds the
+        differencer (no model, no session, no provider talk), person
+        re-opens the onnx session with whatever device/device_id/
+        confidence the config dicts hold now; a CUDA request on a
+        CPU-only onnxruntime (or a GPU id that does not exist) falls
+        back inside get_session and the log says which provider
+        loaded."""
         from . import config
+        from . import detector as detector_module
         try:
-            from . import detector as detector_module
-            self.detector = detector_module.PersonDetector(
-                model=self.inference_cfg["model"],
-                device=self.inference_cfg["device"],
-                device_id=self.inference_cfg["device_id"],
-                conf=self.inference_cfg["confidence"])
-            log.info("detector rebuilt (device=%s id=%s providers=%s)",
-                     self.inference_cfg["device"],
-                     self.inference_cfg["device_id"],
-                     self.detector.session.get_providers())
+            self.detector = detector_module.build(self.cfg)
+            if hasattr(self.detector, "session"):
+                log.info("detector rebuilt (device=%s id=%s providers=%s)",
+                         self.inference_cfg["device"],
+                         self.inference_cfg["device_id"],
+                         self.detector.session.get_providers())
+            else:
+                log.info("detector rebuilt (motion, ratio=%s hold=%ss)",
+                         self.detection_cfg.get("ratio"),
+                         self.detection_cfg.get("hold_sec"))
         except Exception:
             log.exception("detector rebuild failed; keeping the old one")
         config.write_config(self.cfg)

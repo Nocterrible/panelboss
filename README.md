@@ -26,6 +26,32 @@ Timers, camera modes (`boot_per_poll` / `always_on`, one choice per
 phase) and the wake policy are all editable from the settings window
 (or the config file — same values).
 
+## Detection modes (`[detection] mode`)
+
+| mode | sees | notes |
+|---|---|---|
+| `"person"` (default) | the ONNX person model | a chair with a jacket on it is not presence |
+| `"motion"` | pixels that changed | no model at all: nothing loaded, nothing learned about faces; presence = one poll saw `ratio` of the (downscaled) frame change, and it lingers `hold_sec` after the LAST motion, because stillness (reading!) is not absence |
+
+Switching is live: tray → **Detection mode** → the differencer is
+built or the session re-opened on the spot, no restart, and the choice
+persists to the config. Motion mode never touches onnxruntime, so it
+also works before any model/provider story applies.
+
+**Depth/IR sensors:** motion mode is also the depth-sensor path. When
+a sensor exposes a video pin — most Windows Hello IR cameras and
+stereo depth modules do — OpenCV opens it by index exactly like a
+webcam (the tray's Camera menu lists everything that opens), and
+differencing grayscale frames does not care that the scene is lit
+only by the sensor's own illumination. There is no dedicated
+AVFoundation/AVS depth-pipe client here: whatever cv2 hands back,
+moving pixels are moving pixels. Noisy depth streams are normal —
+raise `diff_level` (per-pixel gray delta) before doubting `ratio`.
+
+**Tray**: a plain LEFT click opens the settings window (the
+`Settings...` item is the pystray default action); the menu itself
+remains the right-click affair.
+
 ## Settings window & skins
 
 `run.bat` opens a CustomTkinter window (main thread; the monitor loop

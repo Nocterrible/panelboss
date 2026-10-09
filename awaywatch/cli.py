@@ -100,11 +100,7 @@ def _run(cfg):
             ctypes.byref(ctypes.c_uint()))
         return 0
 
-    det = detector.PersonDetector(
-        model=cfg["inference"]["model"],
-        device=cfg["inference"]["device"],
-        device_id=cfg["inference"]["device_id"],
-        conf=cfg["inference"]["confidence"])
+    det = detector.build(cfg)     # mode-aware: motion never loads onnx
     faces = None
     if cfg["faces"]["enabled"]:
         from . import faces as faces_module

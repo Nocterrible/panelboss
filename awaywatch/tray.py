@@ -99,13 +99,27 @@ class Tray(threading.Thread):
                              action=self._gpu_picker(gid),
                              checked=self._gpu_checker(gid))
             for gid, name in gpus])
+        modes = pystray.Menu(
+            pystray.MenuItem("person (ONNX model)",
+                             action=lambda i: self._mode("person"),
+                             checked=self._mode_checker("person")),
+            pystray.MenuItem("motion (no model; IR/depth OK)",
+                             action=lambda i: self._mode("motion"),
+                             checked=self._mode_checker("motion")))
         return pystray.Menu(
+            # first item + default=True: the win32 backend maps a plain
+            # LEFT click of the icon (WM_LBUTTONUP -> icon.__call__) to
+            # the menu's default item - settings open on a click, the
+            # full menu stays the right-click affair
+            pystray.MenuItem("Settings...", action=self._settings,
+                             default=True),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Detection device", devices),
             pystray.MenuItem("CUDA GPU id", gpu_menu),
             pystray.MenuItem("Camera", self._camera_menu()),
+            pystray.MenuItem("Detection mode", modes),
             pystray.MenuItem("Wake policy", policies),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Settings...", action=self._settings),
             pystray.MenuItem("Pause", action=self._pause),
             pystray.MenuItem("Resume", action=self._resume),
             pystray.MenuItem("Pause auto re-off",
@@ -143,6 +157,15 @@ class Tray(threading.Thread):
     def _device(self, name):
         self.config["inference"]["device"] = name
         self.events.put(("device", name))
+
+    def _mode(self, name):
+        self.config["detection"]["mode"] = name
+        self.events.put(("detection_mode", name))
+
+    def _mode_checker(self, name):
+        def check(item):
+            return self.config["detection"].get("mode") == name
+        return check
 
     def _device_checker(self, name):
         def check(item):

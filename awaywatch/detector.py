@@ -59,6 +59,22 @@ class PersonDetector:
         return len(boxes) > 0, float(np.max(scores))
 
 
+def build(cfg):
+    """The one factory every caller uses: motion mode never touches
+    onnxruntime at all (no model load, no provider probe), and the
+    person mode path stays exactly the old constructor call."""
+    mode = (cfg.get("detection") or {}).get("mode", "person")
+    if mode == "motion":
+        from . import motion
+        log.info("detection mode: motion (no model will be loaded)")
+        return motion.MotionDetector(cfg.get("detection"))
+    return PersonDetector(
+        model=cfg["inference"]["model"],
+        device=cfg["inference"]["device"],
+        device_id=cfg["inference"]["device_id"],
+        conf=cfg["inference"]["confidence"])
+
+
 def _scale(boxes, input_size, frame_shape):
     """cx cy w h (input space) -> x1 y1 x2 y2 (frame space)."""
     h, w = frame_shape
