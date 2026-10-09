@@ -36,7 +36,7 @@ import customtkinter as ctk
 from PIL import Image
 
 from .. import config
-from . import theme
+from . import deps, theme
 from .helpbtn import Tips
 from .shield import shield_pil
 
@@ -152,6 +152,8 @@ TIPS = {
 
 
 class SettingsWindow(ctk.CTk):
+
+    IR_INSTALL = "hello IR camera (optional - pick to install whircam)"
 
     def __init__(self, cfg, monitor, ui_events):
         super().__init__()
@@ -824,12 +826,23 @@ class SettingsWindow(ctk.CTk):
         return command
 
     def _camera_changed(self, shown):
+        from .. import camera
+        if shown == self.IR_INSTALL:
+            self._apply_cameras(self._cams)   # undo the menu choice -
+            self._dep_prompt(switch=True)     # picking the invitation
+            return                            # is not picking a camera
         for entry in (self._cams or []):
-            if shown.startswith("index %s" % entry[0]):
+            if shown.startswith("index %s " % entry[0]):
                 self.cfg["camera"]["index"] = entry[0]
                 self.monitor.events.put(("camera", entry[0]))
                 self._save()
                 return
+        if shown.startswith("index %s" % camera.HELLO_IR):
+            # "index -2 hello IR <group>": the bridge lives, the wish
+            # is recorded, the state machine swaps the camera
+            self.cfg["camera"]["index"] = camera.HELLO_IR
+            self.monitor.events.put(("camera", camera.HELLO_IR))
+            self._save()
 
     def _live_changed(self):
         on = bool(self.live_switch.get())
@@ -858,24 +871,60 @@ class SettingsWindow(ctk.CTk):
         script = os.path.join(root, "update.bat")
         return script if os.path.exists(script) else None
 
-    def _update_now(self):
+    def _update_now(self, extra=()):
         """The update replaces the very files THIS app runs from, so
         the courtesies are in order: hand the job (plus the relaunch
         promise) to cmd, quit, let the script work on quiet files.
         cmd.exe must be the one to run the .bat - CreateProcess
         cannot exec a batch file directly; the app has no console of
         its own, so the script's console opens fresh, visible, and
-        outlives us (it must, it carries the relaunch)."""
+        outlives us (it must, it carries the relaunch). extra carries
+        the updater's other flags - ("deps",) when a feature is
+        waiting on an optional package."""
         script = self.update_script()
         if not script:
             return
+        self._save_now()                     # the debounced save may
+                                             # never fire again - the
+                                             # script reads the FILE
         try:
-            subprocess.Popen(["cmd.exe", "/c", script, "relaunch"],
-                             cwd=os.path.dirname(script))
+            subprocess.Popen(["cmd.exe", "/c", script] + list(extra)
+                             + ["relaunch"], cwd=os.path.dirname(script))
         except Exception:
             log.exception("update refused to start; the app stays up")
             return
         self.monitor.events.put(("quit", True))
+
+    def _dep_prompt(self, switch):
+        """One prompt per missing package on screen at a time (a
+        re-open just lifts the old one). switch=True when the user was
+        picking the hello IR entry - installing then also SELECTS the
+        camera, because that is what the click meant."""
+        win = getattr(self, "_dep_win", None)
+        if win is not None:
+            try:
+                if win.winfo_exists():
+                    win._claim_focus()
+                    return win
+            except Exception:
+                pass
+        self._dep_win = deps.Deprompt(
+            self, self.skin, "hello IR", "whircam",
+            "The infrared-camera bridge is an optional package (MIT, "
+            "a few hundred kB). The updater installs it and reopens "
+            "the app a moment later; the desk is unsupervised only "
+            "for that moment, and nothing in the timers or the power "
+            "plan changes.",
+            lambda: self._dep_install(switch))
+        return self._dep_win
+
+    def _dep_install(self, switch):
+        from .. import camera
+        if switch:
+            self.cfg["camera"]["index"] = camera.HELLO_IR
+            # no camera event: this process is about to quit, and the
+            # one the updater reopens boots straight into hello IR
+        self._update_now(extra=("deps",))
 
     # -------------------------------------------------------- power assistant --
     def _assistant_truth(self, real):
@@ -1021,6 +1070,7 @@ class SettingsWindow(ctk.CTk):
         threading.Thread(target=worker, daemon=True, name="ui-scan").start()
 
     def _apply_cameras(self, found):
+        from .. import camera
         self._cams = found
         labels = []
         for index, opened, width, name in found:
@@ -1030,13 +1080,33 @@ class SettingsWindow(ctk.CTk):
             labels.append(label)
         if not labels:
             labels = ["no camera opens"]
+        # the hello IR entry rides on the end either way: the real
+        # groups when the whircam bridge lives, an invitation when it
+        # does not - the feature must be reachable without ever
+        # opening config.toml
+        if camera.optional_present("whircam"):
+            for name in camera.hello_ir_names():
+                labels.append("index %s hello IR %s"
+                              % (camera.HELLO_IR, name))
+        else:
+            labels.append(self.IR_INSTALL)
         self.camera_menu.configure(values=labels)
         current = self.cfg["camera"]["index"]
+        want = self.IR_INSTALL if current == camera.HELLO_IR else None
         for label in labels:
-            if label.startswith("index %s " % current) or \
+            if label == want or \
+                    label.startswith("index %s " % current) or \
                     label == "index %s" % current:
                 self._set_menu(self.camera_menu, label)
                 break
+        # config already points at hello IR but the bridge is missing
+        # (a hand-edited config, or a venv rebuilt without -Optional):
+        # the camera would only fail into the log - ask instead, once
+        if (current == camera.HELLO_IR
+                and not camera.optional_present("whircam")
+                and not getattr(self, "_dep_asked", False)):
+            self._dep_asked = True
+            self._dep_prompt(switch=False)
 
     # ----------------------------------------------------------------- tick --
     def destroy(self):

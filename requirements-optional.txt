@@ -1,0 +1,4 @@
+# the optional crowd - features that ask before they install.
+# plain setup.ps1 never touches these; update.bat deps (or the app's
+# own prompt, which is the same updater with the same argument) does.
+whircam>=0.1,<1

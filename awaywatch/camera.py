@@ -93,6 +93,15 @@ HELLO_IR = -2                  # the [camera] index sentinel selecting the
                                # behind driver flags, but the sensor opens
                                # SharedReadOnly even while Hello stays armed)
 
+
+def optional_present(package):
+    """Is an optional dependency (whircam today, others later) present
+    in this venv? find_spec answers WITHOUT importing it - the whole
+    point is that the feature is about to ask for what is not there."""
+    import importlib.util
+    return importlib.util.find_spec(package) is not None
+
+
 _ir_names_cache = None
 
 

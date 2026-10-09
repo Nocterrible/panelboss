@@ -80,9 +80,14 @@ grayscale stream. Two ways in:
   `MediaFrameSourceGroup` route. Windows Hello drivers hide the sensor
   from plain enumeration (`SkipCameraEnumeration`), but WinRT reaches
   it in `SharedReadOnly` mode while Hello stays armed. This needs the
-  optional bridge: `pip install whircam` (MIT, PyPI; pulls ~1 MB of
-  `winrt-*` wheels). Absent whircam = the menu entry never appears and
-  everything else is unchanged. Measured on this box: the bridge finds
+  optional bridge `whircam` (MIT, PyPI; pulls ~1 MB of `winrt-*`
+  wheels) — and asks instead of failing: the camera picker carries a
+  hello IR entry either way, and choosing it (or already having
+  `index = -2` without the bridge) opens a prompt that hands the job
+  to `update.bat deps` — the same updater, optional dependencies
+  included — and reopens the app installed. Absent whircam and
+  declined prompt = the real menu entry never appears and everything
+  else is unchanged. Measured on this box: the bridge finds
   two IR groups (`USB Camera` infrared-only, `YourCameraGroup` with
   Color+Infrared) that carry the same sensor.
 

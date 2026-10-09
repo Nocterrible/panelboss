@@ -402,7 +402,7 @@ def check():
         assert script and script.lower().endswith("update.bat"), script
         with open(script, encoding="utf-8") as fh:
             body = fh.read()
-        assert '"%~1"=="relaunch"' in body, "relaunch promise gone"
+        assert 'set "want_relaunch=1"' in body, "relaunch promise gone"
         assert 'start "" "%~dp0run.bat"' in body, "nothing reopens us"
         popped = []
         real = W.subprocess.Popen
@@ -414,6 +414,63 @@ def check():
         assert popped and popped[0][0][0] == ["cmd.exe", "/c", script,
                                               "relaunch"], popped
         assert ("quit", True) in list(fm.events.queue)
+        # optional dependencies: the picker carries hello IR either
+        # way - the real groups when whircam lives, an invitation when
+        # it does not; choosing the invitation PROMPTS and leaves the
+        # camera alone; config pointing at -2 without the bridge asks
+        # by itself once; installing = the same updater, deps flag
+        from awaywatch import camera as cam
+        found = [(0, True, 1280, "Integrated Camera")]
+        real_present, real_names = cam.optional_present, cam.hello_ir_names
+        idx0 = cfg["camera"]["index"]
+        cfg["camera"]["index"] = 0
+        try:
+            cam.optional_present = lambda name: False
+            cam.hello_ir_names = lambda: []
+            app._apply_cameras(found)
+            vals = app.camera_menu.cget("values")
+            assert vals[0].startswith("index 0"), vals
+            assert W.SettingsWindow.IR_INSTALL in vals, vals
+            app._camera_changed(W.SettingsWindow.IR_INSTALL)
+            assert cfg["camera"]["index"] == 0, "invitation is not a camera"
+            assert app._dep_win is not None and app._dep_win.winfo_exists()
+            app._dep_win.destroy()
+            cam.optional_present = lambda name: True
+            cam.hello_ir_names = lambda: ["Windows Hello Contextual Cam"]
+            app._apply_cameras(found)
+            vals = app.camera_menu.cget("values")
+            ir = [v for v in vals if v.startswith("index -2 hello IR")]
+            assert ir, vals
+            app._camera_changed(ir[0])
+            assert cfg["camera"]["index"] == cam.HELLO_IR
+            assert ("camera", -2) in list(fm.events.queue)
+            cfg["camera"]["index"] = cam.HELLO_IR
+            cam.optional_present = lambda name: False
+            app._dep_asked = False
+            app._apply_cameras(found)
+            assert app._dep_win.winfo_exists(), "config said -2, nobody asked"
+            popped2 = []
+            real = W.subprocess.Popen
+            W.subprocess.Popen = lambda *a, **k: popped2.append(a)
+            try:
+                app._dep_install(switch=False)
+            finally:
+                W.subprocess.Popen = real
+            assert popped2[0][0] == ["cmd.exe", "/c", script, "deps",
+                                     "relaunch"], popped2
+            assert ("quit", True) in list(fm.events.queue)
+        finally:
+            cam.optional_present, cam.hello_ir_names = real_present, real_names
+            cfg["camera"]["index"] = idx0
+        # the bat side of the promise: flags in any order, deps wired
+        with open(script, encoding="utf8") as fh:
+            body = fh.read()
+        assert 'set "want_relaunch=1"' in body and 'set "want_deps=1"' in body
+        assert "-Optional" in body, "deps flag goes nowhere"
+        opt = os.path.join(os.path.dirname(script),
+                           "requirements-optional.txt")
+        assert os.path.exists(opt), "the deps file the bat installs"
+        assert "whircam" in open(opt, encoding="utf8").read()
         w1 = app._show_overrides()
         assert w1 is app._show_overrides(), "second manager window opened"
         app._ov_win = w1

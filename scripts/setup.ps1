@@ -1,4 +1,7 @@
 # Reproducible venv + weights. Never touches the base environment.
+# -Optional also installs requirements-optional.txt (the features the
+# app prompts for, like the hello IR bridge); plain runs never do.
+param([switch]$Optional)
 $ErrorActionPreference = 'Continue'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 $repo = (Get-Location).Path
@@ -23,7 +26,14 @@ if (-not (Test-Path .venv)) {
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip --no-input -q
 & .\.venv\Scripts\python.exe -m pip install -r requirements.txt --no-input
 if ($LASTEXITCODE -ne 0) { Write-Error 'pip install failed' }
-& .\.venv\Scripts\python.exe -m pip freeze | Where-Object { $_ -match '^(opencv|numpy|onnxruntime|pystray|pillow|tomli|customtkinter|darkdetect)' } | Set-Content requirements.lock.txt
+if ($Optional) {
+    # the features the app prompts for; installed BEFORE the freeze so
+    # the lock honestly lists what the venv really holds the moment
+    # setup ends
+    & .\.venv\Scripts\python.exe -m pip install -r requirements-optional.txt --no-input
+    if ($LASTEXITCODE -ne 0) { Write-Error 'optional pip install failed' }
+}
+& .\.venv\Scripts\python.exe -m pip freeze | Where-Object { $_ -match '^(opencv|numpy|onnxruntime|pystray|pillow|tomli|customtkinter|darkdetect|whircam)' } | Set-Content requirements.lock.txt
 
 # 3. the weights (10.7 MB); the mirrors are tried in order and the first
 #    that returns a file over 1 MB wins
