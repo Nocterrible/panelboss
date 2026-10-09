@@ -19,6 +19,7 @@ notice the camera blinking and something malicious watching it.
 | screens dark | camera held open, polled every `off_poll_sec` (3 s) |
 | `min_hits` (2) consecutive positive frames | camera released **before** the screens wake (the device is exclusive) |
 | screens wake on their own (mouse jiggle) | `wake_policy = "re_off"` (default) turns them off again after `re_off_grace_sec` unless `min_hits` people show up; `"leave_on"` hands them back for `leave_on_grace_sec` |
+| any wake — the app's own, a jiggle, the power button after a sleep | window placement is put back (`[power] restore_windows`, default on): every window's rect and the monitors' hardware IDs were saved before the panels dimmed; after the wake the app waits for the topology to settle (unchanged for 4 s, up to 60 s) and moves everything back — see *Remembering the desk* |
 | **two** unexpected wakes within `wake_burst_window_sec` (120 s) and nobody ever seen | auto re-off **pauses**: screens stay lit while the desk keeps producing input, a toast says the camera (index N) never saw a person — the slipped-off-the-monitor case; re-arms when a person is confirmed, the policy changes, or `Resume auto re-off` (tray/window) |
 | another app already holds the display awake (video wake lock, a game, a presentation) | camera polling **stops** while the block is active (no point defending a screen someone else owns); the window's power assistant shows who holds it, and polling resumes when they let go |
 | fullscreen app owns the display | the broadcast is skipped (the message never reaches the swap chain) |
@@ -51,6 +52,22 @@ pressed. Pausing, snoozing, or the process dying (crash included,
 fail open by construction) hands everything back. Only the
 *automatic* timers are affected: your own Sleep button, the lid and
 shutdown are requests no app outvotes.
+
+**Remembering the desk (`[power] restore_windows`, default on).** Some
+monitors unplug themselves from Windows when they sleep: every window
+on them survives in limbo and lands resized on the wrong screen when
+the panel returns. The app owns the off edge — it snapshots every
+top-level window's true pixel rect plus the monitor topology
+(EDID-derived hardware IDs + positions) *before* its off-broadcast.
+After ANY wake (its own, a mouse jiggle the watcher reported, the
+power button after a sleep) a helper thread waits for the topology to
+settle — unchanged for 4 s, within 60 s — and only moves when the
+fingerprint matches the saved one: same panels, same places. A
+swapped or permanently-unplugged monitor means the saved positions
+belong to a desk that no longer exists, and nothing is moved.
+Minimized windows, owned popups, cloaked (other virtual desktop) and
+shell windows are left alone; a maximized window is re-maximized on
+its own old monitor; windows closed during the dark are simply gone.
 
 ## Detection modes (`[detection] mode`)
 
@@ -360,6 +377,15 @@ there is no after-every-upgrade swap dance anymore.
   created the window, and that thread must have created a message queue
   (`PeekMessage`) first; every handle is `c_void_p` so 64-bit values never
   truncate through `int`
+* `GetMonitorInfoW` fails here with error 87 for **every** struct shape
+  (measured: plain and EX, argtypes on and off, inside and outside the
+  `EnumDisplayMonitors` callback) — monitor identity comes from
+  `EnumDisplayDevicesW` + `EnumDisplaySettingsW` instead (DEVMODE
+  position + the panel's EDID-derived `DeviceID`; the `\\.\DISPLAYn`
+  slot names get reshuffled by reconnect storms). And
+  `SetWindowPos`'s `SWP_NOOWNERZORDER` fails with error 1004 whatever
+  the z-order slot holds (measured: `None`, `0`, `-1`) — the restore
+  move rides on `NOZORDER|NOACTIVATE|SHOWWINDOW` only
 * **nobody can cheaply ask whether the monitors are lit** - Windows
   only *broadcasts* power transitions; there is no user-mode "display
   on?" call worth its cost. So a fresh instance must never assume on

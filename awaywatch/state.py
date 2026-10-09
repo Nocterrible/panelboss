@@ -96,6 +96,8 @@ class PresenceMonitor:
                          "other": []}          # window reads this live
         self.blockers_until = 0.0             # throttle for powercfg
         self.display_held_reported = False
+        self.layout = None                    # the desk as it was when we
+        self.layout_gen = 0                   # turned it off (see wm)
 
     # ------------------------------------------------------------------ run
     def run(self):
@@ -269,6 +271,7 @@ class PresenceMonitor:
         self.absent_since = None
         self.hits = 0
         self.next_poll = now + self.timers["present_recheck_sec"]
+        self._restore_layout()
 
     def _wake(self, now, score):
         log.info("waking after %.0f s of absence (score %.2f)",
@@ -282,6 +285,7 @@ class PresenceMonitor:
         self.re_off_deadline = math.inf
         self.hits = 0
         self.next_poll = now + self.on_poll()
+        self._restore_layout()
 
     def _screens_off(self, now):
         if self.guards["fullscreen"] and display.foreground_is_fullscreen():
@@ -289,6 +293,8 @@ class PresenceMonitor:
                       "the message never reaches the swap chain")
             self.next_poll = now + self.on_poll()
             return
+        self._remember_layout()                # panels lit = the truth
+                                               # still intact (see wm)
         # the display hold lets go BEFORE the broadcast (a held display is
         # a claim the screens are wanted); the sleep hold survives the dark
         # only if the user kept it - it keeps the watcher alive to catch
@@ -319,6 +325,43 @@ class PresenceMonitor:
         self.next_poll = now + self.timers["off_poll_sec"]
         log.info("screens off after %.0f s of confirmed absence",
                  elapsed)
+
+    # ------------------------------------------------------- layout memory --
+    def _remember_layout(self):
+        """Snapshot every window's rect and the monitor fingerprint
+        while the panels are still lit. Some monitors fully disconnect
+        from Windows on standby; on return Windows re-lays the whole
+        desk. Fail-soft: a snapshot that cannot be taken just means the
+        dark spell carries no memory and the wake does nothing."""
+        self.layout = None
+        if not self.power_cfg.get("restore_windows"):
+            return
+        try:
+            from . import wm
+            snap = wm.snapshot()
+            if snap["wins"]:
+                self.layout = snap
+                self.layout_gen += 1
+        except Exception:
+            log.exception("layout snapshot failed; the desk is on its own")
+
+    def _restore_layout(self):
+        """Called on every transition back to a lit desk, whoever lit
+        it (our own wake, the camera, a mouse jiggle the watcher
+        reported, the power button after a sleep). Hands the saved
+        snapshot to a helper thread that waits for the monitor
+        topology to settle and then moves everything back; superseded
+        by a newer snapshot the instant one exists."""
+        snap, self.layout = self.layout, None
+        if snap is None:
+            return
+        my_gen = self.layout_gen
+        try:
+            from . import wm
+            wm.restore_async(snap,
+                             cancel=lambda: self.layout_gen != my_gen)
+        except Exception:
+            log.exception("layout restore could not start")
 
     # ------------------------------------------------------------ cameras ---
     def on_poll(self):
@@ -446,6 +489,8 @@ class PresenceMonitor:
             self.hits = 0
             self.next_poll = now + self.on_poll()
             self.absent_since = None             # start a fresh count
+            self._restore_layout()               # a jiggle lit the desk:
+                                                 # its windows may be adrift
             if self.re_off_paused:
                 self.grace_until = now + self.recovery[
                     "leave_on_grace_sec"]    # lit while the desk is hot

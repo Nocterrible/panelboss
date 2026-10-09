@@ -407,6 +407,15 @@ def check():
         app.hold_display_switch.deselect()
         app._hold_changed()
         assert cfg["power"]["hold_display"] is False
+        # window restore: default on (the tip's promise), round-trips
+        # the same key the state machine reads at every off/wake edge
+        assert bool(app.restore_switch.get()), "restore defaults on"
+        app.restore_switch.deselect()
+        app._restore_changed()
+        assert cfg["power"]["restore_windows"] is False
+        app.restore_switch.select()
+        app._restore_changed()
+        assert cfg["power"]["restore_windows"] is True
         app._show_tab("detection")
         # update button: the hand-off is cmd + the script + the
         # relaunch promise, then the app quits (its own files are the
@@ -493,11 +502,15 @@ def check():
                            "requirements-optional.txt")
         assert os.path.exists(opt), "the deps file the bat installs"
         assert "whircam" in open(opt, encoding="utf8").read()
-        # start minimized: a General switch, off by default, written
-        # for the next boot (the window cannot minimize its own birth)
+        # start minimized: the switch mirrors whatever config it was
+        # built from - that value is the user's choice, not an
+        # invariant (the virgin defaults are pinned offline in
+        # layout_test.py). Written for the next boot (the window
+        # cannot minimize its own birth)
         app._show_tab("general")
         app.update_idletasks()
-        assert not bool(app.min_switch.get()), "default is an open window"
+        assert bool(app.min_switch.get()) == bool(
+            cfg["ui"]["start_minimized"]), "switch betrays its origin"
         app.min_switch.select()
         app._start_min_changed()
         assert cfg["ui"]["start_minimized"] is True

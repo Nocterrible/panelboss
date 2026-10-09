@@ -120,6 +120,18 @@ TIPS = {
                    "alive to notice the return; with it off the box "
                    "sleeps on schedule and the app re-arms when the "
                    "power button is pressed.",
+    "restore_windows": "some monitors unplug themselves from Windows "
+                       "when they sleep, and Windows re-lays every window "
+                       "on them to the wrong screen when they return. "
+                       "Before the screens go dark the app remembers every "
+                       "window's pixel rect and the monitors' hardware "
+                       "identity; after any wake - its own, a mouse "
+                       "jiggle, or the power button - it waits for the "
+                       "topology to settle and moves everything back. If a "
+                       "monitor was swapped or unplugged for good, the "
+                       "saved positions belong to another desk and nothing "
+                       "is moved. Minimized windows and popups are left "
+                       "alone.",
     "camera": "which camera the frames come from. Opening every index "
                "is slow (the virtual camera alone takes 16 s), so the "
                "list fills in after the window opens and rescans on "
@@ -630,6 +642,16 @@ class SettingsWindow(ctk.CTk):
             command=lambda: self.monitor.events.put(("reoff", False)),
             **self.skin.secondary())
         self.reoff_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        row = self._row(box, "put window positions back after wake",
+                        TIPS["restore_windows"])
+        self.restore_switch = ctk.CTkSwitch(row, text="",
+                                            font=self.skin.font(12),
+                                            command=self._restore_changed,
+                                            progress_color=self.skin.accent,
+                                            border_color=self.skin.border)
+        self.restore_switch.grid(row=0, column=1, sticky="e")
+        if self.cfg["power"].get("restore_windows"):
+            self.restore_switch.select()
 
         # the UAC shield before the assistant label is the honest hint
         # that ticking it means one admin confirm (drawn to match the
@@ -868,6 +890,13 @@ class SettingsWindow(ctk.CTk):
             self.hold_display_switch.get())
         self.cfg["power"]["hold_sleep"] = bool(
             self.hold_sleep_switch.get())
+        self._save()
+
+    def _restore_changed(self):
+        # cfg["power"] IS monitor.power_cfg: the snapshot/restore hooks
+        # read restore_windows fresh at every off/wake edge
+        self.cfg["power"]["restore_windows"] = bool(
+            self.restore_switch.get())
         self._save()
 
     def _skin_changed(self, label):

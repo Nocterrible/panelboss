@@ -98,6 +98,11 @@ DEFAULTS = {
         "skip_camera_when_blocked": True,  # if another app already holds the
                                            # display awake, the camera does not
                                            # poll to defend it
+        "restore_windows": True,     # monitors that unplug themselves on
+                                     # standby make Windows re-lay every
+                                     # window when they return: the desk is
+                                     # remembered at screens-off and put
+                                     # back after any wake (see wm.py)
         "assistant_task": False,   # opt-in: registers an elevated scheduled
                                    # task so powercfg /requests can be read
                                    # without running the app as admin
