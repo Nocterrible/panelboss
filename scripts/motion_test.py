@@ -97,4 +97,86 @@ t._mode("motion")
 assert cfg["detection"]["mode"] == "motion"
 assert t.events.get() == ("detection_mode", "motion"), t.events
 print("tray wiring OK")
+# 7) hello IR adapter against a fake whircam: the whole Camera contract
+import types as _types
+fake = _types.ModuleType("whircam")
+
+
+class FakeIRCam:
+    instances = []
+
+    def __init__(self, group=None, format_index=None, timeout=8.0,
+                 format_output="bgr"):
+        self.group, self.format_output = group, format_output
+        self.opened, self.frames = True, 0
+        FakeIRCam.instances.append(self)
+
+    @property
+    def width(self):
+        return 640
+
+    @property
+    def height(self):
+        return 360
+
+    @property
+    def is_opened(self):
+        return self.opened
+
+    def read(self, timeout=None):
+        self.frames += 1
+        if self.frames <= 3:
+            return True, np.zeros((360, 640, 3), np.uint8)
+        return False, None
+
+    def release(self):
+        self.opened = False
+
+
+class FakeGroup:
+    def __init__(self, name):
+        self.name = name
+
+
+fake.find_groups = lambda: [FakeGroup("USB Camera"), FakeGroup("Both")]
+fake.IRCam = FakeIRCam
+sys.modules["whircam"] = fake
+
+from awaywatch import camera as cam_mod
+cam_mod._ir_names_cache = None
+assert cam_mod.hello_ir_names() == ["USB Camera", "Both"]
+c = cam_mod.open_camera({"index": cam_mod.HELLO_IR, "warmup_frames": 2})
+assert isinstance(c, cam_mod.HelloIrCamera) and c.is_open()
+assert c.warm_up() == 2, "warm-up must count settled frames"
+inst = FakeIRCam.instances[-1]
+assert c.read() is not None and inst.format_output == "bgr"
+inst.frames = 5                                   # exhausted stream
+assert c.read() is None                           # no frame = None, no raise
+c.release()
+c.release()                                       # idempotent
+assert not c.is_open()
+
+
+class Crasher(FakeIRCam):
+    def read(self, timeout=None):
+        raise RuntimeError("pump crashed")
+
+
+fake.IRCam = Crasher
+c2 = cam_mod.open_camera({"index": cam_mod.HELLO_IR})
+assert c2.read(timeout=1) is None, "a crashed pump must read as dead"
+c2.release()
+# and the cv2 path keeps its exact old kwargs (patched Camera records them)
+_real_camera = cam_mod.Camera
+seen = {}
+cam_mod.Camera = lambda **kw: seen.update(kw) or "CV2"
+try:
+    got = cam_mod.open_camera({"index": 3, "warmup_frames": 1,
+                               "width": 800, "height": 600})
+    assert got == "CV2" and seen == {"index": 3, "warmup": 1,
+                                     "width": 800, "height": 600}, seen
+finally:
+    cam_mod.Camera = _real_camera
+print("hello IR adapter OK (open, warmup, read, crash, release, factory)")
+
 print("ALL MOTION TESTS OK")

@@ -38,7 +38,9 @@ LOG_DIR = os.environ.get("ICU_PRESENCE_LOG_DIR") or str(Path(CONFIG_DIR) / "logs
 # stock defaults, in one place so behavior is documented by code
 DEFAULTS = {
     "camera": {
-        "index": 0,             # -1 to auto-pick the first camera that opens
+        "index": 0,             # -1 to auto-pick the first camera that opens;
+                                # -2 = Windows Hello IR sensor (the optional
+                                # whircam bridge: pip install whircam)
         "name_contains": [],    # substring match against device names, wins over index
         "width": 1280,
         "height": 720,

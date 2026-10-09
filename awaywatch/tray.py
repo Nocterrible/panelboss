@@ -138,6 +138,12 @@ class Tray(threading.Thread):
         from . import camera
         names = camera.camera_names()
         items = []
+        ir = camera.hello_ir_names()   # [] without the whircam bridge;
+        if ir:                         # first entry = IR group 0
+            items.append(pystray.MenuItem(
+                "hello IR: %s" % ir[0],
+                action=self._camera_picker(camera.HELLO_IR),
+                checked=self._camera_checker(camera.HELLO_IR)))
         for index, opened, width in camera.enumerate_cameras():
             if not opened:
                 continue

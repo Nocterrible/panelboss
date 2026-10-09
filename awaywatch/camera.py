@@ -86,6 +86,99 @@ def find_camera(index=-1, name_contains=None, fallback=0):
     raise RuntimeError("no camera opened; check privacy settings")
 
 
+HELLO_IR = -2                  # the [camera] index sentinel selecting the
+                               # Windows Hello IR sensor via the optional
+                               # whircam bridge (WinRT MediaFrameSourceGroup:
+                               # Hello cameras hide from plain enumeration
+                               # behind driver flags, but the sensor opens
+                               # SharedReadOnly even while Hello stays armed)
+
+_ir_names_cache = None
+
+
+def hello_ir_names():
+    """Display names of IR-capable camera groups; [] when whircam is not
+    installed or the platform has none. The result is cached for the
+    process: the tray rebuilds its menu on every right click and this
+    spins up WinRT enumeration (~1 s) exactly once."""
+    global _ir_names_cache
+    if _ir_names_cache is None:
+        try:
+            import whircam
+            _ir_names_cache = [g.name for g in whircam.find_groups()]
+        except Exception:
+            _ir_names_cache = []      # no bridge, no groups, no driver:
+        log.debug("hello IR groups: %s", _ir_names_cache)   # all the same
+    return _ir_names_cache
+
+
+class HelloIrCamera:
+    """Camera-compatible adapter over the optional whircam bridge.
+
+    Frames arrive as 3-channel BGR (grayscale under near-IR illumination)
+    so both detectors keep their contract; the pump thread belongs to
+    whircam, release() is what retires it. read() maps whircam's pump
+    crash onto the SAME currency the state machine already speaks: a
+    None frame releases the handle and the next poll opens a fresh one."""
+
+    def __init__(self, group=None, warmup=4, timeout=8.0, verbose=False):
+        try:
+            import whircam
+        except ImportError as exc:
+            raise RuntimeError("the hello IR camera needs the optional "
+                               "whircam package: pip install whircam") \
+                from exc
+        with _open_lock:                 # open timing varies wildly; the
+            self._cam = whircam.IRCam(group=group,   # lock at least keeps
+                                      format_output="bgr",   # the device
+                                      timeout=timeout)         # tree sane
+        self.warmup = warmup
+        self.width = int(self._cam.width)
+        self.height = int(self._cam.height)
+        log.info("hello IR camera open (group=%s, %dx%d)",
+                 group or "auto", self.width, self.height)
+
+    def warm_up(self, frames=None):
+        frames = self.warmup if frames is None else frames
+        got = 0
+        for _ in range(frames):
+            if self.read(timeout=2) is not None:
+                got += 1
+        return got
+
+    def read(self, timeout=3):
+        try:
+            ok, frame = self._cam.read(timeout=timeout)
+        except RuntimeError:            # pump crashed mid-poll: dead
+            return None                 # handle, same as a cv2 stall
+        return frame if ok else None
+
+    def release(self):
+        if getattr(self, "_cam", None) is not None:
+            try:
+                self._cam.release()
+            except Exception:
+                pass                    # release is a courtesy call; the
+                                        # handle is ours to forget anyway
+            self._cam = None
+
+    def is_open(self):
+        cam = getattr(self, "_cam", None)
+        return cam is not None and bool(cam.is_opened)
+
+
+def open_camera(cam_cfg):
+    """The one way to get a camera. index -2 is the Hello IR bridge;
+    everything else is the old cv2 path with the old arguments."""
+    index = cam_cfg.get("index", 0)
+    if index == HELLO_IR:
+        return HelloIrCamera(warmup=cam_cfg.get("warmup_frames", 4))
+    return Camera(index=index,
+                  warmup=cam_cfg.get("warmup_frames", 4),
+                  width=cam_cfg.get("width", 1280),
+                  height=cam_cfg.get("height", 720))
+
+
 class Camera:
     """One open device. Kept alive between polls when configured so, or
     booted per poll to let the LED rest."""

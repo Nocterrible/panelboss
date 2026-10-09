@@ -42,15 +42,31 @@ other control catches up within a tick over the shared config dict.
 Motion mode never touches onnxruntime, so it also works before any
 model/provider story applies.
 
-**Depth/IR sensors:** motion mode is also the depth-sensor path. When
-a sensor exposes a video pin — most Windows Hello IR cameras and
-stereo depth modules do — OpenCV opens it by index exactly like a
-webcam (the tray's Camera menu lists everything that opens), and
-differencing grayscale frames does not care that the scene is lit
-only by the sensor's own illumination. There is no dedicated
-AVFoundation/AVS depth-pipe client here: whatever cv2 hands back,
-moving pixels are moving pixels. Noisy depth streams are normal —
-raise `diff_level` (per-pixel gray delta) before doubting `ratio`.
+**Depth/IR sensors (Hello bridge included):** motion mode drives any
+grayscale stream. Two ways in:
+
+- Plain indexes. Many desktop Hello webcams expose the IR sensor as an
+  ordinary second UVC device — it then shows in the tray **Camera**
+  menu like any webcam (measured here: one Hello cam presents *two*
+  "USB Camera" entries, RGB and IR, both openable by index; the
+  ambiguous names are exactly why the second way exists).
+- `index = -2` (or the tray's **hello IR:** entry) — the
+  `MediaFrameSourceGroup` route. Windows Hello drivers hide the sensor
+  from plain enumeration (`SkipCameraEnumeration`), but WinRT reaches
+  it in `SharedReadOnly` mode while Hello stays armed. This needs the
+  optional bridge: `pip install whircam` (MIT, PyPI; pulls ~1 MB of
+  `winrt-*` wheels). Absent whircam = the menu entry never appears and
+  everything else is unchanged. Measured on this box: the bridge finds
+  two IR groups (`USB Camera` infrared-only, `YourCameraGroup` with
+  Color+Infrared) that carry the same sensor.
+
+IR frames are near-infrared grayscale at ~15 fps (the driver alternates
+lit/ambient) — motion mode does not care and the person model works on
+BGR-converted IR too, though it was trained on RGB lighting. IR opens
+take ~1–2 s (WinRT pipeline start): with `index = -2`, prefer
+`mode_on = "always_on"` in `[camera]` so the pump is not rebuilt per
+poll. A crashed WinRT pump reads as a dead handle — the state machine's
+existing release-and-reopen path picks it up.
 
 **Tray**: a plain LEFT click opens the settings window (the
 `Settings...` item is the pystray default action); the menu itself

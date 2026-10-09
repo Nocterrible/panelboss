@@ -157,8 +157,7 @@ def _enroll(cfg, name):
         device=cfg["inference"]["device"],
         device_id=cfg["inference"]["device_id"],
         conf=cfg["inference"]["confidence"])
-    cam = camera.Camera(index=cfg["camera"]["index"],
-                         warmup=cfg["camera"]["warmup_frames"])
+    cam = camera.open_camera(cfg["camera"])
     cam.warm_up()                           # the exposure settles first
     frame = cam.read()
     cam.release()

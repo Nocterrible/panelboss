@@ -347,10 +347,7 @@ class PresenceMonitor:
 
     def _new_camera(self):
         from . import camera
-        return camera.Camera(index=self.camera_cfg["index"],
-                              warmup=self.camera_cfg["warmup_frames"],
-                              width=self.camera_cfg["width"],
-                              height=self.camera_cfg["height"])
+        return camera.open_camera(self.camera_cfg)   # index -2 = hello IR
 
     def _hold_camera(self):
         if self.camera is None or not self.camera.is_open():

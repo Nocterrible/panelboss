@@ -18,10 +18,7 @@ log = logging.getLogger("preview")
 
 def run(config, off_test=False):
     det = _detector(config)
-    cam = camera.Camera(index=config["camera"]["index"],
-                         warmup=config["camera"]["warmup_frames"],
-                         width=config["camera"]["width"],
-                         height=config["camera"]["height"])
+    cam = camera.open_camera(config["camera"])   # index -2 = hello IR
     cam.warm_up()                      # the exposure always settles before
                                        # the first frame is drawn
     print("press q to quit")
