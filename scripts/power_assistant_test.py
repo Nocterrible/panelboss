@@ -307,14 +307,22 @@ _FAKE_DESK = [{"id": "MONITOR\\T", "short": "T",
                "h": 100, "rate": 60, "bits": 32, "primary": True}]
 WM.monitors = lambda: [dict(m) for m in _FAKE_DESK]
 WM.fingerprint = lambda: "TESTFP"
-WM.list_windows = lambda: [{"proc": "a.exe", "title": "one",
-                            "hwnd": 11, "rect": [0, 0, 50, 50],
-                            "zoomed": False}]
+_FAKE_WINS = [{"proc": "a.exe", "title": "one", "hwnd": 11,
+               "rect": [0, 0, 50, 50], "zoomed": False,
+               "exe": r"C:\a\a.exe"}]
+WM.list_windows = lambda: [dict(w) for w in _FAKE_WINS]
+WM.launch = lambda exe: ""
 WM.rescue_lost = lambda: []
 WM.place = lambda h, r, z=False: "ok"
 WM.hdr_states = lambda: [{"gdi": r"\\.\DISPLAY1", "model": "T",
                           "supported": True, "state": "off",
                           "mode": 0, "precise": True}]
+# CTkToplevel.__init__ pumps the WHOLE event loop (its titlebar-color
+# dance calls withdraw()+update() to force a redraw). Inside the
+# synchronous check() chain that re-entrancy runs after_install - and
+# its destroy tail - EARLY, killing the app mid-probe (measured). The
+# flag skips the dance; the probes never look at titlebars.
+W.ctk.CTkToplevel._deactivate_windows_window_header_manipulation = True
 app = W.SettingsWindow(cfg, fm, queue.Queue())
 # the mode pin below calls _save(); keep the live config out of reach
 config.write_config = lambda c, path=None: _saved_wc(
@@ -332,6 +340,9 @@ def _fail(where):
 
 
 def check():
+    import time as _clock
+    _T0 = _clock.monotonic()
+    print("[t] check start", flush=True)
     try:
         fm.blockers = res2                       # structured: the manager
         app._update_blockers()                   # pane reads it too
@@ -421,6 +432,8 @@ def check():
         # ticking saves NOW and unticking forgets, the pickers
         # persist, and the gate reads HARDWARE identity - swap the
         # panel and the profile names its own disappearance.
+        print("[t] profiles block +%.1fs" % (
+            _clock.monotonic() - _T0), flush=True)
         app._show_tab("monitor profiles")
         app.update_idletasks()
         assert managed("monitor profiles") == "pack"
@@ -436,39 +449,114 @@ def check():
         assert prof["fp"] == "TESTFP"
         assert prof["displays"][0]["short"] == "T"
         assert prof["displays"][0]["hdr_cap"] is True, prof["displays"][0]
-        texts = [""]
-        stack = [app._prof_detail]
-        while stack:                       # the live hdr note must
-            w = stack.pop()                # ride the monitor row
-            stack += w.winfo_children()
-            try:                           # CTkLabel answers cget,
-                t = w.cget("text")         # OptionMenu answers get
-            except Exception:
+        def _ptexts():
+            got, stack = [""], [app._prof_detail]
+            while stack:                   # every label/menu text
+                w = stack.pop()            # the pane shows
+                stack += w.winfo_children()
                 try:
-                    t = w.get()
-                except Exception:
-                    continue
-            if isinstance(t, str):
-                texts.append(t)
-        assert any("hdr off" in t and "T" in t for t in texts), texts
+                    t = w.cget("text")     # CTkLabel answers cget,
+                except Exception:          # OptionMenu answers get
+                    try:
+                        t = w.get()
+                    except Exception:
+                        continue
+                if isinstance(t, str):
+                    got.append(t)
+            return got
+
+        app.update_idletasks()
+        assert any("hdr off" in t and "T" in t for t in _ptexts()), \
+            "live hdr note missing from the monitor row"
         assert app.hdr_menu.get() == "leave alone"
-        assert app.match_menu.get() == "process + title"
-        key = ("a.exe", "one")
-        assert key in app._pin_boxes, list(app._pin_boxes)
-        app._pin_boxes[key].select()
-        app._pin_toggle(key)
-        wins = app._prof_data["profiles"]["test desk"]["wins"]
-        assert wins and wins[0]["monitor"] == "T" and \
-            wins[0]["rect"] == [0, 0, 50, 50], wins
+        # the new pin editor: matching defaults to PROCESS (titles
+        # lie a hundred times a day), no open wish, no advanced
+        # rows until one is asked for
+        assert app.match_menu.get() == "process", app.match_menu.get()
+        assert app.pin_open_box.get() == 0
+        assert not hasattr(app, "pin_wait_menu"), "advanced rows leak"
+        # picking the fake window makes it the subject; the editor
+        # states the seat it will save
+        app._pin_select(("a.exe", "one"))
+        app.update_idletasks()
+        assert any("will save" in t and "50x50" in t
+                   for t in _ptexts()), _ptexts()
+        # the wish reveals its advanced half: the wait menu and the
+        # browse-to-exe line, plus the honest naive warning
+        app.pin_open_box.select()
+        app._pin_open()
+        app.update_idletasks()
+        assert app.pin_wait_menu.get() == "30 s"
+        assert any("naive" in t for t in _ptexts()), "no fine print"
+        # the human who knows better tunes patience and points the
+        # pin at the launcher that actually works (browse is faked:
+        # the dialog itself is tkinter's own)
+        app._pin_wait("90 s")
+        assert app._pin_edit["wait"] == 90
+        import tkinter.filedialog as _fd
+        _real_dialog, _fd.askopenfilename = (
+            _fd.askopenfilename, lambda **k: r"C:\stub\launcher.exe")
+        app._pin_browse()
+        _fd.askopenfilename = _real_dialog
+        assert app._pin_edit["exe"] == r"C:\stub\launcher.exe"
+        app._pin_commit()
+        wins = prof["wins"]
+        assert wins and wins[0]["proc"] == "a.exe" and \
+            wins[0]["match"] == "process" and wins[0]["open"] is True \
+            and wins[0]["wait"] == 90 and \
+            wins[0]["exe"] == r"C:\stub\launcher.exe" and \
+            wins[0]["rect"] == [0, 0, 50, 50] and \
+            wins[0]["monitor"] == "T", wins
         assert os.path.exists(PF.path()), "pin did not reach disk"
-        boxes = dict(app._pin_boxes)
-        assert boxes[key].get() == 1, "the row unticked itself"
-        boxes[key].deselect()
-        app._pin_toggle(key)
-        assert app._prof_data["profiles"]["test desk"]["wins"] == []
+        app.update_idletasks()
+        got = _ptexts()
+        assert any("[open it in 90s]" in t for t in got), got
+        assert any("[via launcher.exe]" in t for t in got), got
+        # clicking the pinned row pops the pin back into the editor:
+        # conditions as saved, and the button now says update
+        app._pin_load(wins[0])
+        app.update_idletasks()
+        assert app._pin_edit["key"] == ("a.exe", "one")
+        assert app._pin_edit["wait"] == 90 and \
+            app._pin_edit["exe"] == r"C:\stub\launcher.exe"
+        assert any("editing: one" in t for t in _ptexts())
+        assert any("update pin" in t for t in _ptexts())
+        # two windows of the same process open: a process pin must
+        # warn it moves ALL of them, not just the picked one
+        _FAKE_WINS.append({"proc": "a.exe", "title": "two",
+                           "hwnd": 12, "rect": [60, 0, 40, 40],
+                           "zoomed": False, "exe": r"C:\a\a.exe"})
+        app._pin_select(("a.exe", "two"))
+        app.update_idletasks()
+        assert any("moves ALL of them" in t for t in _ptexts()), \
+            _ptexts()
+        app._pin_cancel()
+        assert app._pin_edit["pick"] is None and \
+            app._pin_edit["key"] is None and app._pin_edit["wait"] == 30
+        _FAKE_WINS.pop()                   # the second window closes
+        # and x forgets the seat
+        app._pin_remove(wins[0])
+        assert prof["wins"] == []
         app._prof_hdr("on")
-        app._prof_match("process")
-        assert prof["hdr"] == "on" and prof["match"] == "process"
+        assert prof["hdr"] == "on"
+        # loud-once then quiet: _noshows_ask marks declined misses
+        # quiet and persists them, so the same failure cannot nag
+        # a second time
+        app._prof_pin_all()
+        assert prof["wins"], "pin-every-app pinned nothing"
+        app._noshows_ask([{"proc": "a.exe", "title": "one"}])
+        app.update_idletasks()
+        kids, stack = [], [app.noshows_dialog]
+        while stack:
+            w = stack.pop()
+            stack += w.winfo_children()
+            if w.__class__.__name__ == "CTkButton":
+                kids.append(w)
+        by = {w.cget("text"): w for w in kids}
+        by["let it be"].invoke()
+        assert prof["wins"][0].get("quiet") is True, "not marked"
+        assert "quiet" in open(PF.path(), encoding="utf-8").read(), \
+            "quiet did not reach disk"
         assert PF.default_name(app._prof_data, "TESTFP") == "test desk"
         assert PF.desk_mismatch(prof, WM.monitors()) == ""
         _FAKE_DESK[0]["id"] = "MONITOR\\GONE"
@@ -477,6 +565,8 @@ def check():
         _FAKE_DESK[0]["id"] = "MONITOR\\T"
         app._rescue_now()
         assert "off screen" in app._prof_msg, app._prof_msg
+        print("[t] profiles done +%.1fs" % (
+            _clock.monotonic() - _T0), flush=True)
         # the command bar: rescue lives ON the bar now (visible on
         # every tab), Quit owns the far right (pack stacks from the
         # right edge, so the rightmost command is the first child),
@@ -647,6 +737,8 @@ def check():
         app._ov_win = w1
         app.power_switch.select()
         app._power_assistant_changed()
+        print("[t] check end +%.1fs" % (
+            _clock.monotonic() - _T0), flush=True)
     except Exception:
         _fail("check")
 
@@ -692,9 +784,18 @@ def after_install():
                 pass
 
 
+def _watchdog():
+    print("WATCHDOG FIRED after 60 s", flush=True)
+    FAILED.append("watchdog")
+    app.destroy()
+
+
 app.after(600, check)
 app.after(1800, after_install)
-app.after(20000, lambda: (FAILED.append("watchdog"), app.destroy()))
+# the watchdog only turns a hang into a loud failure; the profiles
+# editor re-renders scrollable panes per click, so the walk needs
+# real headroom - a probe timeout is a harness lie, not a bug
+app.after(60000, _watchdog)
 app.mainloop()
 if FAILED:
     print("WINDOW TEST FAILED in", FAILED)

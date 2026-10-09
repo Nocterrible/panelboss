@@ -147,12 +147,13 @@ def windows_now():
                 mon = m["short"]
                 break
         out.append({"proc": w["proc"], "title": w["title"],
+                    "exe": w.get("exe") or "",
                     "rect": list(w["rect"]), "zoomed": w["zoomed"],
                     "monitor": mon})
     return out
 
 
-def create(data, name, hdr="leave alone", match="process + title",
+def create(data, name, hdr="leave alone", match="process",
            dir=None):
     prof = {"fp": wm.fingerprint(), "created": time.time(),
             "used": time.time(), "match": match, "hdr": hdr,
@@ -166,16 +167,41 @@ def create(data, name, hdr="leave alone", match="process + title",
 
 
 # --------------------------------------------------------------- pins ---
-def pin(data, name, win, dir=None):
-    """Tick the box: the window's placement RIGHT NOW becomes the
-    profile's truth for that process + title."""
+# A pin is per APP, not per window: the identity is the process, the
+# title is only a hint for matching and for the human reading the
+# list. The choice of how strictly a saved seat recognises its
+# window lives on the pin, because only the user knows which of
+# their apps rename themselves a hundred times a day (a browser
+# window pinned by title died the moment a tab was clicked).
+def pin(data, name, win, match="process", open_if_missing=False,
+        exe=None, wait=None, dir=None):
+    """Pin it: the window's placement RIGHT NOW becomes the
+    profile's truth for that app. `open_if_missing` is the wish to
+    re-run the exe when no window answers - naive by design (a bare
+    shell-execute; store apps and stub launchers start nothing this
+    way), so the UI says so before saving it, and offers `exe` to
+    outsmart that: the user can point the pin at a launcher or the
+    right binary when the auto-captured one starts nothing. `wait`
+    is how long to trust the wish before calling it a miss. The exe
+    path is captured while the window is alive, because afterwards
+    nobody knows where it was installed."""
     prof = data["profiles"][name]
     prof["wins"] = [w for w in prof["wins"]
                     if (w["proc"], w["title"]) != (win["proc"],
                                                    win["title"])]
-    prof["wins"].append({k: win[k] for k in
-                         ("proc", "title", "rect", "zoomed",
-                          "monitor")})
+    try:
+        seconds = int(wait or 30)
+    except (TypeError, ValueError):
+        seconds = 30
+    prof["wins"].append({"proc": win["proc"], "title": win["title"],
+                         "rect": list(win["rect"]),
+                         "zoomed": bool(win.get("zoomed")),
+                         "monitor": win.get("monitor") or "",
+                         "exe": (exe if exe is not None
+                                 else win.get("exe")) or "",
+                         "match": match,
+                         "open": bool(open_if_missing),
+                         "wait": max(5, min(600, seconds))})
     save(data, dir)
 
 
@@ -199,40 +225,60 @@ def default_name(data, fp):
 
 
 # ----------------------------------------------------------- matching ---
-def pair(saved, live, mode):
-    """Pure decision (testable): which open window answers to which
-    saved placement. The mode is the user's choice because both
-    answers have a failure mode: process-only may drag an unrelated
-    new window into an old one's place, title-only misses the
-    browser window that renamed itself - and 'process + title'
-    misses exactly THAT, which is why the menu exists. Within a
-    mode, exact agreement wins first, then order; open windows that
-    answer no pin are left exactly where they are (the profile
-    never shoves a window it never pinned)."""
-    mode = (mode or "").lower()
-    same_proc = lambda s, l: (s["proc"] or "").lower() == \
-        (l["proc"] or "").lower()
-    same_title = lambda s, l: (s["title"] or "") == (l["title"] or "")
-    pairs, used = [], set()
+def pin_hits(row, live, taken, fallback="process"):
+    """Pure decision (testable): which open windows answer to one
+    saved seat. A 'process' pin moves EVERY window of that app -
+    the UI warns before saving such a pin, because it is a choice,
+    not an accident. 'title' is the gentle version and misses the
+    browser tab that renamed itself; 'process + title' matches
+    exactly the one window it was pinned from. Earlier pins answer
+    first (save order): `taken` holds the hwnds already claimed, so
+    no window is shoved twice, and windows no pin speaks to are
+    left exactly where they are."""
+    mode = (row.get("match") or fallback or "process").lower()
+    proc = (row.get("proc") or "").lower()
+    title = row.get("title") or ""
+    out = []
+    for l in live:
+        if l["hwnd"] in taken:
+            continue
+        lp = (l.get("proc") or "").lower()
+        lt = l.get("title") or ""
+        if mode == "process + title":
+            hit = bool(proc) and lp == proc and lt == title
+        elif mode == "title":
+            hit = bool(title) and lt == title
+        else:                                    # "process"
+            hit = bool(proc) and lp == proc
+        if hit:
+            out.append(l)
+    return out
 
-    def take(pred):
-        for s in saved:
-            if any(s is ps for ps, _ in pairs):
-                continue
-            for i, l in enumerate(live):
-                if i not in used and pred(s, l):
-                    used.add(i)
-                    pairs.append((s, l))
-                    break
 
-    if mode == "title":
-        take(same_title)
-    elif mode == "process":
-        take(lambda s, l: same_proc(s, l) and same_title(s, l))
-        take(same_proc)                      # the renamed tab still
-    else:                                    # belongs in its seat
-        take(lambda s, l: same_proc(s, l) and same_title(s, l))
-    return pairs
+def relaunch(row, taken, fallback):
+    """The naive re-open: run the exe the pin saved, then wait for
+    a window that answers the pin - as long as the pin's own `wait`
+    says (the slider the user set, default 30 s; slow machines and
+    patient people get to choose) - and move on as soon as it
+    shows. Re-lists every tick, because the whole point is that the
+    window does not exist yet. Returns (hits, trouble); trouble is
+    what to say when even the wish failed."""
+    try:
+        budget = max(5, min(600, int(row.get("wait") or 30)))
+    except (TypeError, ValueError):
+        budget = 30
+    trouble = wm.launch(row.get("exe") or "")
+    if trouble:
+        return [], trouble
+    end = time.monotonic() + budget
+    while time.monotonic() < end:
+        time.sleep(1.0)
+        hits = pin_hits(row, wm.list_windows(), taken, fallback)
+        if hits:
+            return hits, ""
+    return [], "no window of %s showed up within %d s" % (
+        (row.get("proc") or row.get("exe") or "?").split("\\")[-1],
+        budget)
 
 
 # -------------------------------------------------------------- HDR ----
@@ -323,15 +369,17 @@ def apply(data, name, best_effort=False, dir=None):
     commit, skip-what-is-right so a self-apply never blinks;
     verify-by-fingerprint after, because success is reported before
     the modes land; rescue at the end for whatever the shuffle
-    stranded). Returns (ok, sentence)."""
+    stranded). Returns (ok, sentence, info) - info["no_shows"] names
+    the pins whose app never appeared, so the UI can be loud about
+    it exactly as often as the rules allow."""
     prof = data["profiles"].get(name)
     if prof is None:
-        return False, "no such profile"
+        return False, "no such profile", {}
     mons = wm.monitors()
     say = []
     gate = desk_mismatch(prof, mons)
     if gate and not best_effort:
-        return False, "different desk right now (%s)" % gate
+        return False, "different desk right now (%s)" % gate, {}
     if gate:
         say.append("best effort over: %s" % gate)
 
@@ -352,7 +400,8 @@ def apply(data, name, best_effort=False, dir=None):
         for t in lines:
             log.info("apply '%s': %s", name, t)
         if not ok:
-            return False, ("layout refused: " + "; ".join(lines[-1:]))
+            return False, ("layout refused: " +
+                           "; ".join(lines[-1:])), {}
 
     # 3. HDR: ask the driver first. Where it answers precisely
     # (24H2+), command only the monitors that disagree, then READ
@@ -434,15 +483,53 @@ def apply(data, name, best_effort=False, dir=None):
         say.append("the desk never answered as the profile asked "
                    "(still: %s)" % (last or "nothing settled"))
 
-    # 5. windows, only against a settled desk they were pinned for
+    # 5. windows, only against a settled desk they were pinned for.
+    # A pin that finds no window and carries the naive wish re-runs
+    # the saved exe and waits; a pin whose app DID show up (just
+    # answered an earlier pin of the same process first) is not a
+    # failure worth a dialog - only apps that truly stayed away are
+    # reported, and only until the user once declined to fix them.
+    no_shows = []
     if matched or best_done:
         live = wm.list_windows()
-        pairs = pair(prof["wins"], live, prof.get("match"))
-        moved = sum(1 for s, l in pairs
-                    if wm.place(l["hwnd"], tuple(s["rect"]),
-                                s.get("zoomed")) == "ok")
+        taken, placed, silent = set(), 0, 0
+        moved_procs, troubles = set(), []
+        for s in prof["wins"]:
+            fb = prof.get("match") or "process"
+            hits = pin_hits(s, live, taken, fb)
+            if not hits and s.get("open") and s.get("exe"):
+                hits, trouble = relaunch(s, taken, fb)
+                if trouble:
+                    troubles.append(trouble)
+            if not hits:
+                if s.get("quiet"):
+                    silent += 1
+                else:
+                    no_shows.append(s)
+                continue
+            if s.get("quiet"):
+                s["quiet"] = False       # it answered again: a new
+                                         # failure may be loud again
+            for l in hits:
+                taken.add(l["hwnd"])
+                if wm.place(l["hwnd"], tuple(s["rect"]),
+                            s.get("zoomed")) == "ok":
+                    placed += 1
+                    moved_procs.add((s.get("proc") or "").lower())
+                else:
+                    silent += 1
+        still = []
+        for s in no_shows:               # the app walked in under
+            if (s.get("proc") or "").lower() in moved_procs:
+                silent += 1              # another pin - not a loss
+            else:
+                still.append(s)
+        no_shows = still
         say.append("windows: %d placed, %d not open or refused"
-                   % (moved, len(prof["wins"]) - moved))
+                   % (placed, silent))
+        if troubles:
+            say.append("would not start: %s" % "; ".join(
+                troubles)[:160])
         rescued = wm.rescue_lost()
         if rescued:
             say.append("rescued: %s" % ", ".join(rescued)[:120])
@@ -452,6 +539,10 @@ def apply(data, name, best_effort=False, dir=None):
     prof["used"] = time.time()
     data["last"][target] = name
     save(data, dir)
+    info = {"no_shows": [{"proc": s.get("proc", ""),
+                          "title": s.get("title", "")}
+                         for s in no_shows]}
     return matched or best_done, " ; ".join(say) if say else \
         "applied: %s" % (" + ".join(d["short"] for d in
-                                prof["displays"] if d.get("on", True)))
+                                prof["displays"] if d.get("on", True))), \
+        info

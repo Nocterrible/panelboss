@@ -74,7 +74,7 @@ its own old monitor; windows closed during the dark are simply gone.
 desk spelled out: which physical panels (EDID hardware identity —
 never the `\\.\DISPLAYn` slots, which reconnect storms reshuffle)
 are on, where they sit, which is primary, each one's resolution and
-refresh rate, an HDR ask, and a seat for every pinned window. The
+refresh rate, an HDR ask, and a seat for every pinned app. The
 picker opens on the profile last used for the layout it sees;
 *create new...* captures what the desk is doing right now. Applying
 one is the entire lever, in an order this project stole from
@@ -88,10 +88,33 @@ command (read first, set only what disagrees, verify by reading
 again — see below), then a **wait until the monitors answer as the profile
 asked** (Windows reports success before the modes have settled —
 measured — so the live fingerprint is the proof, quiet for two
-seconds), and only then the windows: each pinned window is paired
-with its live self by the chosen match mode (`process`, `title`, or
-both — one of the two must sometimes forgive the browser tab that
-renamed itself), moved, and anything the shuffle stranded off-screen
+seconds), and only then the windows.
+
+Windows are pinned per APP, in the tab's **pin an app** editor:
+pick one of the open windows, set its conditions, *pin it* — the
+spot it holds right now becomes the seat the app must return to.
+Matching defaults to `process`, because a browser or chat window
+renames itself constantly and a pin that trusted titles was dead
+the moment you clicked another tab; the editor warns out loud when
+a process pin would move EVERY window of that app, not just the
+picked one. `process + title` (the automatic wake-restore's method,
+where it stays) matches exactly the one window it was pinned from;
+`title` is the gentle version. The honest extras: *open it if
+missing* runs the exe saved at pin time when no window answered,
+waits for it to wake (default 30 s, adjustable per pin from 5 s to
+10 min) and moves it the moment it shows — a naive exe run, so
+store apps and stub launchers may start nothing; *browse* then
+lets you point the pin at the launcher or binary that really opens
+the window (the shell runs it exactly like a double-click, so a
+`.lnk` shortcut works too). Clicking a pinned row lifts the pin
+back into the editor to change or refresh it, `x` forgets the
+seat, and *pin every open app* seats one window per running
+program at once. At apply each pin moves the windows that answer
+to it (earlier pins answer first, windows no pin speaks to are
+never touched); a pin whose app stayed away is complained about
+**once** — the dialog offers to fix the profile, and "let it be"
+keeps that pin silent about the same failure until the app
+actually shows up again. Anything the shuffle stranded off-screen
 is rescued on the spot. The one thing a profile cannot fix is a
 panel that is not plugged in — modes can be asked for, a missing
 monitor cannot — so applying onto the wrong monitors refuses with
@@ -466,6 +489,24 @@ there is no after-every-upgrade swap dance anymore.
   survives a day of live use. Any
   struct-pointer argument on a shared handle is declared `c_void_p`
   now; the layout suite pokes both modules to keep it that way
+* the shared-handle trap has an easy variant: power.py already calls
+  `ShellExecuteW("runas")` through the cached `windll.shell32`, so
+  wm.py's `launch()` argtypes bind on a fresh `ctypes.WinDLL("shell32")`
+  handle instead — same lesson, private copy
+* a pinned app's re-open is a bare `ShellExecuteW` of the exe the
+  pin recorded (exactly what a double-click runs), and that is the
+  whole trick — store apps and stub launchers start nothing under
+  that name, which is why browse (point the pin at the launcher that
+  works) and the pin's own wait timer exist, and why success is
+  judged by a window appearing, never by what launch returned
+* `CTkToplevel.__init__` pumps the **entire event loop** (its
+  Windows titlebar-colour dance does `withdraw(); update()` to force
+  a redraw): a dialog created inside an `after()` callback runs every
+  due timer right there — the window suite's `after_install`, and its
+  destroy tail, ran early inside a probe and killed the app
+  mid-assert. Automated suites set
+  `_deactivate_windows_window_header_manipulation = True` (CTk's own
+  escape hatch); no probe reads titlebars
 * **HDR state is readable after all** (monitor_control exhausted the
   wrong candidates and this project ran on *belief* for months):
   `DisplayConfigGetDeviceInfo` answers per target — type 15,

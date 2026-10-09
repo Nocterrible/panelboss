@@ -153,14 +153,16 @@ TIPS = {
                       "middle of the primary monitor. minimized "
                       "windows, dialogs and windows living on other "
                       "virtual desktops are left alone.",
-    "profile_match": "how a saved window finds its live self when the "
-                     "profile runs. 'process' drags any window of that "
-                     "program into the saved place - it catches the "
-                     "browser tab that renamed itself, but a second "
-                     "editor window may get shoved too. 'title' is the "
-                     "gentle version and misses exactly that renamed "
-                     "tab. 'process + title' is the middle road: both "
-                     "must agree.",
+    "profile_match": "how a saved seat recognises its live window. "
+                     "'process' is the default: a browser or chat "
+                     "window renames itself a hundred times a day, so "
+                     "a pin that trusts titles was dead the moment you "
+                     "clicked another tab. The price is honest and the "
+                     "editor says it out loud when it applies: a "
+                     "process pin moves EVERY window of that app, not "
+                     "just the one you picked. 'process + title' is the "
+                     "one-window road (right for apps that never "
+                     "retitle); 'title' alone matches by name only.",
     "profile_hdr": "on windows 11 24h2 and later hdr is a READABLE "
                    "fact: the app asks the display driver per monitor "
                    "(the live answer sits next to each monitor above) "
@@ -183,12 +185,44 @@ TIPS = {
                      "before the modes have settled - measured), and "
                      "only then the windows. anything the shuffle "
                      "stranded off-screen is rescued on the spot.",
-    "profile_pins": "tick a window to save where it sits RIGHT NOW "
-                    "(monitor, corner, size); untick to forget it. "
-                    "rows marked '(closed)' were saved earlier and "
-                    "keep their seat while the program is shut - the "
-                    "next time it opens, the profile knows where it "
-                    "belongs.",
+    "profile_pins": "a seat reserved for an app: pick one of the "
+                    "open windows, set its terms, pin it - the spot "
+                    "it holds RIGHT NOW becomes the seat it must "
+                    "return to. 'pin every open app' seeds a seat for "
+                    "each running program at once. clicking a pinned "
+                    "row lifts it back into the editor (refreshing "
+                    "the seat = move the window where you want it, "
+                    "then update the pin); x forgets the seat. the "
+                    "profile moves what it pinned and never touches "
+                    "windows it did not.",
+    "profile_pin_open": "'open it if missing' runs the saved exe "
+                        "when no window of that app answered the "
+                        "profile, waits for a window to appear, and "
+                        "moves it the moment it does. naive by honest "
+                        "design: a bare exe run - store apps, stub "
+                        "launchers and shortcut-only programs may "
+                        "start nothing under that name. the advanced "
+                        "rows exist for exactly that: tune how long "
+                        "to wait, and browse to the launcher or "
+                        "binary that really opens the window. the "
+                        "first miss asks whether to fix the profile; "
+                        "say no and later misses stay quiet.",
+    "profile_pin_wait": "how long an 'open it' wait lasts before the "
+                        "seat counts as missed (5 s to 10 min, "
+                        "default 30). it ends the moment a window "
+                        "shows - this only decides how long patience "
+                        "survives a slow launcher or a cold disk.",
+    "profile_pin_exe": "what 'open it' actually runs. by default the "
+                       "exe of the app as captured while it ran - "
+                       "often the wrong door (store stubs, updater "
+                       "wrappers, relauncher shims that exit "
+                       "instantly). browse points the pin at the "
+                       "launcher or binary that really shows the "
+                       "window; the shell runs it exactly as a "
+                       "double-click would, so a .lnk shortcut works "
+                       "too. the seat's row says [via launcher.exe] "
+                       "when the exe no longer matches the app's own "
+                       "file.",
     "camera": "which camera the frames come from. Opening every index "
                "is slow (the virtual camera alone takes 16 s), so the "
                "list fills in after the window opens and rescans on "
@@ -224,6 +258,16 @@ TIPS = {
                "it when it finishes. if it stays closed, the update "
                "window says why; run.bat starts it by hand.",
 }
+
+
+WAIT_CHOICES = (5, 10, 15, 30, 45, 60, 90, 120, 180, 300, 600)
+
+
+def _fresh_pin_edit():
+    """The pin editor's blank slate, in one place so no reset ever
+    forgets a field the editor grew later."""
+    return {"key": None, "pick": None, "match": "process",
+            "open": False, "wait": 30, "exe": None}
 
 
 class _SleepPrompt(ctk.CTkToplevel):
@@ -737,6 +781,7 @@ class SettingsWindow(ctk.CTk):
         row = self._row(box, "profile", TIPS["profile_picker"])
         self._prof_data = profiles.load()
         self._prof_msg = ""
+        self._pin_edit = _fresh_pin_edit()
         names = [profiles.NEW] + sorted(self._prof_data["profiles"])
         start = profiles.default_name(self._prof_data,
                                       wm.fingerprint()) or profiles.NEW
@@ -758,7 +803,6 @@ class SettingsWindow(ctk.CTk):
         extra milliseconds of drawing."""
         for w in self._prof_detail.winfo_children():
             w.destroy()
-        self._pin_boxes = {}
         prof = self._prof_data["profiles"].get(self._prof_sel)
         if prof is None:                          # the create-new pane
             line = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
@@ -823,12 +867,6 @@ class SettingsWindow(ctk.CTk):
 
         opts = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
         opts.pack(fill="x", pady=(2, 0))
-        row = self._row(opts, "window matching", TIPS["profile_match"])
-        self.match_menu = ctk.CTkOptionMenu(
-            row, values=list(profiles.MATCH_MODES), width=150,
-            command=self._prof_match, **self.skin.menu_style())
-        self.match_menu.set(prof.get("match", profiles.MATCH_MODES[1]))
-        self.match_menu.grid(row=0, column=1, sticky="e")
         row = self._row(opts, "hdr", TIPS["profile_hdr"])
         self.hdr_menu = ctk.CTkOptionMenu(
             row, values=list(profiles.HDR_ASKS), width=130,
@@ -847,78 +885,241 @@ class SettingsWindow(ctk.CTk):
                           **self.skin.secondary()).pack(side="left",
                                                         padx=(6, 0))
 
-        # the window list: open windows first (a tick marks the ones
-        # the profile already pins), then the closed-but-pinned ones
-        # so a seat survives the program being shut
+        # ---- pinned apps: the seats this profile owns ------------------
+        live = profiles.windows_now()
+        live_key = {(w["proc"], w["title"]): w for w in live}
+        ed = self._pin_edit
         head = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
         head.pack(fill="x", pady=(10, 0))
-        ctk.CTkLabel(head, text="windows on this profile",
+        ctk.CTkLabel(head, text="pinned apps",
                      font=self.skin.font(13, "bold"),
                      **self.skin.text_style()).pack(side="left")
         self.tips.button(head, TIPS["profile_pins"]).pack(
             side="left", padx=(6, 0))
-        ctk.CTkButton(head, text="pin everything open", width=150,
+        ctk.CTkButton(head, text="pin every open app", width=150,
                       command=self._prof_pin_all,
                       **self.skin.secondary()).pack(side="left",
-                                                   padx=(8, 0))
+                                                    padx=(8, 0))
         ctk.CTkButton(head, text="re-scan", width=80,
                       command=self._prof_rescan,
                       **self.skin.secondary()).pack(side="left",
-                                                   padx=(6, 0))
-        listf = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
-        listf.pack(fill="x")
-        live = profiles.windows_now()
-        saved = {(w["proc"], w["title"]): w for w in prof["wins"]}
+                                                    padx=(6, 0))
+        pinf = ctk.CTkScrollableFrame(self._prof_detail, width=590,
+                                      height=112, fg_color="transparent",
+                                      scrollbar_button_color=self.skin.border,
+                                      scrollbar_button_hover_color=self.skin.accent)
+        pinf.pack(fill="x")
+        for w in prof["wins"]:
+            self._pin_row(pinf, w, live_key.get((w["proc"], w["title"])))
+        if not prof["wins"]:
+            ctk.CTkLabel(pinf, text="nothing pinned yet - seat an app below",
+                         font=self.skin.font(11),
+                         **self.skin.text_style("sub")).pack(
+                anchor="w", pady=4, padx=4)
+
+        # ---- pin an app: pick a window, set conditions, pin it ---------
+        head2 = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        head2.pack(fill="x", pady=(10, 0))
+        ctk.CTkLabel(head2,
+                     text=("editing: %s" % (ed["key"][1] or ed["key"][0])
+                           if ed["key"] else "pin an app"),
+                     font=self.skin.font(13, "bold"),
+                     **self.skin.text_style()).pack(side="left")
+        self.tips.button(head2, TIPS["profile_match"]).pack(
+            side="left", padx=(6, 0))
+        lif = ctk.CTkScrollableFrame(self._prof_detail, width=590,
+                                     height=132, fg_color="transparent",
+                                     scrollbar_button_color=self.skin.border,
+                                     scrollbar_button_hover_color=self.skin.accent)
+        lif.pack(fill="x")
         for l in live:
-            self._prof_row(listf, l["proc"], l["title"], l,
-                           saved.get((l["proc"], l["title"])))
-        for w in prof["wins"]:            # pinned but closed: the
-            if (w["proc"], w["title"]) not in \
-                    {(l["proc"], l["title"]) for l in live}:
-                self._prof_row(listf, w["proc"], w["title"], None, w)
+            key = (l["proc"], l["title"])
+            picked = ed["pick"] == key
+            b = ctk.CTkButton(
+                lif, width=540, anchor="w",
+                text="%s   %s %dx%d at %d,%d on %s" % (
+                    (l["title"] or "(untitled)")[:40],
+                    l["proc"][:14], l["rect"][2], l["rect"][3],
+                    l["rect"][0], l["rect"][1],
+                    l["monitor"] or "?"),
+                font=self.skin.font(11),
+                command=lambda k=key: self._pin_select(k),
+                fg_color=self.skin.accent if picked
+                else self.skin.field_bg,
+                hover_color=self.skin.accent_hover,
+                text_color="#10131a" if picked else self.skin.text,
+                corner_radius=self.skin.radius)
+            b.pack(anchor="w", pady=1)
+        if not live:
+            ctk.CTkLabel(lif, text="no open windows to pick",
+                         font=self.skin.font(11),
+                         **self.skin.text_style("sub")).pack(
+                anchor="w", pady=4, padx=4)
+
+        # the subject of the editor, live or remembered: needed by
+        # the advanced rows as much as by the fine print below
+        picked = live_key.get(ed["pick"])
+        saved_row = next((w for w in prof["wins"]
+                          if (w["proc"], w["title"]) == ed["key"]),
+                         None) if ed["key"] else None
+
+        er = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        er.pack(fill="x", pady=(4, 0))
+        row = self._row(er, "window matching", TIPS["profile_match"])
+        self.match_menu = ctk.CTkOptionMenu(
+            row, values=list(profiles.MATCH_MODES), width=150,
+            command=self._pin_match, **self.skin.menu_style())
+        self.match_menu.set(ed["match"])
+        self.match_menu.grid(row=0, column=1, sticky="e")
+        row = self._row(er, "open it if missing",
+                        TIPS["profile_pin_open"])
+        self.pin_open_box = ctk.CTkCheckBox(row, text="",
+                                            font=self.skin.font(12),
+                                            command=self._pin_open,
+                                            checkbox_width=18,
+                                            checkbox_height=18,
+                                            border_color=self.skin.border,
+                                            fg_color=self.skin.accent,
+                                            hover_color=self.skin.accent)
+        self.pin_open_box.grid(row=0, column=1, sticky="e")
+        if ed["open"]:
+            self.pin_open_box.select()
+
+        if ed["open"]:
+            # the wish's advanced half: how long patience lasts,
+            # and WHERE the wish knocks. the captured exe is often
+            # the wrong door (store stubs, updater wrappers) and
+            # only the human knows which launcher opens the window
+            row = self._row(er, "wait up to",
+                            TIPS["profile_pin_wait"])
+            self.pin_wait_menu = ctk.CTkOptionMenu(
+                row, values=["%d s" % s for s in WAIT_CHOICES],
+                width=110, command=self._pin_wait,
+                **self.skin.menu_style())
+            self.pin_wait_menu.set("%d s" % ed["wait"])
+            self.pin_wait_menu.grid(row=0, column=1, sticky="e")
+            row = self._row(er, "launches", TIPS["profile_pin_exe"])
+            exf = ctk.CTkFrame(row, fg_color="transparent")
+            show = (ed["exe"]
+                    or (picked or saved_row or {}).get("exe")
+                    or "(no exe captured yet - browse picks one)")
+            ctk.CTkLabel(exf,
+                         text=show if len(show) <= 44
+                         else "..." + show[-41:],
+                         font=self.skin.font(10),
+                         **self.skin.text_style("sub")).pack(
+                side="left")
+            ctk.CTkButton(exf, text="browse...", width=80,
+                          command=self._pin_browse,
+                          **self.skin.secondary()).pack(side="left",
+                                                        padx=(6, 0))
+            exf.grid(row=0, column=1, sticky="e")
+
+        # the honest fine print, only ever saying something true:
+        # which rect the pin saves, that a process pin drags every
+        # window of that app, and what "open it" really is
+        notes = []
+        if picked:
+            notes.append("will save: %s %dx%d at %d,%d on %s" % (
+                picked["proc"][:14], picked["rect"][2],
+                picked["rect"][3], picked["rect"][0],
+                picked["rect"][1], picked["monitor"] or "?"))
+        elif saved_row:
+            notes.append("saved seat: %dx%d at %d,%d on %s (the "
+                         "window is closed; move the window and hit "
+                         "update pin while it is open to move the "
+                         "seat)" % (saved_row["rect"][2],
+                                    saved_row["rect"][3],
+                                    saved_row["rect"][0],
+                                    saved_row["rect"][1],
+                                    saved_row.get("monitor") or "?"))
+        else:
+            notes.append("pick one of the open windows above")
+        if (picked or saved_row) and ed["match"] == "process":
+            who = (picked or saved_row)["proc"].lower()
+            n = sum(1 for l in live if l["proc"].lower() == who)
+            if n > 1:
+                notes.append("WARNING: %d windows of %s are open - "
+                             "this pin moves ALL of them, not just "
+                             "the one you picked" % (n, who))
+        if (picked or saved_row) and ed["open"]:
+            exe = ((ed["exe"] or (picked or {}).get("exe")
+                    or (saved_row or {}).get("exe") or "?")
+                   ).split("\\")[-1]
+            notes.append("will run %s to wake it - a naive exe run; "
+                         "store apps and stub launchers may start "
+                         "nothing, then it waits %d s and reports"
+                         % (exe, ed["wait"]))
+        for t in notes:
+            ctk.CTkLabel(self._prof_detail, text=t,
+                         font=self.skin.font(10), wraplength=580,
+                         justify="left", anchor="w",
+                         **self.skin.text_style("sub")).pack(
+                anchor="w", pady=(2, 0))
+        cbtns = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        cbtns.pack(anchor="w", pady=(4, 0))
+        ctk.CTkButton(cbtns,
+                      text="update pin" if ed["key"] else "pin it",
+                      width=130, command=self._pin_commit,
+                      **self.skin.primary()).pack(side="left")
+        if ed["key"] or ed["pick"]:
+            ctk.CTkButton(cbtns, text="cancel", width=80,
+                          command=self._pin_cancel,
+                          **self.skin.secondary()).pack(side="left",
+                                                        padx=(6, 0))
         self._prof_status = ctk.CTkLabel(
             self._prof_detail, text=self._prof_msg,
             font=self.skin.font(11), wraplength=560, justify="left",
             anchor="w", **self.skin.text_style("sub"))
         self._prof_status.pack(anchor="w", pady=(6, 0))
 
-    def _prof_row(self, parent, proc, title, live, saved):
-        key = (proc, title)
+    def _pin_row(self, parent, w, live):
+        """One pinned seat. The row itself is the button that lifts
+        the pin back into the editor ('click it and it pops back
+        up'), the pencil says the same out loud, the x forgets the
+        seat. Badges tell the truth the plain text cannot: closed,
+        'open it', a non-default match."""
         row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(anchor="w", fill="x")
-        box = ctk.CTkCheckBox(
-            row, text=(title or proc)[:52] + ("  (closed)"
-                                              if live is None else ""),
-            font=self.skin.font(12), command=lambda k=key:
-            self._pin_toggle(k),
-            checkbox_width=18, checkbox_height=18,
-            border_color=self.skin.border,
-            fg_color=self.skin.accent, hover_color=self.skin.accent)
-        box.pack(side="left")
-        if saved:
-            box.select()
-        note = ""
-        if live:
-            note = "now %s %dx%d at %d,%d on %s" % (
-                proc[:14], live["rect"][2], live["rect"][3],
-                live["rect"][0], live["rect"][1],
-                live["monitor"] or "no monitor")
-        if saved:
-            note = (note + "     " if note else "") + \
-                "pinned %dx%d at %d,%d on %s" % (
-                    saved["rect"][2], saved["rect"][3],
-                    saved["rect"][0], saved["rect"][1],
-                    saved.get("monitor") or "?")
-        ctk.CTkLabel(row, text=note, font=self.skin.font(10),
-                     **self.skin.text_style("sub")).pack(
-            side="left", padx=(8, 0))
-        self._pin_boxes[key] = box
-        return row
+        row.pack(anchor="w", fill="x", pady=1)
+        badges = ""
+        if w.get("open"):
+            try:
+                wt = int(w.get("wait") or 30)
+            except (TypeError, ValueError):
+                wt = 30
+            badges += "  [open it%s]" % (
+                "" if wt == 30 else " in %ds" % wt)
+            ex = (w.get("exe") or "").split("\\")[-1].lower()
+            if ex and ex != (w.get("proc") or "").lower():
+                badges += "  [via %s]" % ex[:18]
+        if (w.get("match") or "process") != "process":
+            badges += "  [%s]" % w.get("match")
+        ctk.CTkButton(
+            row, width=470, anchor="w",
+            text="%s  %s  %dx%d at %d,%d on %s%s%s" % (
+                (w["title"] or w["proc"])[:36], w["proc"][:14],
+                w["rect"][2], w["rect"][3], w["rect"][0],
+                w["rect"][1], w.get("monitor") or "?",
+                "" if live else "  (closed)", badges),
+            font=self.skin.font(11),
+            command=lambda r=w: self._pin_load(r),
+            fg_color="transparent", hover_color=self.skin.panel,
+            text_color=self.skin.text,
+            corner_radius=self.skin.radius).pack(side="left")
+        ctk.CTkButton(row, text="edit", width=48,
+                      command=lambda r=w: self._pin_load(r),
+                      **self.skin.secondary()).pack(side="left",
+                                                    padx=(4, 0))
+        ctk.CTkButton(row, text="x", width=30,
+                      command=lambda r=w: self._pin_remove(r),
+                      **self.skin.secondary()).pack(side="left",
+                                                    padx=(4, 0))
 
     # ---- profiles: handlers ---------------------------------------------
     def _profile_picked(self, name):
         self._prof_sel = name
         self._prof_msg = ""
+        self._pin_edit = _fresh_pin_edit()
         self._profiles_render()
 
     def _profile_create(self):
@@ -934,32 +1135,83 @@ class SettingsWindow(ctk.CTk):
         self._profile_picked(name)
 
     def _profile_apply(self, force=False):
-        # the reshuffle takes seconds (modes, settle-poll, windows),
-        # and Tk must not sit frozen through it
+        # the reshuffle takes seconds (modes, settle-poll, windows
+        # and maybe a 30 s wait for a pinned app to wake), and Tk
+        # must not sit frozen through any of it
         name, data = self._prof_sel, self._prof_data
         self._prof_msg = "reshaping the desktop..."
         self._prof_status.configure(text=self._prof_msg)
 
         def work():
-            ok, text = profiles.apply(data, name, best_effort=force)
+            ok, text, info = profiles.apply(data, name,
+                                            best_effort=force)
             log.info("profile '%s' %s: %s", name,
                      "applied" if ok else "refused", text)
 
             def done():
                 self._prof_msg = text
                 self._profiles_render()
+                misses = (info or {}).get("no_shows") or []
+                if misses:
+                    self._noshows_ask(misses)
             self.after(0, done)
         threading.Thread(target=work, daemon=True).start()
+
+    def _noshows_ask(self, misses):
+        """Loud, but only once: pinned apps that never turned up.
+        'I'll fix it' leaves them loud and opens the editor for
+        them; 'let it be' marks them quiet and the same failure is
+        silent from now on - until one answers a profile again,
+        which lifts the quiet automatically."""
+        names = "\n".join("  %s" % (m["title"] or m["proc"])[:60]
+                          for m in misses)
+        dlg = ctk.CTkToplevel(self)
+        self.noshows_dialog = dlg
+        dlg.title("pinned apps that stayed away")
+        dlg.resizable(False, False)
+        dlg.configure(fg_color=self.skin.bg)
+        dlg.transient(self)
+        ctk.CTkLabel(
+            dlg, text="these pinned apps did not turn up:\n%s\n\n"
+                      "Fix the profile? 'let it be' keeps them "
+                      "quiet about future failures." % names,
+            font=self.skin.font(12), justify="left",
+            **self.skin.text_style()).pack(padx=20, pady=(14, 8))
+        line = ctk.CTkFrame(dlg, fg_color="transparent")
+        line.pack(pady=(0, 14))
+
+        def fix():
+            if len(misses) == 1:
+                self._pin_load({"proc": misses[0]["proc"],
+                                "title": misses[0]["title"],
+                                "rect": [0, 0, 0, 0]})
+            dlg.destroy()
+
+        def quiet():
+            prof = self._prof_data["profiles"].get(self._prof_sel)
+            if prof:
+                for m in misses:
+                    for w in prof["wins"]:
+                        if (w["proc"], w["title"]) == (m["proc"],
+                                                       m["title"]):
+                            w["quiet"] = True
+                profiles.save(self._prof_data)
+            dlg.destroy()
+        ctk.CTkButton(line, text="I'll fix it", width=110,
+                      command=fix, **self.skin.primary()).pack(
+            side="left", padx=(0, 6))
+        ctk.CTkButton(line, text="let it be", width=110,
+                      command=quiet, **self.skin.secondary()).pack(
+            side="left")
+        dlg.after(30, dlg.focus_force)       # the measured claim:
+                                             # Windows steals focus
+                                             # back without this
 
     def _rescue_now(self):
         brought = wm.rescue_lost()
         self._prof_msg = ("brought back: %s" % ", ".join(brought)
                           if brought else "nothing was off screen")
         self._profiles_render()
-
-    def _prof_match(self, mode):
-        self._prof_data["profiles"][self._prof_sel]["match"] = mode
-        profiles.save(self._prof_data)
 
     def _prof_hdr(self, ask):
         self._prof_data["profiles"][self._prof_sel]["hdr"] = ask
@@ -969,27 +1221,127 @@ class SettingsWindow(ctk.CTk):
         self._prof_msg = ""
         self._profiles_render()
 
-    def _prof_pin_all(self):
-        for w in profiles.windows_now():
-            profiles.pin(self._prof_data, self._prof_sel, w)
-        self._prof_msg = "pinned every window that is open"
+    def _pin_select(self, key):
+        """a click in the open-windows list makes it the editor's
+        subject; clicking the same one again lets go of it"""
+        if self._pin_edit["pick"] == key and self._pin_edit["key"] \
+                is None:
+            self._pin_edit["pick"] = None
+        else:
+            self._pin_edit.update(key=None, pick=key)
         self._profiles_render()
 
-    def _pin_toggle(self, key):
-        proc, title = key
-        box = self._pin_boxes.get(key)
-        if box is None:
+    def _pin_load(self, w):
+        """the pinned row clicked: the pin pops back up into the
+        editor, conditions as saved, ready to change and update"""
+        try:
+            wait = max(5, min(600, int(w.get("wait") or 30)))
+        except (TypeError, ValueError):
+            wait = 30
+        self._pin_edit.update(key=(w["proc"], w["title"]),
+                              pick=(w["proc"], w["title"]),
+                              match=w.get("match")
+                              or (self._prof_data["profiles"]
+                                  .get(self._prof_sel, {})
+                                  .get("match"))
+                              or "process",
+                              open=bool(w.get("open")),
+                              wait=wait, exe=w.get("exe") or None)
+        self._profiles_render()
+
+    def _pin_remove(self, w):
+        profiles.unpin(self._prof_data, self._prof_sel, w["proc"],
+                       w["title"])
+        if self._pin_edit["key"] == (w["proc"], w["title"]):
+            self._pin_edit = _fresh_pin_edit()
+        self._prof_msg = "forgot: %s" % (w["title"] or w["proc"])[:60]
+        self._profiles_render()
+
+    def _pin_match(self, mode):
+        self._pin_edit["match"] = mode
+        self._profiles_render()       # the all-windows warning hangs
+                                      # off this choice
+
+    def _pin_open(self):
+        self._pin_edit["open"] = bool(self.pin_open_box.get())
+        self._profiles_render()       # the naive-exe warning and
+                                      # the advanced rows hang off it
+
+    def _pin_wait(self, text):
+        try:
+            self._pin_edit["wait"] = int(str(text).split()[0])
+        except (TypeError, ValueError):
+            pass                      # a menu value we did not
+                                      # write: keep the current wait
+        self._profiles_render()
+
+    def _pin_browse(self):
+        """What the app cannot guess, the human can: when the
+        captured exe starts nothing (store stubs, wrapper launchers)
+        the user points the pin at the door that really opens the
+        window. The shell runs it exactly as double-click would, so
+        a .lnk shortcut is a legal answer too."""
+        try:
+            from tkinter import filedialog
+            got = filedialog.askopenfilename(
+                parent=self, title="what should the profile run?",
+                filetypes=[("launchers", "*.exe *.bat *.cmd *.lnk"),
+                           ("all files", "*.*")],
+                defaultextension=".exe")
+        except Exception:
+            log.warning("browse failed", exc_info=True)
+            got = ""
+        if got:
+            self._pin_edit["exe"] = got
+            self._profiles_render()
+
+    def _pin_cancel(self):
+        self._pin_edit = _fresh_pin_edit()
+        self._profiles_render()
+
+    def _pin_commit(self):
+        ed = self._pin_edit
+        key = ed["key"] or ed["pick"]
+        if key is None:
+            self._prof_msg = "pick one of the open windows first"
+            self._profiles_render()
             return
-        if box.get():
-            live = next((w for w in profiles.windows_now()
-                         if (w["proc"], w["title"]) == key), None)
-            if live:
-                profiles.pin(self._prof_data, self._prof_sel, live)
-                self._prof_msg = "pinned: %s" % (title or proc)[:60]
-        else:
-            profiles.unpin(self._prof_data, self._prof_sel, proc,
-                           title)
-            self._prof_msg = "forgot: %s" % (title or proc)[:60]
+        win = next((w for w in profiles.windows_now()
+                    if (w["proc"], w["title"]) == key), None)
+        if win is None:                # the window closed since the
+            win = next((w for w in     # scan: a pin being edited
+                self._prof_data["profiles"][self._prof_sel]["wins"]
+                if (w["proc"], w["title"]) == key), None)
+        if win is None:
+            self._prof_msg = "that window is gone - pin something " \
+                             "that exists"
+            self._pin_cancel()
+            return
+        profiles.pin(self._prof_data, self._prof_sel, win,
+                     match=ed["match"], open_if_missing=ed["open"],
+                     exe=ed["exe"], wait=ed["wait"])
+        self._prof_msg = "pinned: %s (seat: where it sits now)" % \
+            (key[1] or key[0])[:60]
+        self._pin_edit = _fresh_pin_edit()
+        self._profiles_render()
+
+    def _prof_pin_all(self):
+        # one seat per APP, not per window: a process pin owns every
+        # window of its app, so the biggest window of each process
+        # gets the seat and its siblings ride along with it
+        best = {}
+        for w in profiles.windows_now():
+            p = (w["proc"] or "").lower()
+            if not p:
+                continue
+            if p not in best or w["rect"][2] * w["rect"][3] > \
+                    best[p]["rect"][2] * best[p]["rect"][3]:
+                best[p] = w
+        for w in best.values():
+            profiles.pin(self._prof_data, self._prof_sel, w,
+                         match="process")
+        self._prof_msg = "pinned one seat per open app (%d)" % \
+            len(best)
         self._profiles_render()
 
     # --------------------------------------------------------- power plan --

@@ -58,6 +58,7 @@ SWP_SHOWWINDOW = 0x40
 SWP_NOOWNERZORDER = 0x10000        # measured here: dies with 1004
                                    # whatever the insert-after slot
                                    # holds - _move does not use it
+SW_SHOWNORMAL = 1
 SW_SHOWMAXIMIZED = 3
 SW_RESTORE = 9
 
@@ -249,30 +250,37 @@ def win_title(hwnd):
     return buf.value
 
 
-def proc_name(hwnd):
-    """The exe's file name ("opera.exe"), which is the identity a
-    profile matches on - hwnds die, pids are recycled, the name
-    survives relaunches."""
+def _proc_info(hwnd):
+    """(name, full exe path) - one OpenProcess, two answers. The
+    name is the identity a profile matches on (hwnds die, pids are
+    recycled, the name survives relaunches); the full path is what
+    a pin can re-run when the app is not open any more."""
     try:
         pid = wintypes.DWORD()
         if not u32.GetWindowThreadProcessId(hwnd, byref(pid)):
-            return ""
+            return "", ""
         h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False,
                             pid.value)
         if not h:
-            return ""
+            return "", ""
         try:
             buf = ctypes.create_unicode_buffer(4096)
             n = wintypes.DWORD(len(buf))
             if not k32.QueryFullProcessImageNameW(h, 0, buf, byref(n)):
-                return ""
-            return buf.value.split("\\")[-1].lower()
+                return "", ""
+            full = buf.value
+            return full.split("\\")[-1].lower(), full
         finally:
             k32.CloseHandle(h)
     except Exception:
-        return ""                          # a window dying mid-walk;
+        return "", ""                      # a window dying mid-walk;
                                            # a profile entry with no
                                            # proc is simply unmatched
+
+
+def proc_name(hwnd):
+    name, _ = _proc_info(hwnd)
+    return name
 
 
 def true_rect(hwnd):
@@ -300,11 +308,13 @@ def _facts(hwnd):
     style = u32.GetWindowLongW(hwnd, GWL_STYLE)
     ex = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
     cls = _class_name(hwnd)
+    proc, exe = _proc_info(hwnd)
     return {
         "hwnd": hwnd,
         "rect": true_rect(hwnd),
         "title": win_title(hwnd),
-        "proc": proc_name(hwnd),
+        "proc": proc,
+        "exe": exe,
         "visible": bool(u32.IsWindowVisible(hwnd)),
         "owned": u32.GetAncestor(hwnd, GA_ROOT) != hwnd,
         "iconic": bool(u32.IsIconic(hwnd)),
@@ -415,6 +425,34 @@ def place(hwnd, rect, zoomed=False):
     the private path."""
     return _move({"hwnd": hwnd, "rect": tuple(rect),
                   "zoomed": bool(zoomed)})
+
+
+# A PRIVATE shell32 handle: windll.shell32 is the one power.py already
+# calls ShellExecuteW("runas") through, and argtypes bound there would
+# bind there too (the user32 trap, learned the hard way). WinDLL() hands
+# out a fresh copy whose prototype belongs to us alone.
+_shell32 = ctypes.WinDLL("shell32")
+_shell32.ShellExecuteW.restype = ctypes.c_int
+_shell32.ShellExecuteW.argtypes = [wintypes.HWND, ctypes.c_wchar_p,
+                                   ctypes.c_wchar_p, ctypes.c_wchar_p,
+                                   ctypes.c_wchar_p, ctypes.c_int]
+
+
+def launch(exe_path):
+    """The naive re-open a pin with 'open it' makes: shell-execute
+    the exe exactly as double-clicking it in Explorer would (so .lnk
+    and app paths behave as they do for a human). Honest about its
+    limits: store apps and stub-launchers start NOTHING under this
+    name - the caller waits for a window and must not wait forever.
+    Returns "" or the reason it could not even try."""
+    if not exe_path:
+        return "no exe path was saved for this pin"
+    ret = _shell32.ShellExecuteW(None, "open", exe_path, None, None,
+                                 SW_SHOWNORMAL)
+    if ret <= 32:
+        return "the shell refused to start %s (error %d)" % (
+            exe_path.split("\\")[-1], ret)
+    return ""
 
 
 # --------------------------------------------------- desktop application --
