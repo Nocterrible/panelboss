@@ -379,6 +379,7 @@ def check():
         app.tips.toggle("hello", app.mode_button)
         app.update_idletasks()
         assert app.tips.tip is not None and app.tips.pinned
+        assert app.tips.tip.overrideredirect(), "the note grew a titlebar"
         app.tips.kill()
         assert app.tips.tip is None
         # the hold switches are independent, both default on
@@ -393,6 +394,26 @@ def check():
         app._hold_changed()
         assert cfg["power"]["hold_display"] is False
         app._show_tab("detection")
+        # update button: the hand-off is cmd + the script + the
+        # relaunch promise, then the app quits (its own files are the
+        # ones being replaced). the SCRIPT side of the contract is
+        # pinned from the file too - the two halves cannot drift.
+        script = app.update_script()
+        assert script and script.lower().endswith("update.bat"), script
+        with open(script, encoding="utf-8") as fh:
+            body = fh.read()
+        assert '"%~1"=="relaunch"' in body, "relaunch promise gone"
+        assert 'start "" "%~dp0run.bat"' in body, "nothing reopens us"
+        popped = []
+        real = W.subprocess.Popen
+        W.subprocess.Popen = lambda *a, **k: popped.append((a, k))
+        try:
+            app._update_now()
+        finally:
+            W.subprocess.Popen = real
+        assert popped and popped[0][0][0] == ["cmd.exe", "/c", script,
+                                              "relaunch"], popped
+        assert ("quit", True) in list(fm.events.queue)
         w1 = app._show_overrides()
         assert w1 is app._show_overrides(), "second manager window opened"
         app._ov_win = w1

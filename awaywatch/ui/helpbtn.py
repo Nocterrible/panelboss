@@ -92,7 +92,10 @@ class Tips:
             return
         tip = tk.Toplevel(self.root, takefocus=())
         tip.withdraw()
-        tip.transient(self.root)               # dies with the window
+        tip.overrideredirect(True)             # no title bar: this is a
+        tip.transient(self.root)               # note at the cursor, not
+                                               # a window that announces
+                                               # itself as another app
         frame = tk.Frame(tip, bg=self.skin.border, padx=1, pady=1)
         frame.pack(fill="both", expand=True)
         tk.Label(frame, text=text, bg=self.skin.panel, fg=self.skin.text,

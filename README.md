@@ -29,7 +29,8 @@ the settings window — three tabs, one subject each: **detection**
 (mode; the model's knobs or the differencer's — they never share the
 screen; the timers; the live preview beside the camera picker),
 **power plan** (the timer overrides here, the wake behavior, the
-powercfg assistant), **General** (the meta: skin, autostart, logs).
+powercfg assistant), **General** (the meta: skin, autostart, updater,
+logs).
 Anything with more to say has a "?" beside it: hover for the story,
 click to pin it. The config file holds the same values.
 
@@ -157,7 +158,9 @@ its real design. Switching is live.
 git clone <this repo> ; cd ICU-PresenceDetector
 powershell -File scripts\setup.ps1     # .venv + pinned deps + weights
 run.bat                                 # or double-click: tray + monitor
-update.bat                              # pull + reinstall + relock
+update.bat                              # pull + reinstall + relock;
+                                        # reopens the app when the app
+                                        # itself asked (its button)
 ```
 
 Diagnose first:

@@ -25,6 +25,8 @@ from __future__ import annotations
 import logging
 import os
 import queue
+import subprocess
+import sys
 import textwrap
 import threading
 import time
@@ -141,6 +143,11 @@ TIPS = {
                 "verifies it by reading the registry back.",
     "logs": "every decision and the reason, in %APPDATA%\\ICU-"
              "PresenceDetector\\logs.",
+    "update": "runs update.bat: pulls the newest copy and refreshes "
+               "the dependencies. the app quits first - its own files "
+               "are the ones being replaced - and the script reopens "
+               "it when it finishes. if it stays closed, the update "
+               "window says why; run.bat starts it by hand.",
 }
 
 
@@ -654,6 +661,17 @@ class SettingsWindow(ctk.CTk):
             **self.skin.menu_style())
         self.skin_menu.grid(row=0, column=1, sticky="e")
         self.skin_menu.set(self.skin.label)
+        # the updater lives here because it is meta: it replaces the
+        # app, not anything the app watches. the frozen exe has no
+        # repo to pull, so the row hides itself there.
+        row = self._row(box, "check for updates", TIPS["update"])
+        self.update_row = row
+        self.update_button = ctk.CTkButton(
+            row, text="update now", width=110, command=self._update_now,
+            **self.skin.secondary())
+        self.update_button.grid(row=0, column=1, sticky="e")
+        if getattr(sys, "frozen", False):
+            row.pack_forget()
         row = self._row(box, "open log folder", TIPS["logs"])
         ctk.CTkButton(row, text="open", width=110, command=self._open_log,
                       **self.skin.secondary()).grid(row=0, column=1,
@@ -828,6 +846,36 @@ class SettingsWindow(ctk.CTk):
             os.startfile(config.LOG_DIR)
         except Exception:
             os.system('start "" "%s"' % config.LOG_DIR)
+
+    @staticmethod
+    def update_script():
+        """update.bat, beside the package - or None. The frozen exe
+        carries no repo and no script, so it has nothing to run."""
+        if getattr(sys, "frozen", False):
+            return None
+        root = os.path.dirname(os.path.dirname(
+            os.path.abspath(config.__file__)))
+        script = os.path.join(root, "update.bat")
+        return script if os.path.exists(script) else None
+
+    def _update_now(self):
+        """The update replaces the very files THIS app runs from, so
+        the courtesies are in order: hand the job (plus the relaunch
+        promise) to cmd, quit, let the script work on quiet files.
+        cmd.exe must be the one to run the .bat - CreateProcess
+        cannot exec a batch file directly; the app has no console of
+        its own, so the script's console opens fresh, visible, and
+        outlives us (it must, it carries the relaunch)."""
+        script = self.update_script()
+        if not script:
+            return
+        try:
+            subprocess.Popen(["cmd.exe", "/c", script, "relaunch"],
+                             cwd=os.path.dirname(script))
+        except Exception:
+            log.exception("update refused to start; the app stays up")
+            return
+        self.monitor.events.put(("quit", True))
 
     # -------------------------------------------------------- power assistant --
     def _assistant_truth(self, real):
