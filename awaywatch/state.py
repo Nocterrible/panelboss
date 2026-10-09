@@ -140,28 +140,22 @@ class PresenceMonitor:
 
     def _apply_hold(self, now):
         """Windows' execution-state policy, restated every tick:
-
-        watching a lit desk -> hold the plan's display AND sleep timers
-        off entirely: the app alone decides when the screens darken, so
-        the measured tug of war (plan times the panel out, we see a
-        person and power it back on) cannot happen;
-        dark and polling    -> the box must stay up to keep watching
-        (a restart during a dark spell silently loses a wake), but the
-        screens are ours to give away, so the display hold lets go;
-        paused or snoozing  -> behave exactly like an app that is not
-        running: the plan owns the desk again.
-
-        hold_timers off shrinks this to the old shape: system hold in
-        the dark only, plan timers live while present."""
-        on = bool(self.power_cfg.get("hold_timers"))
+        hold_display suppresses the plan's display timeout, hold_sleep
+        the sleep timeout - either may live alone. The display bit
+        always lets go while dark (holding a display is claiming the
+        screens are wanted); the system bit survives the dark ONLY if
+        the user kept hold_sleep on - it is what keeps the watcher
+        alive to see the return, and without it the box sleeps and
+        the app re-arms on the power-button press (unknown-state
+        boot). Paused or snoozing releases everything: the app then
+        behaves exactly like an app that is not running."""
         if self.paused or now < self.snooze_until:
             display.set_hold(False, False)
         elif self.state == "off":
-            display.set_hold(False, True)
-        elif on:
-            display.set_hold(True, True)
+            display.set_hold(False, bool(self.power_cfg.get("hold_sleep")))
         else:
-            display.set_hold(False, False)
+            display.set_hold(bool(self.power_cfg.get("hold_display")),
+                             bool(self.power_cfg.get("hold_sleep")))
 
     # ------------------------------------------------------- screens are on
     def _on_phase(self, now, idle):
@@ -295,12 +289,11 @@ class PresenceMonitor:
                       "the message never reaches the swap chain")
             self.next_poll = now + self.on_poll()
             return
-        display.set_hold(False, True)            # the display hold lets go
-                                                 # BEFORE the broadcast (a
-                                                 # held display is a claim
-                                                 # the screens are wanted);
-                                                 # the box stays up while we
-                                                 # poll with dark screens
+        # the display hold lets go BEFORE the broadcast (a held display is
+        # a claim the screens are wanted); the sleep hold survives the dark
+        # only if the user kept it - it keeps the watcher alive to catch
+        # the return
+        display.set_hold(False, bool(self.power_cfg.get("hold_sleep")))
         # mode always_on: the stream rides THROUGH the standby
         # transition, never released. Reopening inside the transition
         # is the race that produced forever-dead cameras (measured:

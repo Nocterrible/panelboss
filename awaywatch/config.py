@@ -88,12 +88,13 @@ DEFAULTS = {
                                 # the message is swallowed by the swapchain
     },
     "power": {
-        "hold_timers": True,     # while the app watches, it holds Windows'
-                                 # own display and sleep timers off (an
-                                 # execution-state request, no admin, gone
-                                 # on pause/quit/exit and every time the
-                                 # app itself darkens the screens) so the
-                                 # power plan needs no touching
+        "hold_display": True,    # while the app watches a lit desk it holds
+                                 # the plan's display timeout off - a still
+                                 # person reading a page is never timed out
+        "hold_sleep": True,      # ...and the sleep timeout. The dark watcher
+                                 # needs it too: without it the box sleeps
+                                 # and presence detection only re-arms when
+                                 # the power button is pressed
         "skip_camera_when_blocked": True,  # if another app already holds the
                                            # display awake, the camera does not
                                            # poll to defend it
@@ -149,6 +150,17 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
         if key not in merged:
             merged[key] = value
     merged["_path"] = path
+    # [power] hold_timers became two switches (screen, sleep): one old
+    # answer seeds both new keys, and the fossil is dropped so the writer
+    # stops re-persisting it; keys the file already sets always win
+    power_merged = merged.get("power", {})
+    legacy = power_merged.pop("hold_timers", None)
+    if legacy is not None:
+        loaded = (config.get("power", {}) if isinstance(config, dict)
+                  else {})
+        for key in ("hold_display", "hold_sleep"):
+            if key not in loaded:
+                power_merged[key] = bool(legacy)
     if verbose:
         log.debug(f"using config from {path}")
     return merged

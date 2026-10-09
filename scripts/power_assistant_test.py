@@ -340,14 +340,48 @@ def check():
         app._assistant_ui(True)
         # the detection card's mode segment: window flips -> cfg + event,
         # and a TRAY flip (someone editing the same cfg dict) is mirrored
-        # back onto the segment by the status tick, without firing command
+        # back onto the segment AND the rows by the status tick, without
+        # firing command
+        rows = dict(app._det_rows)
+        assert rows["confidence"].winfo_manager() != "", "person rows"
+        assert rows["frame changes"].winfo_manager() == "", \
+            "motion knobs hide in person mode"
         app._detect_mode_changed("motion (no AI)")
         assert cfg["detection"]["mode"] == "motion", cfg["detection"]
         assert ("detection_mode", "motion") in list(fm.events.queue), \
             list(fm.events.queue)
+        assert rows["device"].winfo_manager() == "", \
+            "the model's knobs hide in motion mode"
+        assert rows["motion hold"].winfo_manager() != ""
         cfg["detection"]["mode"] = "person"
         app._update_status(time.time(), None)
         assert app.mode_button.get() == "person (AI)", app.mode_button.get()
+        assert rows["confidence"].winfo_manager() != "", "rows follow"
+        # tabs: exactly one page is ever visible
+        app._show_tab("power plan")
+        assert app.pages["power plan"].winfo_manager() != ""
+        assert app.pages["detection"].winfo_manager() == ""
+        assert app.pages["general"].winfo_manager() == ""
+        app._show_tab("detection")
+        assert app.pages["detection"].winfo_manager() != ""
+        # tooltips: pin, read, dismiss - the pointer may reach the tip
+        app.tips.toggle("hello", app.mode_button)
+        app.update_idletasks()
+        assert app.tips.tip is not None and app.tips.pinned
+        app.tips.kill()
+        assert app.tips.tip is None
+        # the hold switches are independent, both default on
+        app._show_tab("power plan")
+        assert bool(app.hold_display_switch.get())
+        assert bool(app.hold_sleep_switch.get())
+        app.hold_sleep_switch.deselect()
+        app._hold_changed()
+        assert cfg["power"]["hold_sleep"] is False
+        assert cfg["power"]["hold_display"] is True, "each lives alone"
+        app.hold_display_switch.deselect()
+        app._hold_changed()
+        assert cfg["power"]["hold_display"] is False
+        app._show_tab("detection")
         w1 = app._show_overrides()
         assert w1 is app._show_overrides(), "second manager window opened"
         app._ov_win = w1

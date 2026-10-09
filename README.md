@@ -14,7 +14,7 @@ notice the camera blinking and something malicious watching it.
 |---|---|
 | typing | nothing; the camera never runs (`idle_gate_sec`) |
 | idle > `idle_gate_sec` (30 s default) | camera boots per poll, every `on_poll_sec` (3 s) |
-| idle and being watched | the app holds Windows' own display and sleep timers off (`[power] hold_timers`, default on) so a plan timeout can never time a still person out; released before the app's own off-broadcast, and on pause/snooze |
+| idle and being watched | the app holds Windows' own display and sleep timers off (`[power] hold_display` + `hold_sleep`, default on, independent) so a plan timeout can never time a still person out; the display hold is released before the app's own off-broadcast, and both are released on pause/snooze |
 | absence confirmed `absent_confirm_sec` (60 s) | `SC_MONITORPOWER(2)` — same standby as the power plan, worst case 90 s after the last keystroke |
 | screens dark | camera held open, polled every `off_poll_sec` (3 s) |
 | `min_hits` (2) consecutive positive frames | camera released **before** the screens wake (the device is exclusive) |
@@ -24,24 +24,32 @@ notice the camera blinking and something malicious watching it.
 | fullscreen app owns the display | the broadcast is skipped (the message never reaches the swap chain) |
 
 Timers, camera modes (`boot_per_poll` / `always_on`, one choice per
-phase) and the wake policy are all editable from the settings window
-(or the config file — same values).
+phase), the wake policy and the overrides below are all editable from
+the settings window — three tabs, one subject each: **detection**
+(mode; the model's knobs or the differencer's — they never share the
+screen; the timers; the live preview beside the camera picker),
+**power plan** (the timer overrides here, the wake behavior, the
+powercfg assistant), **General** (the meta: skin, autostart, logs).
+Anything with more to say has a "?" beside it: hover for the story,
+click to pin it. The config file holds the same values.
 
-**Owning the screens (`[power] hold_timers`, default on).** While the
-app watches a lit desk it holds a Windows execution-state request
-(`SetThreadExecutionState`, display + system): the plan's own display
-and sleep timers do not start while a request lives, so the measured
-tug of war — plan times a still-reading person out, the camera sees
-them, the app powers the screen back on — cannot happen, and the
-power plan itself needs no touching at all. The hold lets go before
-the app's own off-broadcast (holding the display is claiming the
-screens are wanted), while paused or snoozing (the app then behaves
-exactly like an app that is not running), and when the process dies —
-crash included, fail open by construction. Only the *automatic*
-timers are affected: your own Sleep button, the lid and shutdown are
-requests no app outvotes. With the feature off, the old shape returns:
-the box is kept awake during dark polling only, and the plan owns a
-lit desk.
+**Owning the screens (`[power] hold_display`, `hold_sleep`, default
+on — and fully independent).** While the app watches a lit desk it
+holds a Windows execution-state request (`SetThreadExecutionState`):
+the plan's own timers do not start while a request lives, so the
+measured tug of war — plan times a still-reading person out, the
+camera sees them, the app powers the screen back on — cannot happen,
+and the power plan itself needs no touching at all. Each timer is
+held separately: display held, sleep released is the classic
+no-screen-timeout setup media players always shipped. The display
+hold lets go before the app's own off-broadcast (holding a display is
+claiming the screens are wanted); the sleep hold is what keeps the
+watcher alive through the dark — with it off the box sleeps on
+schedule and presence detection re-arms when the power button is
+pressed. Pausing, snoozing, or the process dying (crash included,
+fail open by construction) hands everything back. Only the
+*automatic* timers are affected: your own Sleep button, the lid and
+shutdown are requests no app outvotes.
 
 ## Detection modes (`[detection] mode`)
 
