@@ -14,6 +14,7 @@ from __future__ import annotations
 import glob
 import logging
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -27,8 +28,21 @@ MODEL_URLS = [
     "https://huggingface.co/aaurelions/yolo11n.onnx/resolve/main/files/1024/yolo11n.onnx",
 ]
 
-MODELS_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                           "models")
+def _default_models_root():
+    """Where *.onnx live. A frozen PyInstaller build rewrites __file__
+    into the bundle, which the user can neither see nor edit, so the
+    frozen exe looks for a models/ folder BESIDE the exe first -
+    exactly where a release zip puts it - and only then falls back to
+    the repo layout (download-once still fills whichever wins)."""
+    if getattr(sys, "frozen", False):
+        cand = os.path.join(os.path.dirname(sys.executable), "models")
+        if os.path.isdir(cand):
+            return cand
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                        "models")
+
+
+MODELS_ROOT = _default_models_root()
 
 
 def cuda_gpus():
@@ -39,7 +53,13 @@ def cuda_gpus():
     import subprocess
     try:
         out = subprocess.run(["nvidia-smi", "-L"], capture_output=True,
-                             timeout=10).stdout.decode("utf-8", "replace")
+                             timeout=10,
+                             # no console, ever: a windowed parent gets
+                             # a fresh visible terminal for every
+                             # console-app child, and this probe runs
+                             # at window build (measured popping)
+                             creationflags=subprocess.CREATE_NO_WINDOW,
+                             ).stdout.decode("utf-8", "replace")
     except Exception:
         return []
     gpus = []

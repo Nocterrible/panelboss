@@ -11,6 +11,20 @@ sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
 from awaywatch import config, power
 from awaywatch.state import PresenceMonitor
 
+# 0) silent children: EVERY external helper the windowed app spawns
+#    must carry CREATE_NO_WINDOW. A windowless parent (pythonw) gets a
+#    fresh, VISIBLE console for every console-app child; the user
+#    counted the flashes (powershell for camera names, nvidia-smi for
+#    the gpu probe). A source-level pin: cheap, and it fails the
+#    moment a probe grows without the flag.
+import io as _io
+for _f in ("camera.py", "inference.py", "power.py"):
+    _src = _io.open(os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), "..", "awaywatch", _f),
+        encoding="utf8").read()
+    assert "CREATE_NO_WINDOW" in _src, _f + " would pop a console"
+print("silent children OK (probes carry CREATE_NO_WINDOW)")
+
 SAMPLE = """Power Request Sources:
 
 DISPLAY:

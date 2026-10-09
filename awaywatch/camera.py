@@ -37,7 +37,13 @@ def camera_names():
     cmd = ("(Get-PnpDevice -Class Camera).FriendlyName")
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-Command", cmd],
-                              capture_output=True, timeout=10)
+                             capture_output=True, timeout=10,
+                             # windowless parents get a FRESH VISIBLE
+                             # console for every console-app child:
+                             # without this flag each scan and each
+                             # tray-menu rebuild popped a powershell
+                             # window (the user counted them)
+                             creationflags=subprocess.CREATE_NO_WINDOW)
         try:
             names = out.stdout.decode("utf-8").splitlines()
         except UnicodeDecodeError:               # the console encoding is
