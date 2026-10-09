@@ -276,6 +276,9 @@ if _held:
     print("tray app and rerun for the full suite")
     sys.exit(0)
 app = W.SettingsWindow(cfg, fm, queue.Queue())
+# the mode pin below calls _save(); keep the live config out of reach
+config.write_config = lambda c, path=None: _saved_wc(
+    c, os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml"))
 FAILED = []
 
 
@@ -335,6 +338,16 @@ def check():
         app._assistant_ui(False)
         assert app.overrides_button.winfo_manager() == "", "button off-screen"
         app._assistant_ui(True)
+        # the detection card's mode segment: window flips -> cfg + event,
+        # and a TRAY flip (someone editing the same cfg dict) is mirrored
+        # back onto the segment by the status tick, without firing command
+        app._detect_mode_changed("motion (no AI)")
+        assert cfg["detection"]["mode"] == "motion", cfg["detection"]
+        assert ("detection_mode", "motion") in list(fm.events.queue), \
+            list(fm.events.queue)
+        cfg["detection"]["mode"] = "person"
+        app._update_status(time.time(), None)
+        assert app.mode_button.get() == "person (AI)", app.mode_button.get()
         w1 = app._show_overrides()
         assert w1 is app._show_overrides(), "second manager window opened"
         app._ov_win = w1

@@ -33,10 +33,14 @@ phase) and the wake policy are all editable from the settings window
 | `"person"` (default) | the ONNX person model | a chair with a jacket on it is not presence |
 | `"motion"` | pixels that changed | no model at all: nothing loaded, nothing learned about faces; presence = one poll saw `ratio` of the (downscaled) frame change, and it lingers `hold_sec` after the LAST motion, because stillness (reading!) is not absence |
 
-Switching is live: tray → **Detection mode** → the differencer is
-built or the session re-opened on the spot, no restart, and the choice
-persists to the config. Motion mode never touches onnxruntime, so it
-also works before any model/provider story applies.
+Switching is live from two places that mirror each other: the tray's
+**Detection mode** submenu and the **mode** segment on the settings
+window's Detection card (person (AI) / motion (no AI)). Either flips
+the detector on the spot - the differencer is built or the session
+re-opened, no restart - and the choice persists to the config; the
+other control catches up within a tick over the shared config dict.
+Motion mode never touches onnxruntime, so it also works before any
+model/provider story applies.
 
 **Depth/IR sensors:** motion mode is also the depth-sensor path. When
 a sensor exposes a video pin — most Windows Hello IR cameras and

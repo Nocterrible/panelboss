@@ -164,6 +164,15 @@ class SettingsWindow(ctk.CTk):
 
     def _build_detection(self):
         box = self._card(self.left, "Detection")
+        # the mode row leads the card: motion mode has no model at all,
+        # so device and gpu id below it are then mere trivia
+        row = self._row(box, "mode")
+        self.mode_button = ctk.CTkSegmentedButton(
+            row, values=["person (AI)", "motion (no AI)"], height=26,
+            width=230, command=self._detect_mode_changed,
+            **self.skin.segmented_style())
+        self.mode_button.set(self._detect_mode_label(self.cfg))
+        self.mode_button.grid(row=0, column=1, sticky="e")
         row = self._row(box, "device")
         menu = ctk.CTkOptionMenu(row, values=[label for _, label in
                                               DEVICE_KEYS], width=160,
@@ -207,7 +216,8 @@ class SettingsWindow(ctk.CTk):
         hits.set(str(self.cfg["inference"]["min_hits"]))
         hits.grid(row=0, column=1, sticky="e")
         ctk.CTkLabel(box, text="device and gpu id apply immediately; "
-                     "changing the model needs a restart",
+                     "changing the model needs a restart; motion mode "
+                     "loads no model, so device and id are ignored there",
                      font=self.skin.font(10),
                      **self.skin.text_style("sub")).pack(anchor="w", pady=(6, 0))
 
@@ -543,6 +553,20 @@ class SettingsWindow(ctk.CTk):
             self.cfg["inference"]["min_hits"] = int(value)
             self._save()
 
+    @staticmethod
+    def _detect_mode_label(cfg):
+        return ("motion (no AI)"
+                if (cfg.get("detection") or {}).get("mode") == "motion"
+                else "person (AI)")
+
+    def _detect_mode_changed(self, label):
+        mode = "motion" if str(label).startswith("motion") else "person"
+        # the tray and the monitor read THIS dict; the event rebuilds the
+        # detector through the factory (motion: no onnx touched at all)
+        self.cfg["detection"]["mode"] = mode
+        self.monitor.events.put(("detection_mode", mode))
+        self._save()
+
     def _timer_changed(self, section, key, value):
         self.cfg[section][key] = int(round(value))
         # monitor.timers / monitor.recovery are these very dicts:
@@ -718,6 +742,9 @@ class SettingsWindow(ctk.CTk):
         self.reoff_button.configure(
             state="normal" if paused_re else "disabled")
         self._update_blockers()
+        want = self._detect_mode_label(self.cfg)   # a tray flip lands here
+        if self.mode_button.get() != want:      # through the shared cfg
+            self.mode_button.set(want)          # dict; set() fires no command
 
     def _update_blockers(self):
         b = getattr(self.monitor, "blockers", None) or {}
