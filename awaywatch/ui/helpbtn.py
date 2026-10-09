@@ -106,7 +106,7 @@ class Tips:
         tip.geometry("+%d+%d" % (x, y))
         tip.attributes("-topmost", True)        # above borderless windows
         tip.deiconify()
-        for widget in (tip, frame) + frame.winfo_children():
+        for widget in (tip, frame) + tuple(frame.winfo_children()):
             widget.bind("<Enter>", lambda e=None: self._cancel())
             widget.bind("<Leave>", lambda e=None: self.kill())
         self.tip = tip

@@ -353,17 +353,28 @@ def check():
         assert rows["device"].winfo_manager() == "", \
             "the model's knobs hide in motion mode"
         assert rows["motion hold"].winfo_manager() != ""
+        # a TRAY flip looks like THIS from the window's seat: the cfg
+        # dict moved, the segment widget is stale (a direct command
+        # call moves neither, and the tray never touches widgets);
+        # the status tick must correct segment AND rows together
         cfg["detection"]["mode"] = "person"
+        app.mode_button.set("motion (no AI)")
         app._update_status(time.time(), None)
         assert app.mode_button.get() == "person (AI)", app.mode_button.get()
         assert rows["confidence"].winfo_manager() != "", "rows follow"
-        # tabs: exactly one page is ever visible
+        # tabs: exactly one page is ever visible. the probe is the
+        # MANAGED frame: customtkinter's page object delegates pack()
+        # down to _parent_frame, and its own winfo_manager forever
+        # answers "canvas" (measured) - a probe there measures nothing
+        managed = lambda k: app.pages[k]._parent_frame.winfo_manager()
         app._show_tab("power plan")
-        assert app.pages["power plan"].winfo_manager() != ""
-        assert app.pages["detection"].winfo_manager() == ""
-        assert app.pages["general"].winfo_manager() == ""
+        app.update_idletasks()
+        assert managed("power plan") == "pack"
+        assert managed("detection") == "" and managed("general") == ""
         app._show_tab("detection")
-        assert app.pages["detection"].winfo_manager() != ""
+        app.update_idletasks()
+        assert managed("detection") == "pack"
+        assert managed("power plan") == ""
         # tooltips: pin, read, dismiss - the pointer may reach the tip
         app.tips.toggle("hello", app.mode_button)
         app.update_idletasks()
