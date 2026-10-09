@@ -26,12 +26,13 @@ notice the camera blinking and something malicious watching it.
 
 Timers, camera modes (`boot_per_poll` / `always_on`, one choice per
 phase), the wake policy and the overrides below are all editable from
-the settings window — three tabs, one subject each: **detection**
+the settings window — four tabs, one subject each: **detection**
 (mode; the model's knobs or the differencer's — they never share the
 screen; the timers; the live preview beside the camera picker),
-**power plan** (the timer overrides here, the wake behavior, the
-powercfg assistant), **General** (the meta: skin, start minimized,
-autostart, updater, logs).
+**monitor profiles** (named whole-desktop states: panels, modes,
+HDR, window seats — see below), **power plan** (the timer overrides
+here, the wake behavior, the powercfg assistant), **General** (the
+meta: skin, start minimized, autostart, updater, logs).
 Anything with more to say has a "?" beside it: hover for the story,
 click to pin it. The config file holds the same values.
 
@@ -68,6 +69,42 @@ belong to a desk that no longer exists, and nothing is moved.
 Minimized windows, owned popups, cloaked (other virtual desktop) and
 shell windows are left alone; a maximized window is re-maximized on
 its own old monitor; windows closed during the dark are simply gone.
+
+**Named desktops (monitor profiles tab).** A profile is the whole
+desk spelled out: which physical panels (EDID hardware identity —
+never the `\\.\DISPLAYn` slots, which reconnect storms reshuffle)
+are on, where they sit, which is primary, each one's resolution and
+refresh rate, an HDR ask, and a seat for every pinned window. The
+picker opens on the profile last used for the layout it sees;
+*create new...* captures what the desk is doing right now. Applying
+one is the entire lever, in an order this project stole from
+`monitor_control` and its lessons baked in: topology first (already
+correct monitors untouched so a self-apply never blinks; the new
+primary LAST with `CDS_SET_PRIMARY`, because Windows refuses with
+error 87 to give up the display that owns the desktop in the same
+call that hands the desktop over), modes asked only from the
+driver's own offered list with a `CDS_TEST` first, then the HDR
+hotkey, then a **wait until the monitors answer as the profile
+asked** (Windows reports success before the modes have settled —
+measured — so the live fingerprint is the proof, quiet for two
+seconds), and only then the windows: each pinned window is paired
+with its live self by the chosen match mode (`process`, `title`, or
+both — one of the two must sometimes forgive the browser tab that
+renamed itself), moved, and anything the shuffle stranded off-screen
+is rescued on the spot. The one thing a profile cannot fix is a
+panel that is not plugged in — modes can be asked for, a missing
+monitor cannot — so applying onto the wrong monitors refuses with
+the honest sentence and a *try anyway (best effort)* button that
+converts what exists and places windows on whatever desk answered.
+HDR is a keypress with a belief: no reachable API reads it back, so
+the app sends win+alt+b (configurable) only when its stored belief
+disagrees with the profile, flips the belief, and never claims to
+know. The **rescue my lost windows** button (top right, useful far
+beyond profiles) walks every visible, non-minimized, grabbable
+window no screen covers and brings it back to the middle of the
+primary monitor. Store: `%APPDATA%\ICU-PresenceDetector\
+profiles.json`; the automatic off/wake desk-memory above stays the
+nightly path — profiles are the manual lever.
 
 ## Detection modes (`[detection] mode`)
 
@@ -386,6 +423,39 @@ there is no after-every-upgrade swap dance anymore.
   `SetWindowPos`'s `SWP_NOOWNERZORDER` fails with error 1004 whatever
   the z-order slot holds (measured: `None`, `0`, `-1`) — the restore
   move rides on `NOZORDER|NOACTIVATE|SHOWWINDOW` only
+* display-mode changes are a **normal-user right**: the whole profiles
+  feature asks `ChangeDisplaySettingsExW` from a medium-integrity
+  token (measured: `CDS_TEST` → 0 without elevation) — the app still
+  elevates for exactly one thing, the power assistant task
+* a DEVMODE freshly copied from the `EnumDisplaySettingsW` mode list
+  carries an **empty `dmDeviceName`** and every change requested
+  against it answers −2 (the "monitor unplugged itself" illusion);
+  changes base on the *current* mode, falling back to
+  `ENUM_REGISTRY_SETTINGS` for a display that is currently dark
+* asking `ChangeDisplaySettingsExW` to give up the display that owns
+  the desktop, in the same call that hands the desktop over, refuses
+  with error 87 — hence the two-pass apply: enable pass (new primary
+  last, `CDS_SET_PRIMARY`), disable pass, one commit releasing all
+  the `CDS_NORESET` holds
+* mode switches report success **before they land**: everything here
+  believes the read-back, not the return code — profiles poll the
+  live fingerprint until it stops moving for two seconds, and the
+  window pass waits for that proof
+* `SendInput` silently drops events whose `cbSize` is not exactly 40
+  (the x64 `INPUT` size): with a naturally-packed 32-byte keyboard
+  struct the call "succeeds" having injected nothing — a win+alt+b
+  that never happened
+* **HDR state has no readable API** (the monitor_control project
+  exhausted the candidates): profiles therefore keep a *belief* —
+  `"hdr": "on"` in `profiles.json` means "believed on", and the only
+  action ever taken is pressing the configurable hotkey on
+  disagreement
+* config files are the user's own turf (`%APPDATA%`), hand-edited by
+  design, and the app must survive it: both `config.toml` and
+  `profiles.json` are written atomically (temp file + `os.replace`),
+  and one that fails to parse is renamed to `.corrupt-<timestamp>`
+  instead of being silently swallowed by the next save — the
+  half-typed edit stays recoverable
 * **nobody can cheaply ask whether the monitors are lit** - Windows
   only *broadcasts* power transitions; there is no user-mode "display
   on?" call worth its cost. So a fresh instance must never assume on

@@ -289,6 +289,29 @@ if _held:
     print("windows poison CTkToplevel in this process) - close the")
     print("tray app and rerun for the full suite")
     sys.exit(0)
+# the monitor-profiles tab, live in this window: the store goes to a
+# scratch file, and the desk it sees is a fake one (one monitor "T",
+# two windows) - deterministic rows, and no real display is ever
+# asked for anything by this suite
+from awaywatch import profiles as PF
+from awaywatch import wm as WM
+PF.path = lambda dir=None: os.path.join(os.environ.get("TEMP", "."),
+                                        "icu_test_profiles.json")
+for _f in (PF.path(), PF.path() + ".tmp"):
+    try:
+        os.remove(_f)
+    except OSError:
+        pass
+_FAKE_DESK = [{"id": "MONITOR\\T", "short": "T",
+               "gdi": r"\\.\DISPLAY1", "x": 0, "y": 0, "w": 100,
+               "h": 100, "rate": 60, "bits": 32, "primary": True}]
+WM.monitors = lambda: [dict(m) for m in _FAKE_DESK]
+WM.fingerprint = lambda: "TESTFP"
+WM.list_windows = lambda: [{"proc": "a.exe", "title": "one",
+                            "hwnd": 11, "rect": [0, 0, 50, 50],
+                            "zoomed": False}]
+WM.rescue_lost = lambda: []
+WM.place = lambda h, r, z=False: "ok"
 app = W.SettingsWindow(cfg, fm, queue.Queue())
 # the mode pin below calls _save(); keep the live config out of reach
 config.write_config = lambda c, path=None: _saved_wc(
@@ -389,6 +412,53 @@ def check():
         app.update_idletasks()
         assert managed("detection") == "pack"
         assert managed("power plan") == ""
+        # monitor profiles tab, live in this window (fake desk "T",
+        # scratch store): the picker opens on create-new, create
+        # captures the desk, pin rows tag the monitor they sit on,
+        # ticking saves NOW and unticking forgets, the pickers
+        # persist, and the gate reads HARDWARE identity - swap the
+        # panel and the profile names its own disappearance.
+        app._show_tab("monitor profiles")
+        app.update_idletasks()
+        assert managed("monitor profiles") == "pack"
+        assert managed("detection") == ""
+        assert app.profile_menu.get() == PF.NEW, app.profile_menu.get()
+        assert app.rescue_button.winfo_manager() != ""
+        app._prof_name.insert(0, "test desk")
+        app._profile_create()
+        app.update_idletasks()
+        assert app._prof_sel == "test desk"
+        assert "test desk" in app.profile_menu.cget("values")
+        prof = app._prof_data["profiles"]["test desk"]
+        assert prof["fp"] == "TESTFP"
+        assert prof["displays"][0]["short"] == "T"
+        assert app.hdr_menu.get() == "leave alone"
+        assert app.match_menu.get() == "process + title"
+        key = ("a.exe", "one")
+        assert key in app._pin_boxes, list(app._pin_boxes)
+        app._pin_boxes[key].select()
+        app._pin_toggle(key)
+        wins = app._prof_data["profiles"]["test desk"]["wins"]
+        assert wins and wins[0]["monitor"] == "T" and \
+            wins[0]["rect"] == [0, 0, 50, 50], wins
+        assert os.path.exists(PF.path()), "pin did not reach disk"
+        boxes = dict(app._pin_boxes)
+        assert boxes[key].get() == 1, "the row unticked itself"
+        boxes[key].deselect()
+        app._pin_toggle(key)
+        assert app._prof_data["profiles"]["test desk"]["wins"] == []
+        app._prof_hdr("on")
+        app._prof_match("process")
+        assert prof["hdr"] == "on" and prof["match"] == "process"
+        assert PF.default_name(app._prof_data, "TESTFP") == "test desk"
+        assert PF.desk_mismatch(prof, WM.monitors()) == ""
+        _FAKE_DESK[0]["id"] = "MONITOR\\GONE"
+        bad = PF.desk_mismatch(prof, WM.monitors())
+        assert "T" in bad and "GONE" in bad, bad
+        _FAKE_DESK[0]["id"] = "MONITOR\\T"
+        app._rescue_now()
+        assert "off screen" in app._prof_msg, app._prof_msg
+        app._show_tab("detection")
         # tooltips: pin, read, dismiss - the pointer may reach the tip
         app.tips.toggle("hello", app.mode_button)
         app.update_idletasks()

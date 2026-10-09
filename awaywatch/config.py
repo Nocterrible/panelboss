@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -148,6 +149,15 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
         except Exception as e:  # a broken config should not crash the loop
             log.error(f"{path} does not parse ({e}); using stock defaults")
             config = {}
+            # the defaults will be written back at the first save and
+            # swallow a hand-edit with a typo in it - move the
+            # wreckage aside first so the edit stays fixable
+            try:
+                bad = "%s.corrupt-%d" % (path, int(time.time()))
+                os.replace(path, bad)
+                log.error(f"unparsable config kept aside as {bad}")
+            except OSError:
+                log.exception("could not move %s aside", path)
     merged = {}
     for section, stock in DEFAULTS.items():
         merged[section] = dict(stock)
@@ -203,9 +213,12 @@ def write_config(config, path=None):
     if os.path.isdir(path):
         path = os.path.join(path, "config.toml")
     data = {k: v for k, v in config.items() if not k.startswith("_")}
-    with open(path, "w", encoding="utf-8") as f:
+    # atomic: the app saves while it runs, and a crash between
+    # truncate and finish used to leave a half file (or none)
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
         f.write("# ICU Presence Detector config (rewritten, edit to taste)\n")
         f.write(_dumps(data))
+    os.replace(path + ".tmp", path)
     log.debug(f"config saved to {path}")
     return path
 

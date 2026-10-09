@@ -9,9 +9,11 @@ Rules this file lives by:
   camera picker is literally the frame the detector judged
 * camera enumeration boots every index (this machine's virtual camera
   takes up to 16 s), so it always runs off the UI thread
-* three tabs, one scroll page each: what belongs together is
-  detected together (detection + timers + camera), what guards the
-  desk belongs to the power plan (hold overrides, wake behavior, the
+* four tabs, one scroll page each: what belongs together is
+  detected together (detection + timers + camera), named desktops
+  (monitors, modes, HDR, window seats) get their own tab because
+  applying one reshapes the whole desk, what guards the desk
+  belongs to the power plan (hold overrides, wake behavior, the
   powercfg assistant), and what only configures the app itself
   (skin, autostart, logs) is meta - it goes in General
 * anything that needs a paragraph carries a "?" (ui.helpbtn); the
@@ -35,7 +37,7 @@ import cv2
 import customtkinter as ctk
 from PIL import Image
 
-from .. import config
+from .. import config, profiles, wm
 from . import deps, theme
 from .helpbtn import Tips
 from .kofi import kofi_pil
@@ -70,7 +72,7 @@ TIMER_SPECS = [          # section, key, label, min, max, step, help
 DEVICE_KEYS = [("auto", "auto"), ("cpu", "CPU"), ("cuda", "CUDA GPU")]
 DEVICE_BY_LABEL = dict((label, key) for key, label in DEVICE_KEYS)
 
-TABS = ("detection", "power plan", "general")
+TABS = ("detection", "monitor profiles", "power plan", "general")
 
 PERSON_ROWS = ("device", "cuda gpu id", "confidence", "min hits")
 MOTION_ROWS = ("frame changes", "pixel delta", "motion hold")
@@ -132,6 +134,57 @@ TIPS = {
                        "saved positions belong to another desk and nothing "
                        "is moved. Minimized windows and popups are left "
                        "alone.",
+    "profile_picker": "a profile is the whole desk spelled out: which "
+                      "physical monitors (by hardware identity, so "
+                      "renumbered slots fool nothing) are on, where "
+                      "they sit, which is primary, each one's "
+                      "resolution and refresh rate, the HDR ask, and "
+                      "where every pinned window belongs. the picker "
+                      "opens on the profile last used for the layout it "
+                      "sees right now; 'create new...' copies what the "
+                      "desk is doing and lets you name it. the one "
+                      "thing a profile cannot fix is a monitor that is "
+                      "not plugged in - modes can be asked for, a "
+                      "missing panel cannot.",
+    "profile_rescue": "the panic button: every visible window that no "
+                      "screen covers - the classic victim of a "
+                      "resolution change made while it sat on the "
+                      "monitor that just left - comes back to the "
+                      "middle of the primary monitor. minimized "
+                      "windows, dialogs and windows living on other "
+                      "virtual desktops are left alone.",
+    "profile_match": "how a saved window finds its live self when the "
+                     "profile runs. 'process' drags any window of that "
+                     "program into the saved place - it catches the "
+                     "browser tab that renamed itself, but a second "
+                     "editor window may get shoved too. 'title' is the "
+                     "gentle version and misses exactly that renamed "
+                     "tab. 'process + title' is the middle road: both "
+                     "must agree.",
+    "profile_hdr": "windows has no api worth the name that reads HDR "
+                   "back - all there is, is the win+alt+b hotkey, "
+                   "which toggles. the app therefore keeps its own "
+                   "belief about the current state and presses the key "
+                   "only when the profile wants the opposite of what "
+                   "it believes. the belief can drift when you toggle "
+                   "by hand; 'toggle' is the honest option when you "
+                   "only care that it changes.",
+    "profile_apply": "one click reshapes the desk: topology first (new "
+                     "primary last - windows refuses to move the "
+                     "desktop in the same call that hands it over), "
+                     "modes asked only from the driver's own list, the "
+                     "hotkey where the HDR ask disagrees with the "
+                     "belief, then a wait until the monitors ANSWER as "
+                     "the profile asked (windows reports success "
+                     "before the modes have settled - measured), and "
+                     "only then the windows. anything the shuffle "
+                     "stranded off-screen is rescued on the spot.",
+    "profile_pins": "tick a window to save where it sits RIGHT NOW "
+                    "(monitor, corner, size); untick to forget it. "
+                    "rows marked '(closed)' were saved earlier and "
+                    "keep their seat while the program is shut - the "
+                    "next time it opens, the profile knows where it "
+                    "belongs.",
     "camera": "which camera the frames come from. Opening every index "
                "is slow (the virtual camera alone takes 16 s), so the "
                "list fills in after the window opens and rescans on "
@@ -229,6 +282,7 @@ class SettingsWindow(ctk.CTk):
                 scrollbar_button_color=self.skin.button,
                 scrollbar_fg_color=self.skin.panel)
         self._build_detection(self.pages["detection"])
+        self._build_profiles(self.pages["monitor profiles"])
         self._build_power(self.pages["power plan"])
         self._build_general(self.pages["general"])
         self._show_tab(self._tab)
@@ -582,6 +636,264 @@ class SettingsWindow(ctk.CTk):
                                          anchor="w",
                                          **self.skin.text_style("sub"))
         self.preview_info.pack(anchor="w", padx=14, pady=(0, 10))
+
+    # ---------------------------------------------------- monitor profiles --
+    def _build_profiles(self, page):
+        col = ctk.CTkFrame(page, width=640, fg_color="transparent")
+        col.pack(side="left", fill="y")
+        box = self._card(col, "whole-desktop profiles",
+                         "one profile is the desk spelled out: the "
+                         "panels by hardware identity, their places, "
+                         "modes and rates, HDR, and the windows that "
+                         "belong on it. applying re-shapes everything, "
+                         "waits until the monitors ANSWER as asked, "
+                         "and only then moves the windows")
+        row = self._row(box, "profile", TIPS["profile_picker"])
+        self._prof_data = profiles.load()
+        self._prof_msg = ""
+        names = [profiles.NEW] + sorted(self._prof_data["profiles"])
+        start = profiles.default_name(self._prof_data,
+                                      wm.fingerprint()) or profiles.NEW
+        self.profile_menu = ctk.CTkOptionMenu(
+            row, values=names, width=220, command=self._profile_picked,
+            **self.skin.menu_style())
+        self.profile_menu.set(start)
+        self.profile_menu.grid(row=0, column=1, sticky="e")
+        self.rescue_button = ctk.CTkButton(
+            row, text="rescue my lost windows", width=170,
+            command=self._rescue_now, **self.skin.secondary())
+        self.rescue_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        self.tips.button(row, TIPS["profile_rescue"]).grid(
+            row=0, column=3, padx=(4, 0))
+        self._prof_sel = start
+        self._prof_detail = ctk.CTkFrame(box, fg_color="transparent")
+        self._prof_detail.pack(fill="x", pady=(4, 0))
+        self._profiles_render()
+
+    def _profiles_render(self):
+        """The detail pane, rebuilt whole on every change: the lists
+        of open windows and live monitor states are a snapshot, and
+        a half-updated mix of old and new lines is worse than two
+        extra milliseconds of drawing."""
+        for w in self._prof_detail.winfo_children():
+            w.destroy()
+        self._pin_boxes = {}
+        prof = self._prof_data["profiles"].get(self._prof_sel)
+        if prof is None:                          # the create-new pane
+            line = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+            line.pack(fill="x")
+            self._prof_name = ctk.CTkEntry(
+                line, width=240, font=self.skin.font(12),
+                placeholder_text="new profile name",
+                fg_color=self.skin.field_bg, border_width=1,
+                border_color=self.skin.border,
+                corner_radius=self.skin.radius)
+            self._prof_name.pack(side="left")
+            ctk.CTkButton(line, text="capture this desktop", width=150,
+                          command=self._profile_create,
+                          **self.skin.secondary()).pack(side="left",
+                                                        padx=(6, 0))
+            self._prof_status = ctk.CTkLabel(
+                self._prof_detail, text=self._prof_msg,
+                font=self.skin.font(11), wraplength=560, justify="left",
+                anchor="w", **self.skin.text_style("sub"))
+            self._prof_status.pack(anchor="w", pady=(6, 0))
+            return
+
+        mons = wm.monitors()
+        gate = profiles.desk_mismatch(prof, mons)
+        desk = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        desk.pack(fill="x")
+        for d in prof["displays"]:
+            ctk.CTkLabel(
+                desk, text="%-9s %s %dx%d@%d   at %d,%d%s%s" % (
+                    d["short"],
+                    "off " if not d.get("on", True) else "on  ",
+                    d["w"], d["h"], d.get("rate") or 0,
+                    d["x"], d["y"],
+                    "   PRIMARY" if d.get("primary") else "",
+                    "" if d.get("on", True) else "  (dark)"),
+                font=self.skin.font(11),
+                **self.skin.text_style("sub")).pack(anchor="w")
+        warn = ctk.CTkLabel(
+            self._prof_detail,
+            text=(gate + " - applying anyway is a gamble, best "
+                  "effort below") if gate
+            else "this desk matches the profile",
+            font=self.skin.font(11), wraplength=560, justify="left",
+            anchor="w", **self.skin.text_style("sub"))
+        warn.pack(anchor="w", pady=(4, 0))
+
+        opts = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        opts.pack(fill="x", pady=(2, 0))
+        row = self._row(opts, "window matching", TIPS["profile_match"])
+        self.match_menu = ctk.CTkOptionMenu(
+            row, values=list(profiles.MATCH_MODES), width=150,
+            command=self._prof_match, **self.skin.menu_style())
+        self.match_menu.set(prof.get("match", profiles.MATCH_MODES[1]))
+        self.match_menu.grid(row=0, column=1, sticky="e")
+        row = self._row(opts, "hdr", TIPS["profile_hdr"])
+        self.hdr_menu = ctk.CTkOptionMenu(
+            row, values=list(profiles.HDR_ASKS), width=130,
+            command=self._prof_hdr, **self.skin.menu_style())
+        self.hdr_menu.set(prof.get("hdr", "leave alone"))
+        self.hdr_menu.grid(row=0, column=1, sticky="e")
+        btns = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        btns.pack(anchor="w", pady=(6, 0))
+        ctk.CTkButton(btns, text="apply profile", width=130,
+                      command=lambda: self._profile_apply(False),
+                      **self.skin.primary()).pack(side="left")
+        if gate:
+            ctk.CTkButton(btns, text="try anyway (best effort)",
+                          width=180,
+                          command=lambda: self._profile_apply(True),
+                          **self.skin.secondary()).pack(side="left",
+                                                        padx=(6, 0))
+
+        # the window list: open windows first (a tick marks the ones
+        # the profile already pins), then the closed-but-pinned ones
+        # so a seat survives the program being shut
+        head = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        head.pack(fill="x", pady=(10, 0))
+        ctk.CTkLabel(head, text="windows on this profile",
+                     font=self.skin.font(13, "bold"),
+                     **self.skin.text_style()).pack(side="left")
+        self.tips.button(head, TIPS["profile_pins"]).pack(
+            side="left", padx=(6, 0))
+        ctk.CTkButton(head, text="pin everything open", width=150,
+                      command=self._prof_pin_all,
+                      **self.skin.secondary()).pack(side="left",
+                                                   padx=(8, 0))
+        ctk.CTkButton(head, text="re-scan", width=80,
+                      command=self._prof_rescan,
+                      **self.skin.secondary()).pack(side="left",
+                                                   padx=(6, 0))
+        listf = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        listf.pack(fill="x")
+        live = profiles.windows_now()
+        saved = {(w["proc"], w["title"]): w for w in prof["wins"]}
+        for l in live:
+            self._prof_row(listf, l["proc"], l["title"], l,
+                           saved.get((l["proc"], l["title"])))
+        for w in prof["wins"]:            # pinned but closed: the
+            if (w["proc"], w["title"]) not in \
+                    {(l["proc"], l["title"]) for l in live}:
+                self._prof_row(listf, w["proc"], w["title"], None, w)
+        self._prof_status = ctk.CTkLabel(
+            self._prof_detail, text=self._prof_msg,
+            font=self.skin.font(11), wraplength=560, justify="left",
+            anchor="w", **self.skin.text_style("sub"))
+        self._prof_status.pack(anchor="w", pady=(6, 0))
+
+    def _prof_row(self, parent, proc, title, live, saved):
+        key = (proc, title)
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(anchor="w", fill="x")
+        box = ctk.CTkCheckBox(
+            row, text=(title or proc)[:52] + ("  (closed)"
+                                              if live is None else ""),
+            font=self.skin.font(12), command=lambda k=key:
+            self._pin_toggle(k),
+            checkbox_width=18, checkbox_height=18,
+            border_color=self.skin.border,
+            fg_color=self.skin.accent, hover_color=self.skin.accent)
+        box.pack(side="left")
+        if saved:
+            box.select()
+        note = ""
+        if live:
+            note = "now %s %dx%d at %d,%d on %s" % (
+                proc[:14], live["rect"][2], live["rect"][3],
+                live["rect"][0], live["rect"][1],
+                live["monitor"] or "no monitor")
+        if saved:
+            note = (note + "     " if note else "") + \
+                "pinned %dx%d at %d,%d on %s" % (
+                    saved["rect"][2], saved["rect"][3],
+                    saved["rect"][0], saved["rect"][1],
+                    saved.get("monitor") or "?")
+        ctk.CTkLabel(row, text=note, font=self.skin.font(10),
+                     **self.skin.text_style("sub")).pack(
+            side="left", padx=(8, 0))
+        self._pin_boxes[key] = box
+        return row
+
+    # ---- profiles: handlers ---------------------------------------------
+    def _profile_picked(self, name):
+        self._prof_sel = name
+        self._prof_msg = ""
+        self._profiles_render()
+
+    def _profile_create(self):
+        name = (self._prof_name.get() or "").strip()
+        if not name:
+            self._prof_msg = "give it a name first"
+            self._prof_status.configure(text=self._prof_msg)
+            return
+        profiles.create(self._prof_data, name)
+        self.profile_menu.configure(values=[profiles.NEW] + sorted(
+            self._prof_data["profiles"]))
+        self.profile_menu.set(name)
+        self._profile_picked(name)
+
+    def _profile_apply(self, force=False):
+        # the reshuffle takes seconds (modes, settle-poll, windows),
+        # and Tk must not sit frozen through it
+        name, data = self._prof_sel, self._prof_data
+        self._prof_msg = "reshaping the desktop..."
+        self._prof_status.configure(text=self._prof_msg)
+
+        def work():
+            ok, text = profiles.apply(data, name, best_effort=force)
+            log.info("profile '%s' %s: %s", name,
+                     "applied" if ok else "refused", text)
+
+            def done():
+                self._prof_msg = text
+                self._profiles_render()
+            self.after(0, done)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _rescue_now(self):
+        brought = wm.rescue_lost()
+        self._prof_msg = ("brought back: %s" % ", ".join(brought)
+                          if brought else "nothing was off screen")
+        self._profiles_render()
+
+    def _prof_match(self, mode):
+        self._prof_data["profiles"][self._prof_sel]["match"] = mode
+        profiles.save(self._prof_data)
+
+    def _prof_hdr(self, ask):
+        self._prof_data["profiles"][self._prof_sel]["hdr"] = ask
+        profiles.save(self._prof_data)
+
+    def _prof_rescan(self):
+        self._prof_msg = ""
+        self._profiles_render()
+
+    def _prof_pin_all(self):
+        for w in profiles.windows_now():
+            profiles.pin(self._prof_data, self._prof_sel, w)
+        self._prof_msg = "pinned every window that is open"
+        self._profiles_render()
+
+    def _pin_toggle(self, key):
+        proc, title = key
+        box = self._pin_boxes.get(key)
+        if box is None:
+            return
+        if box.get():
+            live = next((w for w in profiles.windows_now()
+                         if (w["proc"], w["title"]) == key), None)
+            if live:
+                profiles.pin(self._prof_data, self._prof_sel, live)
+                self._prof_msg = "pinned: %s" % (title or proc)[:60]
+        else:
+            profiles.unpin(self._prof_data, self._prof_sel, proc,
+                           title)
+            self._prof_msg = "forgot: %s" % (title or proc)[:60]
+        self._profiles_render()
 
     # --------------------------------------------------------- power plan --
     def _build_power(self, page):

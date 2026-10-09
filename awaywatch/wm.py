@@ -44,7 +44,13 @@ from ctypes import wintypes
 log = logging.getLogger("wm")
 
 u32 = ctypes.windll.user32
+k32 = ctypes.windll.kernel32
 dwm = ctypes.windll.dwmapi
+
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+LOST_EDGE = 30                 # the monitor_control rescue's floor:
+                               # under this a window is not something
+                               # a person could grab anyway
 
 SWP_NOZORDER = 0x4
 SWP_NOACTIVATE = 0x10
@@ -177,10 +183,25 @@ _TYPED = {
                      ctypes.c_int, ctypes.c_int, ctypes.c_int,
                      ctypes.c_uint),
     "GetWindowRect": (ctypes.c_void_p, ctypes.POINTER(RECT)),
+    "GetWindowTextW": (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int),
+    "GetWindowTextLengthW": (ctypes.c_void_p, ctypes.c_wchar_p,
+                             ctypes.c_int),
+    "GetWindowThreadProcessId": (ctypes.c_void_p,
+                                 ctypes.POINTER(wintypes.DWORD)),
 }
 for _name, _args in _TYPED.items():
     getattr(u32, str(_name)).argtypes = list(_args)
 del _name, _args
+
+k32.OpenProcess.restype = ctypes.c_void_p
+k32.OpenProcess.argtypes = [wintypes.DWORD, ctypes.c_bool, wintypes.DWORD]
+k32.QueryFullProcessImageNameW.restype = ctypes.c_bool
+k32.QueryFullProcessImageNameW.argtypes = [ctypes.c_void_p,
+                                           wintypes.DWORD,
+                                           ctypes.c_wchar_p,
+                                           ctypes.POINTER(wintypes.DWORD)]
+k32.CloseHandle.restype = ctypes.c_bool
+k32.CloseHandle.argtypes = [ctypes.c_void_p]
 
 u32.GetAncestor.restype = ctypes.c_void_p
 u32.GetWindowLongW.restype = ctypes.c_long
@@ -212,6 +233,41 @@ def _cloaked(hwnd):
                                            # no answer = not cloaked
 
 
+def win_title(hwnd):
+    n = u32.GetWindowTextLengthW(hwnd, None, 0)
+    if n <= 0:
+        return ""
+    buf = ctypes.create_unicode_buffer(min(n, 200) + 1)
+    u32.GetWindowTextW(hwnd, buf, len(buf))
+    return buf.value
+
+
+def proc_name(hwnd):
+    """The exe's file name ("opera.exe"), which is the identity a
+    profile matches on - hwnds die, pids are recycled, the name
+    survives relaunches."""
+    try:
+        pid = wintypes.DWORD()
+        if not u32.GetWindowThreadProcessId(hwnd, byref(pid)):
+            return ""
+        h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False,
+                            pid.value)
+        if not h:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(4096)
+            n = wintypes.DWORD(len(buf))
+            if not k32.QueryFullProcessImageNameW(h, 0, buf, byref(n)):
+                return ""
+            return buf.value.split("\\")[-1].lower()
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        return ""                          # a window dying mid-walk;
+                                           # a profile entry with no
+                                           # proc is simply unmatched
+
+
 def true_rect(hwnd):
     """(x, y, w, h) in the desktop's pixel coordinates. pythonw runs
     DPI-aware, so GetWindowRect answers in real pixels - the trap
@@ -240,6 +296,8 @@ def _facts(hwnd):
     return {
         "hwnd": hwnd,
         "rect": true_rect(hwnd),
+        "title": win_title(hwnd),
+        "proc": proc_name(hwnd),
         "visible": bool(u32.IsWindowVisible(hwnd)),
         "owned": u32.GetAncestor(hwnd, GA_ROOT) != hwnd,
         "iconic": bool(u32.IsIconic(hwnd)),
@@ -267,15 +325,21 @@ def _toplevel_facts():
     return out
 
 
-def fingerprint():
-    """Topology as one string: every attached monitor's hardware
-    identity, place and size. The identity is the MONITOR DeviceID
-    (EDID-derived serial/model), not the \\.\DISPLAYn slot - slots
-    get reshuffled by reconnect storms, the panel's own ID does not.
-    Reconnecting the same monitor reproduces the string exactly;
-    swapping or unplugging one for good changes it, and then the
-    saved rects belong to a desk that no longer exists."""
-    parts = []
+def _short_id(monitor_id):
+    """"MONITOR\\AOC2790\\{...}\\0009" -> "AOC2790": the model token is
+    the only part of the EDID path a human can read."""
+    parts = str(monitor_id).split("\\")
+    if len(parts) >= 2 and parts[0].upper() == "MONITOR":
+        return parts[1]
+    return str(monitor_id)[:24]
+
+
+def monitors():
+    """Every attached monitor as {id, short, gdi, x, y, w, h, rate,
+    bits, primary}. The identity is the MONITOR DeviceID (EDID-derived
+    serial/model), not the \\.\DISPLAYn slot - slots get reshuffled
+    by reconnect storms, the panel's own ID does not."""
+    out = []
     i = 0
     while True:
         d = DISPLAY_DEVICEW()
@@ -298,12 +362,333 @@ def fingerprint():
                                         ENUM_CURRENT_SETTINGS,
                                         byref(dm)):
             continue                       # no current mode to place
-        parts.append("%s@%d,%d %dx%d%s" % (   # it by; fail open
-            monitor_id, dm.display.dmPosition.x,
-            dm.display.dmPosition.y, dm.dmPelsWidth, dm.dmPelsHeight,
-            "P" if d.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE
-            else ""))
-    return "|".join(sorted(parts))
+        out.append({"id": monitor_id, "short": _short_id(monitor_id),
+                    "gdi": d.DeviceName,
+                    "x": dm.display.dmPosition.x,
+                    "y": dm.display.dmPosition.y,
+                    "w": int(dm.dmPelsWidth), "h": int(dm.dmPelsHeight),
+                    "rate": int(dm.dmDisplayFrequency),
+                    "bits": int(dm.dmBitsPerPel),
+                    "primary": bool(d.StateFlags
+                                    & DISPLAY_DEVICE_PRIMARY_DEVICE)})
+    return out
+
+
+def monitor_for(rect):
+    """The monitor owning a rect's centre - for labelling profile
+    rows, nothing leans on the answer."""
+    if not rect:
+        return None
+    cx, cy = rect[0] + rect[2] // 2, rect[1] + rect[3] // 2
+    for m in monitors():
+        if m["x"] <= cx < m["x"] + m["w"] and m["y"] <= cy < m["y"] + m["h"]:
+            return m
+    return None
+
+
+def fingerprint():
+    """Topology as one string: every monitor's hardware ID, place
+    and size. Reconnecting the same monitor reproduces it exactly;
+    swapping or unplugging one for good changes it - and then the
+    saved rects belong to a desk that no longer exists."""
+    return "|".join(sorted(
+        "%s@%d,%d %dx%d%s" % (m["id"], m["x"], m["y"], m["w"], m["h"],
+                              "P" if m["primary"] else "")
+        for m in monitors()))
+
+
+def list_windows():
+    """Every window the app dares to move (wanted's rules), with the
+    identity fields a profile needs."""
+    return [w for w in _toplevel_facts() if wanted(w)]
+
+
+def place(hwnd, rect, zoomed=False):
+    """Public wrapper for the move logic, so profiles do not import
+    the private path."""
+    return _move({"hwnd": hwnd, "rect": tuple(rect),
+                  "zoomed": bool(zoomed)})
+
+
+# --------------------------------------------------- desktop application --
+# The procedures below are stolen from the monitor_control project
+# (both halves of it), with its measured lessons baked in: the driver
+# is the truth about sizes (the display-config API reported widths
+# that disagreed with the desktop - measured), the current DEVMODE
+# must be the base of any change (one copied from the mode list has
+# an empty dmDeviceName and every request then comes back -2), a
+# CDS_TEST ask costs nothing and saves a blink, Windows reports
+# success BEFORE the modes settle (so everything is read back), and
+# it refuses with 87 to drop the display that owns the desktop in
+# the same call that hands the desktop over.
+ENUM_REGISTRY_SETTINGS = -2
+CDS_UPDATEREGISTRY = 0x01
+CDS_TEST = 0x02
+CDS_SET_PRIMARY = 0x10
+CDS_NORESET = 0x10000000
+DM_POSITION = 0x20
+DM_PELSWIDTH = 0x80000
+DM_PELSHEIGHT = 0x40000
+DM_DISPLAYFREQUENCY = 0x400000
+DISP_CHANGE_SUCCESSFUL = 0
+DISP_CHANGE_RESTART = 1
+
+u32.ChangeDisplaySettingsExW.argtypes = [
+    ctypes.c_wchar_p, ctypes.POINTER(DEVMODEW), ctypes.c_void_p,
+    wintypes.DWORD, ctypes.c_void_p]
+u32.ChangeDisplaySettingsExW.restype = ctypes.c_long
+
+
+def current_mode(gdi):
+    """The DEVMODE to base a change on. A turned-off monitor has no
+    current mode, and one copied fresh from the mode list carries an
+    empty dmDeviceName (every non-trivial request then answers -2,
+    the "monitor unplugged itself" illusion) - so: current first,
+    registry second, both with the name the driver recognises."""
+    dm = DEVMODEW()
+    dm.dmSize = sizeof(dm)
+    if u32.EnumDisplaySettingsW(gdi, ENUM_CURRENT_SETTINGS, byref(dm)) \
+            and dm.dmPelsWidth:
+        return dm
+    if u32.EnumDisplaySettingsW(gdi, ENUM_REGISTRY_SETTINGS, byref(dm)):
+        return dm
+    return None
+
+
+def offered_modes(gdi, limit=400):
+    """The modes the driver offers, spelled "WxH@Hz", driver order,
+    deduplicated - the profile UI shows this list next to each
+    monitor so a user cannot ask for a mode the panel will not
+    take."""
+    out = []
+    for i in range(limit):
+        dm = DEVMODEW()
+        dm.dmSize = sizeof(dm)
+        if not u32.EnumDisplaySettingsW(gdi, i, byref(dm)):
+            break
+        if not dm.dmPelsWidth:
+            continue
+        name = "%dx%d@%d" % (dm.dmPelsWidth, dm.dmPelsHeight,
+                             dm.dmDisplayFrequency)
+        if name not in out:
+            out.append(name)
+    return out
+
+
+def set_mode(gdi, w, h, rate):
+    """Size (and rate when asked) on one monitor, the Modes.Set
+    procedure: current DEVMODE as the base, the mode must be on the
+    driver's list (an unlisted one answers -2 like a dead cable),
+    CDS_TEST before touching the screen, believe the driver over the
+    return code."""
+    dm = current_mode(gdi)
+    if dm is None:
+        return "the driver will not say what %s is set to" % gdi
+    if int(dm.dmPelsWidth) == w and int(dm.dmPelsHeight) == h and \
+            (rate <= 0 or int(dm.dmDisplayFrequency) == rate):
+        return "already %dx%d@%d" % (w, h, dm.dmDisplayFrequency)
+    want = "%dx%d@%d" % (w, h, rate)
+    if rate > 0 and want not in offered_modes(gdi):
+        return "%s is not among the modes this monitor offers" % want
+    dm.dmPelsWidth = w
+    dm.dmPelsHeight = h
+    dm.dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT
+    if rate > 0:
+        dm.dmDisplayFrequency = rate
+        dm.dmFields |= DM_DISPLAYFREQUENCY
+    if u32.ChangeDisplaySettingsExW(gdi, byref(dm), None, CDS_TEST,
+                                    None) != DISP_CHANGE_SUCCESSFUL:
+        return "%s is on the list but the driver will not switch" % want
+    rc = u32.ChangeDisplaySettingsExW(gdi, byref(dm), None, 0, None)
+    if rc == DISP_CHANGE_RESTART:          # the keep-settings dialog
+        u32.ChangeDisplaySettingsExW(None, None, None, 0, None)
+    time.sleep(0.9)                        # the mode lands async
+    return "asked %s (driver answer %d)" % (want, rc)
+
+
+def apply_layout(entries):
+    """Turn the profile's display plan on the desk: enable pass
+    first (new primary LAST so it can steal 0,0 cleanly, CDS_SET_
+    PRIMARY), then the disable pass (0x0 at 0,0), then one commit;
+    everything CDS_UPDATEREGISTRY | CDS_NORESET. entries:
+    [{gdi, on, primary, x, y, w, h, rate}] - devices already in the
+    wanted state are skipped, so a profile applied onto its own desk
+    never blinks (the switcher's rule: a change nobody asked for is
+    still a change)."""
+    lines = []
+    wanted = [e for e in entries if e.get("on", True)]
+    disabled = [e for e in entries if not e.get("on", True)]
+    if not wanted:
+        return False, ["no monitor would stay on - refusing"]
+    primary = next((e["gdi"] for e in wanted if e.get("primary")),
+                   wanted[0]["gdi"])
+
+    def already(dev, want_on):
+        now = {m["gdi"]: m for m in monitors()}
+        cur = now.get(dev)
+        if want_on:
+            if cur is None:
+                return False
+            e = next(x for x in entries if x["gdi"] == dev)
+            px = 0 if dev == primary else int(e["x"])
+            py = 0 if dev == primary else int(e["y"])
+            return (cur["w"] == int(e["w"]) and cur["h"] == int(e["h"])
+                    and cur["x"] == px and cur["y"] == py
+                    and (dev != primary or cur["primary"]))
+        return cur is None                 # already off
+
+    pend = [e for e in wanted if not already(e["gdi"], True)]
+    order = [e for e in pend if e["gdi"] != primary] + \
+            [e for e in pend if e["gdi"] == primary]
+    for e in order:
+        dm = current_mode(e["gdi"])
+        base = dm if dm is not None else DEVMODEW()
+        base.dmSize = sizeof(base)
+        base.dmDriverExtra = 0
+        base.dmPelsWidth = int(e["w"])
+        base.dmPelsHeight = int(e["h"])
+        if e.get("rate"):
+            base.dmDisplayFrequency = int(e["rate"])
+        base.display.dmPosition.x = (0 if e["gdi"] == primary
+                                     else int(e["x"]))
+        base.display.dmPosition.y = (0 if e["gdi"] == primary
+                                     else int(e["y"]))
+        base.dmFields = DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT
+        if e.get("rate"):
+            base.dmFields |= DM_DISPLAYFREQUENCY
+        flags = CDS_UPDATEREGISTRY | CDS_NORESET
+        if e["gdi"] == primary:
+            flags |= CDS_SET_PRIMARY
+        rc = u32.ChangeDisplaySettingsExW(e["gdi"], byref(base), None,
+                                          flags, None)
+        lines.append("enable %s %dx%d@%d -> %d" % (
+            e["gdi"], e["w"], e["h"], e.get("rate") or 0, rc))
+    for e in disabled:
+        if already(e["gdi"], False):
+            continue
+        dm = DEVMODEW()
+        dm.dmSize = sizeof(dm)
+        dm.dmFields = DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT
+        dm.dmPelsWidth = 0
+        dm.dmPelsHeight = 0
+        rc = u32.ChangeDisplaySettingsExW(e["gdi"], byref(dm), None,
+                                          CDS_UPDATEREGISTRY
+                                          | CDS_NORESET, None)
+        lines.append("disable %s -> %d" % (e["gdi"], rc))
+    rc = u32.ChangeDisplaySettingsExW(None, None, None, 0, None)
+    lines.append("commit -> %d" % rc)
+    return rc in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART), lines
+
+
+# ------------------------------------------------------------- HDR ------
+# The C# project's honest conclusion: there is no API it could reach
+# that reads HDR back, only the Win+Alt+B hotkey (which has moved
+# between Windows versions, hence the configurable key), so the app
+# only ever SENDS the key and keeps its own belief about the state.
+# Same deal here: press when the belief disagrees with the profile,
+# flip the belief, never claim to know.
+KEYEVENTF_KEYUP = 0x0002
+INPUT_KEYBOARD = 1
+VK = {"win": 0x5B, "windows": 0x5B, "alt": 0x12, "ctrl": 0x11,
+      "control": 0x11, "shift": 0x10}
+
+
+class KEYBDINPUT(ctypes.Structure):
+    """The x64 INPUT for a keyboard event: 40 bytes exactly (their
+    C# pins it with Size=40) - a smaller struct is not INPUT-shaped
+    and SendInput refuses it in silence."""
+    _fields_ = [("type", wintypes.UINT), ("pad", wintypes.UINT),
+                ("vk", wintypes.USHORT), ("scan", wintypes.USHORT),
+                ("flags", wintypes.UINT), ("time", wintypes.UINT),
+                ("extra", ctypes.c_ulonglong),
+                ("tail", ctypes.c_ulonglong)]
+
+
+assert ctypes.sizeof(KEYBDINPUT) == 40, "INPUT drift, SendInput is blind"
+
+
+def press_keys(combination):
+    """Press a combination ("win+alt+b"): every key down, then up in
+    reverse, one SendInput batch. Returns the trouble string (empty
+    = the batch was accepted - whether HDR followed is, again,
+    unknowable from here)."""
+    keys = []
+    for part in combination.lower().replace("-", "+").split("+"):
+        part = part.strip()
+        if not part:
+            continue
+        if part in VK:
+            keys.append(VK[part])
+        elif len(part) == 1 and part.isalnum():
+            keys.append(ord(part.upper()))
+        elif part.startswith("f") and len(part) <= 3 \
+                and part[1:].isdigit() and 1 <= int(part[1:]) <= 24:
+            keys.append(0x70 + int(part[1:]) - 1)
+    if not keys:
+        return "'%s' is not a key combination like win+alt+b" \
+            % combination
+    batch = (KEYBDINPUT * (len(keys) * 2))()
+    for i, vk in enumerate(keys):
+        batch[i] = KEYBDINPUT(INPUT_KEYBOARD, 0, vk, 0, 0, 0, 0)
+        batch[len(keys) * 2 - 1 - i] = KEYBDINPUT(
+            INPUT_KEYBOARD, 0, vk, 0, KEYEVENTF_KEYUP, 0, 0)
+    u32.SendInput.argtypes = [wintypes.UINT, ctypes.c_void_p,
+                              ctypes.c_int]
+    n = u32.SendInput(len(batch), batch, sizeof(KEYBDINPUT))
+    if n != len(batch):
+        return "windows took %d of %d key events" % (n, len(batch))
+    return ""
+
+
+# ----------------------------------------------------------- rescue -----
+def lost(rect, mons):
+    """Pure decision (testable): a rectangle no monitor intersects
+    belongs to a window nobody can reach. Stolen from
+    monitor_control's WindowRescue, disqualifiers and all."""
+    x, y, cx, cy = rect
+    for m in mons:
+        if (x < m["x"] + m["w"] and x + cx > m["x"]
+                and y < m["y"] + m["h"] and y + cy > m["y"]):
+            return False
+    return True
+
+
+def rescue_lost():
+    """Every visible, not-minimized, grabbable window that no screen
+    covers comes back to the middle of the primary monitor (the C#
+    original returns it to the nearest one; the ask here was
+    explicitly "center of the primary"). Cloaked (other virtual
+    desktop) windows are the port's one addition: their coordinates
+    are honest, they just live on another desktop - dragging them
+    across is not a rescue."""
+    mons = monitors()
+    if not mons:
+        return []
+    prim = next((m for m in mons if m["primary"]), mons[0])
+    brought = []
+    for w in _toplevel_facts():
+        if not w["visible"] or w["iconic"] or w["cloaked"] \
+                or w["furniture"]:
+            continue
+        r = w["rect"]
+        if not r or r[2] < LOST_EDGE or r[3] < LOST_EDGE:
+            continue
+        if not lost(r, mons):
+            continue
+        x, y, cx, cy = r
+        cx = min(cx, prim["w"])
+        cy = min(cy, prim["h"])
+        nx = prim["x"] + max(0, (prim["w"] - cx) // 2)
+        ny = prim["y"] + max(0, (prim["h"] - cy) // 2)
+        if w["zoomed"]:
+            u32.ShowWindow(w["hwnd"], SW_RESTORE)
+        if u32.SetWindowPos(w["hwnd"], None, nx, ny, cx, cy,
+                            SWP_NOACTIVATE | SWP_SHOWWINDOW):
+            brought.append((w["title"] or w["proc"] or
+                            "(untitled)").strip()[:48])
+    log.info("rescue: %s", ("brought back " + ", ".join(brought))[:200]
+             if brought else "nothing was off screen")
+    return brought
 
 
 def snapshot():
