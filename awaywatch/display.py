@@ -324,10 +324,20 @@ def wake(timeout=2.0):
     return True
 
 
-def keep_awake(enabled=True):
-    """Hold the system up (no sleep) while polling with dark screens."""
-    k32.SetThreadExecutionState(ES_CONTINUOUS |
-                                (ES_SYSTEM_REQUIRED if enabled else 0))
+def set_hold(display=False, system=False):
+    """Windows' own idle timers, suppressed exactly as the policy
+    asks: DISPLAY resets/holds off the screen timeout, SYSTEM the
+    sleep timeout (ES_DISPLAY alone still lets the box sleep under
+    a lit screen). Requests are per-thread and die with the process,
+    so a crash hands the machine back to the power plan - fail open
+    by construction. Every caller lives on the monitor loop thread;
+    one owner keeps the policy honest."""
+    flags = ES_CONTINUOUS
+    if display:
+        flags |= ES_DISPLAY_REQUIRED
+    if system:
+        flags |= ES_SYSTEM_REQUIRED
+    k32.SetThreadExecutionState(flags)
 
 
 def get_idle_time():

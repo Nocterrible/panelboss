@@ -14,6 +14,7 @@ notice the camera blinking and something malicious watching it.
 |---|---|
 | typing | nothing; the camera never runs (`idle_gate_sec`) |
 | idle > `idle_gate_sec` (30 s default) | camera boots per poll, every `on_poll_sec` (3 s) |
+| idle and being watched | the app holds Windows' own display and sleep timers off (`[power] hold_timers`, default on) so a plan timeout can never time a still person out; released before the app's own off-broadcast, and on pause/snooze |
 | absence confirmed `absent_confirm_sec` (60 s) | `SC_MONITORPOWER(2)` — same standby as the power plan, worst case 90 s after the last keystroke |
 | screens dark | camera held open, polled every `off_poll_sec` (3 s) |
 | `min_hits` (2) consecutive positive frames | camera released **before** the screens wake (the device is exclusive) |
@@ -25,6 +26,22 @@ notice the camera blinking and something malicious watching it.
 Timers, camera modes (`boot_per_poll` / `always_on`, one choice per
 phase) and the wake policy are all editable from the settings window
 (or the config file — same values).
+
+**Owning the screens (`[power] hold_timers`, default on).** While the
+app watches a lit desk it holds a Windows execution-state request
+(`SetThreadExecutionState`, display + system): the plan's own display
+and sleep timers do not start while a request lives, so the measured
+tug of war — plan times a still-reading person out, the camera sees
+them, the app powers the screen back on — cannot happen, and the
+power plan itself needs no touching at all. The hold lets go before
+the app's own off-broadcast (holding the display is claiming the
+screens are wanted), while paused or snoozing (the app then behaves
+exactly like an app that is not running), and when the process dies —
+crash included, fail open by construction. Only the *automatic*
+timers are affected: your own Sleep button, the lid and shutdown are
+requests no app outvotes. With the feature off, the old shape returns:
+the box is kept awake during dark polling only, and the plan owns a
+lit desk.
 
 ## Detection modes (`[detection] mode`)
 
@@ -264,6 +281,13 @@ there is no after-every-upgrade swap dance anymore.
   on the next line - no indentation exists to lean on, so reason lines
   pair with the entry above positionally (one per entry) and the
   `\Device\HarddiskVolume8\` prefix is volume noise the parser trims
+* the app's own display hold appears in that same dump, under
+  `DISPLAY:`, as the app's own `[PROCESS]` line - and the flat layout
+  prints **no PID** for execution-state holders (measured): only the
+  image path, and of the BASE install the venv launcher re-execed, not
+  the venv path itself. The self-filter matches both spellings'
+  driveless path tails; without it the app would list itself as a
+  display blocker, stop its own camera, and defend itself forever
 * `powercfg -requestsoverride` bare (the listing, needs admin, so the
   dump task writes it under a `REQUESTSOVERRIDEMARK` line) shows
   `[CATEGORY]` headers then `<friendly name> <TYPE>` per line. A live

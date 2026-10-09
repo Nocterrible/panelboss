@@ -39,6 +39,7 @@ import ctypes
 import os
 import re
 import subprocess
+import sys
 import time
 
 TASK_NAME = "ICU-Presence-PowerRequests"
@@ -72,9 +73,25 @@ def result_path():
     return os.path.join(root, "ICU-PresenceDetector", "power_requests.txt")
 
 
-def _own_pid_tokens():
+def _own_tokens():
+    """What marks OUR process inside a dump. Measured: the flat layout
+    prints no PID for execution-state holders - just "[PROCESS]
+    \\Device\\HarddiskVolume8\\Users\\...\\python.exe" - and the venv
+    launcher re-execs the base install, so powercfg names THAT image
+    while sys.executable says venv. Device paths carry no drive letter,
+    so the driveless tail is the token that actually hits. Without this
+    the app's own display hold would block its own camera forever."""
     pid = os.getpid()
-    return ("0x%x" % pid, "0x%X" % pid, str(pid))
+    toks = {"0x%x" % pid, "0x%X" % pid, str(pid)}
+    exes = {sys.executable, os.path.realpath(sys.executable)}
+    base = getattr(sys, "base_prefix", None)
+    if base:                       # the venv stub's true successor
+        for name in ("python.exe", "pythonw.exe"):
+            exes.add(os.path.join(base, name))
+    for exe in exes:
+        toks.add(exe.lower())
+        toks.add(exe.split(":", 1)[-1].strip("\\").lower())
+    return tuple(t for t in toks if t)
 
 
 def _tidy(text):
@@ -129,7 +146,7 @@ def _parse(text):
     other = []
     entries = []
     section = "unknown"
-    mine = _own_pid_tokens()
+    mine = _own_tokens()
     pending = None                  # entry awaiting its reason line
     pending_mine = False
     pending_caller = "other"

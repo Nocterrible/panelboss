@@ -31,7 +31,7 @@ cfg["power"]["assistant_task"] = False
 sent = []
 display.wake = lambda *a, **k: sent.append("wake")
 display.turn_off = lambda *a, **k: sent.append("off")
-display.keep_awake = lambda *a, **k: None
+display.set_hold = lambda *a, **k: None
 display.foreground_is_fullscreen = lambda: False
 
 m = PresenceMonitor(cfg, detector=None)

@@ -276,6 +276,17 @@ class SettingsWindow(ctk.CTk):
             command=lambda: self.monitor.events.put(("reoff", False)),
             **self.skin.secondary())
         self.reoff_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        # the plan's timers become irrelevant while the app watches: the
+        # switch is the honest escape hatch, and pausing/snoozing already
+        # release the hold (the app then behaves like an app not running)
+        self.hold_switch = ctk.CTkSwitch(
+            box, text="hold off the plan's display/sleep timers while present",
+            font=self.skin.font(12), command=self._hold_changed,
+            progress_color=self.skin.accent,
+            border_color=self.skin.border)
+        if self.cfg["power"]["hold_timers"]:
+            self.hold_switch.select()
+        self.hold_switch.pack(anchor="w", pady=6)
 
     def _assistant_truth(self, real):
         """Adopt the task store's answer as the switch state and tell
@@ -644,6 +655,12 @@ class SettingsWindow(ctk.CTk):
 
     def _fullscreen_changed(self):
         self.cfg["guards"]["fullscreen"] = bool(self.fullscreen_switch.get())
+        self._save()
+
+    def _hold_changed(self):
+        # cfg["power"] IS monitor.power_cfg, and the loop re-asserts the
+        # execution state every tick: this write is live within 0.2 s
+        self.cfg["power"]["hold_timers"] = bool(self.hold_switch.get())
         self._save()
 
     def _skin_changed(self, label):

@@ -88,6 +88,12 @@ DEFAULTS = {
                                 # the message is swallowed by the swapchain
     },
     "power": {
+        "hold_timers": True,     # while the app watches, it holds Windows'
+                                 # own display and sleep timers off (an
+                                 # execution-state request, no admin, gone
+                                 # on pause/quit/exit and every time the
+                                 # app itself darkens the screens) so the
+                                 # power plan needs no touching
         "skip_camera_when_blocked": True,  # if another app already holds the
                                            # display awake, the camera does not
                                            # poll to defend it

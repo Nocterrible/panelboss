@@ -115,6 +115,9 @@ class PresenceMonitor:
         self._drain_display(now)
         if self.quit:
             return
+        self._apply_hold(now)                # the policy is asserted every
+                                             # tick: a stray clear (wake's
+                                             # pulse) dies within a cycle
         leased = now < self.preview_until
         if leased:
             # the settings window holds the camera; the lease expires on
@@ -134,6 +137,31 @@ class PresenceMonitor:
             self._off_phase(now, idle)
         else:
             self._on_phase(now, idle)
+
+    def _apply_hold(self, now):
+        """Windows' execution-state policy, restated every tick:
+
+        watching a lit desk -> hold the plan's display AND sleep timers
+        off entirely: the app alone decides when the screens darken, so
+        the measured tug of war (plan times the panel out, we see a
+        person and power it back on) cannot happen;
+        dark and polling    -> the box must stay up to keep watching
+        (a restart during a dark spell silently loses a wake), but the
+        screens are ours to give away, so the display hold lets go;
+        paused or snoozing  -> behave exactly like an app that is not
+        running: the plan owns the desk again.
+
+        hold_timers off shrinks this to the old shape: system hold in
+        the dark only, plan timers live while present."""
+        on = bool(self.power_cfg.get("hold_timers"))
+        if self.paused or now < self.snooze_until:
+            display.set_hold(False, False)
+        elif self.state == "off":
+            display.set_hold(False, True)
+        elif on:
+            display.set_hold(True, True)
+        else:
+            display.set_hold(False, False)
 
     # ------------------------------------------------------- screens are on
     def _on_phase(self, now, idle):
@@ -241,8 +269,9 @@ class PresenceMonitor:
         log.info("%s - sending the harmless power-on", reason)
         self._release_camera()                   # exclusive device, same
         display.wake()                           # dance as _wake
-        display.keep_awake(False)
         self.state = "active"
+        self._apply_hold(now)                # present: the plan's timers
+                                             # stay suppressed from here on
         self.absent_since = None
         self.hits = 0
         self.next_poll = now + self.timers["present_recheck_sec"]
@@ -253,8 +282,8 @@ class PresenceMonitor:
         self._release_camera()                   # the device is exclusive;
                                                  # release before the screens
         display.wake()                           # come back up
-        display.keep_awake(False)
         self.state = "counting"
+        self._apply_hold(now)                # back: hold the timers again
         self.absent_since = None
         self.re_off_deadline = math.inf
         self.hits = 0
@@ -266,7 +295,11 @@ class PresenceMonitor:
                       "the message never reaches the swap chain")
             self.next_poll = now + self.on_poll()
             return
-        display.keep_awake(True)                 # the box stays up while we
+        display.set_hold(False, True)            # the display hold lets go
+                                                 # BEFORE the broadcast (a
+                                                 # held display is a claim
+                                                 # the screens are wanted);
+                                                 # the box stays up while we
                                                  # poll with dark screens
         # mode always_on: the stream rides THROUGH the standby
         # transition, never released. Reopening inside the transition
