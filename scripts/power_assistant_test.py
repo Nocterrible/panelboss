@@ -276,6 +276,31 @@ def check():
         assert "*OVERRIDE" in text and "SteelSeries" in text, text
         fg = app.blockers_box._textbox.tag_cget("danger", "foreground")
         assert str(fg).lower().startswith("#"), ("danger tag uncolored", fg)
+        # scrollable-ness: identical content must NOT touch the box -
+        # delete+insert rewinds the view to the top, and the tick loop
+        # re-rendered every ~0.5 s, so the pane was un-scrollable
+        # (user-confirmed); a REAL change must still rewrite
+        inner = app.blockers_box._textbox
+        deletes = []
+        _real_delete = inner.delete
+        inner.delete = lambda *a, **k: (deletes.append(a),
+                                        _real_delete(*a, **k))[1]
+        app._update_blockers()                     # same blockers again
+        assert deletes == [], "identical text rewrote the box"
+        fm.blockers = {"error": None, "display": ["newlock.exe X"],
+                       "other": []}
+        app._update_blockers()                     # genuine change
+        assert deletes, "changed text did not rewrite the box"
+        assert "newlock.exe" in app.blockers_box.get("1.0", "end")
+        inner.delete = _real_delete
+        fm.blockers = res2                         # RESTORE the real
+                                                   # dump: the manager
+                                                   # window opens below
+                                                   # and merges from here
+                                                   # (a leaked minimal
+                                                   # dict = no SteelSeries
+                                                   # = StopIteration, and
+                                                   # its teardown cascade)
         # the truth-bridge: a worker thread's answer rides ui_events (its
         # self.after(0) could land BEFORE app.mainloop exists and die with
         # "main thread is not in main loop", pythonw eating the traceback -

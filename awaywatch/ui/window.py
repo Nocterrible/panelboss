@@ -751,6 +751,14 @@ class SettingsWindow(ctk.CTk):
                          "ok"))
         colors = {"danger": self.skin.danger, "warn": self.skin.paused,
                   "sub": self.skin.subtext, "ok": self.skin.ok}
+        sig = tuple(rows)
+        if getattr(self, "_blockers_sig", None) == sig:
+            return                    # identical text: never touch the
+                                      # box - delete+insert snaps the
+                                      # view to the top, and this runs
+                                      # every tick, so the pane was
+                                      # un-scrollable (user-confirmed)
+        self._blockers_sig = sig
         box = self.blockers_box
         # customtkinter 6 turns tags= into a bare tag NAME and leaves
         # foreground empty (measured: tags on char 1.0 = ('#ff5d5d',)
@@ -761,9 +769,18 @@ class SettingsWindow(ctk.CTk):
                 inner.tag_configure(mood, foreground=color)
             except Exception:
                 pass
+        try:                          # survive a real content change
+            was = float(inner.yview()[0])      # where the user was
+        except Exception:
+            was = 0.0
         box.delete("1.0", "end")
         for text, mood in rows:
             box.insert("end", text + "\n", tags=mood)
+        if was > 0.0:
+            try:
+                inner.yview_moveto(0, was)     # fraction of content:
+            except Exception:                  # the honest best we can
+                pass                           # do for changed text
 
     @staticmethod
     def _idle():
