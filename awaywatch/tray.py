@@ -130,6 +130,9 @@ class Tray(threading.Thread):
             pystray.MenuItem("Snooze 30 min", action=lambda i: self._snooze(30)),
             pystray.MenuItem("Snooze 60 min", action=lambda i: self._snooze(60)),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("start with Windows",
+                             action=self._startup,
+                             checked=self._startup_checked),
             pystray.MenuItem("Quit", action=self._quit))
 
     def _camera_menu(self):
@@ -212,6 +215,22 @@ class Tray(threading.Thread):
     def _settings(self, icon=None):
         if self.ui_events is not None:
             self.ui_events.put(("open", None))    # the window listens
+
+    def _startup(self, icon=None):
+        """One click flips whatever the Run key holds right now (the
+        registry is the truth, and a stale entry from a moved folder
+        deserves the same one-click fix); the open window resyncs."""
+        from . import startup
+        ok, msg = (startup.disable() if startup.enabled() is not None
+                   else startup.enable())
+        if not ok:
+            log.warning("start with Windows: %s", msg)
+        if self.ui_events is not None:
+            self.ui_events.put(("startup", None))
+
+    def _startup_checked(self, item):
+        from . import startup
+        return startup.enabled() is not None
 
     def _pause(self, icon=None):
         self.events.put(("pause", True))

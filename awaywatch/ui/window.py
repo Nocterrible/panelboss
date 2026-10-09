@@ -362,6 +362,7 @@ class SettingsWindow(ctk.CTk):
         threading.Thread(target=work, daemon=True).start()
 
     def _build_general(self):
+        from .. import startup
         box = self._card(self.left, "General")
         row = self._row(box, "skin")
         self.skin_menu = ctk.CTkOptionMenu(
@@ -375,6 +376,60 @@ class SettingsWindow(ctk.CTk):
                       command=self._open_log,
                       **self.skin.secondary()).grid(row=0, column=1,
                                                     sticky="e")
+        # the switch mirrors the HKCU Run key, not a config rumor: a
+        # stale entry from a deleted folder lights it up honest, and the
+        # note below spells out where the entry actually points (move
+        # the app folder and the old entry keeps firing at logon; one
+        # flip off and on re-points it here)
+        self.startup_switch = ctk.CTkSwitch(
+            box, text="start with Windows",
+            font=self.skin.font(12), command=self._startup_changed,
+            progress_color=self.skin.accent,
+            border_color=self.skin.border)
+        self.startup_switch.pack(anchor="w", pady=(6, 0))
+        self.startup_note = ctk.CTkLabel(box, text="",
+                                          font=self.skin.font(11),
+                                          justify="left", anchor="w",
+                                          wraplength=300,
+                                          **self.skin.text_style("sub"))
+        self.startup_note.pack(anchor="w")
+        self._startup_sync(startup.enabled())
+
+    def _startup_sync(self, stored):
+        """Checkbox + note from the registry's answer (None | string)."""
+        from .. import startup
+        self.startup_switch.select() if stored else \
+            self.startup_switch.deselect()
+        if not stored:
+            text = ""
+        elif stored == startup.command():
+            text = ("registered for this copy (see Task Manager's "
+                    "startup apps)")
+        else:
+            text = ("entry points elsewhere: %s - flip off and on to "
+                    "re-point here" % textwrap.shorten(stored, width=46))
+        self.startup_note.configure(text=text)
+
+    def _startup_changed(self):
+        """The write verifies itself by re-read; the switch always ends
+        on what the registry says, never on hope. Registry I/O is fast,
+        but a locked-down hive can block on policy - the worker keeps
+        even that worst case off the UI thread."""
+        from .. import startup
+        want = bool(self.startup_switch.get())
+
+        def work():
+            ok, msg = (startup.enable() if want else startup.disable())
+            stored = startup.enabled()
+            self.after(0, lambda: self._startup_done(ok, msg, stored))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _startup_done(self, ok, msg, stored):
+        if not ok:
+            self.startup_note.configure(text=msg)     # the failure needs
+            self.startup_switch.set(1 if stored else 0)   # to introduce
+            return                                          # itself
+        self._startup_sync(stored)
 
     # ------------------------------------------------- camera + preview ---
     def _build_right(self):
@@ -721,6 +776,9 @@ class SettingsWindow(ctk.CTk):
                 self._assistant_truth(_value)
             if message == "assistant_ui":
                 self._assistant_ui(_value)
+            if message == "startup":
+                from .. import startup
+                self._startup_sync(startup.enabled())
             if message == "cameras":
                 self._apply_cameras(_value)
 

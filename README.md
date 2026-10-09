@@ -157,9 +157,20 @@ notice dialog closes itself after 5 seconds.
 Headless (tray only, no window): `ui.enabled = false` in the config or
 `python -m awaywatch run --no-ui`.
 
-Autostart at logon: `powershell -File scripts\autostart.ps1 install`
-(Task Scheduler; the tray Quit menu remains the only way to stop it
-otherwise).
+Start at logon: both the tray menu and the window's **General**
+card carry a `start with Windows` switch. It writes one value under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (named `ICU
+Presence Detector` — the entry Task Manager's Startup tab lists, so
+the user can verify it in system UI). No admin. The registry is the
+truth: the switch reads the entry back every time, a stale entry from
+a moved folder is shown as pointing elsewhere, and one flip off and
+on re-points it at the current copy. The command stored is this
+install's own: the frozen exe for a packaged release, `pythonw
+run.py` for the repo.
+
+`powershell -File scripts\autostart.ps1 install` is the alternative
+(Task Scheduler). Pick one — both at once means two launches at
+logon, and the mutex answers the second with a notice dialog.
 
 ## Face identities (optional)
 
