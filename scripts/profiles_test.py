@@ -1,8 +1,9 @@
-"""Offline checks for the profile engine: pairing, the HDR belief,
-the store (quarantine included), the mismatch gate, and the whole
-apply flow against a FAKE wm - the two-pass order, the verify loop,
-the best-effort road. The real desk is never touched: no real
-apply_layout ever runs here."""
+"""Offline checks for the profile engine: pairing, both HDR paths
+(read-and-command where the driver answers, belief fallback where
+it cannot), the store (quarantine included), the mismatch gate, and
+the whole apply flow against a FAKE wm - the two-pass order, the
+verify loop, the best-effort road. The real desk is never touched:
+no real apply_layout ever runs here."""
 import os
 import sys
 import tempfile
@@ -48,6 +49,19 @@ assert H("toggle", "on") == ("press", "off")
 assert H("toggle", "unknown") == ("press", "on")
 assert H("leave alone", "off") == (None, "off")
 print("hdr belief OK (press only on disagreement, toggle flips)")
+
+# 2b) hdr_plan: the driver's ANSWER decides - panels that cannot do
+# HDR ("na") or will not say ("unknown") are never commanded, on/off
+# fixes only the disagreements, toggle flips exactly what it sees.
+P = profiles.hdr_plan
+S = {"A": "off", "B": "on", "C": "na", "D": "unknown"}
+assert P("leave alone", S) == []
+assert P("skip", S) == []
+assert P("on", S) == [("A", "on")], P("on", S)
+assert P("off", S) == [("B", "off")], P("off", S)
+assert sorted(P("toggle", S)) == [("A", "on"), ("B", "off")]
+assert P("on", {"A": "na"}) == []
+print("hdr plan OK (na/unknown never commanded, toggle flips what it sees)")
 
 # 3) the store: roundtrip, quarantine of an unparsable file, and a
 # single rotted profile dropped without killing its neighbours
@@ -100,13 +114,16 @@ print("target fp OK (lit panels only, order-proof)")
 # 6) the whole apply flow against a fake wm ---------------------------
 class FakeWM:
     """records every call the apply makes; the desk answers whatever
-    fp list it is handed, one string per poll."""
+    fp list it is handed, one string per poll. hdr rows (the driver
+    answers for 24H2+) are optional: none = the OS stays silent and
+    the apply must fall back to the belief path."""
 
-    def __init__(self, mons, fps, layout_ok=True):
+    def __init__(self, mons, fps, layout_ok=True, hdr=None):
         self.mons, self.fps = mons, list(fps)
         self.layout_ok = layout_ok
         self.calls, self.entries = [], []
         self.pressed, self.placed, self.rescued = [], [], []
+        self.hdr, self.sets = hdr or [], []
 
     def monitors(self):
         return self.mons
@@ -124,6 +141,17 @@ class FakeWM:
 
     def press_keys(self, combo):
         self.pressed.append(combo)
+        return ""
+
+    def hdr_states(self):
+        return [dict(r, mode=2 if r["state"] == "on" else 0,
+                     precise=True) for r in self.hdr]
+
+    def hdr_set(self, gdi, on):
+        self.sets.append((gdi, on))
+        for r in self.hdr:
+            if r["gdi"] == gdi:
+                r["state"] = "on" if on else "off"
         return ""
 
     def list_windows(self):
@@ -170,19 +198,20 @@ prof6 = {"fp": TARGET, "match": "process + title", "hdr": "on",
 try:
     profiles.time = FastTime()
 
-    def scenario(fps, mons=DESK, best=False, ok=True):
+    def scenario(fps, mons=DESK, best=False, ok=True, hdr=None):
         tmp6 = tempfile.mkdtemp()
         profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
                        "last": {}, "profiles": {"p": prof6}}, tmp6)
         data = profiles.load(tmp6)
-        f = FakeWM(mons, fps, ok)
+        f = FakeWM(mons, fps, ok, hdr)
         profiles.wm = f
         ok_, say = profiles.apply(data, "p", best_effort=best,
                                   dir=tmp6)
         return ok_, say, f, profiles.load(tmp6)
 
-    # matched desk: layout asked, HDR belief unknown->press->"on"
-    # persisted, window placed, rescue ran, last-used recorded
+    # matched desk: layout asked; the fake OS stays silent about HDR
+    # (no rows) so the belief fallback must fire: unknown->press->
+    # "on" persisted; window placed, rescue ran, last-used recorded
     ok6, say6, f6, disk = scenario([TARGET])
     assert ok6, say6
     assert ("layout", [AAA["gdi"], BBB["gdi"]]) in f6.calls or \
@@ -194,6 +223,42 @@ try:
     assert disk["last"].get(TARGET) == "p"
     # 2 s of quiet were actually demanded before believing
     assert f6.calls.count("fp") >= 2, f6.calls
+
+    # 24H2+ reality: the driver ANSWERS. AAA is off and the profile
+    # wants on -> commanded, read back, VERIFIED; BBB cannot do HDR
+    # at all and is left in peace; the hotkey is never touched and
+    # the stored belief is calibrated from the read, not guessed
+    rows = [{"gdi": AAA["gdi"], "supported": True, "state": "off"},
+            {"gdi": BBB["gdi"], "supported": False, "state": "off"}]
+    ok6, say6, f6, disk = scenario([TARGET], hdr=rows)
+    assert ok6, say6
+    assert f6.sets == [(AAA["gdi"], True)], f6.sets
+    assert f6.pressed == [], "hotkey while the driver could answer"
+    assert "AAA on (verified)" in say6, say6
+    assert disk["hdr_now"] == "on", "belief not calibrated from read"
+
+    # everything already obeys: no command travels at all
+    rows = [{"gdi": AAA["gdi"], "supported": True, "state": "on"},
+            {"gdi": BBB["gdi"], "supported": True, "state": "on"}]
+    ok6, say6, f6, _ = scenario([TARGET], hdr=rows)
+    assert f6.sets == [] and "already on" in say6, say6
+
+    # a deaf driver: accepts the command, never obeys - the honest
+    # complaint is "never confirmed", not a verification lie
+    class DeafWM(FakeWM):
+        def hdr_set(self, gdi, on):          # accepts, never obeys
+            self.sets.append((gdi, on))
+            return ""
+    tmp6 = tempfile.mkdtemp()
+    profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
+                   "last": {}, "profiles": {"p": prof6}}, tmp6)
+    f6 = DeafWM(DESK, [TARGET], True,
+                [{"gdi": AAA["gdi"], "supported": True,
+                  "state": "off"}])
+    profiles.wm = f6
+    ok6, say6 = profiles.apply(profiles.load(tmp6), "p", dir=tmp6)
+    assert ok6 and "never confirmed" in say6, say6
+    assert f6.pressed == [] and f6.sets == [(AAA["gdi"], True)]
 
     # different desk, no mercy: refused, nothing touched
     ok6, say6, f6, _ = scenario(["other fp"],
@@ -214,7 +279,8 @@ try:
     assert not ok6 and "layout refused" in say6 and not f6.placed
 finally:
     profiles.wm, profiles.time = real_wm, real_time
-print("apply flow OK (gate, mercy, belief, verify, rescue, refusal)")
+print("apply flow OK (gate, mercy, belief fallback, real-hdr set+"
+      "verify+calibration, refusal honesty, rescue)")
 
 # 7) the two-pass order inside wm.apply_layout itself, with the
 # config API faked: enables first, new primary LAST with

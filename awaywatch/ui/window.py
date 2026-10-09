@@ -161,20 +161,24 @@ TIPS = {
                      "gentle version and misses exactly that renamed "
                      "tab. 'process + title' is the middle road: both "
                      "must agree.",
-    "profile_hdr": "windows has no api worth the name that reads HDR "
-                   "back - all there is, is the win+alt+b hotkey, "
-                   "which toggles. the app therefore keeps its own "
-                   "belief about the current state and presses the key "
-                   "only when the profile wants the opposite of what "
-                   "it believes. the belief can drift when you toggle "
-                   "by hand; 'toggle' is the honest option when you "
-                   "only care that it changes.",
+    "profile_hdr": "on windows 11 24h2 and later hdr is a READABLE "
+                   "fact: the app asks the display driver per monitor "
+                   "(the live answer sits next to each monitor above) "
+                   "and commands exactly the monitors that disagree, "
+                   "then reads back to confirm - no hotkey involved. "
+                   "older windows cannot answer without confusing hdr "
+                   "with wide-colour-gamut (measured: it says 'enabled' "
+                   "on a panel with no hdr at all), and there the app "
+                   "falls back to pressing win+alt+b plus keeping its "
+                   "own belief, pressing only when belief and wish "
+                   "disagree.",
     "profile_apply": "one click reshapes the desk: topology first (new "
                      "primary last - windows refuses to move the "
                      "desktop in the same call that hands it over), "
-                     "modes asked only from the driver's own list, the "
-                     "hotkey where the HDR ask disagrees with the "
-                     "belief, then a wait until the monitors ANSWER as "
+                     "modes asked only from the driver's own list, hdr "
+                     "commanded at exactly the monitors that disagree "
+                     "(a hotkey only on ancient windows), then a wait "
+                     "until the monitors ANSWER as "
                      "the profile asked (windows reports success "
                      "before the modes have settled - measured), and "
                      "only then the windows. anything the shuffle "
@@ -701,18 +705,34 @@ class SettingsWindow(ctk.CTk):
             return
 
         mons = wm.monitors()
+        # live HDR truth per monitor, straight from the driver; a
+        # silent {} on ancient Windows (or any trouble) - the row
+        # then simply carries no hdr note, which is honest
+        hdr = {}
+        try:
+            hdr = {r["gdi"]: ("no hdr" if not r.get("supported")
+                              else "hdr on"
+                              if r.get("state") == "on"
+                              else "hdr off"
+                              if r.get("state") == "off"
+                              else "hdr ?")
+                   for r in wm.hdr_states()}
+        except Exception:
+            pass
+        g_of = {m["id"]: m["gdi"] for m in mons}
         gate = profiles.desk_mismatch(prof, mons)
         desk = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
         desk.pack(fill="x")
         for d in prof["displays"]:
             ctk.CTkLabel(
-                desk, text="%-9s %s %dx%d@%d   at %d,%d%s%s" % (
+                desk, text="%-9s %s %dx%d@%d   at %d,%d%s%s%s" % (
                     d["short"],
                     "off " if not d.get("on", True) else "on  ",
                     d["w"], d["h"], d.get("rate") or 0,
                     d["x"], d["y"],
                     "   PRIMARY" if d.get("primary") else "",
-                    "" if d.get("on", True) else "  (dark)"),
+                    "" if d.get("on", True) else "  (dark)",
+                    "   " + hdr.get(g_of.get(d["id"], ""), "")),
                 font=self.skin.font(11),
                 **self.skin.text_style("sub")).pack(anchor="w")
         warn = ctk.CTkLabel(

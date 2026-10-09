@@ -84,7 +84,8 @@ primary LAST with `CDS_SET_PRIMARY`, because Windows refuses with
 error 87 to give up the display that owns the desktop in the same
 call that hands the desktop over), modes asked only from the
 driver's own offered list with a `CDS_TEST` first, then the HDR
-hotkey, then a **wait until the monitors answer as the profile
+command (read first, set only what disagrees, verify by reading
+again — see below), then a **wait until the monitors answer as the profile
 asked** (Windows reports success before the modes have settled —
 measured — so the live fingerprint is the proof, quiet for two
 seconds), and only then the windows: each pinned window is paired
@@ -96,10 +97,19 @@ panel that is not plugged in — modes can be asked for, a missing
 monitor cannot — so applying onto the wrong monitors refuses with
 the honest sentence and a *try anyway (best effort)* button that
 converts what exists and places windows on whatever desk answered.
-HDR is a keypress with a belief: no reachable API reads it back, so
-the app sends win+alt+b (configurable) only when its stored belief
-disagrees with the profile, flips the belief, and never claims to
-know. The **rescue my lost windows** button (top right, useful far
+HDR is a read, then a command: on Windows 11 24H2 and later the
+DisplayConfig API answers per monitor what colour mode it is
+actually in (`GET_ADVANCED_COLOR_INFO_2` — the call the Settings
+toggle itself is built on) and accepts a direct SET, so the app
+reads first, commands only the monitors that disagree with the
+profile's ask, then reads back until the answer arrives. No
+hotkey, no guessing. win+alt+b (configurable) survives only as the
+fallback for older Windows, where the one readable answer conflates
+HDR with wide-gamut colour and measurably lies — on this desk it
+reports "supported + enabled" for a panel that cannot do HDR at
+all. The stored belief (`hdr_now` in `profiles.json`) is kept
+calibrated from the reads and matters only on that ancient path.
+The **rescue my lost windows** button (top right, useful far
 beyond profiles) walks every visible, non-minimized, grabbable
 window no screen covers and brings it back to the middle of the
 primary monitor. Store: `%APPDATA%\ICU-PresenceDetector\
@@ -445,11 +455,37 @@ there is no after-every-upgrade swap dance anymore.
   (the x64 `INPUT` size): with a naturally-packed 32-byte keyboard
   struct the call "succeeds" having injected nothing — a win+alt+b
   that never happened
-* **HDR state has no readable API** (the monitor_control project
-  exhausted the candidates): profiles therefore keep a *belief* —
-  `"hdr": "on"` in `profiles.json` means "believed on", and the only
-  action ever taken is pressing the configurable hotkey on
-  disagreement
+* `ctypes.windll.user32` is one cached handle shared by the whole
+  process: an `argtypes` declaration applied to it binds **every
+  module** that touches it. wm.py's `POINTER(wm.RECT)` on
+  `GetWindowRect` screened display.py's structurally identical
+  `wintypes.RECT` (ctypes checks class identity, and the error message
+  helpfully calls both "RECT") — and it only died on the first real
+  absence after the window-restore commit shipped, which is how a bug
+  survives a day of live use. Any
+  struct-pointer argument on a shared handle is declared `c_void_p`
+  now; the layout suite pokes both modules to keep it that way
+* **HDR state is readable after all** (monitor_control exhausted the
+  wrong candidates and this project ran on *belief* for months):
+  `DisplayConfigGetDeviceInfo` answers per target — type 15,
+  `GET_ADVANCED_COLOR_INFO_2` (OS build 26100+), carries the honest
+  `activeColorMode` (SDR/WCG/HDR) plus the panel's capability bits,
+  and type 16 SETs it directly. Proven here end to end, unelevated:
+  SET → read back → restore
+* the old type 9, `GET_ADVANCED_COLOR_INFO`, is what poisoned the
+  well: it conflates HDR with wide-gamut colour and on this desk
+  answers "supported + enabled" for the panel that has no HDR at
+  all — an answer from it is never an HDR fact, only "cannot tell"
+* the display-path *device path* is the join key: the model segment
+  of `\\?\DISPLAY#IOC912B#5&...` **is** the EDID identity we store;
+  the *friendly* name is a marketing string and a different one
+  (this desk's `IOC912B` answers to "GA27W1Q") — joining on it
+  loses
+* the adapter LUID + id the colour calls want come from the **mode
+  entry of the target side**, never the source side (the source
+  LUID is the GPU's), and an HDR change re-enumerates the display
+  paths: cached mode indices across a SET are stale — wm.py
+  re-walks the topology on every call
 * config files are the user's own turf (`%APPDATA%`), hand-edited by
   design, and the app must survive it: both `config.toml` and
   `profiles.json` are written atomically (temp file + `os.replace`),

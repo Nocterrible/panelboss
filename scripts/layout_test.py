@@ -189,4 +189,16 @@ print("wiring OK (snapshot on off, restore on wake/force-on/jiggle, "
       "consumed once, superseded on new off)")
 
 wm.snapshot = _real_snap
+
+# the shared-handle diplomacy: wm pins user32 argtypes at import on
+# the process-wide windll cache, so display.py's GetWindowRect -
+# a DIFFERENT class (wintypes.RECT), identical layout - must still
+# be accepted there. Measured: POINTER(wm.RECT) poisoned the shared
+# handle and killed every _screens_off tick (LP_RECT vs pointer to
+# RECT) until the rect argument became a plain void pointer
+from awaywatch import display as disp
+assert isinstance(disp.foreground_is_fullscreen(), bool)
+assert isinstance(wm.list_windows(), list)
+print("shared user32 handle OK (display and wm both get window rects)")
+
 print("ALL LAYOUT TESTS OK")

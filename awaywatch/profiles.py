@@ -15,11 +15,15 @@ asked for, a missing monitor cannot. A mismatch therefore refuses
 with a sentence and offers the best-effort route (apply what
 exists, then rescue).
 
-HDR is a keypress with a belief: there is no API reachable here
-that reads HDR back (the C# project's conclusion, unchanged), so
-the app sends win+alt+b (configurable, the hotkey has moved between
-Windows versions) only when its stored belief disagrees with the
-profile, flips the belief, and never claims to know.
+HDR is a read, then a command: on Windows 11 24H2+ the DisplayConfig
+API (wm.hdr_states / wm.hdr_set) answers per monitor what HDR IS and
+accepts a direct SET - no hotkey, no guessing. The app reads first,
+commands only the monitors that disagree with the profile, then
+reads back until the answer arrives. The keypress-with-belief dance
+(win+alt+b, stored hdr_now) survives only as the fallback for older
+Windows, whose single readable API conflates HDR with wide-gamut
+colour and measurably lies: on this desk it answers
+"supported+enabled" for a panel that cannot do HDR at all.
 """
 
 import json
@@ -112,13 +116,19 @@ def target_fp(displays):
 
 def capture():
     """Everything the desk is right now, in profile words."""
-    displays = []
+    caps = {}
+    try:
+        caps = {r["gdi"]: bool(r["supported"]) for r in wm.hdr_states()}
+    except Exception:
+        pass                           # capability is garnish, never
+    displays = []                      # a blocker
     for m in wm.monitors():
         displays.append({"id": m["id"], "short": m["short"],
                          "gdi": m["gdi"], "on": True,
                          "primary": m["primary"], "x": m["x"],
                          "y": m["y"], "w": m["w"], "h": m["h"],
-                         "rate": m["rate"], "bits": m["bits"]})
+                         "rate": m["rate"], "bits": m["bits"],
+                         "hdr_cap": caps.get(m["gdi"])})
     return displays
 
 
@@ -227,10 +237,11 @@ def pair(saved, live, mode):
 
 # -------------------------------------------------------------- HDR ----
 def hdr_action(want, believed):
-    """Pure belief dance (testable): press or don't, and what the
-    belief becomes after the press. 'unknown' presses and adopts
-    the wanted answer loudly; a press always FLIPS the belief -
-    the app sends a toggle, not a command."""
+    """LEGACY (pre-24H2 Windows, where HDR cannot be read): the pure
+    belief dance - press or don't, and what the belief becomes after
+    the press. 'unknown' presses and adopts the wanted answer loudly;
+    a press always FLIPS the belief - the app sends a toggle, not a
+    command. On a readable OS apply never comes here."""
     if want == "leave alone" or want == "skip":
         return None, believed
     if want == "toggle":
@@ -242,6 +253,47 @@ def hdr_action(want, believed):
     if believed_on != on:
         return "press", ("on" if on else "off")
     return None, believed
+
+
+def hdr_plan(want, states):
+    """Pure decision (testable): given what the driver ANSWERS about
+    each monitor ({id: "on"/"off"/"na"/"unknown"}), which monitors to
+    command and to what. Panels that cannot do HDR ("na") or will not
+    say ("unknown") are left alone - a command they would only refuse
+    is not a service; 'toggle' flips exactly what it can see. An
+    empty list means the desk already obeys."""
+    if want in ("leave alone", "skip"):
+        return []
+    if want == "toggle":
+        return [(i, "off" if s == "on" else "on")
+                for i, s in states.items() if s in ("on", "off")]
+    return [(i, want) for i, s in states.items() if s in ("on", "off")
+            and s != want]
+
+
+def _hdr_now():
+    """Driver truth joined to monitor ids: ({id: state}, precise,
+    {id: gdi}) - the gdi map rides along because after a topology
+    apply the old slot names are stale and hdr_set wants fresh
+    ones. Fail-open: ({}, False, {}) on any trouble - the caller
+    then falls back to the belief path, which is how it behaved
+    all along."""
+    states, precise, gdis = {}, False, {}
+    try:
+        rows = wm.hdr_states()
+        by_gdi = {m["gdi"]: m["id"] for m in wm.monitors()}
+        for s in rows:
+            mid = by_gdi.get(s["gdi"])
+            if mid is None:
+                continue
+            gdis[mid] = s["gdi"]
+            states[mid] = "na" if not s.get("supported") \
+                else s.get("state", "unknown")
+            precise = precise or bool(s.get("precise"))
+    except Exception:
+        log.debug("hdr read failed", exc_info=True)
+        return {}, False, {}
+    return states, precise, gdis
 
 
 # ------------------------------------------------------------- apply ---
@@ -302,15 +354,58 @@ def apply(data, name, best_effort=False, dir=None):
         if not ok:
             return False, ("layout refused: " + "; ".join(lines[-1:]))
 
-    # 3. the belief dance
-    want, believed = hdr_action(prof.get("hdr", "leave alone"),
-                                data.get("hdr_now", "unknown"))
-    if want == "press":
-        trouble = wm.press_keys(data.get("hdr_key", "win+alt+b"))
-        data["hdr_now"] = believed
-        say.append(trouble or ("pressed %s for hdr (now believed %s)"
-                               % (data.get("hdr_key"), believed)))
-        save(data, dir)
+    # 3. HDR: ask the driver first. Where it answers precisely
+    # (24H2+), command only the monitors that disagree, then READ
+    # BACK until the answer arrives - a set nobody confirmed is a
+    # wish, not a fact. The belief dance is what is left for old
+    # Windows, whose only readable API conflates HDR with wide
+    # gamut and measurably lies.
+    ask = prof.get("hdr", "leave alone")
+    if ask in ("on", "off", "toggle"):
+        states, precise, gdis = _hdr_now()
+        if precise:
+            plan = hdr_plan(ask, states)
+            for mid, goal in plan:
+                trouble = wm.hdr_set(gdis[mid], goal == "on")
+                if trouble:
+                    say.append("hdr %s: %s" % (by_id[mid]["short"],
+                                               trouble))
+            got = states
+            end = time.monotonic() + 10
+            while time.monotonic() < end:
+                got = _hdr_now()[0]
+                if all(got.get(mid) == goal for mid, goal in plan):
+                    break
+                time.sleep(0.5)
+            stuck = [(m, g) for m, g in plan if got.get(m) != g]
+            short = lambda m: (by_id[m]["short"] if m in by_id
+                               else m[:12])
+            if not plan:
+                say.append("hdr: nothing readable to flip"
+                           if ask == "toggle" else
+                           "hdr: every readable monitor already %s"
+                           % ask)
+            elif stuck:
+                say.append("hdr: %s never confirmed" % ", ".join(
+                    short(m) for m, _ in stuck))
+            else:
+                say.append("hdr: %s" % ", ".join(
+                    "%s %s (verified)" % (short(m), g)
+                    for m, g in plan))
+            data["hdr_now"] = "on" if any(v == "on" for v in
+                                          got.values()) else "off"
+            save(data, dir)
+        else:
+            action, believed = hdr_action(ask, data.get(
+                "hdr_now", "unknown"))
+            if action == "press":
+                trouble = wm.press_keys(data.get("hdr_key",
+                                                 "win+alt+b"))
+                data["hdr_now"] = believed
+                say.append(trouble or
+                           ("pressed %s for hdr (now believed %s)"
+                            % (data.get("hdr_key"), believed)))
+                save(data, dir)
 
     # 4. verify: poll until the desk answers with the profile's
     # fingerprint, quiet-for-2s so the relay storm has passed. A

@@ -312,6 +312,9 @@ WM.list_windows = lambda: [{"proc": "a.exe", "title": "one",
                             "zoomed": False}]
 WM.rescue_lost = lambda: []
 WM.place = lambda h, r, z=False: "ok"
+WM.hdr_states = lambda: [{"gdi": r"\\.\DISPLAY1", "model": "T",
+                          "supported": True, "state": "off",
+                          "mode": 0, "precise": True}]
 app = W.SettingsWindow(cfg, fm, queue.Queue())
 # the mode pin below calls _save(); keep the live config out of reach
 config.write_config = lambda c, path=None: _saved_wc(
@@ -432,6 +435,22 @@ def check():
         prof = app._prof_data["profiles"]["test desk"]
         assert prof["fp"] == "TESTFP"
         assert prof["displays"][0]["short"] == "T"
+        assert prof["displays"][0]["hdr_cap"] is True, prof["displays"][0]
+        texts = [""]
+        stack = [app._prof_detail]
+        while stack:                       # the live hdr note must
+            w = stack.pop()                # ride the monitor row
+            stack += w.winfo_children()
+            try:                           # CTkLabel answers cget,
+                t = w.cget("text")         # OptionMenu answers get
+            except Exception:
+                try:
+                    t = w.get()
+                except Exception:
+                    continue
+            if isinstance(t, str):
+                texts.append(t)
+        assert any("hdr off" in t and "T" in t for t in texts), texts
         assert app.hdr_menu.get() == "leave alone"
         assert app.match_menu.get() == "process + title"
         key = ("a.exe", "one")
