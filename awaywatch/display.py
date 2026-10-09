@@ -53,6 +53,12 @@ ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x1       # keep the box awake while we poll the camera
 ES_DISPLAY_REQUIRED = 0x2      # resets the display idle timer (wake fallback)
 
+VIDEO_DISPLAY_ON = 0x8000000D  # powrprof power request type: THE supported
+                               # way to light the panels back up
+INPUT_KEYBOARD = 1
+KEYUP = 0x0002
+VK_CONTROL = 0x11              # a lone modifier presses no buttons
+
 DEVICE_NOTIFICATION = 1
 SERVICE_NOTIFICATION = 2
 
@@ -231,6 +237,69 @@ def wait_for(on=True, timeout=1.0):
     return False
 
 
+class MOUSEINPUT(ctypes.Structure):
+    # present for the SIZE only: SendInput rejects any cbSize that is
+    # not the real INPUT union size, and the mouse case is the widest
+    _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG),
+                ("mouse_data", wintypes.DWORD), ("flags", wintypes.DWORD),
+                ("time", wintypes.DWORD), ("extra", ctypes.c_void_p)]
+
+
+class KEYBDINPUT(ctypes.Structure):
+    _fields_ = [("vk", wintypes.WORD), ("scan", wintypes.WORD),
+                ("flags", wintypes.DWORD), ("time", wintypes.DWORD),
+                ("extra", ctypes.c_void_p)]
+
+
+class INPUT_UNION(ctypes.Union):
+    _anonymous_ = ("mouse", "kbd")
+    _fields_ = [("mouse", MOUSEINPUT), ("kbd", KEYBDINPUT)]
+
+
+class INPUT(ctypes.Structure):
+    _fields_ = [("type", wintypes.DWORD), ("u", INPUT_UNION)]
+
+
+def _video_display_on():
+    """One-shot VideoDisplayOn power request: the call that makes the
+    video class driver restore the monitors. The SC_MONITORPOWER ON
+    broadcast is the legacy route and modern NVIDIA/DP stacks ignore it
+    (measured: the whole wake path ran and the panels stayed dark until
+    real input)."""
+    try:
+        handle = wintypes.HANDLE()
+        ok = ctypes.windll.powrprof.CallNtPowerRequest(
+            ctypes.c_uint32(VIDEO_DISPLAY_ON), 0, None, 0,
+            ctypes.byref(handle))
+        if ok:
+            ctypes.windll.powrprof.ClosePwrShutdownRequest(handle)
+            return True
+        log.debug("VideoDisplayOn request refused (%s)",
+                  ctypes.GetLastError())
+    except Exception:
+        log.debug("VideoDisplayOn request unavailable", exc_info=True)
+    return False
+
+
+def _ctrl_tap():
+    """An injected lone modifier: re-trains a stubborn DP link like any
+    input does, presses no buttons, and nudges the idle timer we gate
+    on - the last weapon when the API calls get politely ignored."""
+    try:
+        down = INPUT(type=INPUT_KEYBOARD)
+        down.u.kbd.vk = VK_CONTROL
+        up = INPUT(type=INPUT_KEYBOARD)
+        up.u.kbd.vk = VK_CONTROL
+        up.u.kbd.flags = KEYUP
+        n = u32.SendInput(1, ctypes.byref(down), ctypes.sizeof(INPUT))
+        n += u32.SendInput(1, ctypes.byref(up), ctypes.sizeof(INPUT))
+        if n < 2:
+            log.debug("ctrl tap dropped by the input stack (%s)",
+                      ctypes.GetLastError())
+    except Exception:
+        log.debug("ctrl tap failed", exc_info=True)
+
+
 def turn_off():
     """DPMS standby: the same state the power plan timeout uses.
     The W suffix is not decoration: user32.dll exports
@@ -247,24 +316,31 @@ def turn_off():
 
 
 def wake(timeout=2.0):
-    """Restore the display.
+    """Restore the display, escalating.
 
-    The on-broadcast is the documented way, but GPU drivers are stubborn,
-    so when the screens stay dark we pulse ES_DISPLAY_REQUIRED (the same
-    nudge user input delivers to the idle timer) and retry. Returns once
-    the command round completes; the caller reconciles reality with the
-    camera and input activity.
+    The ON broadcast alone is effectless on modern NVIDIA/DP stacks
+    (measured: the whole wake path ran, camera released, panels stayed
+    dark until real mouse input), and ES_DISPLAY_REQUIRED only ever
+    prevents the AUTO off - so: broadcast (documented way), one-shot
+    VideoDisplayOn power request (the supported API that makes the
+    video class driver restore the monitors), and an injected CTRL tap
+    for whatever ignores both. wait_for's truth never fires on this
+    machine anyway (the broadcasts emit no notification), so every
+    attempt runs; the first weapon that works lights the panels.
     """
     for attempt in range(3):
         u32.SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND,
                                 SC_MONITORPOWER, MONITOR_ON, SMTO_NORMAL,
                                 SMTO_TIMEOUT_MS,
                                 ctypes.byref(ctypes.c_ulong()))
+        _video_display_on()
         if wait_for(True, timeout=0.5):
             break
         k32.SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED)
         time.sleep(0.5)
         k32.SetThreadExecutionState(ES_CONTINUOUS)
+        if attempt:
+            _ctrl_tap()
     if watcher:
         watcher.state = 1.0
     return True

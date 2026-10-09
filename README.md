@@ -145,6 +145,14 @@ there is no after-every-upgrade swap dance anymore.
 * raw `SC_MONITORPOWER` broadcasts do **not** emit `GUID_MONITOR_ON`
   notifications — display state is tracked from commands, input activity
   and the camera; the power sink still listens for power-plan transitions
+* the `SC_MONITORPOWER(-1)` **on**-broadcast is effectless on this box
+  (measured: the whole wake path ran — camera released, broadcast sent,
+  `ES_DISPLAY_REQUIRED` pulsed — and the panels stayed dark until real
+  mouse input; NVIDIA + DisplayPort drops the link and driver ignores
+  the legacy request). `wake()` now escalates: broadcast → one-shot
+  `VideoDisplayOn` power request (`CallNtPowerRequest`, the API the
+  video class driver honors) → injected `CTRL` tap, since nothing
+  re-trains a DP link like input and a lone modifier presses no buttons
 * `SendMessageTimeout` with `uTimeout=0` waits forever; some app on the
   system never pumps its queue — every call carries a timeout
 * ctypes finds **exports**, not C header macros: `user32.SendMessageTimeout`

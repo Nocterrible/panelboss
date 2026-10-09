@@ -1,5 +1,7 @@
 """Offline checks for the power assistant: parser, fail-open paths,
-state gating, UI wiring. No real UAC: install/uninstall are faked."""
+state gating, UI wiring. No real UAC: install/uninstall are faked.
+Run with the tray app CLOSED: its CTk windows poison CTkToplevel in
+any other process (the window section then skips itself, exit 0)."""
 import os
 import sys
 import time
@@ -254,6 +256,25 @@ fm.blockers = {"error": None, "display": ["msedgewebview2.exe Video Lock"],
                "other": ["System: AudioSrv AUDIO"]}
 power.install = lambda: (True, "registered (test)")
 power.uninstall = lambda: (True, "assistant removed (test)")
+# the window section needs a quiet desktop: with the live app running,
+# its CTk windows poison any CTkToplevel a second process opens - both
+# window runs today died inside CTkToplevel.__init__ with "can't
+# invoke bind command: application has been destroyed" while the exact
+# same steps passed with the tray app closed. The tray binary takes
+# the named mutex from cli.py; refuse loudly instead of failing red.
+import ctypes
+_held = None
+try:
+    ctypes.windll.kernel32.OpenMutexW.restype = ctypes.c_void_p
+    _held = ctypes.windll.kernel32.OpenMutexW(0x00100001, False,
+                                              "ICU-Presence-Detector")
+except Exception:
+    pass
+if _held:
+    print("SKIP window section: the presence app is running (its CTk")
+    print("windows poison CTkToplevel in this process) - close the")
+    print("tray app and rerun for the full suite")
+    sys.exit(0)
 app = W.SettingsWindow(cfg, fm, queue.Queue())
 FAILED = []
 
