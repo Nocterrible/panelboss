@@ -148,11 +148,17 @@ there is no after-every-upgrade swap dance anymore.
 * the `SC_MONITORPOWER(-1)` **on**-broadcast is effectless on this box
   (measured: the whole wake path ran — camera released, broadcast sent,
   `ES_DISPLAY_REQUIRED` pulsed — and the panels stayed dark until real
-  mouse input; NVIDIA + DisplayPort drops the link and driver ignores
-  the legacy request). `wake()` now escalates: broadcast → one-shot
-  `VideoDisplayOn` power request (`CallNtPowerRequest`, the API the
-  video class driver honors) → injected `CTRL` tap, since nothing
-  re-trains a DP link like input and a lone modifier presses no buttons
+  mouse input; NVIDIA + DisplayPort drops the link and the driver
+  ignores the legacy request). The "supported" replacements are dead
+  ends here too, all probed: `powrprof.dll` exports **no
+  `CallNtPowerRequest`** at all on current Windows, `powercfg`'s
+  request table has no video-on keyword, and kernel32
+  `PowerCreateRequest` takes a `REASON_CONTEXT` with no video-on type.
+  Injected input is the only measured weapon: `wake()` CTRL-taps via
+  `SendInput` (a lone modifier presses no buttons), then one broadcast
+  round for machines that honor it, `ES_DISPLAY_REQUIRED` for the idle
+  timer, and a second tap — real input re-trains a DP link, and
+  `SendInput` rides the same stack
 * `SendMessageTimeout` with `uTimeout=0` waits forever; some app on the
   system never pumps its queue — every call carries a timeout
 * ctypes finds **exports**, not C header macros: `user32.SendMessageTimeout`

@@ -53,10 +53,8 @@ ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x1       # keep the box awake while we poll the camera
 ES_DISPLAY_REQUIRED = 0x2      # resets the display idle timer (wake fallback)
 
-VIDEO_DISPLAY_ON = 0x8000000D  # powrprof power request type: THE supported
-                               # way to light the panels back up
-INPUT_KEYBOARD = 1
-KEYUP = 0x0002
+INPUT_KEYBOARD = 1             # SendInput inject: the only weapon that
+KEYUP = 0x0002                 # measurably lights these panels (see wake)
 VK_CONTROL = 0x11              # a lone modifier presses no buttons
 
 DEVICE_NOTIFICATION = 1
@@ -260,31 +258,10 @@ class INPUT(ctypes.Structure):
     _fields_ = [("type", wintypes.DWORD), ("u", INPUT_UNION)]
 
 
-def _video_display_on():
-    """One-shot VideoDisplayOn power request: the call that makes the
-    video class driver restore the monitors. The SC_MONITORPOWER ON
-    broadcast is the legacy route and modern NVIDIA/DP stacks ignore it
-    (measured: the whole wake path ran and the panels stayed dark until
-    real input)."""
-    try:
-        handle = wintypes.HANDLE()
-        ok = ctypes.windll.powrprof.CallNtPowerRequest(
-            ctypes.c_uint32(VIDEO_DISPLAY_ON), 0, None, 0,
-            ctypes.byref(handle))
-        if ok:
-            ctypes.windll.powrprof.ClosePwrShutdownRequest(handle)
-            return True
-        log.debug("VideoDisplayOn request refused (%s)",
-                  ctypes.GetLastError())
-    except Exception:
-        log.debug("VideoDisplayOn request unavailable", exc_info=True)
-    return False
-
-
 def _ctrl_tap():
     """An injected lone modifier: re-trains a stubborn DP link like any
     input does, presses no buttons, and nudges the idle timer we gate
-    on - the last weapon when the API calls get politely ignored."""
+    on - on this box the ONLY input the display stack answers."""
     try:
         down = INPUT(type=INPUT_KEYBOARD)
         down.u.kbd.vk = VK_CONTROL
@@ -316,31 +293,32 @@ def turn_off():
 
 
 def wake(timeout=2.0):
-    """Restore the display, escalating.
+    """Restore the display, input FIRST.
 
-    The ON broadcast alone is effectless on modern NVIDIA/DP stacks
-    (measured: the whole wake path ran, camera released, panels stayed
-    dark until real mouse input), and ES_DISPLAY_REQUIRED only ever
-    prevents the AUTO off - so: broadcast (documented way), one-shot
-    VideoDisplayOn power request (the supported API that makes the
-    video class driver restore the monitors), and an injected CTRL tap
-    for whatever ignores both. wait_for's truth never fires on this
-    machine anyway (the broadcasts emit no notification), so every
-    attempt runs; the first weapon that works lights the panels.
+    Measured on this box, the ON broadcast alone is effectless (NVIDIA
+    + DP drops the link and the driver ignores the legacy request), and
+    every "supported" one-shot turned out dead here: powrprof.dll
+    exports NO CallNtPowerRequest at all (AttributeError, probed), the
+    powercfg CLI has no video-on keyword in its request table (probed),
+    and kernel32's PowerCreateRequest takes a REASON_CONTEXT with no
+    video-on type to ask for. Injected input is the only measured
+    weapon - real mouse movement always lights these panels, and
+    SendInput rides the same stack - so: CTRL tap, then exactly one
+    broadcast round (harmless, and honored on other machines), the
+    ES_DISPLAY_REQUIRED pulse for the idle timer, tap again in case
+    the round swallowed the first. The old 3-round loop burned 17.7 s
+    in a blackout because wait_for's notification never arrives here
+    (README quirk) - every round ran even after the panels lit.
     """
-    for attempt in range(3):
-        u32.SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND,
-                                SC_MONITORPOWER, MONITOR_ON, SMTO_NORMAL,
-                                SMTO_TIMEOUT_MS,
-                                ctypes.byref(ctypes.c_ulong()))
-        _video_display_on()
-        if wait_for(True, timeout=0.5):
-            break
-        k32.SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED)
-        time.sleep(0.5)
-        k32.SetThreadExecutionState(ES_CONTINUOUS)
-        if attempt:
-            _ctrl_tap()
+    _ctrl_tap()
+    u32.SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND,
+                             SC_MONITORPOWER, MONITOR_ON, SMTO_NORMAL,
+                             SMTO_TIMEOUT_MS,
+                             ctypes.byref(ctypes.c_ulong()))
+    k32.SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED)
+    time.sleep(0.2)
+    k32.SetThreadExecutionState(ES_CONTINUOUS)
+    _ctrl_tap()
     if watcher:
         watcher.state = 1.0
     return True
