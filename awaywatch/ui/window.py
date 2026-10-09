@@ -38,6 +38,7 @@ from PIL import Image
 from .. import config
 from . import deps, theme
 from .helpbtn import Tips
+from .kofi import kofi_pil
 from .shield import shield_pil
 
 log = logging.getLogger("ui")
@@ -189,13 +190,19 @@ class SettingsWindow(ctk.CTk):
     # ------------------------------------------------------------- build --
     def build_all(self):
         self._top = ctk.CTkFrame(self, fg_color="transparent")
-        self._top.pack(fill="x", padx=14, pady=(12, 6))
+        self._top.pack(fill="x", padx=14, pady=(12, 2))
+        self._actions = ctk.CTkFrame(self, fg_color="transparent")
+        self._actions.pack(fill="x", padx=14)     # pause/snooze/quit row:
+        # the desk commands belong above the tabs, not welded to the
+        # title (and the title row keeps room for the one link that
+        # is not a command)
         self._tabs_bar = ctk.CTkFrame(self, fg_color="transparent")
-        self._tabs_bar.pack(fill="x", padx=14)
+        self._tabs_bar.pack(fill="x", padx=14, pady=(6, 0))
         self._body = ctk.CTkFrame(self, fg_color="transparent")
         self._body.pack(fill="both", expand=True, padx=14, pady=(6, 12))
         self.tips = Tips(self.skin, self)
         self._build_top()
+        self._build_actions()
         self.tab_buttons = {}
         for key in TABS:
             b = ctk.CTkButton(self._tabs_bar, text=key, width=120,
@@ -226,7 +233,8 @@ class SettingsWindow(ctk.CTk):
 
     def rebuild_for_skin(self):
         self.tips.kill()
-        for widget in (self._top, self._tabs_bar, self._body):
+        for widget in (self._top, self._actions, self._tabs_bar,
+                       self._body):
             widget.destroy()
         self.skin = theme.get_skin(self.cfg["ui"]["skin"])
         ctk.set_appearance_mode(self.skin.mode)
@@ -284,7 +292,26 @@ class SettingsWindow(ctk.CTk):
                                        font=self.skin.font(12),
                                        **self.skin.text_style("sub"))
         self.idle_label.pack(side="left")
-        right = ctk.CTkFrame(self._top, fg_color="transparent")
+        # the patron link, top-right: the cup is drawn in code (like
+        # the UAC shield), one ink per appearance mode - a near-black
+        # cup on the near-black window would be a hole, not an icon
+        self._kofi_img = ctk.CTkImage(
+            light_image=kofi_pil(36),
+            dark_image=kofi_pil(36, ink=(226, 229, 232, 255)),
+            size=(18, 18))
+        self.kofi_button = ctk.CTkButton(
+            self._top, text="buy me a beer", image=self._kofi_img,
+            compound="left", height=28,
+            fg_color="transparent", hover_color=self.skin.panel,
+            text_color=self.skin.subtext, font=self.skin.font(12),
+            corner_radius=self.skin.radius, command=self._kofi)
+        self.kofi_button.pack(side="right")
+
+    def _build_actions(self):
+        """The desk commands get their own row above the tabs: they
+        steer the running watch, and welded to the title they read
+        like window chrome."""
+        right = ctk.CTkFrame(self._actions, fg_color="transparent")
         right.pack(side="right")
         self.pause_button = ctk.CTkButton(right, text="Pause", width=90,
                                           command=self._pause_toggle,
@@ -305,11 +332,17 @@ class SettingsWindow(ctk.CTk):
 
     # ---------------------------------------------------------- detection --
     def _build_detection(self, page):
-        left = ctk.CTkFrame(page, width=380, fg_color="transparent")
+        # ONE band anchored top-left: the camera card mounts beside
+        # the settings column, never against the window edge -
+        # stretching the window opens spare room to the RIGHT of the
+        # pair, not in a canyon between its halves
+        band = ctk.CTkFrame(page, fg_color="transparent")
+        band.pack(anchor="nw")
+        left = ctk.CTkFrame(band, width=380, fg_color="transparent")
         left.pack(side="left", fill="y")
         self._build_detect_card(left)
         self._build_timers(left)
-        self._build_camera_card(page)
+        self._build_camera_card(band)
 
     def _build_detect_card(self, left):
         box = self._card(left, "Detection")
@@ -473,13 +506,14 @@ class SettingsWindow(ctk.CTk):
         self._update_worst()
 
     # ----------------------------------------------------- camera + preview --
-    def _build_camera_card(self, page):
-        # beside the picker: the window cannot promise the preview
-        # height fits, so the page scrolls (unscrollable, the switch
-        # was simply born below the clip edge - seen live)
-        card = ctk.CTkFrame(page, width=int(self.cfg["ui"]["preview_width"])
+    def _build_camera_card(self, band):
+        # beside the settings column (see _build_detection): the
+        # window cannot promise the preview height fits, so the page
+        # scrolls (unscrollable, the switch was simply born below the
+        # clip edge - seen live)
+        card = ctk.CTkFrame(band, width=int(self.cfg["ui"]["preview_width"])
                             + 30, **self.skin.panel_style())
-        card.pack(side="right", fill="y")
+        card.pack(anchor="nw", padx=(12, 0))
         head = ctk.CTkFrame(card, fg_color="transparent")
         head.pack(anchor="w", padx=14, pady=(10, 0))
         ctk.CTkLabel(head, text="Camera", font=self.skin.font(15, "bold"),
@@ -495,18 +529,25 @@ class SettingsWindow(ctk.CTk):
         ctk.CTkButton(controls, text="rescan", width=80,
                       command=self._scan_cameras,
                       **self.skin.secondary()).pack(side="left", padx=6)
+        # the label zone is a 320 px form, not the card's full width:
+        # full width flings labels to one edge and menus to the other
+        # and the eye has to cross a canyon to read the pair (the
+        # screenshot's complaint); 320 keeps every control's right
+        # edge on one line, close enough to its label to belong to it
+        zone = ctk.CTkFrame(card, width=320, fg_color="transparent")
+        zone.pack(anchor="w", padx=14)
         for key, label, tip in (("mode_on", "while screens are on",
                                  TIPS["cam_on"]),
                                 ("mode_off", "while screens are off",
                                  TIPS["cam_off"])):
-            row = self._row(card, label, tip)
+            row = self._row(zone, label, tip)
             menu = ctk.CTkOptionMenu(row, values=["boot per poll",
                                                   "always on"], width=150,
                                      command=self._mode_changed(key),
                                      **self.skin.menu_style())
             menu.grid(row=0, column=1, sticky="e")
             menu.set(self._mode_label(self.cfg["camera"][key]))
-        row = self._row(card, "live preview", TIPS["live"])
+        row = self._row(zone, "live preview", TIPS["live"])
         self.live_switch = ctk.CTkSwitch(row, text="", font=self.skin.font(12),
                                          command=self._live_changed,
                                          progress_color=self.skin.accent,
@@ -516,7 +557,7 @@ class SettingsWindow(ctk.CTk):
         self.power_msg_ts = 0.0
         self.preview_frame = ctk.CTkFrame(card, fg_color=self.skin.field_bg,
                                           corner_radius=self.skin.radius)
-        self.preview_frame.pack(pady=(4, 4), padx=14)
+        self.preview_frame.pack(anchor="w", pady=(4, 4), padx=14)
         self.preview_label = ctk.CTkLabel(self.preview_frame,
                                           text="no frames yet - flip on "
                                           "live preview",
@@ -883,6 +924,18 @@ class SettingsWindow(ctk.CTk):
             os.startfile(config.LOG_DIR)
         except Exception:
             os.system('start "" "%s"' % config.LOG_DIR)
+
+    KO_FI = "https://ko-fi.com/nocterrible"
+
+    def _kofi(self):
+        """the patron page in the default browser - stdlib opener, no
+        shell window (the app's standing policy on windows it did not
+        ask to open)"""
+        import webbrowser
+        try:
+            webbrowser.open(self.KO_FI)
+        except Exception:
+            log.warning("no browser answered the kofi link")
 
     @staticmethod
     def update_script():

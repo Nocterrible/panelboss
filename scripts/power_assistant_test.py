@@ -504,6 +504,27 @@ def check():
         app.min_switch.deselect()
         app._start_min_changed()
         assert cfg["ui"]["start_minimized"] is False
+        # kofi link: click opens exactly the patron page (opener
+        # faked - a test must never really launch a browser), the cup
+        # draws itself, and the desk commands now sit on their own row
+        # BETWEEN the title and the tabs (geometry proves the order)
+        import webbrowser as wb
+        opened = []
+        orig = wb.open
+        wb.open = lambda url: opened.append(url)
+        try:
+            app._kofi()
+        finally:
+            wb.open = orig
+        assert opened == [W.SettingsWindow.KO_FI], opened
+        from awaywatch.ui.kofi import kofi_pil
+        cup = kofi_pil(20)
+        assert cup.mode == "RGBA" and cup.size == (20, 20)
+        assert app.kofi_button.winfo_manager() != "", "link not on screen"
+        app.update_idletasks()
+        assert (app._top.winfo_rooty() <= app._actions.winfo_rooty()
+                <= app._tabs_bar.winfo_rooty()), "actions not above tabs"
+        assert app.pause_button.winfo_manager() != ""
         w1 = app._show_overrides()
         assert w1 is app._show_overrides(), "second manager window opened"
         app._ov_win = w1
