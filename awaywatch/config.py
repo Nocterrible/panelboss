@@ -8,6 +8,7 @@ machine never has to None-check.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -142,6 +143,14 @@ DEFAULTS = {
         "power_plan": "",        # name fragment or guid swapped in when a
                                  # game starts ('' = hands off the plan)
     },
+    "tweaks": {
+        "fso_apps": [],          # full exe paths that get fullscreen
+                                 # optimizations OFF in the registry
+                                 # (takes effect next launch of each);
+                                 # the Layers key is MIRRORED to this
+                                 # list at boot - foreign tokens in
+                                 # existing values are preserved
+    },
     "faces": {
         "enabled": False,       # only registered identities count as presence (insightface)
     },
@@ -233,9 +242,22 @@ def _format_value(value):
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, str):
-        return '"%s"' % value.replace('"', '\\"')
+        return json.dumps(value)
     if isinstance(value, list):
         return "[" + ", ".join(_format_value(v) for v in value) + "]"
+    if isinstance(value, dict):
+        # TOML inline table, the ONLY legal dict shape here. The
+        # old str(dict) fallback wrote Python single quotes, which
+        # tomli rejects: the first save carrying a non-empty dict
+        # (e.g. gaming.game_hz after a rate pick) made the NEXT
+        # boot declare the whole file corrupt and reset every
+        # setting to stock (found by the gaming UI suite,
+        # 2026-10-10). Keys go through json too: TOML bare keys
+        # are [A-Za-z0-9_-] only, and monitor shorts earn dots
+        # and spaces from EDID names often enough.
+        return "{" + ", ".join("%s = %s" % (json.dumps(k),
+                                            _format_value(v))
+                               for k, v in value.items()) + "}"
     return str(value)
 
 

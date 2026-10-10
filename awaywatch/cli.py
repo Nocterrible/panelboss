@@ -137,6 +137,20 @@ def _run(cfg, autostart=False):
     threading.Thread(target=gaming_watch.loop,
                      args=(cfg, stop_gaming), daemon=True,
                      name="gaming").start()
+
+    from . import tweaks             # fail-open: a denied key is a
+    def _mirror_tweaks():            # one boot pass, then the
+        log = logging.getLogger("tweaks")   # registry IS the state;
+        try:                         # the UI applies changes
+            rows = tweaks.fso_sync(
+                (cfg.get("tweaks") or {}).get("fso_apps") or [])
+            for action, exe, ok, err in rows:
+                log.info("tweaks: %s %s%s", action, exe,
+                         "" if ok else " FAILED: " + err)
+        except Exception:
+            log.debug("tweaks mirror died", exc_info=True)
+    threading.Thread(target=_mirror_tweaks, daemon=True,   # log
+                     name="tweaks").start()                # line
     try:
         _drive(cfg, monitor, worker, ui_events)
     except KeyboardInterrupt:

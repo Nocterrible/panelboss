@@ -175,6 +175,7 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
             mons = senses.get("mons", wm.monitors())
             _release_all(ledger, mons, gcfg)
         _apply_power_plan(side, gcfg, False)   # and the plan back
+        _timer_boost(side, False)              # and the timer hand
         st.clear()
         return st, None
     mons = senses.get("mons") if "mons" in senses else wm.monitors()
@@ -200,6 +201,7 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
     if not plan:
         _adopt_or_hands_off(st, ledger, mons)
         _apply_power_plan(side, gcfg, gaming_now)
+        _timer_boost(side, gaming_now)
         return st, plan
     for short in plan.get("desktop") or []:
         m = next((m for m in mons if m["short"] == short), None)
@@ -215,7 +217,29 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
                               wm.offered_modes(m["gdi"])),
                     "game", notify, g.get("proc", ""))
     _apply_power_plan(side, gcfg, gaming_now)
+    _timer_boost(side, gaming_now)
     return st, plan
+
+
+def _timer_boost(side, gaming_now):
+    """Hold 1 ms timer resolution ONLY while a game owns the desk
+    (docs/apack-findings.md T8: the documented winmm API, not the
+    undocumented registry knob; zero admin, zero reboot, works even
+    with the GPU counters dead). side remembers OUR holding so the
+    pairing is exact: timeEndPeriod only ever answers a
+    timeBeginPeriod we made."""
+    held = bool(side.get("timer"))
+    if held == bool(gaming_now):
+        return
+    try:
+        from . import tweaks
+        ok = tweaks.timer_boost(bool(gaming_now))
+    except Exception:
+        ok = False
+    if ok:
+        side["timer"] = bool(gaming_now)
+        log.debug("timer resolution %s for gaming",
+                  "held at 1 ms" if gaming_now else "released")
 
 
 def _apply_power_plan(side, gcfg, gaming_now):

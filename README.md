@@ -292,6 +292,28 @@ peace. A user's Win+Alt+B toggle in the middle is overridden by the
 handback: the promise is "what you had when you left", not "guess
 what you want now".
 
+## Registry tweaks (`[tweaks]`, no admin, no reboot)
+
+Small, measured registry wins (research: `docs/apack-findings.md`,
+all verified on this 25H2 build - the folklore pile stayed out):
+
+* `fso_apps`: full exe paths whose **fullscreen optimizations get
+  turned OFF** (the exact `~ DISABLEDXMAXIMIZEDWINDOWEDMODE` layer
+  the compat-tab checkbox writes; takes effect next launch). At
+  boot the Layers key is MIRRORED to the list - missing entries are
+  added, fallen-off entries lose only OUR token (someone else's
+  compat flags in the same value survive).
+* while a game owns the desk, the watcher holds **1 ms system
+  timer granularity** via the documented `timeBeginPeriod` API -
+  the honest half of the "0.5 ms fix" (zero admin, zero reboot,
+  gone the moment the game leaves; the registry variant of that
+  fix is undocumented and skipped).
+* `awaywatch.tweaks` also knows the Game DVR suppressors (overlay,
+  background capture, record-what-happened, session detection -
+  all HKCU, read live so Settings and us never disagree) and the
+  machine-wide policy attempt that honestly reports "admin needed".
+  A UI card for these is the next seat in line.
+
 ## Settings window & skins
 
 `run.bat` opens a CustomTkinter window (main thread; the monitor loop
@@ -425,6 +447,35 @@ there is no after-every-upgrade swap dance anymore.
   a preference: **counter instances are born with their process**, so
   a reused query is blind to every game started after it (measured:
   stays blind forever)
+* **2026-10-10, the day the GPU went silent**: after an overnight
+  restart, EVERY per-instance read fails `PDH_INVALID_ARGUMENT`
+  (0xC0000BBD) and .NET `Get-Counter` reports
+  `PDH_CSTATUS_INVALID_DATA` with silent 0.0 for all ~1650
+  instances - bisected across scale (3 vs 400 counters), collect
+  schedules, format-vs-struct pairings and 3-vs-4-arg calls
+  (scripts/pdh_min.py). Verdict: the counter DATA PROVIDER (WDDM
+  graphics bridge) is dead machine-wide, not our marshaling; both
+  GPUs stay `CM_PROB_NONE` and enumeration still works (metadata
+  only). Corroborating: all monitors fell 240/144 back to 60 Hz at
+  the same restart. Recovery needs a driver-mode change (hot-key
+  reset or NVDisplay container restart, admin) - BOTH forbidden
+  while the vLLM fleet runs, because the engines live on those exact
+  GPUs (a reset kills them). Until the next reboot at the user's
+  hours: `gpu.usage()` fail-opens to `{}`, gaming evidence degrades
+  to trust-list + xinput, and the video-rate feature stays gated
+  (scripts/video_probe.py must see decode move before any engine
+  trusts a counter). Honest re-read of the note above: "rc=0 with
+  values 0.0" on 10-09 may have been the same dead provider masked
+  by silent zeros - treat that success claim as UNVERIFIED
+* **config writer, the silent data-killer (2026-10-10)**: a
+  non-empty dict was emitted as Python `str(dict)` - single quotes,
+  unparseable - so the FIRST save carrying one (a gaming rate pick)
+  made the next boot declare the file corrupt and reset every
+  setting. Dicts now emit as TOML inline tables (keys through
+  `json.dumps`: TOML bare keys are `[A-Za-z0-9_-]` only), and so do
+  strings - the old escaper only escaped `"`, so a backslash path
+  (`F:\Games\...` in tweaks.fso_apps) was a parse bomb too. Proven
+  by scripts/config_writer_test.py, which now rides the sweep
 * the venv `python.exe` is a **redirector**: `Popen([sys.executable,
   "-c", ...]).pid` is the shim; the interpreter that really runs the
   code is its child (measured: popened 70424, child's own `getpid()`
