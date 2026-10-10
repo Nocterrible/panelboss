@@ -130,6 +130,40 @@ def run():
         s2, p = gaming.evaluate(junk, s2, CFG, 10000.0)
     print("ok - junk facts never raise")
 
+    st.clear()
+    cfg = dict(CFG, game_hz={"A": "vrr"})   # a vrr-declared panel
+    _, p = ev(fg(proc="listed.exe", pid=9), cfg=cfg, now=11000.0)
+    assert p is None and st.get("mode") == "game"
+    print("ok - vrr: entering a listed game owes no plan at all")
+    _, p = ev(fg(proc="listed.exe", pid=9), cfg=cfg, now=11010.0)
+    assert p is None and st.get("mode") == "game"
+    print("ok - vrr: a steady game stays planless")
+    _, p = ev({"fg": None, "gpu": {}, "xinput": False},
+              cfg=cfg, now=11100.0)
+    assert p is None and st.get("mode") == "game"
+    print("ok - vrr: absence only opens the grace, no plan")
+    _, p = ev({"fg": None, "gpu": {}, "xinput": False},
+              cfg=cfg, now=11171.0)
+    assert p is None and not st
+    print("ok - vrr: the 71 s expiry owes the panel nothing (no end "
+          "plan, zero flash)")
+
+    st.clear()
+    cfg = dict(CFG, game_hz={"A": "vrr"})
+    ev(fg(proc="listed.exe", pid=9), cfg=cfg, now=12000.0)
+    _, p = ev(fg(monitor="B", proc="listed.exe", pid=9), cfg=cfg,
+              now=12010.0)
+    assert p["game"]["monitor"] == "B" and p["desktop"] == []
+    print("ok - vrr: moving panels keeps the old one out of the plan")
+    _, p = ev({"fg": None, "gpu": {}, "xinput": False},
+              cfg=cfg, now=12080.0)
+    assert p is None and st.get("mode") == "game"
+    _, p = ev({"fg": None, "gpu": {}, "xinput": False},
+              cfg=cfg, now=12171.0)
+    assert p == {"game": None, "desktop": ["B"]}
+    print("ok - vrr: the expiry hands the SIBLING back; the vrr panel "
+          "never appears")
+
     print("GAMING TESTS OK")
 
 

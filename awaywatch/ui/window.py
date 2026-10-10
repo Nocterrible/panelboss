@@ -322,7 +322,11 @@ TIPS = {
                     "watcher never starts a rule on that panel (a "
                     "panel IT clocked up for a game still comes back "
                     "to a sane 60 - or your rate - when the game "
-                    "ends).",
+                    "ends). VRR panels: tick VRR (pin max) after you "
+                    "enable G-SYNC yourself - AwayWatch never touches "
+                    "drivers, it just stops flipping that panel's "
+                    "mode and keeps it at max; if you never enabled "
+                    "VRR, pick an Hz or keep.",
     "gaming_games": "the exe names that enter game mode instantly the "
                     "moment they own a monitor - a title screen "
                     "renders at near-zero GPU and still owns the "
@@ -2013,17 +2017,26 @@ class SettingsWindow(ctk.CTk):
                                   # to offer this panel
             row = self._row(box, "%s - game rate" % m["short"],
                             TIPS["gaming_rates"])
-            game_vals = ["auto"] + [str(v) for v in hz]
+            # 'VRR (pin max)' is not a rate: it declares the panel's
+            # scanout belongs to the driver's variable rate, so the
+            # watcher never flips it (and pins it at its max outside
+            # games). The card's first entry stays 'auto' - the game
+            # menu has no 'keep' (that is the desktop menu's word)
+            game_vals = ["auto", "VRR (pin max)"] + [str(v) for v in hz]
             game_menu = ctk.CTkOptionMenu(
                 row, values=game_vals, width=120,
                 command=lambda v, s=m["short"]:
                 self._gaming_game_hz(s, v),
                 **self.skin.menu_style())
             stored = (g.get("game_hz") or {}).get(m["short"])
-            game_menu.set(str(stored)
-                          if stored is not None
-                          and str(stored) in game_vals[1:]
-                          else "auto")
+            # a stored 'vrr' shows as its menu label; anything else
+            # shows its own string, falling back to the default the
+            # same way the desktop menu does
+            shown = ("VRR (pin max)"
+                     if str(stored).strip().lower() == "vrr"
+                     else str(stored))
+            game_menu.set(shown if stored is not None
+                          and shown in game_vals[1:] else "auto")
             game_menu.grid(row=0, column=1, sticky="e")
             row = self._row(box, "%s - desktop rate" % m["short"],
                             TIPS["gaming_rates"])
@@ -2336,8 +2349,18 @@ class SettingsWindow(ctk.CTk):
         self._save()
 
     def _gaming_game_hz(self, short, label):
-        self.cfg["gaming"]["game_hz"][short] = (
-            "auto" if label == "auto" else int(label))
+        if label == "VRR (pin max)":
+            self.cfg["gaming"]["game_hz"][short] = "vrr"
+        elif label == "auto" and (
+                self.cfg["gaming"]["game_hz"].get(short) == "vrr"):
+            # back to the default = the vrr rule comes off: pop the
+            # rule, the same pattern the desktop keep uses ('auto'
+            # and an unset entry answer the same, the panel's
+            # fastest)
+            self.cfg["gaming"]["game_hz"].pop(short, None)
+        else:
+            self.cfg["gaming"]["game_hz"][short] = (
+                "auto" if label == "auto" else int(label))
         self._save()
 
     def _gaming_desk_hz(self, short, label):
@@ -2855,7 +2878,10 @@ class SettingsWindow(ctk.CTk):
         else:
             labels.append(self.IR_INSTALL)
         self.camera_menu.configure(values=labels)
-        current = self.cfg["camera"]["index"]
+        # the roster may be a list (multi-camera); the picker is a
+        # one-choice widget, so it shows the rotation's first post
+        # and picking any single entry collapses the roster onto it
+        current = config.normalize_index(self.cfg["camera"]["index"])[0]
         want = self.IR_INSTALL if current == camera.HELLO_IR else None
         for label in labels:
             if label == want or \

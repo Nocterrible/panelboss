@@ -18,7 +18,11 @@ THE LAW, in the order the loop obeys it:
    monitor's current pixels and only trades the rate;
 5. fail open. Any exception inside a tick is logged and the loop
    survives; any Win32 layer failure is already None/False/{}/""
-   by the time it reaches us.
+   by the time it reaches us;
+6. a vrr-declared panel (game_hz = "vrr") is never flipped: the
+   user enabled g-sync on it, its scanout belongs to the driver's
+   variable rate, so outside games it is only re-pinned to its max
+   offered rate (the top of that range, where it idles anyway).
 
 tick() is pure of threads and sleeps so scripts/gaming_watch_test.py
 can drive a week of fake desk in seconds. cli.py runs loop() on a
@@ -63,11 +67,16 @@ def covers(fg, mons):
 def wanted_hz(gcfg, key, m, offered):
     """Resolve game_hz/desktop_hz for one monitor: an int is an
     order; game_hz "auto" (or unset) means the fastest rate the
-    panel offers; desktop_hz unset means 60, the user's default."""
+    panel offers; game_hz "vrr" rides that same path (the max IS
+    the top of the panel's range, and set_mode refuses a no-op, so
+    an accidental set cannot flash); desktop_hz unset means 60, the
+    user's default."""
     want = (gcfg.get(key) or {}).get(m["short"])
     if want is None and key == "game_hz":
         want = "auto"
-    if want == "auto":
+    if want is None:
+        return 60
+    if want == "auto" or str(want).strip().lower() == "vrr":
         best = 0
         for name in offered or ():
             try:
@@ -75,8 +84,6 @@ def wanted_hz(gcfg, key, m, offered):
             except (IndexError, ValueError):
                 continue
         return best or m["rate"]
-    if want is None:
-        return 60
     try:
         return int(want)
     except (TypeError, ValueError):
@@ -127,29 +134,96 @@ def _release_all(ledger, mons, gcfg):
     """Gaming got switched off while a monitor was ours: give every
     booked monitor its desktop rate back (default 60 - a panel WE
     clocked up must not stay clocked up with us gone; panels we
-    never touched were never ours to release), then wash hands."""
+    never touched were never ours to release), then wash hands.
+    vrr panels are exempt: we leave them at max, which is exactly
+    where their g-sync range tops out."""
     for short in list(ledger):
         m = next((m for m in mons if m["short"] == short), None)
-        if m:
+        if m and _vrr_rule((gcfg.get("game_hz") or {}).get(short)):
+            # vrr outranks even the hand-back: the panel stays at max,
+            # where g-sync lives; 60 is the worst seat in the house
+            log.info("gaming hz: %s stays pinned - vrr owns it", short)
+        elif m:
             _set_hz(ledger, m, wanted_hz(gcfg, "desktop_hz", m, ()),
                     "switched off")
         ledger.pop(short, None)
 
 
+def _vrr_rule(rule):
+    """True when a per-monitor game rule declares vrr: the user
+    enabled g-sync on that panel themselves, so the only thing we
+    may do with it is stop flipping it (and re-pin its max)."""
+    return str(rule or "").strip().lower() == "vrr"
+
+
+def _vrr_max(offered):
+    """The top rate a 'WxH@R' list offers, 0 when the list is empty
+    or nothing in it parses (the same reading 'auto' uses)."""
+    best = 0
+    for name in offered or ():
+        try:
+            best = max(best, int(name.rsplit("@", 1)[1]))
+        except (AttributeError, IndexError, TypeError, ValueError):
+            continue
+    return best
+
+
+def _hold_vrr(ledger, m):
+    """The vrr pin: outside games a declared-vrr panel sits at its
+    max offered rate - the top of the variable range, where the
+    panel idles anyway. Silent when it already sits there; parked
+    quietly when the max cannot land at this resolution right now
+    (the same storm guard the explicit path uses); nothing at all
+    when the driver offers no list."""
+    try:
+        offered = wm.offered_modes(m["gdi"])
+    except Exception:
+        offered = ()
+    want = _vrr_max(offered)
+    if not want:
+        return                     # no list: say nothing, do nothing
+    live = _live(m["gdi"])
+    if live is None or live[2] == want:
+        return                     # already at the max: zero calls
+    mode = "%dx%d@%d" % (live[0], live[1], want)
+    if mode not in (offered or ()):
+        # the max cannot land at THIS resolution right now (a cable
+        # swap or a driver update rewrote the mode list): set_mode
+        # would refuse before touching the screen, the book would
+        # keep the foreign truth, and next tick we'd be here again -
+        # a 2 s retry storm of scans and log lines for a mode that
+        # cannot land. Park quietly until the list changes.
+        return
+    _set_hz(ledger, m, want, "vrr max", None, "not gaming")
+
+
 def _enforce_desktop(ledger, mons, gcfg):
-    """OUTSIDE game mode, desktop_hz is law: every configured panel
-    sits at its configured rate, always, re-set whenever the driver
-    stopped listening. This is the automation: Windows forgets rates
-    after reboots/driver updates (measured: whole desk at 60 after
-    the 10-10 restart) and the user should never have to notice.
-    Panels WITHOUT an entry are nobody's business - profiles, NVCP
-    and the user's hands keep full authority over them, adopted
-    untouched by _adopt_or_hands_off."""
+    """OUTSIDE game mode two laws share this pass: the vrr law
+    outranks the desktop law - a declared-vrr panel is never flipped
+    to its desktop rate, it is re-pinned to its max (_hold_vrr);
+    every other configured panel sits at its configured rate,
+    always, re-set whenever the driver stopped listening. This is
+    the automation: Windows forgets rates after reboots/driver
+    updates (measured: whole desk at 60 after the 10-10 restart) and
+    the user should never have to notice. Panels WITHOUT an entry in
+    either map are nobody's business - profiles, NVCP and the user's
+    hands keep full authority over them, adopted untouched by
+    _adopt_or_hands_off."""
     want_map = gcfg.get("desktop_hz") or {}
-    for short in want_map:
+    game_map = gcfg.get("game_hz") or {}
+    if not isinstance(game_map, dict):
+        game_map = {}
+    shorts = list(want_map)
+    for short in game_map:
+        if _vrr_rule(game_map.get(short)) and short not in shorts:
+            shorts.append(short)
+    for short in shorts:
         m = next((m for m in mons if m["short"] == short), None)
         if m is None:
             continue                     # unplugged: nothing to hold
+        if _vrr_rule(game_map.get(short)):
+            _hold_vrr(ledger, m)
+            continue
         try:
             want = int(want_map[short])
         except (TypeError, ValueError):

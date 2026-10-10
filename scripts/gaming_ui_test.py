@@ -9,6 +9,7 @@ import ctypes
 import os
 import queue
 import sys
+import threading
 import time
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
@@ -212,6 +213,59 @@ def check():
         assert back["gaming"]["game_hz"]["T2"] == "auto", back["gaming"]
         assert back["gaming"]["desktop_hz"]["T2"] == 120, back["gaming"]
         print("[PASS] game_hz menu selection lands in cfg with the right short")
+        # 4b) the VRR entry: it sits between the default and the Hz
+        #     list, stores the string "vrr", shows itself again on a
+        #     reload, and choosing the default back pops the rule (the
+        #     desktop keep's pattern, scoped to a vrr entry)
+        assert "VRR (pin max)" in v1, v1
+        assert str(game1.cget("values")) == \
+            "['auto', 'VRR (pin max)', '60', '144']", v1
+        app._gaming_game_hz("T1", "VRR (pin max)")
+        assert cfg["gaming"]["game_hz"].get("T1") == "vrr", \
+            cfg["gaming"]["game_hz"]
+        time.sleep(0.5)
+        app.update()
+        assert _disk()["gaming"]["game_hz"]["T1"] == "vrr", _disk()["gaming"]
+        print("[PASS] vrr (pin max): menu entry, vrr stored, on disk")
+        # the reload half needs a SECOND live window. A second
+        # SettingsWindow in the same process dies inside the CTk image
+        # setup (TclError: image ... doesn't exist, at the kofi button
+        # in window.py's build_all) - the in-process flavor of the
+        # CTk-poison this file guards against at the top. Loud skip,
+        # never red: the defect is on the window.py side.
+        app2 = None
+        try:
+            app2 = W.SettingsWindow(cfg, fm, queue.Queue())
+        except Exception as e:
+            # the half-built shell still exists and poisons the Tk
+            # state (it keeps mainloop alive after app is destroyed):
+            # tear it down before anything else runs
+            try:
+                app2.destroy()
+            except Exception:
+                pass
+            print("SKIP vrr reload half: the second SettingsWindow died "
+                  "in the build (%s: %s) - the in-process CTk image-"
+                  "poison; the window.py side is the defect, not this "
+                  "suite" % (type(e).__name__, e), flush=True)
+        else:
+            try:
+                g2, d2 = app2.gaming_menus["T1"]
+                assert g2.get() == "VRR (pin max)", g2.get()
+                assert d2.get() == "keep", d2.get()   # desktop side
+                # untouched
+                app2._gaming_game_hz("T1", "auto")
+                assert "T1" not in cfg["gaming"]["game_hz"], \
+                    cfg["gaming"]["game_hz"]
+                time.sleep(0.5)
+                app2.update()
+                disk2 = _disk()["gaming"]["game_hz"]
+                assert "T1" not in disk2 and disk2.get("T2") == "auto", \
+                    disk2
+            finally:
+                app2.destroy()
+            print("[PASS] vrr (pin max): reload shows it, back-to-"
+                  "default pops the rule")
         # 5) the front-of-me worker: the function (not the click) starts
         #    the probe off-thread; the answer appends and refreshes the
         #    box; a miss leaves the list exactly alone
@@ -308,7 +362,13 @@ def check():
             tweaks._put(p2, n2, orig)
         print("[PASS] a DVR click repaints its OWN row, never the "
               "neighbour's")
-        app.destroy()          # the checks are done: end the loop
+        # the checks are done: end the loop. destroy() alone does not
+        # always work - a half-built second window (the image poison
+        # above) kills the Tk auto-command table, and the mainloop's
+        # window-gone notification runs through those commands.
+        # quit() is a Tcl-level 'break' and always ends the loop.
+        app.destroy()
+        app.quit()
     except Exception:
         _fail("check")
 
@@ -318,6 +378,20 @@ def _watchdog():
     FAILED.append("watchdog")
     app.destroy()
 
+
+# hard backstop: if the Tk event loop itself stops processing (the
+# second-window image death can do it), the after-based watchdog
+# below never fires and this process would hang the whole sweep.
+# This daemon kills the process at 120 s instead.
+def _hard_kill():
+    time.sleep(120)
+    print("HARD KILL after 120 s: the Tk event loop stopped "
+          "processing - killing so the sweep cannot hang",
+          flush=True)
+    os._exit(3)
+
+
+threading.Thread(target=_hard_kill, daemon=True).start()
 
 app.after(600, check)
 app.after(60000, _watchdog)

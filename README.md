@@ -245,6 +245,24 @@ take ~1–2 s (WinRT pipeline start): with `index = -2`, prefer
 poll. A crashed WinRT pump reads as a dead handle — the state machine's
 existing release-and-reopen path picks it up.
 
+**Several cameras, one vote (rotation).** `[camera] index` also takes a
+list (`index = [2, 5]`), and `name_contains = "Integrated Camera"`
+resolves every matching device **at config load** and appends it to the
+roster (probes are the picker's, cached about a minute; a failed probe
+leaves the explicit indexes standing, and saving settings persists the
+resolved list as plain indexes). Presence is an OR: the eye that sees
+you decides it, no other camera can overrule it. Cold boot measures
+~5 s per camera, so polling all of them every tick would be far too
+slow — each poll cycle votes with exactly one camera, round-robin, and
+the first present vote wins the tick outright. A camera that cannot
+open abstains: it casts no negative vote, and the absence clock never
+runs on cycles where nothing opened at all — a drawer full of dead
+webcams cannot turn your screens off. Single-camera setups change not
+at all: the one eye dying still counts as absent (fail-closed, table
+above). The window picker shows the rotation's first post, and picking
+any single entry collapses the roster onto it; the tray menu instead
+ticks every camera on duty.
+
 **Tray**: a plain LEFT click opens the settings window (the
 `Settings...` item is the pystray default action); the menu itself
 remains the right-click affair.
@@ -290,6 +308,13 @@ need 240 Hz burning watts and OLED heat all day. The watcher
     rate for a specific panel - the card used to *display* a phantom
     `60` for unconfigured panels (the config was really empty), which
     made the feature look broken; it now honestly shows `keep`.
+
+VRR: tick **VRR (pin max)** in the card for a panel you have G-SYNC
+on yourself. AwayWatch never writes NVIDIA driver settings - it just
+stops flipping that panel's mode (zero flash at a game's start and
+end) and keeps it at the highest rate the driver offers, which is
+where a VRR panel's range tops out anyway. Panels you leave unmarked
+keep plain Hz switching.
 
 Detection reads `\GPU Engine(*)\Utilization Percentage` per-instance
 (`gpu.py`); the wildcard-array API is abandoned on this OS (it

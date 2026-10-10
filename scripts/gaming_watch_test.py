@@ -79,14 +79,24 @@ class FakeWm:
              "bits": 32, "primary": True},
             {"id": "M2", "short": "M2", "gdi": "D2",
              "x": 2560, "y": 0, "w": 1920, "h": 1080, "rate": 60,
+             "bits": 32, "primary": False},
+            {"id": "M3", "short": "M3", "gdi": "D3",
+             "x": 4480, "y": 0, "w": 3840, "h": 2160, "rate": 144,
+             "bits": 32, "primary": False},
+            {"id": "M4", "short": "M4", "gdi": "D4",
+             "x": 8320, "y": 0, "w": 1920, "h": 1080, "rate": 60,
              "bits": 32, "primary": False}]
     OFFER = {"D1": ["2560x1440@60", "2560x1440@144",
                                  "2560x1440@240"],
-             "D2": ["1920x1080@60", "1920x1080@165"]}
+             "D2": ["1920x1080@60", "1920x1080@165"],
+             "D3": ["3840x2160@144", "3840x2160@240"],
+             "D4": ["1920x1080@60", "1920x1080@165"]}
 
     def __init__(self):
         self.live = {"D1": (2560, 1440, 144),
-                     "D2": (1920, 1080, 60)}
+                     "D2": (1920, 1080, 60),
+                     "D3": (3840, 2160, 144),
+                     "D4": (1920, 1080, 60)}
         self.fg = None
 
     def monitors(self):
@@ -299,6 +309,97 @@ def main():
     assert n == 0
     ok("hold stands down while the game owns the desk")
     CFG["gaming"]["desktop_hz"] = {}
+
+    # the VRR pin: a declared-vrr panel is never flipped (zero flash
+    # at a game's start and end) and sits at its max offered rate
+    # outside games; a sibling explicit-Hz panel still switches both
+    # ways. The max comes from the driver's list, not from
+    # desktop_hz (vrr outranks desktop; the entry stays stored but
+    # ignored by this pass)
+    st.clear()
+    ledger.clear()
+    CFG["gaming"]["game_hz"] = {"M3": "vrr", "M4": 165}
+    CFG["gaming"]["desktop_hz"] = {}
+    wm.live["D3"] = (3840, 2160, 144)
+    n, plan = tick()
+    assert n == 1 and CALLS[-1] == ("D3", 3840, 2160, 240), CALLS[-3:]
+    assert ledger.get("M3") == ("D3", 3840, 2160, 240)
+    ok("vrr at 144: pinned to the max offered (240) exactly once")
+    n, plan = tick()
+    assert n == 0 and plan is None
+    ok("vrr already at the max: silent")
+    wm.live["D3"] = (3840, 2160, 240)
+    n, plan = tick()
+    assert n == 0
+    d3 = lambda: sum(1 for c in CALLS if c[0] == "D3")
+    d3_now = d3()
+    n, plan = tick(fg_on("M3", "test.exe"))
+    assert n == 0 and plan is None and st.get("mode") == "game"
+    ok("vrr game start: zero mode changes, plan None")
+    n, plan = tick(fg_on("M3", "test.exe"))
+    assert n == 0 and plan is None
+    n, plan = tick(fg_on("M4", "test.exe"))
+    assert n == 1 and CALLS[-1] == ("D4", 1920, 1080, 165), CALLS[-3:]
+    ok("move to the sibling explicit-Hz panel: it switches, the vrr "
+       "panel stays put")
+    clock.t += 61
+    n, plan = tick()
+    assert n == 0 and st.get("mode") == "game"
+    clock.t += 61
+    n, plan = tick()
+    assert n == 1 and CALLS[-1] == ("D4", 1920, 1080, 60), CALLS[-3:]
+    assert d3() == d3_now
+    ok("game ends: the sibling gets its 60 back, the vrr panel never "
+       "flips (zero flash both ways)")
+
+    # the storm guard on the pin: the max (240) is offered only at
+    # another resolution, so it cannot land at THIS one - the pin
+    # parks quietly instead of retrying every 2 s
+    wm.OFFER = dict(FakeWm.OFFER,
+                    D3=["3840x2160@60", "2560x1440@240"])
+    wm.live["D3"] = (3840, 2160, 60)
+    st.clear()
+    ledger.clear()
+    CFG["gaming"]["game_hz"] = {"M3": "vrr"}
+    for _ in range(3):
+        n, plan = tick()
+        assert n == 0 and plan is None
+    ok("vrr max not offerable at this resolution: parked quietly, no "
+       "retry storm")
+    wm.OFFER = dict(FakeWm.OFFER, D3=[])
+    n, plan = tick()
+    assert n == 0 and plan is None
+    ok("vrr with no offered list at all: says nothing, does nothing")
+    del wm.OFFER
+
+    # the release pin: with a vrr-declared panel AND an explicit-Hz
+    # sibling both in the ledger, switching the watcher off hands the
+    # sibling its desktop rate back (60, the unset default) but never
+    # touches the vrr panel - it stays at its max, where g-sync lives,
+    # and both entries fall out of the ledger
+    st.clear()
+    ledger.clear()
+    side.clear()
+    CFG["gaming"]["game_hz"] = {"M3": "vrr", "M4": 165}
+    CFG["gaming"]["desktop_hz"] = {}
+    wm.live["D3"] = (3840, 2160, 144)         # not yet at its max
+    wm.live["D4"] = (1920, 1080, 60)
+    n, plan = tick()
+    assert n == 1 and CALLS[-1] == ("D3", 3840, 2160, 240), CALLS[-3:]
+    assert ledger.get("M3") == ("D3", 3840, 2160, 240)
+    n, plan = tick(fg_on("M4", "test.exe"))
+    assert n == 1 and CALLS[-1] == ("D4", 1920, 1080, 165), CALLS[-3:]
+    assert ledger.get("M4") == ("D4", 1920, 1080, 165)
+    d3 = lambda: sum(1 for c in CALLS if c[0] == "D3")
+    d3_now = d3()
+    n, plan = tick(fg_on("M4", "test.exe"), enabled=False)
+    assert n == 1 and CALLS[-1] == ("D4", 1920, 1080, 60), CALLS[-3:]
+    assert d3() == d3_now, "the vrr panel must never be flipped on release"
+    assert wm.live["D3"] == (3840, 2160, 240), wm.live
+    assert not ledger and not st
+    ok("switched off with a vrr panel booked: the vrr panel stays at "
+       "its max, the sibling gets the 60 default back, the ledger "
+       "washes clean")
 
     print("GAMING WATCH TESTS OK"
           if os.path.exists(os.path.join(ROOT, "awaywatch",

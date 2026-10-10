@@ -40,10 +40,16 @@ LOG_DIR = os.environ.get("ICU_PRESENCE_LOG_DIR") or str(Path(CONFIG_DIR) / "logs
 # stock defaults, in one place so behavior is documented by code
 DEFAULTS = {
     "camera": {
-        "index": 0,             # -1 to auto-pick the first camera that opens;
+        "index": 0,             # an int, or a list of ints: several cameras
+                                # rotate (one votes per poll, round-robin);
                                 # -2 = Windows Hello IR sensor (the optional
                                 # whircam bridge: pip install whircam)
-        "name_contains": [],    # substring match against device names, wins over index
+        "name_contains": "",    # substring(s) matched against device names
+                                # and merged into the index list at config
+                                # load (re-checked at open time); matches
+                                # join the rotation, "" = names ignored
+                                # (old files may hold a list); a sentinel
+                                # index (-1/-2) stays single-eyed
         "width": 1280,
         "height": 720,
         "warmup_frames": 4,     # auto-exposure needs time to settle before inference
@@ -137,7 +143,9 @@ DEFAULTS = {
                                  # menus, cutscenes and alt-tabs before the
                                  # desktop rate is handed back
         "game_hz": {},           # monitor short -> "auto" (the panel's
-                                 # fastest) or a number; unset means auto
+                                 # fastest), "vrr" (the user has
+                                 # g-sync on it: never flip it, pin
+                                 # its max) or a number; unset means auto
         "desktop_hz": {},        # monitor short -> the rate the panel gets
                                  # back when no game owns it; unset means 60
         "power_plan": "",        # name fragment or guid swapped in when a
@@ -195,6 +203,35 @@ DEFAULTS = {
 }
 
 
+def normalize_index(value):
+    """[camera] index in its in-memory shape: a list of ints. A bare int
+    is one camera; a list is the rotation (one camera votes per poll,
+    round-robin). An empty list means "the stock default"."""
+    if value is None:
+        return [0]
+    if isinstance(value, (list, tuple)):
+        out = [int(i) for i in value]
+        return out if out else [0]
+    return [int(value)]
+
+
+def normalize_name_contains(value):
+    """[camera] name_contains in its in-memory shape: a list of
+    substrings. Both shapes read - the new stock default is a string,
+    old files on disk may still hold a list; "" and [] both mean
+    "no name matching"."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    out = []
+    for part in value:
+        part = str(part).strip()
+        if part:
+            out.append(part)
+    return out
+
+
 def find_config(dir=CONFIG_DIR, config_name="config.toml"):
     """Returns the config path, creating parent directories."""
     if not os.path.exists(dir):
@@ -250,6 +287,34 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
                 power_merged[key] = bool(legacy)
     if verbose:
         log.debug(f"using config from {path}")
+    # [camera] index and name_contains normalize to one in-memory shape
+    # (index a list of ints, names a list of substrings); the on-disk
+    # file keeps whatever the user wrote
+    camera_merged = merged.get("camera")
+    if camera_merged is not None:
+        camera_merged["index"] = normalize_index(
+            camera_merged.get("index", 0))
+        camera_merged["name_contains"] = normalize_name_contains(
+            camera_merged.get("name_contains"))
+        if camera_merged["name_contains"] and all(
+                i >= 0 for i in camera_merged["index"]):
+            # name matches resolve INTO the duty roster at load: the
+            # rotation decision (state._rotor) counts plain indexes,
+            # so a name-only config must already be a list by then.
+            # probes are the camera module's cached ones, and any
+            # probe failure leaves the explicit indexes standing.
+            # a sentinel roster stays single-eyed here too (the same
+            # rule open_camera enforces): no second eye next to
+            # hello IR or the default device, or the bridge route
+            # would silently lose its priority
+            try:
+                from . import camera
+                camera_merged["index"] = camera._extend_by_name(
+                    camera_merged["index"],
+                    camera_merged["name_contains"])
+            except Exception:
+                log.exception("camera name match failed; running on "
+                              "the explicit indexes alone")
     return merged
 
 
@@ -296,6 +361,19 @@ def write_config(config, path=None):
     if os.path.isdir(path):
         path = os.path.join(path, "config.toml")
     data = {k: v for k, v in config.items() if not k.startswith("_")}
+    if "camera" in data:
+        # in memory the index is ALWAYS a list; on disk a single camera
+        # goes back to the bare int (the shape users and the tray have
+        # always saved) and several stay a list. name_contains: empty
+        # is "" on disk, one match a plain string, several a list. The
+        # sub-dict is copied: the live cfg keeps its list shape
+        cam = dict(data["camera"])
+        indexes = normalize_index(cam.get("index", 0))
+        cam["index"] = indexes[0] if len(indexes) == 1 else indexes
+        names = normalize_name_contains(cam.get("name_contains"))
+        cam["name_contains"] = (names[0] if len(names) == 1
+                                else names if names else "")
+        data["camera"] = cam
     # atomic: the app saves while it runs, and a crash between
     # truncate and finish used to leave a half file (or none)
     with open(path + ".tmp", "w", encoding="utf-8") as f:

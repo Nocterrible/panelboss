@@ -209,7 +209,11 @@ class Tray(threading.Thread):
 
     def _camera_checker(self, index):
         def check(item):
-            return self.config["camera"]["index"] == index
+            # a multi-camera roster ticks every eye on duty:
+            # the rotation really does check with each of them
+            from . import config
+            return index in config.normalize_index(
+                self.config["camera"]["index"])
         return check
 
     def _settings(self, icon=None):

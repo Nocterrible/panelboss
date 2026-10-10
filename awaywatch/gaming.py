@@ -20,11 +20,17 @@ THE LAW:
    steady state answers None and the worker stays silent);
 6. ignore beats the list; a game never qualifies twice for the
    same frame; nothing here may raise.
+7. a vrr-declared panel (game_hz = "vrr") owes no mode change:
+   no start plan, no end plan - its scanout belongs to the
+   driver's variable rate (the watcher pins the panel at its max
+   offered rate outside games instead).
 
 evaluate(facts, st, cfg, now) -> (st, plan|None)
 facts = {"fg": {...}|None, "gpu": {pid: pct}, "xinput": bool}
 plan  = {"game": {"monitor","pid","proc","reason"}|None,
-         "desktop": [short, ...]}
+         "desktop": [short, ...]}  - a vrr-declared panel never
+appears in either slot, and a transition with nothing left in it
+answers None, the steady-state answer
 """
 import logging
 
@@ -40,6 +46,30 @@ def _get(d, key, default=None):
     except AttributeError:
         return default
     return default if v is None else v
+
+
+def _vrr(cfg, monitor):
+    """True when this panel's game rule declares vrr: the user has
+    g-sync on it, the scanout belongs to the driver's variable
+    rate, so no plan entry may start or end on it (the watcher pins
+    it at its max offered rate outside games instead)."""
+    rules = _get(cfg, "game_hz")
+    if not isinstance(rules, dict):
+        return False
+    return str(rules.get(monitor, "") or "").strip().lower() == "vrr"
+
+
+def _plan(game, desktop, cfg):
+    """Assemble a transition plan, dropping the entries a vrr panel
+    owes nobody (no start, no end). A transition that drops
+    everything answers None - the steady-state answer, so the worker
+    stays exactly as silent as it would be mid-game."""
+    if game is not None and _vrr(cfg, game.get("monitor")):
+        game = None
+    desktop = [s for s in (desktop or []) if not _vrr(cfg, s)]
+    if game is None and not desktop:
+        return None
+    return {"game": game, "desktop": desktop}
 
 
 def evaluate(facts, st, cfg, now):
@@ -99,18 +129,18 @@ def _evaluate(facts, st, cfg, now):
                                          # any re-assert, we do not
             st["proc"], st["pid"] = proc, pid   # handoff: new
             game["reason"] = "handoff"          # title bar, same
-            return st, {"game": game, "desktop": []}   # panel
+            return st, _plan(game, [], cfg)     # panel
         if qualified:                    # another panel earned it
             st.update(mode="game", monitor=monitor, proc=proc,
                       pid=pid, grace_start=None, seen=None)
             game["reason"] = "moved"
-            return st, {"game": game, "desktop": [old]}
+            return st, _plan(game, [old], cfg)
         if st.get("grace_start") is None:
             st["grace_start"] = now      # the alt-tab window opens
         if now - st["grace_start"] < grace:
             return st, None
         st.clear()
-        return st, {"game": None, "desktop": [old]}
+        return st, _plan(None, [old], cfg)
 
     if not qualified:
         st.pop("seen", None)             # evidence broke; the timer
@@ -118,7 +148,7 @@ def _evaluate(facts, st, cfg, now):
     if proc in games:                    # listed: instant, a menu
         st.update(mode="game", monitor=monitor, proc=proc, pid=pid,
                   seen=None, grace_start=None)
-        return st, {"game": game, "desktop": []}
+        return st, _plan(game, [], cfg)
     sp = st.get("seen") or {}
     if not (sp.get("pid") == pid and sp.get("proc") == proc
             and sp.get("monitor") == monitor):
@@ -130,5 +160,5 @@ def _evaluate(facts, st, cfg, now):
             reason, int(now - sp["since"]))
         st.update(mode="game", monitor=monitor, proc=proc, pid=pid,
                   seen=None, grace_start=None)
-        return st, {"game": game, "desktop": []}
+        return st, _plan(game, [], cfg)
     return st, None

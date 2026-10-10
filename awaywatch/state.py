@@ -197,6 +197,13 @@ class PresenceMonitor:
                     self.next_poll = now + self.power_cfg["poll_sec"]
                     return
             present, score = self._poll()
+            if present is None:
+                # no camera delivered a frame: no verdict. It neither
+                # starts the absence clock, nor logs "nobody at the
+                # desk", nor forces anything on; the next poll gets
+                # its own turn
+                self.next_poll = now + self.on_poll()
+                return
             if unknown_start and present:
                 self._force_on(now, "somebody sits at a desk whose screens"
                                     " the app cannot prove are lit")
@@ -256,7 +263,12 @@ class PresenceMonitor:
             return
         if now >= self.next_poll:
             present, score = self._poll()
-            if present:
+            if present is None:
+                # dead camera: no verdict, no reset of the presence
+                # hits, and no reschedule (the off phase re-polls
+                # every tick once the deadline is due, as today)
+                pass
+            elif present:
                 self.hits += 1
                 if self.hits >= self.cfg["inference"]["min_hits"]:
                     self._wake(now, score)
@@ -394,8 +406,13 @@ class PresenceMonitor:
         return self.timers["on_poll_sec"]
 
     def _poll(self):
-        frame = self._grab()
+        frame, opened = self._grab()
         if frame is None:
+            if not opened:
+                # the open itself failed: no camera looked, so no
+                # verdict - an abstain never confirms absence and
+                # never resets the presence hits
+                return None, 0.0
             return False, 0.0                    # device busy or died
         # two-tier, letterboxed: a clear hit is present, a borderline one
         # counts only if it moved; motion mode has no detect_lively, so
@@ -420,15 +437,39 @@ class PresenceMonitor:
         return self.camera_cfg["mode_on"]
 
     def _grab(self):
+        """(frame, opened): opened is True when a camera handle was
+        actually constructed and then failed to deliver a frame (a
+        stall: today's fail-closed vote), False when the open itself
+        failed (a real driver error, or a rotation in which no camera
+        could open): that is an abstain, and an abstain is not a
+        verdict."""
         try:
             if self._mode() == "boot_per_poll":
+                rot = self._rotor()
+                if rot is not None:
+                    # the rotation keeps one persistent adapter across
+                    # polls: the cursor must outlive the per-poll open
+                    # and release, or every poll starts on camera one
+                    frame = rot.read(mode="boot_per_poll")
+                    return frame, rot.last_opened
                 cam = self._new_camera()
                 try:
                     cam.warm_up()
-                    return cam.read()
+                    return cam.read(), True
                 finally:
                     cam.release()                # the LED rests; the user
                 # can always notice the blink
+            rot = self._rotor()
+            if rot is not None:
+                # a rotor is never recreated here: every index keeps
+                # its own slot (a dead one retried on its turn, a
+                # stalled one released and reopened) and the cursor
+                # must outlive the dead ones, so a dead camera can
+                # never veto a live one
+                if not rot.is_open():
+                    rot.warm_up()
+                frame = rot.read(mode="always_on")
+                return frame, rot.last_opened
             cam = self.camera
             if cam is None or not cam.is_open():
                 cam = self.camera = self._new_camera()
@@ -441,11 +482,61 @@ class PresenceMonitor:
                 # reading the corpse every poll forever is exactly
                 # the "no LED, no wake, mouse required" symptom)
                 self._release_camera()
-            return frame
+            return frame, True
         except Exception:
             log.exception("grab failed; treating this poll as no frame")
             self._release_camera()               # half-dead device: next
-            return None                          # poll opens a fresh one
+            # poll opens a fresh one. the vote shape is the shipped
+            # one: with no rotor behind this failure nobody else is
+            # watching, so a single-camera desk keeps its fail-closed
+            # absent - only a rotation may abstain (a dead camera must
+            # never veto a live one; a lone dead camera has no live
+            # one to veto, and abstaining would keep the screens lit
+            # forever with nobody ever seen again)
+            return None, not self._multi_cam()
+
+    def _multi_cam(self):
+        """True when the duty roster holds more than one camera. Pure
+        config math plus one honest exception: a rotor that open-time
+        resolution handed us owns this desk until the config itself
+        says otherwise (the hot-plug case the load probe missed).
+        Safe to call from an except arm. name matches are merged INTO
+        the index list at config load (config.get_config), so the
+        length check is the whole truth, names included."""
+        from . import config
+        if getattr(self.camera, "rotating", False):
+            return True
+        return len(config.normalize_index(self.camera_cfg.get("index", 0))) > 1
+
+    def _roster_words(self):
+        """"camera index 2" or "cameras [0, 2]" - the burst notice has
+        to read right whichever roster is on duty."""
+        r = self.camera_cfg["index"]
+        if isinstance(r, (list, tuple)):
+            if len(r) > 1:
+                return "cameras %s" % (list(r),)
+            r = r[0] if r else None
+        return "camera index %s" % r
+
+    def _rotor(self):
+        """The shared RotatingCamera while the config holds more than
+        one camera; None for a single one (the single path keeps its
+        exact old open and close shape - a single camera never goes
+        through rotation code at all). The adapter is created on
+        demand, so a pause or snooze that releases it simply gets a
+        fresh one next poll."""
+        from . import config
+        indexes = config.normalize_index(self.camera_cfg.get("index", 0))
+        if len(indexes) <= 1:
+            if getattr(self.camera, "rotating", False):
+                return self.camera    # the load probe missed it, the
+                                      # open-time one found it: the rotor
+                                      # that exists keeps voting (single
+                                      # logic would drop it every poll)
+            return None
+        if self.camera is None or not getattr(self.camera, "rotating", False):
+            self.camera = self._new_camera()
+        return self.camera
 
     def _new_camera(self):
         from . import camera
@@ -561,20 +652,20 @@ class PresenceMonitor:
         self.grace_until = now + self.recovery["leave_on_grace_sec"]
         window = self.recovery["wake_burst_window_sec"]
         log.warning("auto re-off paused: %d unexpected wakes in %s s and "
-                    "nobody ever confirmed (camera index %s pointing at "
+                    "nobody ever confirmed (%s pointing at "
                     "a wall?)", len(self.wake_times), window,
-                    self.camera_cfg["index"])
+                    self._roster_words())
         burst = len(self.wake_times) >= self.recovery["wake_burst_count"]
         if self.notifier is not None and burst:
             try:
                 self.notifier(
                     "auto re-off paused: the screens woke %d times in "
-                    "%d s but the camera (index %s) never saw a person. "
+                    "%d s but the %s never saw a person. "
                     "If it slipped off the monitor, point it back; auto "
                     "off resumes as soon as it sees somebody (or from "
                     "the tray / window)." % (
                         len(self.wake_times), window,
-                        self.camera_cfg["index"]))
+                        self._roster_words()))
             except Exception:
                 pass                             # the notice is a courtesy
 
