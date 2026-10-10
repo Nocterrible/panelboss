@@ -535,11 +535,17 @@ def _hdr_now():
 
 def hdr_away_off():
     """Presence policy helper: kill every HDR-lit display when the
-    desk goes dark, returning the gdis we switched so the return can
+    desk goes dark, returning the panels we switched so the return can
     hand back exactly what the user had per panel. Empty list =
     nothing to hand back. On pre-24H2 the read state is a lie
     (HDR and wide-gamut merged), so precise=False abstains: no
-    cleverness built on sand. Fail-open always."""
+    cleverness built on sand. Fail-open always.
+
+    Each entry carries the panel MODEL, not just the gdi slot:
+    standby can fully disconnect a panel and Windows reshuffles the
+    \\.\DISPLAYn slots on return (the same reason _remember_layout
+    exists), so the return re-resolves by the model identity that
+    does not move."""
     off = []
     try:
         for r in wm.hdr_states():
@@ -547,7 +553,8 @@ def hdr_away_off():
                     r.get("state") == "on":
                 say = wm.hdr_set(r["gdi"], False)
                 if say == "":
-                    off.append(r["gdi"])
+                    off.append({"gdi": r["gdi"],
+                                "model": r.get("model") or ""})
                 else:
                     log.info("hdr away: %s refused: %s", r["gdi"], say)
     except Exception:
@@ -558,12 +565,48 @@ def hdr_away_off():
 def hdr_away_restore(off):
     """Give back what hdr_away_off took. Setting HDR on a display
     that came back on its own (someone's hotkey, a driver whim) is
-    a no-op, so the handback is unconditional."""
+    a no-op, so the handback is unconditional. A saved slot is
+    trusted only while its LIVE row still answers to the saved model
+    - a pair the shuffle cannot frame; a slot that changed tenants
+    sends the search to the model identity that does not move.
+    Plain-string entries (snapshots taken before this fix) still
+    ride, trusting the slot. No live match at all: skip, do not
+    guess a panel the user never had lit."""
+    entries = [{"gdi": e, "model": ""} if isinstance(e, str) else e
+               for e in (off or [])]
     try:
-        for gdi in off:
-            say = wm.hdr_set(gdi, True)
+        live = wm.hdr_states()
+    except Exception:
+        log.debug("hdr return: live read failed", exc_info=True)
+        live = []
+    by_gdi = {r["gdi"]: r for r in live}
+    used = set()
+    try:
+        for e in entries:
+            gdi = e.get("gdi") or ""
+            model = e.get("model") or ""
+            row = by_gdi.get(gdi)
+            if not live:
+                target = gdi          # cannot see the desk at all:
+                #                      blind ride, the old way
+            elif row is not None and (not model
+                                      or (row.get("model")
+                                          or "") == model):
+                target = gdi                    # slot still its own
+            elif model:
+                target = next((r["gdi"] for r in live
+                               if (r.get("model") or "") == model
+                               and r["gdi"] not in used), None)
+            else:
+                target = gdi          # nothing to re-find by
+            if not target:
+                log.info("hdr return: %s (%s) is gone from the desk",
+                         gdi or "?", model or "?")
+                continue
+            used.add(target)
+            say = wm.hdr_set(target, True)
             if say:
-                log.info("hdr return: %s refused: %s", gdi, say)
+                log.info("hdr return: %s refused: %s", target, say)
     except Exception:
         log.debug("hdr restore failed", exc_info=True)
 
@@ -799,6 +842,15 @@ def apply(data, name, best_effort=False, scope="full", login=False,
                                          # failure may be loud again
             for l in hits:
                 taken.add(l["hwnd"])
+                try:
+                    cur = wm.true_rect(l["hwnd"])
+                except Exception:
+                    cur = None       # a desk this blind proves
+                    #                                nothing: place anyway
+                if cur == tuple(s["rect"]) and not s.get("zoomed"):
+                    placed += 1              # already parked, floating,
+                    continue                 # right there: don't move it
+                                             # (mirrors wm.apply's skip)
                 if wm.place(l["hwnd"], tuple(s["rect"]),
                             s.get("zoomed")) == "ok":
                     placed += 1

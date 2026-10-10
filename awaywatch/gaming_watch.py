@@ -165,6 +165,9 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
     power-plan handback memory) - kept apart from the engine's st
     because evaluate is free to clear st on every transition.
     Returns (st, plan)."""
+    if gaming is None:
+        return st, None                      # engine not merged yet:
+        # sleep quietly, exactly like the import comment promises
     gcfg = cfg.get("gaming") or {}
     senses = senses or {}
     if side is None:
@@ -196,7 +199,7 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
             x = bool(side.get("fg_x"))
     gpu_map = senses.get("gpu") if "gpu" in senses else _gpu_usage()
     st, plan = gaming.evaluate(dict(fg=fg, gpu=gpu_map, xinput=x),
-                               st, gcfg, time.time())
+                               st, gcfg, time.monotonic())
     gaming_now = st.get("mode") == "game"
     if not plan:
         _adopt_or_hands_off(st, ledger, mons)
@@ -250,11 +253,11 @@ def _apply_power_plan(side, gcfg, gaming_now):
     side is long-lived so the saved guid survives the engine
     clearing its own state."""
     want = (gcfg.get("power_plan") or "").strip()
-    if not want:
+    state = side.setdefault("power_plan", {"saved": "", "active": ""})
+    if not want and not state["active"]:
         return
     from . import power_plan
-    state = side.setdefault("power_plan", {"saved": "", "active": ""})
-    if gaming_now and not state["active"]:
+    if want and gaming_now and not state["active"]:
         cur = power_plan.active()
         target = power_plan.pick(power_plan.plans(), want)
         if cur and target and target.lower() != cur.lower():

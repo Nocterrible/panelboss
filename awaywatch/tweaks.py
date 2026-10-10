@@ -76,8 +76,8 @@ def _put(path, name, data):
                 except OSError:
                     pass        # absent is the goal anyway
             else:
-                winreg.SetValueEx(k, name, data, None,
-                                  winreg.REG_DWORD)
+                winreg.SetValueEx(k, name, 0, winreg.REG_DWORD,
+                                  data)
             return True, ""
         finally:
             winreg.CloseKey(k)
@@ -135,9 +135,20 @@ def fso_state(exe_path):
 
 def fso_set(exe_path, off=True):
     """Set/remove the per-app FSO layer (takes effect NEXT launch
-    of that exe - measured folklore-free, see findings doc)."""
+    of that exe - measured folklore-free, see findings doc). Setting
+    MERGES our token into any value already there, so another tool's
+    compat flags on the same exe survive; removing strips only ours
+    and leaves the rest (or deletes the value once it is empty)."""
     if off:
-        return _put_str(LAYERS, exe_path, DISABLE_FSO)
+        cur = _get(LAYERS, exe_path)
+        if isinstance(cur, str) and "DISABLEDXMAXIMIZEDWINDOWEDMODE" \
+                in cur:
+            return True, ""                # already ours, no rewrite
+        keep = [t for t in (cur or "").split()
+                if t != "~" and "DISABLEDXMAXIMIZEDWINDOWEDMODE"
+                not in t]
+        want = ["~", "DISABLEDXMAXIMIZEDWINDOWEDMODE"] + keep
+        return _put_str(LAYERS, exe_path, " ".join(want))
     return _put(LAYERS, exe_path, None)
 
 
@@ -179,25 +190,37 @@ def fso_sync(paths):
         winreg.CloseKey(k)
     except OSError:
         mine = {}
-    want = set(paths or [])
-    for exe in want:
-        if exe not in mine:
+    # Windows registry value names are CASE-INSENSITIVE; the same exe
+    # spelled differently by user and cfg is one entry, not two.
+    # All compare/compare/write/delete uses the STORED name.
+    want_fold = {p.casefold() for p in (paths or [])}
+    have_fold = {n.casefold(): n for n in mine}
+    for exe in paths or []:
+        stored = have_fold.get(exe.casefold())
+        if stored is None:
             ok, err = fso_set(exe, True)
             out.append(("disable-fso", exe, ok, err))
-    for exe in mine:
-        if exe not in want:
+        elif "DISABLEDXMAXIMIZEDWINDOWEDMODE" not in \
+                (mine[stored] or ""):
+            # the user DID list this exe; the entry exists but
+            # carries no token (another tool's value): merge ours
+            # in under the STORED name, vendor tokens survive
+            ok, err = fso_set(stored, True)
+            out.append(("disable-fso", stored, ok, err))
+    for stored in list(mine):
+        if stored.casefold() not in want_fold:
             # a bare "~" (no token) is a stale leftover of our write,
             # not a vendor token - do not preserve it
-            rest = " ".join(t for t in mine[exe].split()
+            rest = " ".join(t for t in mine[stored].split()
                             if t != "~" and
                             "DISABLEDXMAXIMIZEDWINDOWEDMODE"
                             not in t).strip()
             if rest:      # someone else's tokens stay in the value
-                ok, err = _put_str(LAYERS, exe, rest)
-                out.append(("strip-our-token", exe, ok, err))
+                ok, err = _put_str(LAYERS, stored, rest)
+                out.append(("strip-our-token", stored, ok, err))
             else:
-                ok, err = fso_set(exe, False)
-                out.append(("clear-fso-flag", exe, ok, err))
+                ok, err = _put(LAYERS, stored, None)
+                out.append(("clear-fso-flag", stored, ok, err))
     return out
 
 

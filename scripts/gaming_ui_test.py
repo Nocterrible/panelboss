@@ -134,7 +134,8 @@ def check():
         #    tab (no fifth tab - the card joins that tab's column)
         assert set(app.pages) == set(W.TABS), app.pages
         for attr in ("gaming_switch", "gaming_menus", "games_box",
-                     "ignore_box", "plan_entry", "add_fg_button"):
+                     "ignore_box", "plan_entry", "add_fg_button",
+                     "dvr_status"):
             assert hasattr(app, attr), attr + " missing from the build"
         print("[PASS] window builds (gaming card on the power-plan tab)")
         app._show_tab("power plan")
@@ -248,6 +249,28 @@ def check():
         app.update()
         assert bool(_disk()["power"]["hdr_off_when_away"]) is before_hdr
         print("[PASS] hdr-while-away switch round-trips through a config rewrite")
+        # 8) the Game DVR card: the registry is the truth, so the
+        #    round-trip runs against the LIVE registry - "history" is
+        #    the low-blast-radius value on this desk and its original
+        #    entry is restored no matter what happens in between. This
+        #    exercises tweaks.apply/revert/_put VERBATIM: the old 6-arg
+        #    SetValueEx crash (TypeError, the provider-era myth) is gone,
+        #    so no shim stands between the test and the code that ships.
+        from awaywatch import tweaks
+        tid = "history"
+        path, name = tweaks.TOGGLES[tid][1], tweaks.TOGGLES[tid][2]
+        orig = tweaks._get(path, name)             # capture
+        try:
+            ok, err = tweaks.apply(tid)
+            assert ok, err
+            assert tweaks.is_on(tid) is True
+            ok, err = tweaks.revert(tid)
+            assert ok, err
+            assert tweaks.is_on(tid) is False
+        finally:
+            tweaks._put(path, name, orig)          # restore (None deletes)
+        print("[PASS] dvr toggle apply/revert round-trips against the "
+              "live registry")
         app.destroy()          # the checks are done: end the loop
     except Exception:
         _fail("check")

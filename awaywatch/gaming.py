@@ -93,7 +93,6 @@ def _evaluate(facts, st, cfg, now):
     if st.get("mode") == "game":
         old = st.get("monitor")
         if qualified and monitor == old:
-            grace_off = st.get("grace_start") is not None
             st["grace_start"] = None
             if (st.get("proc") == proc and st.get("pid") == pid):
                 return st, None          # steady; the watcher owns

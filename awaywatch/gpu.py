@@ -85,10 +85,16 @@ if pdh is not None:
     pdh.PdhAddCounterW.argtypes = [W.HANDLE, W.LPCWSTR, W.DWORD,
                                    ctypes.POINTER(W.HANDLE)]
     pdh.PdhCollectQueryData.argtypes = [W.HANDLE]
-    # THREE args on this build (a 4th arg yields 0xC0000BBD); LPVOID as
-    # the 3rd so the same declaration serves both FMTV layouts.
+    # Canonical MSDN shape: (hCounter, dwFormat, pdwType*, pValue*).
+    # The old 3-arg pin was "measured" during the dead-provider era
+    # (EVERY read answers c0000bbd regardless of arg shape), so that
+    # measurement was sand - with 3 argtypes the pdwType out-param
+    # lands on whatever ctypes left in R9: a wild write per read.
+    # pdwType may be NULL per the docs. RE-VERIFY with
+    # scripts/pdh_min.py after the provider's reboot.
     pdh.PdhGetFormattedCounterValue.restype = W.DWORD
-    pdh.PdhGetFormattedCounterValue.argtypes = [W.HANDLE, W.DWORD, W.LPVOID]
+    pdh.PdhGetFormattedCounterValue.argtypes = [
+        W.HANDLE, W.DWORD, ctypes.POINTER(W.DWORD), W.LPVOID]
     pdh.PdhCloseQuery.restype = None
     pdh.PdhCloseQuery.argtypes = [W.HANDLE]
 
@@ -159,29 +165,41 @@ def _add_counters(q, parsed):
             q, "\\GPU Engine(%s)\\Utilization Percentage" % n,
             0, ctypes.byref(h))
         if rc:
+            # one instance died in the enum->add window (normal churn
+            # on a busy desk). Skip THIS counter, keep the rest: a
+            # whole-sample drop zeroes usage() and resets the engine's
+            # sustain clock. handles/pids stay parallel by construction.
             logger.debug("PdhAddCounterW rc=%x for %s", rc, n)
-            return None
+            continue
         handles.append(h)
         pids.append(pid)
+    if not handles:
+        return None                      # every counter died: no truth
     return handles, pids
 
 
 def _read_all(handles, struct):
     """Read every counter with the given FMTV layout; [float] or None.
 
-    None means a read rc was nonzero; the caller's finally closes the
-    query.
+    One value PER HANDLE (always parallel to pids): a lone failed
+    read scores that counter 0.0 and the sample survives, so one
+    instance dying mid-read never resets the engine's sustain clock.
+    None means EVERY read failed - the provider is dead, and
+    usage() degrades to {} exactly as before.
     """
     out = []
+    dead = 0
     for h in handles:
         f = struct()
         rc = pdh.PdhGetFormattedCounterValue(h, PDH_FMT_DOUBLE,
-                                             ctypes.byref(f))
+                                             None, ctypes.byref(f))
         if rc:
             logger.debug("PdhGetFormattedCounterValue rc=%x", rc)
-            return None
+            out.append(0.0)
+            dead += 1
+            continue
         out.append(f.Value)
-    return out
+    return None if dead == len(handles) else out
 
 
 def usage():

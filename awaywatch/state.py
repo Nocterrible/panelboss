@@ -227,6 +227,9 @@ class PresenceMonitor:
             self.absent_since = None
             self.last_present = now
             self.hits += 1
+            self.re_off_deadline = math.inf   # a confirmed person voids
+            # the re-off budget: the promise was "off again if still
+            # nobody shows up" - somebody showed up
             if (self.re_off_paused
                     and self.hits >= self.inference_cfg["min_hits"]):
                 self._resume_re_off("the camera saw somebody again")
@@ -443,6 +446,9 @@ class PresenceMonitor:
 
     def _hold_camera(self):
         if self.camera is None or not self.camera.is_open():
+            self._release_camera()               # a present-but-dead
+            # device still gets its honest release + detector reset;
+            # letting the destructor eat it skips both
             self.camera = self._new_camera()
             self.camera.warm_up()
 
@@ -488,16 +494,18 @@ class PresenceMonitor:
         if value == 0.0:
             if self.state != "off":
                 # darkened externally (power-plan timeout, somebody's
-                # Fn key, a resume glitch): adopt the truth, or the
-                # machine would keep believing in lit screens and
-                # never wake them for the person it can see
-                log.info("screens went dark unasked; the camera will "
-                         "wake them for whoever shows up")
+                # Fn key, a resume glitch): the truth is off NOW, and
+                # the away chores (layout memory, hdr, camera policy)
+                # run exactly as they would for our own off - panels
+                # were still lit when the broadcast arrived, so the
+                # layout snapshot is still the truth. turn_off on dark
+                # panels is a harmless no-op.
+                log.info("screens went dark unasked; adopting and "
+                         "running the away chores")
                 self.state = "off"
                 self.hits = 0
                 self.next_poll = now + self.timers["off_poll_sec"]
-                if self.camera_cfg["mode_off"] == "always_on":
-                    self._hold_camera()
+                self._screens_off(now)
             return
         if self.state == "unknown":
             self.state = "counting"          # an on-broadcast answers
@@ -535,9 +543,6 @@ class PresenceMonitor:
                           "screens; turning them off again after %.0f s if "
                           "still nobody shows up",
                           self.timers["re_off_grace_sec"])
-        elif self.state != "off" and value == 0.0:
-            log.info("the power plan turned the screens off early")
-            self._screens_off(now)
 
     def _pause_re_off(self):
         """Two unexpected wakes with nobody ever seen: the classic
@@ -635,8 +640,8 @@ class PresenceMonitor:
                 config.write_config(self.cfg)
                 log.info("camera switched to index %s", value)
             elif action == "device":
-                self.inference_cfg["device"] = name
-                self._rebuild_detector()
+                self.inference_cfg["device"] = value
+                self._rebuild_detector()        # cpu<->gpu swap
             elif action == "device_id":
                 self.inference_cfg["device_id"] = int(value)
                 self._rebuild_detector()        # same provider, new card

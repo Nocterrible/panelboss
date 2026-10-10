@@ -194,8 +194,10 @@ _TYPED = {
     # first real absence (measured), and the monitor stayed lit.
     "GetWindowRect": (ctypes.c_void_p, ctypes.c_void_p),
     "GetWindowTextW": (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int),
-    "GetWindowTextLengthW": (ctypes.c_void_p, ctypes.c_wchar_p,
-                             ctypes.c_int),
+    # ONE arg: the real signature is GetWindowTextLengthW(HWND).
+    # This dict pins the SHARED user32 singleton - a fat pin here
+    # would break every other module that calls it honestly.
+    "GetWindowTextLengthW": (ctypes.c_void_p,),
     "GetWindowThreadProcessId": (ctypes.c_void_p,
                                  ctypes.POINTER(wintypes.DWORD)),
 }
@@ -244,7 +246,7 @@ def _cloaked(hwnd):
 
 
 def win_title(hwnd):
-    n = u32.GetWindowTextLengthW(hwnd, None, 0)
+    n = u32.GetWindowTextLengthW(hwnd)
     if n <= 0:
         return ""
     buf = ctypes.create_unicode_buffer(min(n, 200) + 1)

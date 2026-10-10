@@ -121,6 +121,9 @@ class Clock:
     def time(self):
         return self.t
 
+    def monotonic(self):
+        return self.t          # the engine's now: one frozen lever
+
 
 def fg_on(mon, proc, full=True):
     m = next(m for m in FakeWm.MONS if m["short"] == mon)
