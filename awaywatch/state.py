@@ -91,6 +91,9 @@ class PresenceMonitor:
         self.wake_times = []                  # unexpected wakes, recent
         self.re_off_paused = False            # burst tripped; stays lit
         self.notifier = None                  # cli wires icon.notify
+        self._hdr_snap = []                   # gdis HDR was on at the
+                                              # moment the desk went
+                                              # dark (power section)
         self.power_cfg = config["power"]
         self.blockers = {"error": "not checked yet", "display": [],
                          "other": []}          # window reads this live
@@ -265,6 +268,7 @@ class PresenceMonitor:
         log.info("%s - sending the harmless power-on", reason)
         self._release_camera()                   # exclusive device, same
         display.wake()                           # dance as _wake
+        self._hdr_back()
         self.state = "active"
         self._apply_hold(now)                # present: the plan's timers
                                              # stay suppressed from here on
@@ -279,6 +283,7 @@ class PresenceMonitor:
         self._release_camera()                   # the device is exclusive;
                                                  # release before the screens
         display.wake()                           # come back up
+        self._hdr_back()
         self.state = "counting"
         self._apply_hold(now)                # back: hold the timers again
         self.absent_since = None
@@ -286,6 +291,17 @@ class PresenceMonitor:
         self.hits = 0
         self.next_poll = now + self.on_poll()
         self._restore_layout()
+
+    def _hdr_back(self):
+        """HDR the user had at the leaving moment comes home with
+        them; nothing else touches it. Quiet unless there was a
+        handback."""
+        if not self._hdr_snap:
+            return
+        from . import profiles
+        profiles.hdr_away_restore(self._hdr_snap)
+        log.info("hdr: handed back %d display(s)", len(self._hdr_snap))
+        self._hdr_snap = []
 
     def _screens_off(self, now):
         if self.guards["fullscreen"] and display.foreground_is_fullscreen():
@@ -311,6 +327,13 @@ class PresenceMonitor:
             self._hold_camera()
         else:
             self._release_camera()
+        if self.power_cfg.get("hdr_off_when_away"):
+            from . import profiles
+            self._hdr_snap = profiles.hdr_away_off()
+            if self._hdr_snap:
+                log.info("hdr: %d display(s) off for the absence, "
+                         "the return will hand them back",
+                         len(self._hdr_snap))
         display.turn_off()
         if self.absent_since is None:
             elapsed = 0

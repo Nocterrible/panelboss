@@ -132,12 +132,18 @@ def _run(cfg, autostart=False):
         threading.Thread(target=_restore, args=(cfg, bool(autostart),
                                                 icon), daemon=True,
                          name="restore").start()
+    from . import gaming_watch       # lazy: only ever loads the pdh
+    stop_gaming = threading.Event()  # counter when gaming is enabled
+    threading.Thread(target=gaming_watch.loop,
+                     args=(cfg, stop_gaming), daemon=True,
+                     name="gaming").start()
     try:
         _drive(cfg, monitor, worker, ui_events)
     except KeyboardInterrupt:
         monitor.events.put(("quit", True))
     finally:
         # a window crash must not pin the camera: stop the loop first
+        stop_gaming.set()
         monitor.events.put(("stop", True))
         worker.join(3)
         monitor._release_camera()

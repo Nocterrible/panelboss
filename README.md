@@ -239,6 +239,59 @@ existing release-and-reopen path picks it up.
 `Settings...` item is the pystray default action); the menu itself
 remains the right-click affair.
 
+## Gaming refresh rates (`[gaming]`, power-plan tab)
+
+A fullscreen game deserves its panel's top Hz; a desktop does not
+need 240 Hz burning watts and OLED heat all day. The watcher
+(`gaming_watch.py`, beside the presence loop) applies one law:
+
+1. **only a window covering a whole monitor starts the conversation**
+   - a windowed or half-screen app can ask for nothing;
+2. **evidence decides**: sustained 3D-engine GPU load (the Windows
+   performance counters, read per pid - video decode is a different
+   engine, which is why a fullscreen video player never looks like a
+   game), or a loaded `xinput*.dll` (controller APIs a game is
+   almost alone in using), or simply being on the user's games list.
+   An unlisted app must hold evidence for `seen_secs` before anything
+   moves; a listed one moves instantly, because menu screens render
+   at near zero;
+3. **grace, not flicker**: alt-tab to Discord does not drop the
+   monitor - the rate returns `grace_secs` (60) after the game stops
+   answering, once, quietly;
+4. **we never fight a mode we do not own**: every rate set is booked
+   in a ledger; when the driver moves the mode under us mid-game
+   (native-exclusive titles do exactly that), the watcher takes its
+   hands off until the game leaves;
+5. **resolution is never touched** - only the rate is traded, and
+   back; `game_hz = "auto (fastest)"` asks the panel's own list.
+
+Detection reads `\GPU Engine(*)\Utilization Percentage` per-instance
+(`gpu.py`); the wildcard-array API is abandoned on this OS (it
+answers, but its items match no documented layout - see the quirk
+below). `has_xinput` snapshots a process's modules, which anti-cheat
+can make slow, so it runs only when the foreground *pid changes*,
+never per tick. Fail open everywhere: no counters, no game mode.
+
+If `power_plan` names a scheme (fragment like `high`, or a guid),
+entering game mode also swaps the power plan and - the part that
+distinguishes a janitor from a vandal - restores **the plan that
+was active before the game**, not a guessed default, and only if
+nobody else moved it meanwhile. Off by default (unset).
+
+## HDR while away (`[power] hdr_off_when_away`)
+
+HDR-owning OLEDs punish an unasked HDR desktop: SDR content looks
+washed and the panel runs brighter/hotter than the room wants. With
+the switch on, the screens-off moment turns HDR **off on every
+panel reporting it on**, remembers exactly which ones were lit, and
+hands them back on the return (`profiles.hdr_away_off/restore`, the
+wake and force-on paths both). Panels that were off, unsupported,
+or whose OS cannot answer the question honestly (pre-24H2 merges
+HDR with wide-gamut - not a fact worth acting on) are left in
+peace. A user's Win+Alt+B toggle in the middle is overridden by the
+handback: the promise is "what you had when you left", not "guess
+what you want now".
+
 ## Settings window & skins
 
 `run.bat` opens a CustomTkinter window (main thread; the monitor loop
@@ -360,6 +413,43 @@ there is no after-every-upgrade swap dance anymore.
 
 ## Things this machine taught us
 
+* `\GPU Engine(*)\Utilization Percentage` **wildcard array reads**
+  (`PdhGetFormattedCounterArrayW`) answer rc=0 with ~1900 items in a
+  self-consistent blob that matches **no documented item layout** on
+  this OS (probed across both header shapes; `create_string_buffer(1,
+  size)` meanwhile silently heap-corrupted the attempt - the first
+  argument is the initial byte, not the size). Read per-instance
+  instead: enumerate instance names, add one counter per rendering
+  instance (cap 400), collect twice; measured setup 0.1-0.2 s, so
+  `gpu.usage()` builds fresh every call - and the fresh build is not
+  a preference: **counter instances are born with their process**, so
+  a reused query is blind to every game started after it (measured:
+  stays blind forever)
+* the venv `python.exe` is a **redirector**: `Popen([sys.executable,
+  "-c", ...]).pid` is the shim; the interpreter that really runs the
+  code is its child (measured: popened 70424, child's own `getpid()`
+  75092). A module-walk probe was blaming `wm.has_xinput` for a day -
+  it kept inspecting the shim, which loads nothing. Real games own
+  their windows, so `foreground()` never hands out a shim pid, but
+  any future test that spawns an interpreter and inspects it must ask
+  the child for its own pid
+* **`CreateToolhelp32Snapshot` with the module flags answers an
+  EMPTY snapshot for every pid from this venv's process family** -
+  self, a child that had just loaded `xinput1_3.dll`, even explorer
+  itself (measured across child processes: 0 modules where psapi
+  reports 21/32/397; no error, just empty). Module enumeration in
+  this project is therefore **psapi-only** (`EnumProcessModulesEx` +
+  `GetModuleBaseNameW`, `LIST_ALL_MODULES_REQUEST=0x3`):
+  `wm.has_xinput` was silently always-False under toolhelp. NOTE:
+  process-list snapshots (`Process32First/Next`, flag 0x2, as used
+  by `gpu_probe._name`) are a DIFFERENT snapshot kind and were not
+  disproved by the bisect - only module snapshots are dead here
+* the settings window's tab click-to-quiet cost scales with widget
+  count: measured 4.4 s cold / 2.4 s warm on monitor profiles, 2.0 s
+  on general - the pack/unpack itself is near-free, the cost is CTk
+  repainting every canvas-backed widget the page reveals. That is
+  why gaming controls joined the power-plan card list instead of a
+  fifth tab (five 120 px buttons would not fit the window either)
 * the DEFAULT PyPI `onnxruntime` wheel has **no GPU provider at all**:
   requesting `CUDAExecutionProvider` from it is not an error, just a
   warning on stderr that `pythonw` never shows - the session silently

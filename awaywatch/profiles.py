@@ -418,6 +418,41 @@ def _hdr_now():
     return states, precise, gdis
 
 
+def hdr_away_off():
+    """Presence policy helper: kill every HDR-lit display when the
+    desk goes dark, returning the gdis we switched so the return can
+    hand back exactly what the user had per panel. Empty list =
+    nothing to hand back. On pre-24H2 the read state is a lie
+    (HDR and wide-gamut merged), so precise=False abstains: no
+    cleverness built on sand. Fail-open always."""
+    off = []
+    try:
+        for r in wm.hdr_states():
+            if r.get("precise") and r.get("supported") and \
+                    r.get("state") == "on":
+                say = wm.hdr_set(r["gdi"], False)
+                if say == "":
+                    off.append(r["gdi"])
+                else:
+                    log.info("hdr away: %s refused: %s", r["gdi"], say)
+    except Exception:
+        log.debug("hdr away-off failed", exc_info=True)
+    return off
+
+
+def hdr_away_restore(off):
+    """Give back what hdr_away_off took. Setting HDR on a display
+    that came back on its own (someone's hotkey, a driver whim) is
+    a no-op, so the handback is unconditional."""
+    try:
+        for gdi in off:
+            say = wm.hdr_set(gdi, True)
+            if say:
+                log.info("hdr return: %s refused: %s", gdi, say)
+    except Exception:
+        log.debug("hdr restore failed", exc_info=True)
+
+
 # ------------------------------------------------------------- apply ---
 def desk_mismatch(prof, mons):
     """The blocker, and nothing else: the physical panels. Returns

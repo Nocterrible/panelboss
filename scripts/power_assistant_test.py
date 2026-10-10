@@ -723,9 +723,15 @@ def check():
         # the probes below face live widgets
         app._profiles_render()
         app.update_idletasks()
-        assert app.restorep_switch.get() == 0, "restore defaults off"
-        app.restorep_switch.select()
-        app._restorep_changed()
+        assert bool(app.restorep_switch.get()) == bool(
+            cfg["restore"]["enabled"]), "restore lever betrays its origin"
+        if cfg["restore"]["enabled"]:        # the live config may
+            app.restorep_switch.deselect()   # well have the lever
+            app._restorep_changed()          # ARMED (it is a user
+            app.update_idletasks()           # setting, not a test
+            assert cfg["restore"]["enabled"] is False  # fixture);
+        app.restorep_switch.select()                   # normalize
+        app._restorep_changed()                        # to OFF
         assert cfg["restore"]["enabled"] is True
         assert app.restorep_warn is not None, \
             "the first-login promise went unspoken at arming"

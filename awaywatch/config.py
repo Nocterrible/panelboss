@@ -111,6 +111,36 @@ DEFAULTS = {
         "poll_sec": 5,             # how often to re-run powercfg /requests when idle
         "ignore": [],              # substrings; processes powercfg names but that
                                    # are not real blockers on this machine
+        "hdr_off_when_away": False,  # turn HDR off when the screens go dark
+                                     # and hand it back on return: OLED desks
+                                     # that live in HDR get their SDR desktop
+                                     # washed without it, and the return lands
+                                     # exactly on what the user had per panel
+    },
+    "gaming": {
+        "enabled": False,        # the refresh-rate watcher; off until the
+                                 # user asks for it (it only ever trades a
+                                 # rate the panel already offers)
+        "games": [],             # exe names that enter instantly (a title
+                                 # screen renders at 0% GPU and still owns
+                                 # the panel); any other fullscreen app can
+                                 # still earn in via xinput or sustained GPU
+        "ignore": [],            # exe names that must never look like a
+                                 # game, even if they fool the list
+        "threshold_pct": 5.0,    # per-process rendering load that counts as
+                                 # evidence (decode-only never does)
+        "seen_secs": 10.0,       # how long evidence must hold before the
+                                 # panel switches (a browser spike is not a
+                                 # game)
+        "grace_secs": 60.0,      # how long a game keeps its rate through
+                                 # menus, cutscenes and alt-tabs before the
+                                 # desktop rate is handed back
+        "game_hz": {},           # monitor short -> "auto" (the panel's
+                                 # fastest) or a number; unset means auto
+        "desktop_hz": {},        # monitor short -> the rate the panel gets
+                                 # back when no game owns it; unset means 60
+        "power_plan": "",        # name fragment or guid swapped in when a
+                                 # game starts ('' = hands off the plan)
     },
     "faces": {
         "enabled": False,       # only registered identities count as presence (insightface)
