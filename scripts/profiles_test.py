@@ -211,7 +211,8 @@ prof6 = {"fp": TARGET, "match": "process + title", "hdr": "on",
 try:
     profiles.time = FastTime()
 
-    def scenario(fps, mons=DESK, best=False, ok=True, hdr=None):
+    def scenario(fps, mons=DESK, best=False, ok=True, hdr=None,
+                 scope="full", login=False):
         tmp6 = tempfile.mkdtemp()
         profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
                        "last": {}, "profiles": {"p": prof6}}, tmp6)
@@ -219,6 +220,7 @@ try:
         f = FakeWM(mons, fps, ok, hdr)
         profiles.wm = f
         ok_, say, info_ = profiles.apply(data, "p", best_effort=best,
+                                         scope=scope, login=login,
                                          dir=tmp6)
         return ok_, say, f, profiles.load(tmp6), info_
 
@@ -309,7 +311,7 @@ try:
                        "match": "process", "open": True,
                        "wait": 10}]}
 
-    def run7(mutate=None, refuse="", wake_after=None):
+    def run7(mutate=None, refuse="", wake_after=None, login=False):
         tmp7 = tempfile.mkdtemp()
         pr = dict(prof7)
         row = dict(prof7["wins"][0])
@@ -325,9 +327,11 @@ try:
         def w_init(self, *a, **k):
             FakeWM.__init__(self, *a, **k)
             self.polls = 0
+            self.launch_times = []
 
         def w_launch(self, exe):
             self.launches.append(exe)
+            self.launch_times.append(profiles.time.monotonic())
             return refuse
 
         def w_windows(self):
@@ -343,8 +347,9 @@ try:
         W.list_windows = w_windows
         w7 = W(DESK, [TARGET])
         profiles.wm = w7
+        w7.t0 = profiles.time.monotonic()
         ok7, say7, info7 = profiles.apply(profiles.load(tmp7), "p",
-                                          dir=tmp7)
+                                          login=login, dir=tmp7)
         return ok7, say7, info7, w7
 
     # wakes on the next poll: the exe ran once, the window was moved,
@@ -406,6 +411,60 @@ try:
     assert w7.placed == [(8, (10, 10, 100, 100))], w7.placed
     print("open pins OK (wake, per-pin wait, loud once then quiet, "
           "refused launch, launcher browse, no double-nag)")
+
+    # 6b-login) the logon special: the first launch sits out the
+    # whole storm (30 s from apply's start, virtual here), and the
+    # pin's own 10 s wait becomes 70 - login stretches patience, it
+    # never shrinks it. A late wake is still placed the moment it
+    # shows.
+    ok7, say7, info7, w7 = run7(login=True)
+    assert w7.launches == [r"C:\x\opera.exe"], w7.launches
+    assert abs((w7.launch_times[0] - w7.t0)
+               - profiles.LOGIN_DELAY) <= 1, w7.launch_times
+    assert "within 70 s" in say7, say7
+    assert info7["no_shows"], "login misses stay loud for the balloons"
+    ok7, say7, info7, w7 = run7(login=True, wake_after=1)
+    assert ok7 and w7.placed, say7
+    assert info7["no_shows"] == [], info7
+
+    # 6c) scope: half a lever. windows-only never asks a driver
+    # anything; monitors-only never touches a window; and the desk
+    # gate guards BOTH halves - a seat saved on one desk must never
+    # be forced onto another.
+    ok6, say6, f6, _, info6 = scenario([TARGET], scope="windows")
+    assert ok6 and "monitors untouched" in say6, say6
+    assert f6.entries == [], "windows-only asked the drivers"
+    assert f6.placed, "windows-only failed to place"
+    ok6, say6, f6, _, info6 = scenario([TARGET], scope="monitors")
+    assert ok6 and "monitors only" in say6, say6
+    assert f6.entries, "monitors-only lost the layout"
+    assert f6.placed == [] and info6["no_shows"] == []
+    ok6, say6, f6, _, info6 = scenario(["other fp"], mons=[dict(AAA)],
+                                       best=False, scope="windows")
+    assert not ok6 and "different desk" in say6 and not f6.placed, say6
+
+    # the login picker's "the last one for this desk": judged by
+    # panel IDENTITY (a cold boot may not have reached the modes
+    # yet), freshest match wins, a half-missing desk picks the
+    # profile that fits what IS there
+    tmpn = tempfile.mkdtemp()
+
+    def _pr(fp, used, disp):
+        return {"fp": fp, "used": used, "displays": disp,
+                "wins": [], "hdr": "leave alone"}
+
+    profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
+                   "last": {}, "profiles": {
+                       "old": _pr("X", 100, [AAA, BBB]),
+                       "new": _pr("Y", 200, [AAA, BBB]),
+                       "elsewhere": _pr("Z", 300, [dict(BBB)])}},
+                  tmpn)
+    dn = profiles.load(tmpn)
+    assert profiles.name_for_desk(dn, [dict(AAA), dict(BBB)]) == "new"
+    assert profiles.name_for_desk(dn, [dict(BBB)]) == "elsewhere"
+    assert profiles.name_for_desk(dn, []) is None
+    print("login restore OK (storm delay, stretched patience, "
+          "scopes, identity picker)")
 finally:
     profiles.wm, profiles.time = real_wm, real_time
 print("apply flow OK (gate, mercy, belief fallback, real-hdr set+"

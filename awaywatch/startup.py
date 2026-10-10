@@ -26,17 +26,40 @@ log = logging.getLogger("startup")
 
 RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 VALUE_NAME = "ICU Presence Detector"      # the name Task Manager shows
+# Windows never tells a launched app WHY the shell launched it
+# (explorer.exe parents everything: Run key, Startup folder,
+# double-click). So the entry stamps the fact itself - every serious
+# app in the Run key passes itself a flag (Opera: --autostart,
+# Battle.net: --autostarted); now this one does too, and cli reads
+# it as proof rather than inference.
+FLAG = " --autostart"
 
 
 def command():
     """The exact string the Run key value holds for this install."""
     if getattr(sys, "frozen", False):         # PyInstaller: the exe IS
-        return '"%s"' % sys.executable         # the launcher
+        return '"%s"%s' % (sys.executable, FLAG)   # the launcher
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     pyw = os.path.join(root, ".venv", "Scripts", "pythonw.exe")
     if not os.path.isfile(pyw):               # moved venv: the running
         pyw = sys.executable                    # interpreter knows best
-    return '"%s" "%s"' % (pyw, os.path.join(root, "run.py"))
+    return '"%s" "%s"%s' % (pyw, os.path.join(root, "run.py"), FLAG)
+
+
+def selfheal():
+    """An old flagless entry learns the stamp in place, because
+    recognizing the logon copy must be a fact. Touched only when the
+    stored string differs from ours by exactly the missing flag - a
+    different path means the app moved, and that difference is
+    meaningful (the switch note explains it); it is left alone.
+    Returns True after a rewrite, False on a failed one, None when
+    there was nothing to do."""
+    stored = enabled()
+    if stored is None or stored + FLAG != command():
+        return None
+    ok, msg = enable()
+    log.info("old autostart entry taught %s: %s", FLAG.strip(), msg)
+    return ok
 
 
 def enabled():

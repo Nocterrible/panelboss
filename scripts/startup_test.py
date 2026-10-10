@@ -19,13 +19,13 @@ startup.VALUE_NAME = "ICU Presence Detector TEST SCRATCH"
 # 1) the stored command: quoted (paths love spaces), venv pythonw,
 #    run.py, absolute - the Run key has no cwd to lean on
 cmd = startup.command()
-assert cmd.startswith('"') and cmd.endswith('"')
+assert cmd.startswith('"') and cmd.endswith(" --autostart"), cmd
 assert "pythonw.exe" in cmd and "run.py" in cmd, cmd
 
 # 2) frozen: the exe IS its own launcher, args be damned
 sys.frozen = True
 sys.executable = r"C:\a b\ICU-Presence-Detector.exe"
-assert startup.command() == r'"C:\a b\ICU-Presence-Detector.exe"'
+assert startup.command() == r'"C:\a b\ICU-Presence-Detector.exe" --autostart'
 del sys.frozen
 sys.executable = real_exe
 
@@ -40,6 +40,31 @@ assert ok
 assert startup.enabled() is None
 ok, msg = startup.disable()
 assert ok and "nothing" in msg, "absent counts as removed, twice"
+
+# 3b) login recognition: the shell never tells the launched app
+#     WHY it launched it, so the entry stamps that fact itself -
+#     and selfheal teaches the flagless old ones. An entry that
+#     differs by MORE than the flag is a moved app: that difference
+#     is meaningful, so it is left alone.
+assert startup.command().endswith(startup.FLAG)
+
+
+def _store(val):
+    import winreg as r
+    with r.OpenKey(r.HKEY_CURRENT_USER, startup.RUN_PATH,
+                   access=r.KEY_READ | r.KEY_SET_VALUE) as k:
+        r.SetValueEx(k, startup.VALUE_NAME, 0, r.REG_SZ, val)
+
+
+_store(startup.command()[:-len(startup.FLAG)])    # the old form
+assert startup.enabled() == startup.command()[:-len(startup.FLAG)]
+assert startup.selfheal() is True, "flagless entry learns the stamp"
+assert startup.enabled() == startup.command(), "verified by re-read"
+assert startup.selfheal() is None, "a current entry heals nothing"
+_store("junk")                                    # not ours at all
+assert startup.selfheal() is None
+assert startup.enabled() == "junk", "foreign entry untouched"
+startup.disable()
 
 # 4a) refusal modes: an unimportable winreg must not crash the app
 sys.modules["winreg"] = None

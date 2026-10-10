@@ -48,6 +48,17 @@ HDR_ASKS = ("leave alone", "on", "off", "toggle")
 # file that will not parse is MOVED ASIDE (.corrupt, timestamped)
 # before the fresh start - because the next save would otherwise
 # quietly swallow the wreckage the user may still want to fix.
+# Login is a storm: explorer is still wiring itself together, every
+# other autostart entry is thrashing the disk, panels are mid-
+# renegotiation. A restore fired into that storm gets built-in
+# grace: nothing is LAUNCHED until the delay below has passed since
+# the apply began, and every "open it" wait is EXTENDED by the
+# patience below on top of the pin's own number (login stretches
+# patience, it never shrinks it).
+LOGIN_DELAY = 30.0
+LOGIN_PATIENCE = 60
+
+
 def path(dir=None):
     return config.find_config(dir or config.CONFIG_DIR,
                               "profiles.json")
@@ -224,6 +235,18 @@ def default_name(data, fp):
     return hit[-1]
 
 
+def name_for_desk(data, mons):
+    """The login picker's answer for "the one this desk last used",
+    judged by PANEL IDENTITY (desk_mismatch - the same view an apply
+    takes), not by the exact fingerprint: a cold boot may not have
+    reached the profile's modes yet, and the fingerprint would then
+    hide the profile that fits."""
+    hits = [n for n, p in data["profiles"].items()
+            if p.get("displays") and not desk_mismatch(p, mons)]
+    hits.sort(key=lambda n: data["profiles"][n].get("used", 0))
+    return hits[-1] if hits else None
+
+
 # ----------------------------------------------------------- matching ---
 def pin_hits(row, live, taken, fallback="process"):
     """Pure decision (testable): which open windows answer to one
@@ -255,16 +278,19 @@ def pin_hits(row, live, taken, fallback="process"):
     return out
 
 
-def relaunch(row, taken, fallback):
+def relaunch(row, taken, fallback, extra=0):
     """The naive re-open: run the exe the pin saved, then wait for
     a window that answers the pin - as long as the pin's own `wait`
     says (the slider the user set, default 30 s; slow machines and
     patient people get to choose) - and move on as soon as it
-    shows. Re-lists every tick, because the whole point is that the
-    window does not exist yet. Returns (hits, trouble); trouble is
-    what to say when even the wish failed."""
+    shows. `extra` is login's contribution: apps boot slower when
+    everything boots at once. Re-lists every tick, because the
+    whole point is that the window does not exist yet. Returns
+    (hits, trouble); trouble is what to say when even the wish
+    failed."""
     try:
-        budget = max(5, min(600, int(row.get("wait") or 30)))
+        budget = max(5, min(600, int(row.get("wait") or 30)
+                            + int(extra or 0)))
     except (TypeError, ValueError):
         budget = 30
     trouble = wm.launch(row.get("exe") or "")
@@ -363,18 +389,28 @@ def desk_mismatch(prof, mons):
     return "; ".join(bits)
 
 
-def apply(data, name, best_effort=False, dir=None):
+def apply(data, name, best_effort=False, scope="full", login=False,
+          dir=None):
     """The whole lever. Order and paranoia stolen from
     monitor_control (enable pass, primary last, disable pass, one
     commit, skip-what-is-right so a self-apply never blinks;
     verify-by-fingerprint after, because success is reported before
     the modes land; rescue at the end for whatever the shuffle
-    stranded). Returns (ok, sentence, info) - info["no_shows"] names
-    the pins whose app never appeared, so the UI can be loud about
-    it exactly as often as the rules allow."""
+    stranded). `scope` narrows the lever - "monitors" skips the
+    window phase, "windows" skips every driver call - and the desk
+    gate still guards BOTH halves, because a seat saved on one desk
+    must never be forced onto another. `login` is the grace flag:
+    this apply runs into the logon storm, so the first launch waits
+    out LOGIN_DELAY and every "open it" gets LOGIN_PATIENCE on top
+    of its own number. Returns (ok, sentence, info) -
+    info["no_shows"] names the pins whose app never appeared, so the
+    UI can be loud about it exactly as often as the rules allow."""
     prof = data["profiles"].get(name)
     if prof is None:
         return False, "no such profile", {}
+    start = time.monotonic()
+    layout = scope != "windows"
+    wins_scope = scope != "monitors"
     mons = wm.monitors()
     say = []
     gate = desk_mismatch(prof, mons)
@@ -388,20 +424,21 @@ def apply(data, name, best_effort=False, dir=None):
     # proved on this machine)
     entries = []
     by_id = {m["id"]: m for m in mons}
-    for d in prof["displays"]:
-        cur = by_id.get(d["id"])
-        if cur is None:
-            continue                       # the missing panel: asked
-        e = dict(d)                        # of nothing, said once
-        e["gdi"] = cur["gdi"]              # (slot names may have
-        entries.append(e)                  # shuffled since capture)
-    if entries:
-        ok, lines = wm.apply_layout(entries)
-        for t in lines:
-            log.info("apply '%s': %s", name, t)
-        if not ok:
-            return False, ("layout refused: " +
-                           "; ".join(lines[-1:])), {}
+    if layout:
+        for d in prof["displays"]:
+            cur = by_id.get(d["id"])
+            if cur is None:
+                continue                   # the missing panel: asked
+            e = dict(d)                    # of nothing, said once
+            e["gdi"] = cur["gdi"]          # (slot names may have
+            entries.append(e)              # shuffled since capture)
+        if entries:
+            ok, lines = wm.apply_layout(entries)
+            for t in lines:
+                log.info("apply '%s': %s", name, t)
+            if not ok:
+                return False, ("layout refused: " +
+                               "; ".join(lines[-1:])), {}
 
     # 3. HDR: ask the driver first. Where it answers precisely
     # (24H2+), command only the monitors that disagree, then READ
@@ -410,7 +447,7 @@ def apply(data, name, best_effort=False, dir=None):
     # Windows, whose only readable API conflates HDR with wide
     # gamut and measurably lies.
     ask = prof.get("hdr", "leave alone")
-    if ask in ("on", "off", "toggle"):
+    if layout and ask in ("on", "off", "toggle"):
         states, precise, gdis = _hdr_now()
         if precise:
             plan = hdr_plan(ask, states)
@@ -464,24 +501,32 @@ def apply(data, name, best_effort=False, dir=None):
     # the user bought with the try-anyway button.
     target = prof["fp"]
     matched = best_done = False
-    last = quiet = None
-    deadline = time.monotonic() + 15
-    while time.monotonic() < deadline:
-        fp = wm.fingerprint()
-        now = time.monotonic()
-        if fp != last:
-            last, quiet = fp, now
-        elif now - quiet >= 2:
-            matched = fp == target
-            best_done = best_effort and fp != target
-            break
-        time.sleep(0.5)
-    if best_done:
-        say.append("the desk never matched the profile (it answers "
-                   "%s) - windows placed on what is here" % last)
-    elif not matched:
-        say.append("the desk never answered as the profile asked "
-                   "(still: %s)" % (last or "nothing settled"))
+    if wins_scope and not layout:
+        matched = True             # the gate swore this IS the
+                                   # profile's desk, and nothing was
+                                   # changed: nothing can settle
+        say.append("monitors untouched (windows only)")
+    else:
+        last = quiet = None
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            fp = wm.fingerprint()
+            now = time.monotonic()
+            if fp != last:
+                last, quiet = fp, now
+            elif now - quiet >= 2:
+                matched = fp == target
+                best_done = best_effort and fp != target
+                break
+            time.sleep(0.5)
+        if best_done:
+            say.append("the desk never matched the profile (it "
+                       "answers %s) - windows placed on what is "
+                       "here" % last)
+        elif not matched:
+            say.append("the desk never answered as the profile "
+                       "asked (still: %s)"
+                       % (last or "nothing settled"))
 
     # 5. windows, only against a settled desk they were pinned for.
     # A pin that finds no window and carries the naive wish re-runs
@@ -490,15 +535,32 @@ def apply(data, name, best_effort=False, dir=None):
     # failure worth a dialog - only apps that truly stayed away are
     # reported, and only until the user once declined to fix them.
     no_shows = []
-    if matched or best_done:
+    if wins_scope and (matched or best_done):
         live = wm.list_windows()
         taken, placed, silent = set(), 0, 0
         moved_procs, troubles = set(), []
+        sat_out = not login
         for s in prof["wins"]:
             fb = prof.get("match") or "process"
             hits = pin_hits(s, live, taken, fb)
             if not hits and s.get("open") and s.get("exe"):
-                hits, trouble = relaunch(s, taken, fb)
+                if not sat_out:
+                    # the login special: apps launch into a storm
+                    # (explorer still assembling, every autostart
+                    # entry thrashing the disk), so the FIRST
+                    # launch waits the rest of LOGIN_DELAY out and
+                    # every wait afterwards carries the extra
+                    # patience
+                    sat_out = True
+                    rest = LOGIN_DELAY - (time.monotonic() - start)
+                    if rest > 0:
+                        log.info("login restore: %d s of storm to "
+                                 "sit out before launching",
+                                 int(rest) + 1)
+                        time.sleep(rest)
+                hits, trouble = relaunch(
+                    s, taken, fb,
+                    extra=LOGIN_PATIENCE if login else 0)
                 if trouble:
                     troubles.append(trouble)
             if not hits:
@@ -534,7 +596,8 @@ def apply(data, name, best_effort=False, dir=None):
         if rescued:
             say.append("rescued: %s" % ", ".join(rescued)[:120])
     else:
-        say.append("windows untouched")
+        say.append("windows untouched" +
+                   (" (monitors only)" if not wins_scope else ""))
 
     prof["used"] = time.time()
     data["last"][target] = name

@@ -223,6 +223,34 @@ TIPS = {
                        "too. the seat's row says [via launcher.exe] "
                        "when the exe no longer matches the app's own "
                        "file.",
+    "restore_on": "a profile the app re-applies by itself when it "
+                  "starts: the lever, pre-armed. Knowing the logon "
+                  "copy is a fact, not a guess - the Run entry this "
+                  "app installs carries --autostart (old flagless "
+                  "entries learn it by themselves), so launching "
+                  "the app yourself to fix something can stay a "
+                  "quiet manual start while the logon copy reshapes "
+                  "the desk.",
+    "restore_profile": "'the last one for this desk' picks by the "
+                       "panels physically present (a cold boot may "
+                       "not have reached the profile's modes yet - "
+                       "identity decides, same as an apply's gate). "
+                       "Or name one profile exactly; if it was "
+                       "deleted since, the restore says so on the "
+                       "tray and does nothing else.",
+    "restore_scope": "monitors only: modes, positions, primary, "
+                     "HDR - windows stay exactly where they are. "
+                     "windows only: pinned apps take their seats, "
+                     "the drivers are never asked anything. the "
+                     "desk gate guards every scope: different "
+                     "panels means refuse, not improvise.",
+    "restore_when": "'only logon starts' trusts the flag the Run "
+                    "entry carries - a manual launch never moves "
+                    "the desk while you are debugging it. 'every "
+                    "app start' applies on any launch. Logon "
+                    "copies always get the grace: nothing is "
+                    "launched for the first 30 s, and every 'open "
+                    "it' is 60 s more patient than its own number.",
     "camera": "which camera the frames come from. Opening every index "
                "is slow (the virtual camera alone takes 16 s), so the "
                "list fills in after the window opens and rescans on "
@@ -261,6 +289,15 @@ TIPS = {
 
 
 WAIT_CHOICES = (5, 10, 15, 30, 45, 60, 90, 120, 180, 300, 600)
+
+# the restore-at-start lever's vocabularies: (stored value, shown
+# label) - the cfg file stays English-stable, the menus stay human
+RESTORE_LAST = ("last", "the last one for this desk")
+RESTORE_SCOPES = (("full", "the whole desk"),
+                  ("monitors", "monitors only (modes + HDR)"),
+                  ("windows", "windows only (pinned apps)"))
+RESTORE_WHENS = (("autostart", "only logon/autostart starts"),
+                 ("always", "every app start"))
 
 
 def _fresh_pin_edit():
@@ -407,6 +444,10 @@ class SettingsWindow(ctk.CTk):
         for k, b in self.tab_buttons.items():
             b.configure(**(self.skin.primary() if k == key
                           else self.skin.secondary()))
+        if key == "general" and hasattr(self, "restorep_menu"):
+            # profiles are born on another tab; the login picker
+            # must know about them the moment the lever is visible
+            self._restorep_refresh()
 
     def rebuild_for_skin(self):
         self.tips.kill()
@@ -1540,6 +1581,54 @@ class SettingsWindow(ctk.CTk):
         self.startup_note.pack(anchor="w")
         self._startup_sync(startup.enabled())
 
+        # the pre-armed lever: a profile the app applies by itself at
+        # start. which COPY is the logon one is not inferred (the
+        # shell gives no clue) - the Run entry installed here stamps
+        # --autostart on itself, and cli reads that stamp as proof
+        rst = self.cfg.setdefault("restore", {})
+        row = self._row(box, "restore a profile at start",
+                        TIPS["restore_on"])
+        self.restorep_switch = ctk.CTkSwitch(row, text="",
+                                             font=self.skin.font(12),
+                                             command=self._restorep_changed,
+                                             progress_color=self.skin.accent,
+                                             border_color=self.skin.border)
+        self.restorep_switch.grid(row=0, column=1, sticky="e")
+        if rst.get("enabled"):
+            self.restorep_switch.select()
+        row = self._row(box, "which profile", TIPS["restore_profile"])
+        self.restorep_menu = ctk.CTkOptionMenu(
+            row, values=self._restorep_names(), width=240,
+            command=self._restorep_pick, **self.skin.menu_style())
+        self._set_menu(self.restorep_menu,
+                       self._restorep_label(rst.get("profile") or "last"))
+        self.restorep_menu.grid(row=0, column=1, sticky="e")
+        row = self._row(box, "what to restore", TIPS["restore_scope"])
+        self.restorep_scope_menu = ctk.CTkOptionMenu(
+            row, values=[lbl for _, lbl in RESTORE_SCOPES], width=240,
+            command=self._restorep_scope, **self.skin.menu_style())
+        self._set_menu(self.restorep_scope_menu,
+                       self._pair_label(RESTORE_SCOPES,
+                                        rst.get("scope") or "full"))
+        self.restorep_scope_menu.grid(row=0, column=1, sticky="e")
+        row = self._row(box, "applies to", TIPS["restore_when"])
+        self.restorep_when_menu = ctk.CTkOptionMenu(
+            row, values=[lbl for _, lbl in RESTORE_WHENS], width=240,
+            command=self._restorep_when, **self.skin.menu_style())
+        self._set_menu(self.restorep_when_menu,
+                       self._pair_label(RESTORE_WHENS,
+                                        rst.get("when") or "autostart"))
+        self.restorep_when_menu.grid(row=0, column=1, sticky="e")
+        ctk.CTkLabel(box,
+                     text="login gets the grace a storm needs: the "
+                          "first launch waits 30 s out, every 'open "
+                          "it' waits its own time plus 60 s more, "
+                          "and results arrive as tray balloons - no "
+                          "dialog holds a half-woken desktop hostage",
+                     font=self.skin.font(11), wraplength=420,
+                     justify="left", anchor="w",
+                     **self.skin.text_style("sub")).pack(anchor="w")
+
     # ------------------------------------------------------------- helpers --
     @staticmethod
     def _set_menu(menu, value):
@@ -1913,6 +2002,51 @@ class SettingsWindow(ctk.CTk):
             self.startup_switch.set(1 if stored else 0)   # to introduce
             return                                      # itself
         self._startup_sync(stored)
+
+    # ------------------------------------------------- restore at start --
+    @staticmethod
+    def _pair_label(pairs, value):
+        return dict(pairs).get(value, pairs[0][1])
+
+    def _restorep_names(self):
+        """'last' first, then every profile by name - the picker on
+        the profiles tab and this one read the same truth."""
+        return [RESTORE_LAST[1]] + sorted(profiles.load()["profiles"])
+
+    def _restorep_label(self, value):
+        return RESTORE_LAST[1] if value == "last" else value
+
+    def _restorep_value(self, label):
+        return "last" if label == RESTORE_LAST[1] else label
+
+    def _restorep_refresh(self):
+        cur = self.cfg.get("restore", {}).get("profile") or "last"
+        self.restorep_menu.configure(values=self._restorep_names())
+        self._set_menu(self.restorep_menu, self._restorep_label(cur))
+
+    def _restorep_changed(self):
+        self.cfg.setdefault("restore", {})["enabled"] = bool(
+            self.restorep_switch.get())
+        self._save()
+
+    def _restorep_pick(self, label):
+        self.cfg.setdefault("restore", {})["profile"] = \
+            self._restorep_value(label)
+        self._save()
+
+    def _restorep_scope(self, label):
+        for value, lbl in RESTORE_SCOPES:
+            if lbl == label:
+                self.cfg.setdefault("restore", {})["scope"] = value
+                break
+        self._save()
+
+    def _restorep_when(self, label):
+        for value, lbl in RESTORE_WHENS:
+            if lbl == label:
+                self.cfg.setdefault("restore", {})["when"] = value
+                break
+        self._save()
 
     # --------------------------------------------------------------- cameras --
     def _scan_cameras(self):

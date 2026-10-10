@@ -711,6 +711,28 @@ def check():
         app.min_switch.deselect()
         app._start_min_changed()
         assert cfg["ui"]["start_minimized"] is False
+        # the restore-at-start lever: switch, picker, scope, trigger -
+        # every choice lands in the cfg dict the restore worker
+        # reads, and the picker can see the profiles that exist
+        assert app.restorep_switch.get() == 0, "restore defaults off"
+        app.restorep_switch.select()
+        app._restorep_changed()
+        assert cfg["restore"]["enabled"] is True
+        assert "test desk" in app.restorep_menu.cget("values"), \
+            "the login picker cannot see the profiles that exist"
+        app._restorep_pick("test desk")
+        assert cfg["restore"]["profile"] == "test desk"
+        app._restorep_pick("the last one for this desk")
+        assert cfg["restore"]["profile"] == "last"
+        app._restorep_scope("monitors only (modes + HDR)")
+        assert cfg["restore"]["scope"] == "monitors"
+        app._restorep_when("every app start")
+        assert cfg["restore"]["when"] == "always"
+        app.restorep_switch.deselect()
+        app._restorep_changed()
+        assert cfg["restore"]["enabled"] is False
+        cfg["restore"].update(profile="last", scope="full",
+                              when="autostart")
         # kofi link: click opens exactly the patron page (opener
         # faked - a test must never really launch a browser), the cup
         # draws itself, and the desk commands now sit on their own row

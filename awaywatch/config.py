@@ -122,6 +122,22 @@ DEFAULTS = {
         "skin": "modern",       # "modern" (the unfun one) | "fun" (palette stub for now)
         "preview_width": 420,   # debug camera panel width in px
     },
+    "restore": {
+        "enabled": False,       # the pre-armed lever (General tab): a
+                                # profile the app re-applies by itself
+                                # when it starts
+        "profile": "last",      # "last" = the one this desk last used
+                                # (panel identity decides, modes may
+                                # still differ after a cold boot); or
+                                # one profile's exact name
+        "scope": "full",        # "full" | "monitors" (modes, positions,
+                                # HDR only) | "windows" (pinned apps to
+                                # their seats only)
+        "when": "autostart",    # "autostart" = only the copy the logon
+                                # entry launched - the --autostart stamp
+                                # in the Run key is the proof, never an
+                                # inference; "always" = every app start
+    },
 }
 
 

@@ -120,6 +120,26 @@ panel that is not plugged in — modes can be asked for, a missing
 monitor cannot — so applying onto the wrong monitors refuses with
 the honest sentence and a *try anyway (best effort)* button that
 converts what exists and places windows on whatever desk answered.
+
+**The lever can pull itself (restore at start).** The General tab
+holds a pre-armed apply: tick *restore a profile at start*, pick
+which profile ("the last one for this desk" chooses by panel
+IDENTITY — a cold boot may not have reached the profile's modes
+yet, and the exact fingerprint would then hide the profile that
+fits), what to restore (the whole desk, monitors only, or windows
+only — the desk gate guards every scope), and when (autostart
+launches only, or every app start). Which copy the logon fired is
+never guessed — the shell gives no clue; the Run entry this app
+installs stamps `--autostart` on itself and the app reads its own
+arguments as proof (flagless old entries learn the stamp at the
+next start, and only entries differing by exactly that stamp are
+touched). Login is treated as the storm it is: nothing gets
+launched for the first 30 s, every "open it" waits its own time
+plus 60 s more, and every result arrives as a tray balloon — with
+still-missing apps named — never a dialog holding a half-woken
+desktop hostage. If a manual launch at the exact moment of logon
+wins the single-instance race, the restore runs in whichever copy
+survived.
 HDR is a read, then a command: on Windows 11 24H2 and later the
 DisplayConfig API answers per monitor what colour mode it is
 actually in (`GET_ADVANCED_COLOR_INFO_2` — the call the Settings
@@ -507,6 +527,16 @@ there is no after-every-upgrade swap dance anymore.
   mid-assert. Automated suites set
   `_deactivate_windows_window_header_manipulation = True` (CTk's own
   escape hatch); no probe reads titlebars
+* the shell never tells a launched app WHY it launched it:
+  `explorer.exe` parents the Run key, the Startup folder and a
+  plain double-click alike, and process-parent checks stop there —
+  so recognizing one's own logon copy can only be a fact the app
+  stamps on its entry (`--autostart`, exactly what Opera and
+  Battle.net do; the live HKCU Run key on this machine proves the
+  custom) and reads back from its own argv; `startup.selfheal()`
+  teaches the stamp to old flagless entries, and to nothing else —
+  an entry whose PATH differs is a moved folder, a difference with
+  meaning that the switch note explains instead of touching
 * **HDR state is readable after all** (monitor_control exhausted the
   wrong candidates and this project ran on *belief* for months):
   `DisplayConfigGetDeviceInfo` answers per target — type 15,
