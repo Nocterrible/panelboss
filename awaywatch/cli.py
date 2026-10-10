@@ -151,6 +151,13 @@ def _run(cfg, autostart=False):
             log.debug("tweaks mirror died", exc_info=True)
     threading.Thread(target=_mirror_tweaks, daemon=True,   # log
                      name="tweaks").start()                # line
+    stop_taskbar = threading.Event()
+    if (cfg.get("taskbar") or {}).get("enabled"):
+        from . import taskbar          # lazy: loads the shell pokes only
+                                       # when the user turned the module on
+        threading.Thread(target=taskbar.hover_watch,
+                         args=(cfg, stop_taskbar), daemon=True,
+                         name="taskbar").start()
     try:
         _drive(cfg, monitor, worker, ui_events)
     except KeyboardInterrupt:
@@ -158,6 +165,7 @@ def _run(cfg, autostart=False):
     finally:
         # a window crash must not pin the camera: stop the loop first
         stop_gaming.set()
+        stop_taskbar.set()
         monitor.events.put(("stop", True))
         worker.join(3)
         monitor._release_camera()

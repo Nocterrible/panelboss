@@ -151,6 +151,21 @@ DEFAULTS = {
                                  # list at boot - foreign tokens in
                                  # existing values are preserved
     },
+    "taskbar": {
+        "enabled": False,       # the taskbar hover/autohide emulator
+                                 # (taskbar.py); off until asked. It only
+                                 # emulates the show-on-hover /
+                                 # hide-on-leave of a bar that is ALREADY
+                                 # autohiding, and it hands off entirely
+                                 # (does nothing) when a tinkerer's mod
+                                 # owns the bar - a Windhawk / EP / 7T /
+                                 # tweaker co-tenant intercepts the same
+                                 # surfaces and wins the bar.
+        "retry_ms": 150,        # cadence to re-post the show poke while
+                                 # the cursor sits at the bar's edge and a
+                                 # post gets swallowed by a fullscreen
+                                 # foreground app
+    },
     "faces": {
         "enabled": False,       # only registered identities count as presence (insightface)
     },
