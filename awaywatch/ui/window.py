@@ -248,9 +248,12 @@ TIPS = {
                     "entry carries - a manual launch never moves "
                     "the desk while you are debugging it. 'every "
                     "app start' applies on any launch. Logon "
-                    "copies always get the grace: nothing is "
-                    "launched for the first 30 s, and every 'open "
-                    "it' is 60 s more patient than its own number.",
+                    "copies always get the grace: the FIRST login "
+                    "sits out 2 full minutes and times every app "
+                    "that shows up; later logins launch only after "
+                    "the slowest observed boot + 20 s (never under "
+                    "30 s), and every 'open it' is 60 s more "
+                    "patient than its own number.",
     "camera": "which camera the frames come from. Opening every index "
                "is slow (the virtual camera alone takes 16 s), so the "
                "list fills in after the window opens and rescans on "
@@ -1619,15 +1622,12 @@ class SettingsWindow(ctk.CTk):
                        self._pair_label(RESTORE_WHENS,
                                         rst.get("when") or "autostart"))
         self.restorep_when_menu.grid(row=0, column=1, sticky="e")
-        ctk.CTkLabel(box,
-                     text="login gets the grace a storm needs: the "
-                          "first launch waits 30 s out, every 'open "
-                          "it' waits its own time plus 60 s more, "
-                          "and results arrive as tray balloons - no "
-                          "dialog holds a half-woken desktop hostage",
-                     font=self.skin.font(11), wraplength=420,
-                     justify="left", anchor="w",
-                     **self.skin.text_style("sub")).pack(anchor="w")
+        self.restorep_warn = None
+        self.restorep_note = ctk.CTkLabel(
+            box, text=self._restorep_note(), font=self.skin.font(11),
+            wraplength=420, justify="left", anchor="w",
+            **self.skin.text_style("sub"))
+        self.restorep_note.pack(anchor="w")
 
     # ------------------------------------------------------------- helpers --
     @staticmethod
@@ -2023,11 +2023,70 @@ class SettingsWindow(ctk.CTk):
         cur = self.cfg.get("restore", {}).get("profile") or "last"
         self.restorep_menu.configure(values=self._restorep_names())
         self._set_menu(self.restorep_menu, self._restorep_label(cur))
+        self.restorep_note.configure(text=self._restorep_note())
+
+    def _restorep_note(self):
+        """fine print that tells the truth about how long login will
+        wait - the calibration promise, or the learned number"""
+        data = profiles.load()
+        lg = data.get("login") or {}
+        head = ("login gets the grace a storm needs, and results "
+                "arrive as tray balloons - no dialog holds a "
+                "half-woken desktop hostage. ")
+        try:
+            mx = float(lg.get("max") or 0)
+        except (TypeError, ValueError):
+            mx = 0.0
+        if mx > 0:
+            return head + ("learned from your logins: the slowest "
+                           "app took %d s to show after launch, so "
+                           "launches now wait %d s."
+                           % (int(mx), int(profiles.launch_delay(
+                               data))))
+        return head + ("the FIRST login waits 2 full minutes "
+                       "before launching anything and times every "
+                       "app that shows up; after that, launches "
+                       "wait only the slowest boot + 20 s (never "
+                       "under 30 s, never over 10 min).")
+
+    def _restorep_warn(self):
+        """the first-login promise, spoken when the lever is armed -
+        and only then: once a metric exists there is nothing new to
+        warn about"""
+        if (profiles.load().get("login") or {}).get("max"):
+            return
+        dlg = ctk.CTkToplevel(self)
+        self.restorep_warn = dlg
+        dlg.title("first login restore")
+        dlg.resizable(False, False)
+        dlg.configure(fg_color=self.skin.bg)
+        dlg.transient(self)
+        ctk.CTkLabel(
+            dlg, text="the FIRST login restore will wait longer: 2 "
+                      "full minutes before launching anything, "
+                      "because it is timing how long this machine "
+                      "needs. every login after that waits only "
+                      "the slowest boot it measured + 20 s (never "
+                      "under 30 s, never over 10 min).",
+            font=self.skin.font(12), justify="left", wraplength=340,
+            **self.skin.text_style()).pack(padx=20, pady=(14, 8))
+
+        def close():
+            dlg.destroy()
+            if self.restorep_warn is dlg:
+                self.restorep_warn = None
+
+        ctk.CTkButton(dlg, text="got it", width=110, command=close,
+                      **self.skin.primary()).pack(pady=(0, 14))
+        dlg.after(30, dlg.focus_force)       # Windows steals focus
+                                             # back without this
 
     def _restorep_changed(self):
-        self.cfg.setdefault("restore", {})["enabled"] = bool(
-            self.restorep_switch.get())
+        on = bool(self.restorep_switch.get())
+        self.cfg.setdefault("restore", {})["enabled"] = on
         self._save()
+        if on:
+            self._restorep_warn()
 
     def _restorep_pick(self, label):
         self.cfg.setdefault("restore", {})["profile"] = \

@@ -311,15 +311,19 @@ try:
                        "match": "process", "open": True,
                        "wait": 10}]}
 
-    def run7(mutate=None, refuse="", wake_after=None, login=False):
+    def run7(mutate=None, refuse="", wake_after=None, login=False,
+             seed_login=None):
         tmp7 = tempfile.mkdtemp()
         pr = dict(prof7)
         row = dict(prof7["wins"][0])
         if mutate:
             mutate(row)
         pr["wins"] = [row]
-        profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
-                       "last": {}, "profiles": {"p": pr}}, tmp7)
+        payload = {"hdr_key": "win+alt+b", "hdr_now": "unknown",
+                   "last": {}, "profiles": {"p": pr}}
+        if seed_login is not None:
+            payload["login"] = seed_login
+        profiles.save(payload, tmp7)
 
         class W(FakeWM):
             pass
@@ -412,20 +416,43 @@ try:
     print("open pins OK (wake, per-pin wait, loud once then quiet, "
           "refused launch, launcher browse, no double-nag)")
 
-    # 6b-login) the logon special: the first launch sits out the
-    # whole storm (30 s from apply's start, virtual here), and the
-    # pin's own 10 s wait becomes 70 - login stretches patience, it
-    # never shrinks it. A late wake is still placed the moment it
-    # shows.
-    ok7, say7, info7, w7 = run7(login=True)
+    # 6b-login) the logon special. First login: two full minutes of
+    # calibration before ANY launch, and whatever shows up is timed
+    # from ITS LAUNCH - counting our own wait as the app's slowness
+    # would make every login grow. Nothing showing up is nothing
+    # learned.
+    ok7, say7, info7, w7 = run7(login=True)               # never wakes
     assert w7.launches == [r"C:\x\opera.exe"], w7.launches
     assert abs((w7.launch_times[0] - w7.t0)
-               - profiles.LOGIN_DELAY) <= 1, w7.launch_times
-    assert "within 70 s" in say7, say7
+               - profiles.LOGIN_CALIBRATION) <= 1, w7.launch_times
+    assert "waited 120 s before launching" in say7, say7
+    assert "within 70 s" in say7, say7      # 10 pin + 60 login grace
     assert info7["no_shows"], "login misses stay loud for the balloons"
+    assert info7["login"]["took"] == {}, info7
+    assert info7["login"]["delay_next"] == profiles.LOGIN_CALIBRATION
+
+    # an app that showed up 1 s after its calibration launch: the
+    # lesson is 1 s, and the next login drops to the 30 s floor
     ok7, say7, info7, w7 = run7(login=True, wake_after=1)
     assert ok7 and w7.placed, say7
-    assert info7["no_shows"] == [], info7
+    assert abs(info7["login"]["took"]["opera.exe"] - 1.0) <= 1.0, info7
+    assert info7["login"]["delay_next"] == profiles.LOGIN_DELAY, info7
+    assert "next login: 30 s" in say7, say7
+
+    # lessons from disk shape the next login: a 50 s boot means
+    # 70 s of patience (metric + buffer); a nightmare 700 s boot
+    # is capped at 10 min
+    ok7, say7, info7, w7 = run7(
+        login=True, seed_login={"max": 50.0,
+                                "took": {"opera.exe": 50.0}, "at": 1})
+    assert abs((w7.launch_times[0] - w7.t0) - 70.0) <= 1, \
+        w7.launch_times
+    ok7, say7, info7, w7 = run7(
+        login=True, seed_login={"max": 700.0,
+                                "took": {"opera.exe": 700.0},
+                                "at": 1})
+    assert w7.launch_times[0] - w7.t0 <= profiles.LOGIN_CAP + 1, \
+        w7.launch_times
 
     # 6c) scope: half a lever. windows-only never asks a driver
     # anything; monitors-only never touches a window; and the desk

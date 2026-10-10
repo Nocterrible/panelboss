@@ -51,12 +51,36 @@ HDR_ASKS = ("leave alone", "on", "off", "toggle")
 # Login is a storm: explorer is still wiring itself together, every
 # other autostart entry is thrashing the disk, panels are mid-
 # renegotiation. A restore fired into that storm gets built-in
-# grace: nothing is LAUNCHED until the delay below has passed since
-# the apply began, and every "open it" wait is EXTENDED by the
-# patience below on top of the pin's own number (login stretches
-# patience, it never shrinks it).
-LOGIN_DELAY = 30.0
+# grace: the FIRST login sits out the full calibration below before
+# launching anything, and times every app that shows up; later
+# logins wait only the slowest observed boot + LOGIN_BUFFER (the
+# times are kept per app in profiles.json's "login" record).
+# Every "open it" wait at login is EXTENDED by LOGIN_PATIENCE on
+# top of the pin's own number (login stretches patience, it never
+# shrinks it).
+LOGIN_DELAY = 30.0          # the floor: never less, metric or not
+LOGIN_CALIBRATION = 120.0   # the first login: two full minutes
+LOGIN_BUFFER = 20           # the safety margin on learned times
+LOGIN_CAP = 600             # even a nightmare boot cannot stall past 10 min
 LOGIN_PATIENCE = 60
+
+
+def launch_delay(data):
+    """How long a login restore sits out before LAUNCHING anything.
+    First login: the whole calibration - we do not yet know this
+    machine. Afterwards: the slowest boot ever observed + buffer,
+    floored and capped. Apparent slowness is timed from OUR launch
+    moment, never from the restore start - counting our own wait
+    as the app's slowness would make every login grow one buffer
+    longer than the last."""
+    took = (data.get("login") or {}).get("max")
+    try:
+        took = float(took)
+    except (TypeError, ValueError):
+        took = 0.0
+    if took <= 0:
+        return LOGIN_CALIBRATION
+    return max(LOGIN_DELAY, min(LOGIN_CAP, took + LOGIN_BUFFER))
 
 
 def path(dir=None):
@@ -411,6 +435,8 @@ def apply(data, name, best_effort=False, scope="full", login=False,
     start = time.monotonic()
     layout = scope != "windows"
     wins_scope = scope != "monitors"
+    took = {}                 # app -> seconds from OUR launch to window
+    waited_for = None         # seconds login made us sit out
     mons = wm.monitors()
     say = []
     gate = desk_mismatch(prof, mons)
@@ -539,30 +565,37 @@ def apply(data, name, best_effort=False, scope="full", login=False,
         live = wm.list_windows()
         taken, placed, silent = set(), 0, 0
         moved_procs, troubles = set(), []
-        sat_out = not login
+        if login:
+            waited_for = launch_delay(data)
+        sat_out = waited_for is None
         for s in prof["wins"]:
             fb = prof.get("match") or "process"
             hits = pin_hits(s, live, taken, fb)
             if not hits and s.get("open") and s.get("exe"):
                 if not sat_out:
-                    # the login special: apps launch into a storm
-                    # (explorer still assembling, every autostart
-                    # entry thrashing the disk), so the FIRST
-                    # launch waits the rest of LOGIN_DELAY out and
-                    # every wait afterwards carries the extra
-                    # patience
+                    # the login special: the first launch sits out
+                    # the storm (two unmeasured minutes the first
+                    # time; later whatever the slowest app was ever
+                    # seen to need, plus buffer)
                     sat_out = True
-                    rest = LOGIN_DELAY - (time.monotonic() - start)
+                    rest = waited_for - (time.monotonic() - start)
                     if rest > 0:
                         log.info("login restore: %d s of storm to "
                                  "sit out before launching",
                                  int(rest) + 1)
                         time.sleep(rest)
+                t_launch = time.monotonic()
                 hits, trouble = relaunch(
                     s, taken, fb,
                     extra=LOGIN_PATIENCE if login else 0)
                 if trouble:
                     troubles.append(trouble)
+                if hits:
+                    # the lesson, timed from OUR launch: an app
+                    # that was already open at boot told us nothing
+                    who = ((s.get("proc") or s.get("exe") or "?")
+                           ).split("\\")[-1].lower()
+                    took[who] = max(time.monotonic() - t_launch, 1.0)
             if not hits:
                 if s.get("quiet"):
                     silent += 1
@@ -595,6 +628,19 @@ def apply(data, name, best_effort=False, scope="full", login=False,
         rescued = wm.rescue_lost()
         if rescued:
             say.append("rescued: %s" % ", ".join(rescued)[:120])
+        if took:                       # what showed up is the lesson
+            lg = data.setdefault("login", {})
+            seen = lg.setdefault("took", {})
+            for k, v in took.items():
+                seen[k] = max(v, seen.get(k, 0))
+            lg["max"] = max(seen.values())
+            lg["at"] = time.time()
+        if waited_for is not None:
+            say.append("login: waited %d s before launching"
+                       % int(waited_for))
+            if took:
+                say.append("next login: %d s (learned)"
+                           % int(launch_delay(data)))
     else:
         say.append("windows untouched" +
                    (" (monitors only)" if not wins_scope else ""))
@@ -605,6 +651,9 @@ def apply(data, name, best_effort=False, scope="full", login=False,
     info = {"no_shows": [{"proc": s.get("proc", ""),
                           "title": s.get("title", "")}
                          for s in no_shows]}
+    if login:
+        info["login"] = {"took": took,
+                         "delay_next": launch_delay(data)}
     return matched or best_done, " ; ".join(say) if say else \
         "applied: %s" % (" + ".join(d["short"] for d in
                                 prof["displays"] if d.get("on", True))), \

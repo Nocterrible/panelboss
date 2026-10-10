@@ -718,6 +718,16 @@ def check():
         app.restorep_switch.select()
         app._restorep_changed()
         assert cfg["restore"]["enabled"] is True
+        assert app.restorep_warn is not None, \
+            "the first-login promise went unspoken at arming"
+        stack, kids = [app.restorep_warn], []
+        while stack:                       # dismiss it like a human
+            w = stack.pop()
+            stack += w.winfo_children()
+            if w.__class__.__name__ == "CTkButton":
+                kids.append(w)
+        {w.cget("text"): w for w in kids}["got it"].invoke()
+        assert app.restorep_warn is None, "the warning did not go away"
         assert "test desk" in app.restorep_menu.cget("values"), \
             "the login picker cannot see the profiles that exist"
         app._restorep_pick("test desk")

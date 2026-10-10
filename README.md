@@ -133,13 +133,21 @@ never guessed — the shell gives no clue; the Run entry this app
 installs stamps `--autostart` on itself and the app reads its own
 arguments as proof (flagless old entries learn the stamp at the
 next start, and only entries differing by exactly that stamp are
-touched). Login is treated as the storm it is: nothing gets
-launched for the first 30 s, every "open it" waits its own time
-plus 60 s more, and every result arrives as a tray balloon — with
-still-missing apps named — never a dialog holding a half-woken
-desktop hostage. If a manual launch at the exact moment of logon
-wins the single-instance race, the restore runs in whichever copy
-survived.
+touched). Login is treated as the storm it is, and the lever says
+so when you arm it: the **first** login sits out 2 full minutes
+before launching anything — calibration, timing every app it
+launches until a window shows — and keeps the worst time per app.
+Every login after that launches only after the slowest observed
+boot + 20 s (never under 30 s, never over 10 min), the note under
+the lever states the learned number, and the tray balloon reports
+what the next login will wait. The timing is measured from OUR
+launch, never from login start — counting our own wait as the
+app's slowness would make every login grow one buffer longer than
+the last. Every "open it" at login carries its own wait + 60 s;
+results arrive as tray balloons (still-missing apps named), never
+a dialog holding a half-woken desktop hostage. If a manual launch
+at the exact moment of logon wins the single-instance race, the
+restore runs in whichever copy survived.
 HDR is a read, then a command: on Windows 11 24H2 and later the
 DisplayConfig API answers per monitor what colour mode it is
 actually in (`GET_ADVANCED_COLOR_INFO_2` — the call the Settings

@@ -178,6 +178,9 @@ def _restore(cfg, autostart, icon):
         ok, say, info = profiles.apply(data, name,
                                        scope=want.get("scope") or "full",
                                        login=bool(autostart))
+        lg = info.get("login") or {}
+        if lg.get("delay_next"):
+            say += " ; next login sits out %d s first" % lg["delay_next"]
         log.info("restore '%s' (%s): %s [%s]", name,
                  "login" if autostart else "manual", say,
                  "ok" if ok else "not ok")
