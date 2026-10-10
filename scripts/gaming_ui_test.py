@@ -19,9 +19,9 @@ try:
 except ImportError:
     import tomli as _toml
 
-from awaywatch import config
-from awaywatch import profiles as PF
-from awaywatch import wm as WM
+from panelboss import config
+from panelboss import profiles as PF
+from panelboss import wm as WM
 
 cfg = config.get_config(verbose=False)
 
@@ -29,7 +29,7 @@ cfg = config.get_config(verbose=False)
 # otherwise rewrite the LIVE config on every widget change (the
 # power-assistant suite measured that bite)
 TEST_CFG = os.path.join(os.environ.get("TEMP", "."),
-                        "icu_test_config.toml")
+                        "panelboss_test_config.toml")
 _saved_wc = config.write_config
 config.write_config = lambda c, path=None: _saved_wc(c, TEST_CFG)
 try:
@@ -42,7 +42,7 @@ except OSError:
 # deterministic offered rates) - no real display is ever asked for
 # anything by this suite
 PF.path = lambda dir=None: os.path.join(os.environ.get("TEMP", "."),
-                                        "icu_test_profiles.json")
+                                        "panelboss_test_profiles.json")
 for _f in (PF.path(), PF.path() + ".tmp"):
     try:
         os.remove(_f)
@@ -87,7 +87,7 @@ _held = None
 try:
     ctypes.windll.kernel32.OpenMutexW.restype = ctypes.c_void_p
     _held = ctypes.windll.kernel32.OpenMutexW(0x00100001, False,
-                                              "ICU-Presence-Detector")
+                                              "PanelBoss")
 except Exception:
     pass
 if _held:
@@ -96,8 +96,8 @@ if _held:
     print("tray app and rerun for the full suite")
     sys.exit(0)
 
-from awaywatch.state import FrameBox
-from awaywatch.ui import window as W
+from panelboss.state import FrameBox
+from panelboss.ui import window as W
 
 fm = type("FM", (), {})()
 fm.state = "counting"
@@ -318,7 +318,7 @@ def check():
         #    exercises tweaks.apply/revert/_put VERBATIM: the old 6-arg
         #    SetValueEx crash (TypeError, the provider-era myth) is gone,
         #    so no shim stands between the test and the code that ships.
-        from awaywatch import tweaks
+        from panelboss import tweaks
         tid = "history"
         path, name = tweaks.TOGGLES[tid][1], tweaks.TOGGLES[tid][2]
         orig = tweaks._get(path, name)             # capture

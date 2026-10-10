@@ -8,7 +8,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
-from awaywatch import profiles, wm  # noqa: E402
+from panelboss import profiles, wm  # noqa: E402
 
 LIVE = [{"id": "MONAAA", "short": "AAA", "gdi": r"\\.\DISPLAY1",
          "x": 0, "y": 0, "w": 100, "h": 100, "rate": 60,

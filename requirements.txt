@@ -1,4 +1,4 @@
-# ICU Presence Detector - direct dependencies.
+# PanelBoss - direct dependencies.
 # Reproducible installs happen in the project-local .venv (never the base env).
 # Pinned versions are resolved/locked by scripts/setup.ps1 -> requirements.lock.txt.
 

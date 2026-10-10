@@ -17,7 +17,7 @@ from ctypes import wintypes as W
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
-from awaywatch import gpu  # noqa: E402
+from panelboss import gpu  # noqa: E402
 
 VARIANTS = {
     "scale3_pair": (3, (0.0, 1.2)),

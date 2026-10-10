@@ -8,8 +8,8 @@ import time
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
 
-from awaywatch import config, power
-from awaywatch.state import PresenceMonitor
+from panelboss import config, power
+from panelboss.state import PresenceMonitor
 
 # 0) silent children: EVERY external helper the windowed app spawns
 #    must carry CREATE_NO_WINDOW. A windowless parent (pythonw) gets a
@@ -20,7 +20,7 @@ from awaywatch.state import PresenceMonitor
 import io as _io
 for _f in ("camera.py", "inference.py", "power.py"):
     _src = _io.open(os.path.join(os.path.dirname(
-        os.path.abspath(__file__)), "..", "awaywatch", _f),
+        os.path.abspath(__file__)), "..", "panelboss", _f),
         encoding="utf8").read()
     assert "CREATE_NO_WINDOW" in _src, _f + " would pop a console"
 print("silent children OK (probes carry CREATE_NO_WINDOW)")
@@ -128,7 +128,7 @@ assert ('& powercfg.exe /requestsoverride DRIVER "Legacy Kernel Caller"'
         in lines), script
 assert ('& powercfg.exe /requestsoverride PROCESS "dual.exe" DISPLAY SYSTEM'
         in lines), script
-from awaywatch.ui import overrides as OV
+from panelboss.ui import overrides as OV
 seen = OV.merge_seen({}, res2)
 steel = next(g for g in seen.values() if "SteelSeries" in g["label"])
 assert steel["overridden"] == {"SYSTEM"}, seen   # one row saying both
@@ -243,7 +243,7 @@ print("state gate OK (blocked waits, absence resets, throttle, resume)")
 #    admin errors). Redirect every write to a scratch file.
 _saved_wc = config.write_config
 config.write_config = lambda c, path=None: _saved_wc(
-    c, os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml"))
+    c, os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml"))
 try:
     mon.events.put(("power_assistant", True))
     mon._drain_tray()
@@ -256,8 +256,8 @@ finally:
 print("event persistence OK")
 
 # 6) window: blockers text renders; switch round-trips through fakes
-from awaywatch.state import FrameBox
-from awaywatch.ui import window as W
+from panelboss.state import FrameBox
+from panelboss.ui import window as W
 import queue
 
 fm = type("FM", (), {})()
@@ -270,6 +270,12 @@ fm.blockers = {"error": None, "display": ["msedgewebview2.exe Video Lock"],
                "other": ["System: AudioSrv AUDIO"]}
 power.install = lambda: (True, "registered (test)")
 power.uninstall = lambda: (True, "assistant removed (test)")
+# the window also spawns a truth thread that asks the real task store
+# for this app's own task name; on a box where that (newly named) task
+# is absent the answer is False and _assistant_truth stomps the faked
+# install's flag. Same subsystem, same treatment: the store says the
+# task is there
+power.task_installed = lambda: True
 # the window section needs a quiet desktop: with the live app running,
 # its CTk windows poison any CTkToplevel a second process opens - both
 # window runs today died inside CTkToplevel.__init__ with "can't
@@ -281,7 +287,7 @@ _held = None
 try:
     ctypes.windll.kernel32.OpenMutexW.restype = ctypes.c_void_p
     _held = ctypes.windll.kernel32.OpenMutexW(0x00100001, False,
-                                              "ICU-Presence-Detector")
+                                              "PanelBoss")
 except Exception:
     pass
 if _held:
@@ -293,10 +299,10 @@ if _held:
 # scratch file, and the desk it sees is a fake one (one monitor "T",
 # two windows) - deterministic rows, and no real display is ever
 # asked for anything by this suite
-from awaywatch import profiles as PF
-from awaywatch import wm as WM
+from panelboss import profiles as PF
+from panelboss import wm as WM
 PF.path = lambda dir=None: os.path.join(os.environ.get("TEMP", "."),
-                                        "icu_test_profiles.json")
+                                        "panelboss_test_profiles.json")
 for _f in (PF.path(), PF.path() + ".tmp"):
     try:
         os.remove(_f)
@@ -326,7 +332,7 @@ W.ctk.CTkToplevel._deactivate_windows_window_header_manipulation = True
 app = W.SettingsWindow(cfg, fm, queue.Queue())
 # the mode pin below calls _save(); keep the live config out of reach
 config.write_config = lambda c, path=None: _saved_wc(
-    c, os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml"))
+    c, os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml"))
 FAILED = []
 
 
@@ -629,8 +635,8 @@ def check():
         # the reopening must be WINDOWLESS and identical to run.bat's
         # own launch line - two files, one contract (a test pins them
         # together, so drift between them is a failure, not a surprise)
-        launch = ('start "ICU Presence Detector" '
-                  '".venv\\Scripts\\pythonw.exe" -m awaywatch')
+        launch = ('start "PanelBoss" '
+                  '".venv\\Scripts\\pythonw.exe" -m panelboss')
         assert launch in body, "updater relaunch grew a console"
         with open(os.path.join(os.path.dirname(script), "run.bat"),
                   encoding="utf8") as fh:
@@ -650,7 +656,7 @@ def check():
         # it does not; choosing the invitation PROMPTS and leaves the
         # camera alone; config pointing at -2 without the bridge asks
         # by itself once; installing = the same updater, deps flag
-        from awaywatch import camera as cam
+        from panelboss import camera as cam
         found = [(0, True, 1280, "Integrated Camera")]
         real_present, real_names = cam.optional_present, cam.hello_ir_names
         idx0 = cfg["camera"]["index"]
@@ -771,7 +777,7 @@ def check():
         finally:
             wb.open = orig
         assert opened == [W.SettingsWindow.KO_FI], opened
-        from awaywatch.ui.kofi import kofi_pil
+        from panelboss.ui.kofi import kofi_pil
         cup = kofi_pil(20)
         assert cup.mode == "RGBA" and cup.size == (20, 20)
         assert app.kofi_button.winfo_manager() != "", "link not on screen"

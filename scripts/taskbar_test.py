@@ -10,9 +10,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from awaywatch import taskbar
-from awaywatch import wm
-from awaywatch import config
+from panelboss import taskbar
+from panelboss import wm
+from panelboss import config
 
 # 1. bars() finds at least one Shell_TrayWnd on this live desk; every bar
 #    either maps to a real monitor short or carries short == "".

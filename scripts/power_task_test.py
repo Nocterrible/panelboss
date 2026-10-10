@@ -6,7 +6,7 @@ trusting rc over reality."""
 import sys
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
-from awaywatch import power
+from panelboss import power
 
 
 class R:

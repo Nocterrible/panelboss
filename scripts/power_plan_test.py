@@ -5,7 +5,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from awaywatch import power_plan as pp  # noqa: E402
+from panelboss import power_plan as pp  # noqa: E402
 
 real_run = pp._run
 GUIDS = "8c5e7fda-e8bf-11e5-9023-aa40e0c00000"

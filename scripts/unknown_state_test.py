@@ -12,14 +12,14 @@ import sys
 import types
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
-from awaywatch import config, display
-from awaywatch.state import PresenceMonitor
+from panelboss import config, display
+from panelboss.state import PresenceMonitor
 
 cfg = config.get_config(verbose=False)
 # state.flushes the WHOLE cfg on some paths - redirect every write to
 # scratch, or these tests flip the live assistant flag off again
 # (measured: they did, minutes before "the setting does not persist")
-_scratch = os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml")
+_scratch = os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml")
 config.write_config = (
     lambda c, path=None, _w=config.write_config: _w(c, _scratch))
 # pin the assistant OFF for these scenarios: the live config now

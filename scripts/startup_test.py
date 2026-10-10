@@ -10,11 +10,12 @@ import sys
 logging.disable()             # the refusal branches log by design
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
-from awaywatch import startup, tray
+from panelboss import startup, tray
 
 real_exe = sys.executable
 real_reg = sys.modules["winreg"]
-startup.VALUE_NAME = "ICU Presence Detector TEST SCRATCH"
+startup.VALUE_NAME = "PanelBoss TEST SCRATCH"
+startup.LEGACY_VALUE_NAME = "PanelBoss LEGACY TEST SCRATCH"
 
 # 1) the stored command: quoted (paths love spaces), venv pythonw,
 #    run.py, absolute - the Run key has no cwd to lean on
@@ -24,8 +25,8 @@ assert "pythonw.exe" in cmd and "run.py" in cmd, cmd
 
 # 2) frozen: the exe IS its own launcher, args be damned
 sys.frozen = True
-sys.executable = r"C:\a b\ICU-Presence-Detector.exe"
-assert startup.command() == r'"C:\a b\ICU-Presence-Detector.exe" --autostart'
+sys.executable = r"C:\a b\PanelBoss.exe"
+assert startup.command() == r'"C:\a b\PanelBoss.exe" --autostart'
 del sys.frozen
 sys.executable = real_exe
 

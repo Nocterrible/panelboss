@@ -11,8 +11,8 @@ import os
 import sys
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
-from awaywatch import config, state, wm
-from awaywatch.state import PresenceMonitor
+from panelboss import config, state, wm
+from panelboss.state import PresenceMonitor
 
 
 # 1) wanted(): the pure decision, one disqualifier flipped at a time.
@@ -119,12 +119,12 @@ print("restore OK (superseded / other desk / applied)")
 
 # 6) the state wiring: snapshot on off, restore on every wake.
 cfg = config.get_config(verbose=False)
-_scratch = os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml")
+_scratch = os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml")
 config.write_config = (
     lambda c, path=None, _w=config.write_config: _w(c, _scratch))
 # virgin defaults (a live file can hold anything - the window suite
 # pins the switch against THAT, so the promise itself is pinned here)
-_fresh = os.path.join(os.environ.get("TEMP", "."), "icu_fresh_cfg")
+_fresh = os.path.join(os.environ.get("TEMP", "."), "panelboss_fresh_cfg")
 os.makedirs(_fresh, exist_ok=True)
 _virgin = config.get_config(dir=_fresh, verbose=False)
 assert _virgin["power"]["restore_windows"] is True, "the tip's promise"
@@ -196,7 +196,7 @@ wm.snapshot = _real_snap
 # be accepted there. Measured: POINTER(wm.RECT) poisoned the shared
 # handle and killed every _screens_off tick (LP_RECT vs pointer to
 # RECT) until the rect argument became a plain void pointer
-from awaywatch import display as disp
+from panelboss import display as disp
 assert isinstance(disp.foreground_is_fullscreen(), bool)
 assert isinstance(wm.list_windows(), list)
 print("shared user32 handle OK (display and wm both get window rects)")

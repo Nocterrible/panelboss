@@ -8,9 +8,9 @@ sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
 
 import numpy as np
 
-from awaywatch import config, detector
-from awaywatch.motion import MotionDetector
-from awaywatch.state import PresenceMonitor
+from panelboss import config, detector
+from panelboss.motion import MotionDetector
+from panelboss.state import PresenceMonitor
 
 
 def scene(x=60, size=(480, 640, 3), step=40):
@@ -154,7 +154,7 @@ detector.PersonDetector = lambda **kw: calls.append(kw) or "PERSON"
 cfg = config.get_config(verbose=False)
 _saved_wc = config.write_config
 config.write_config = lambda c, path=None: _saved_wc(
-    c, os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml"))
+    c, os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml"))
 try:
     cfg["detection"]["mode"] = "motion"
     det = detector.build(cfg)
@@ -186,7 +186,7 @@ finally:
     config.write_config = _saved_wc
 
 # 6) the tray writes the config dict and queues the event (no GUI)
-from awaywatch import tray
+from panelboss import tray
 t = tray.Tray(__import__("queue").Queue(), cfg)
 t._mode("motion")
 assert cfg["detection"]["mode"] == "motion"
@@ -237,7 +237,7 @@ fake.find_groups = lambda: [FakeGroup("USB Camera"), FakeGroup("Both")]
 fake.IRCam = FakeIRCam
 sys.modules["whircam"] = fake
 
-from awaywatch import camera as cam_mod
+from panelboss import camera as cam_mod
 cam_mod._ir_names_cache = None
 assert cam_mod.hello_ir_names() == ["USB Camera", "Both"]
 c = cam_mod.open_camera({"index": cam_mod.HELLO_IR, "warmup_frames": 2})

@@ -2,7 +2,7 @@
 
 Spies on pystray's Shell_NotifyIcon call, shows a solid red icon for
 12 seconds, prints every NIM_ call with its result and error code.
-awaywatch.tray is imported first, so its identity patch is in place
+panelboss.tray is imported first, so its identity patch is in place
 before any of this process's NIM_ calls: the spy asserts that every
 call it sees carries uID=1 and, while the tray says the Shell accepts
 it, the NIF_GUID flag - stamped with a TEST guid (the production slot
@@ -19,7 +19,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from awaywatch import tray          # noqa: E402  the patch wraps the
+from panelboss import tray          # noqa: E402  the patch wraps the
                                      # Shell_NotifyIcon it finds at
                                      # import time; this spy wraps it
                                      # again, one layer out
@@ -30,7 +30,7 @@ k32 = ctypes.windll.kernel32
 
 # the identity this app mints: computed here, independently of whatever
 # tray.py did, so a wrong name or a dropped fill fails this test
-expected_guid = uuid.uuid5(uuid.NAMESPACE_DNS, "icu-presence-detector.tray")
+expected_guid = uuid.uuid5(uuid.NAMESPACE_DNS, "panelboss.tray")
 
 # a DIFFERENT identity to actually drive the Shell with: same GUID the
 # app uses and NIM_DELETE under it remove the FIRST icon registered
@@ -38,7 +38,7 @@ expected_guid = uuid.uuid5(uuid.NAMESPACE_DNS, "icu-presence-detector.tray")
 # can trip the fallback latch and mis-assert the whole run. Swapping
 # tray._GUID_ITEM keeps the stamping machinery under test; only the
 # bytes differ, and the production bytes are asserted below as data.
-test_guid = uuid.uuid5(uuid.NAMESPACE_DNS, "icu-presence-detector.tray.test")
+test_guid = uuid.uuid5(uuid.NAMESPACE_DNS, "panelboss.tray.test")
 
 nim_calls = []
 orig = win32.Shell_NotifyIcon       # the raw windll function, or the

@@ -9,7 +9,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
-from awaywatch import config  # noqa: E402
+from panelboss import config  # noqa: E402
 
 cfg = config.get_config(verbose=False)
 cfg.setdefault("gaming", {})

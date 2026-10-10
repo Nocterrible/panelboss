@@ -103,7 +103,7 @@ def download_model(name="yolo11n", root=MODELS_ROOT):
         log.info("downloading %s ...", url)
         try:
             req = urllib.request.Request(url, headers={"User-Agent":
-                "icu-presence-detector"})
+                "panelboss"})
             with urllib.request.urlopen(req, timeout=120) as r:
                 data = r.read()
             break

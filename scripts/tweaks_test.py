@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from awaywatch import tweaks
+from panelboss import tweaks
 
 # 1. timer boost round-trip
 assert tweaks.timer_boost(True) is True

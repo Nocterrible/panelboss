@@ -29,6 +29,7 @@ from importlib import metadata
 
 import logging
 import threading
+import time
 import uuid
 
 import pystray
@@ -46,8 +47,11 @@ log = logging.getLogger("tray")
 # NotifyIconSettings then IS the GUID instead of a hash of whatever
 # interpreter path happens to be running. Wrap verified against pystray
 # 0.19.5 (NOTIFYICONDATAW fields at _util\win32.py:153-168, the call
-# site at _win32.py:337).
-_GUID = uuid.uuid5(uuid.NAMESPACE_DNS, "icu-presence-detector.tray")
+# site at _win32.py:337). The namespace string was reminted on the
+# v0.1.0 rename, so the first run after it owes one re-pin out of the
+# overflow flyout (the pre-rename slot stays registered until it is
+# deleted).
+_GUID = uuid.uuid5(uuid.NAMESPACE_DNS, "panelboss.tray")
 
 
 def _guid_item(guid):
@@ -74,7 +78,7 @@ try:
     # arrives as an exception, not as a zero: fail-open here, the
     # off-pump fallback swap in _warm_menu needs no message at all
     _MENU_READY = win32.RegisterWindowMessage(
-        "ICUPresenceDetectorMenuReady")
+        "PanelBossMenuReady")
 except Exception:
     _MENU_READY = 0
 
@@ -104,11 +108,26 @@ def _wrap_shell_notify():
         _stamp_identity(data)
         ok = bool(inner(code, data))
         if not ok and code == win32.NIM_ADD and _guid_live:
-            # a Shell that predates NIF_GUID (or a test double) refused
-            # the GUID-stamped ADD: the identity then rests on uID
-            # alone - keep uID=1, drop the GUID, say so once, retry
-            # (NIM_DELETE legitimately fails for missing icons, so the
-            # fallback is an ADD-only question)
+            # the common refused ADD is our OWN hide-then-show race
+            # (display change: NIM_DELETE then immediate NIM_ADD while
+            # the Shell still holds the GUID slot -> already-exists),
+            # not a Shell that predates NIF_GUID. Reclaim first: delete
+            # the very identity we are adding (a missing slot is a
+            # legitimate FALSE), breathe, re-ADD unchanged - only
+            # after two refusals treat the Shell as GUID-blind.
+            for _attempt in range(2):
+                inner(win32.NIM_DELETE, data)
+                time.sleep(0.05)
+                ok = bool(inner(code, data))
+                if ok:
+                    log.info("tray: reclaimed the GUID slot after a "
+                             "refused add (the Shell was mid-release)")
+                    return True
+            # still refused: a Shell that predates NIF_GUID (or a test
+            # double). The identity then rests on uID alone - keep
+            # uID=1, drop the GUID, say so once, retry. The latch is
+            # never raised again: a GUID-less registration must not
+            # get GUID-stamped MODIFYs.
             _guid_live = False
             log.warning("the Shell refused the NIF_GUID add; the tray "
                         "identity now rests on uID=1 alone")
@@ -166,9 +185,9 @@ class Tray(threading.Thread):
         # start as honest "probing..." placeholders, and the warm
         # worker swaps in the real ones when it finishes
         try:
-            self.icon = pystray.Icon(name="ICU Presence Detector",
+            self.icon = pystray.Icon(name="PanelBoss",
                                      icon=_image("active"),
-                                     title="ICU Presence Detector",
+                                     title="PanelBoss",
                                      menu=self._light_menu())
             self.icon.run(setup=self._ready)
         except Exception:
@@ -181,7 +200,7 @@ class Tray(threading.Thread):
         icon.update_menu()        # and the constructor skipped the HMENU
         log.info("tray icon ready")
         try:
-            icon.notify("ICU Presence Detector",
+            icon.notify("PanelBoss",
                         "running; quit from the icon menu")
         except Exception:
             pass                        # notifications are a courtesy
@@ -439,7 +458,7 @@ class Tray(threading.Thread):
         """Balloon from the state machine (burst warnings and such)."""
         if self.icon is not None:
             try:
-                self.icon.notify(message, "ICU Presence Detector")
+                self.icon.notify(message, "PanelBoss")
             except Exception:
                 pass                        # notifications are a courtesy
 

@@ -10,8 +10,8 @@ if not exist ".venv\Scripts\pythonw.exe" (
 )
 
 rem the interpreter always comes first; the arguments are always
-rem pythonw.exe -m awaywatch; the tray Quit menu is the only way to
+rem pythonw.exe -m panelboss; the tray Quit menu is the only way to
 rem stop the monitor afterwards. (the console that blinks here is
 rem cmd's OWN window, gone the moment this line runs; autostart and
 rem the updater launch pythonw directly and never pop one)
-start "ICU Presence Detector" ".venv\Scripts\pythonw.exe" -m awaywatch
+start "PanelBoss" ".venv\Scripts\pythonw.exe" -m panelboss

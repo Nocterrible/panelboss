@@ -6,7 +6,7 @@ param(
 # Task Scheduler logon task; the full script path because the task
 # runner does not know where the repo lives
 $repo = (Split-Path -Parent $PSScriptRoot)
-$task = 'ICU-PresenceDetector'
+$task = 'PanelBoss'
 $pythonw = Join-Path $repo '.venv\Scripts\pythonw.exe'
 if (-not (Test-Path $pythonw)) {
     Write-Error 'run scripts\setup.ps1 first'
@@ -15,6 +15,11 @@ $runpy = Join-Path $repo 'run.py'
 
 switch ($Action) {
     'install' {
+        # the pre-rename logon task, if this machine carried it: retired
+        # here so an update never leaves a twin launcher behind
+        if (schtasks /Query /TN 'ICU-PresenceDetector' 2>$null) {
+            schtasks /Delete /F /TN 'ICU-PresenceDetector' | Out-Null
+        }
         schtasks /Create /F /SC ONLOGON /TN $task `
             /TR "$pythonw `"$runpy`" --autostart" | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Error 'schtasks failed' }

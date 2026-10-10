@@ -6,7 +6,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from awaywatch import gaming  # noqa: E402
+from panelboss import gaming  # noqa: E402
 
 CFG = {"enabled": True, "threshold_pct": 5.0, "seen_secs": 10.0,
        "grace_secs": 60.0, "games": ["listed.exe"], "ignore": []}

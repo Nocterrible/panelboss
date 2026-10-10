@@ -15,7 +15,7 @@ import sys
 from ctypes import wintypes as W
 
 sys.path.insert(0, ".")
-from awaywatch import wm  # noqa: E402  monitors(); shares u32/k32
+from panelboss import wm  # noqa: E402  monitors(); shares u32/k32
 
 u32, k32 = wm.u32, wm.k32
 ABM_GETSTATE = 0x00000004

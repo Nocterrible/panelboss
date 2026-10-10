@@ -25,7 +25,10 @@ import sys
 log = logging.getLogger("startup")
 
 RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
-VALUE_NAME = "ICU Presence Detector"      # the name Task Manager shows
+VALUE_NAME = "PanelBoss"                       # the name Task Manager shows
+# the pre-rename value name: recognized so an old install's entry is
+# found and replaced, never kept twice
+LEGACY_VALUE_NAME = "ICU Presence Detector"
 # Windows never tells a launched app WHY the shell launched it
 # (explorer.exe parents everything: Run key, Startup folder,
 # double-click). So the entry stamps the fact itself - every serious
@@ -63,15 +66,20 @@ def selfheal():
 
 
 def enabled():
-    """The stored command line, or None. Any ICU entry counts, even a
+    """The stored command line, or None. Any entry counts, even a
     stale one from a deleted folder: the checkbox lights anyway, and
-    toggling re-points the entry here."""
+    toggling re-points the entry here. The pre-rename name counts too:
+    a found legacy entry is replaced, never duplicated."""
     try:
         import winreg as reg
         with reg.OpenKey(reg.HKEY_CURRENT_USER, RUN_PATH,
                          access=reg.KEY_READ) as key:
-            value, _ = reg.QueryValueEx(key, VALUE_NAME)
-        return value or None
+            try:
+                value, _ = reg.QueryValueEx(key, VALUE_NAME)
+                return value or None
+            except OSError:
+                value, _ = reg.QueryValueEx(key, LEGACY_VALUE_NAME)
+                return value or None
     except OSError:
         return None                            # absent is the normal
     except Exception:                          # hive policy, locked
@@ -85,6 +93,11 @@ def enable():
         import winreg as reg
         with reg.OpenKey(reg.HKEY_CURRENT_USER, RUN_PATH,
                          access=reg.KEY_READ | reg.KEY_SET_VALUE) as key:
+            try:
+                reg.DeleteValue(key, LEGACY_VALUE_NAME)
+            except Exception:
+                pass                            # one entry per app: the
+                                                # new name replaces it
             reg.SetValueEx(key, VALUE_NAME, 0, reg.REG_SZ, command())
             stored, _ = reg.QueryValueEx(key, VALUE_NAME)
     except OSError as exc:
@@ -103,9 +116,19 @@ def disable():
         import winreg as reg
         with reg.OpenKey(reg.HKEY_CURRENT_USER, RUN_PATH,
                          access=reg.KEY_SET_VALUE) as key:
-            reg.DeleteValue(key, VALUE_NAME)
-    except FileNotFoundError:
-        return True, "nothing was registered"
+            gone = 0
+            for name in (VALUE_NAME, LEGACY_VALUE_NAME):
+                # both names, independently: an absent new entry must
+                # not hide a legacy twin (the FileNotFoundError on the
+                # first delete used to skip the second, leaving the
+                # checkbox to re-light itself at the next toggle)
+                try:
+                    reg.DeleteValue(key, name)
+                    gone += 1
+                except FileNotFoundError:
+                    pass
+            if not gone:
+                return True, "nothing was registered"
     except OSError as exc:
         return False, "registry refused the delete: %s" % exc
     except Exception as exc:

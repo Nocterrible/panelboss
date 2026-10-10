@@ -42,7 +42,7 @@ import subprocess
 import sys
 import time
 
-TASK_NAME = "ICU-Presence-PowerRequests"
+TASK_NAME = "PanelBoss-PowerRequests"
 
 # consent dialogs wait for humans; this is how long we give the task
 # store to reflect a create/delete before calling it a refusal
@@ -70,7 +70,7 @@ OVERRIDE_TYPES = ("SYSTEM", "DISPLAY", "AWAYMODE", "AWAYMODEIDLERESCHEDULE",
 def result_path():
     """Where the scheduled task drops its report; per-user, stable."""
     root = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-    return os.path.join(root, "ICU-PresenceDetector", "power_requests.txt")
+    return os.path.join(root, "PanelBoss", "power_requests.txt")
 
 
 def _own_tokens():

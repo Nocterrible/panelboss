@@ -14,16 +14,16 @@ import sys
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
 
-from awaywatch import config
-from awaywatch import profiles as PF
-from awaywatch import wm as WM
+from panelboss import config
+from panelboss import profiles as PF
+from panelboss import wm as WM
 
 cfg = config.get_config(verbose=False)
 
 # config writes go to a scratch file: the window's _save() would
 # otherwise rewrite the LIVE config on every widget change
 TEST_CFG = os.path.join(os.environ.get("TEMP", "."),
-                        "icu_test_config.toml")
+                        "panelboss_test_config.toml")
 _saved_wc = config.write_config
 config.write_config = lambda c, path=None: _saved_wc(c, TEST_CFG)
 try:
@@ -36,7 +36,7 @@ except OSError:
 # OFF is deliberately NOT on the desk, so the editor renders it offline
 # (saved values only, 'panel not live', UNVERIFIED on edit).
 PF.path = lambda dir=None: os.path.join(os.environ.get("TEMP", "."),
-                                        "icu_test_profiles.json")
+                                        "panelboss_test_profiles.json")
 TEST_PROFILES = PF.path()
 for _f in (TEST_PROFILES, TEST_PROFILES + ".tmp"):
     try:
@@ -92,7 +92,7 @@ _held = None
 try:
     ctypes.windll.kernel32.OpenMutexW.restype = ctypes.c_void_p
     _held = ctypes.windll.kernel32.OpenMutexW(0x00100001, False,
-                                              "ICU-Presence-Detector")
+                                              "PanelBoss")
 except Exception:
     pass
 if _held:
@@ -101,8 +101,8 @@ if _held:
     print("tray app and rerun for the full suite")
     sys.exit(0)
 
-from awaywatch.state import FrameBox
-from awaywatch.ui import window as W
+from panelboss.state import FrameBox
+from panelboss.ui import window as W
 
 fm = type("FM", (), {})()
 fm.state = "counting"

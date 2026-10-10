@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import logging
+import os
 import queue
 import sys
 import threading
@@ -18,7 +19,7 @@ from . import config
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="awaywatch")
+    parser = argparse.ArgumentParser(prog="panelboss")
     parser.add_argument("command", nargs="?", default="run",
                         choices=["run", "cameras", "preview", "config",
                                 "enroll", "faces"])
@@ -41,6 +42,12 @@ def main(argv=None):
     except Exception:
         pass
     config.get_log_level()            # logging always comes first
+    # os, not sys: this box's 3.10 build ships a trimmed sys module
+    # without getpid (the tray app has been on os.getpid all along)
+    logging.getLogger("cli").info("panelboss 0.1.0 boot (pid %s)",
+                                  os.getpid())
+    config.migrate_once()             # the one-time pre-rename migration,
+                                      # before any config read; fail-open
     cfg = config.get_config()
     if args.index is not None:
         cfg["camera"]["index"] = args.index
@@ -83,7 +90,7 @@ def _single_instance():
     kernel32.CreateMutexW.restype = ctypes.c_void_p
     kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int,
                                         ctypes.c_wchar_p]
-    kernel32.CreateMutexW(0, False, "ICU-Presence-Detector")
+    kernel32.CreateMutexW(0, False, "PanelBoss")
     return kernel32.GetLastError() != 183        # ERROR_ALREADY_EXISTS
 
 
@@ -95,14 +102,19 @@ def _run(cfg, autostart=False):
     if not _single_instance():
         logging.getLogger("cli").info("already running; one instance is "
                                        "always checked first")
-        user32 = ctypes.windll.user32
-        user32.MessageBoxTimeoutW(0,
-            "ICU Presence Detector is already running (check the tray, "
-            "hidden icons live behind the chevron). One instance is "
-            "always started first.",
-            "ICU Presence Detector", 0x40,      # MB_ICONINFORMATION
-            5000,                                 # closes on its own
-            ctypes.byref(ctypes.c_uint()))
+        if not autostart:
+            # a logon launch must never speak: if an old copy somehow
+            # survived the shutdown, the twin's only sound is the log
+            # line above. Interactive launches get the box so a double
+            # click explains itself.
+            user32 = ctypes.windll.user32
+            user32.MessageBoxTimeoutW(0,
+                "PanelBoss is already running (check the tray, "
+                "hidden icons live behind the chevron). One instance is "
+                "always started first.",
+                "PanelBoss", 0x40,                  # MB_ICONINFORMATION
+                5000,                                 # closes on its own
+                ctypes.byref(ctypes.c_uint()))
         return 0
 
     # the tray registers and pumps first: the icon is the user's only

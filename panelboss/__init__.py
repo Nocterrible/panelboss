@@ -1,4 +1,4 @@
-"""ICU Presence Detector.
+"""PanelBoss.
 
 Presence-aware monitor power control for Windows: watches a webcam, decides
 whether someone is present, and drives the displays into the same DPMS

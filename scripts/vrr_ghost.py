@@ -36,7 +36,7 @@ import time
 from ctypes import wintypes
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from awaywatch import wm                                          # noqa: E402
+from panelboss import wm                                          # noqa: E402
 
 u32 = ctypes.windll.user32
 dxgi = ctypes.windll.dxgi      # the legacy hook shim: exports resolve

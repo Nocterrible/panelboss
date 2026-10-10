@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if not os.path.exists(os.path.join(ROOT, "awaywatch", "gaming.py")):
+if not os.path.exists(os.path.join(ROOT, "panelboss", "gaming.py")):
     # engine still typing elsewhere: shim the EXACT contract so the
     # worker plumbing can be tested today. gaming_test.py is the
     # engine's judge, not this file.
@@ -58,11 +58,11 @@ if not os.path.exists(os.path.join(ROOT, "awaywatch", "gaming.py")):
                                  "pid": fg["pid"], "proc": proc,
                                  "reason": "trusted"}, "desktop": []}
         return st, None
-    mod = types.ModuleType("awaywatch.gaming")
+    mod = types.ModuleType("panelboss.gaming")
     mod.evaluate = evaluate
-    sys.modules["awaywatch.gaming"] = mod
+    sys.modules["panelboss.gaming"] = mod
 
-from awaywatch import gaming_watch as gw        # noqa: E402
+from panelboss import gaming_watch as gw        # noqa: E402
 
 CALLS = []
 
@@ -241,7 +241,7 @@ def main():
 
     # power plan effector: the game earns the fast plan, leaving
     # gives back the plan that was active BEFORE it
-    import awaywatch.power_plan as ppl
+    import panelboss.power_plan as ppl
     real = (ppl.plans, ppl.active, ppl.set_plan)
     FAST = "a" * 8 + "-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     BAL = "b" * 8 + "-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -402,7 +402,7 @@ def main():
        "washes clean")
 
     print("GAMING WATCH TESTS OK"
-          if os.path.exists(os.path.join(ROOT, "awaywatch",
+          if os.path.exists(os.path.join(ROOT, "panelboss",
                                          "gaming.py"))
           else "GAMING WATCH TESTS OK (against CONTRACT SHIM - "
                "engine pending)")

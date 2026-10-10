@@ -289,8 +289,7 @@ TIPS = {
     "startup": "the per-user Run key - exactly the entry Task "
                 "Manager's startup tab lists. No admin, and the app "
                 "verifies it by reading the registry back.",
-    "logs": "every decision and the reason, in %APPDATA%\\ICU-"
-             "PresenceDetector\\logs.",
+    "logs": "every decision and the reason, in %APPDATA%\\PanelBoss\\logs.",
     "update": "runs update.bat: pulls the newest copy and refreshes "
                "the dependencies. the app quits first - its own files "
                "are the ones being replaced - and the script reopens "
@@ -323,7 +322,7 @@ TIPS = {
                     "panel IT clocked up for a game still comes back "
                     "to a sane 60 - or your rate - when the game "
                     "ends). VRR panels: tick VRR (pin max) after you "
-                    "enable G-SYNC yourself - AwayWatch never touches "
+                    "enable G-SYNC yourself - PanelBoss never touches "
                     "drivers, it just stops flipping that panel's "
                     "mode and keeps it at max; if you never enabled "
                     "VRR, pick an Hz or keep.",
@@ -452,7 +451,7 @@ class SettingsWindow(ctk.CTk):
         self.monitor = monitor
         self.ui_events = ui_events
         self.skin = theme.get_skin(cfg["ui"]["skin"])
-        self.title("ICU Presence Detector")
+        self.title("PanelBoss")
         self.geometry("920x640")
         self.minsize(760, 520)
         self.protocol("WM_DELETE_WINDOW", self._hide)     # close = to tray
@@ -564,7 +563,7 @@ class SettingsWindow(ctk.CTk):
 
     # ------------------------------------------------------------ top bar --
     def _build_top(self):
-        ctk.CTkLabel(self._top, text="ICU Presence Detector",
+        ctk.CTkLabel(self._top, text="PanelBoss",
                      font=self.skin.font(18, "bold"),
                      **self.skin.text_style()).pack(side="left")
         self.chip = ctk.CTkLabel(self._top, text=self.monitor.state,

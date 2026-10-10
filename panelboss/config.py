@@ -1,6 +1,6 @@
 """Config handling.
 
-Reads %APPDATA%\\ICU-PresenceDetector\\config.toml, writing stock defaults
+Reads %APPDATA%\\PanelBoss\\config.toml, writing stock defaults
 first if it has never been created. Unknown keys are tolerated (forward
 compatible); missing keys are backfilled from stock defaults so the state
 machine never has to None-check.
@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
+import subprocess
 import sys
 import time
 from logging.handlers import RotatingFileHandler
@@ -23,7 +25,7 @@ except ImportError:
 
 log = logging.getLogger("config")
 
-APP_NAME = "ICU-PresenceDetector"
+APP_NAME = "PanelBoss"
 
 # the base directory; the environment variable wins so portable installs
 # can redirect it next to the repo
@@ -33,9 +35,9 @@ if appdata:
 else:
     CONFIG_DIR = Path.home / ".config" / APP_NAME
 
-CONFIG_DIR = os.environ.get("ICU_PRESENCE_CONFIG_DIR") or str(CONFIG_DIR)
+CONFIG_DIR = os.environ.get("PANELBOSS_CONFIG_DIR") or str(CONFIG_DIR)
 
-LOG_DIR = os.environ.get("ICU_PRESENCE_LOG_DIR") or str(Path(CONFIG_DIR) / "logs")
+LOG_DIR = os.environ.get("PANELBOSS_LOG_DIR") or str(Path(CONFIG_DIR) / "logs")
 
 # stock defaults, in one place so behavior is documented by code
 DEFAULTS = {
@@ -377,7 +379,7 @@ def write_config(config, path=None):
     # atomic: the app saves while it runs, and a crash between
     # truncate and finish used to leave a half file (or none)
     with open(path + ".tmp", "w", encoding="utf-8") as f:
-        f.write("# ICU Presence Detector config (rewritten, edit to taste)\n")
+        f.write("# PanelBoss config (rewritten, edit to taste)\n")
         f.write(_dumps(data))
     os.replace(path + ".tmp", path)
     log.debug(f"config saved to {path}")
@@ -386,15 +388,15 @@ def write_config(config, path=None):
 
 def get_log_level(level=None):
     """Attaches a rotating file handler; the tray app has no console."""
-    level = level or os.environ.get("ICU_PRESENCE_LOG_LEVEL", "info")
+    level = level or os.environ.get("PANELBOSS_LOG_LEVEL", "info")
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
     root = logging.getLogger()
     handler = next((h for h in root.handlers
                      if isinstance(h, RotatingFileHandler)
-                     and h.baseFilename.endswith("awaywatch.log")), None)
+                     and h.baseFilename.endswith("panelboss.log")), None)
     if handler is None:
-        handler = RotatingFileHandler(os.path.join(LOG_DIR, "awaywatch.log"),
+        handler = RotatingFileHandler(os.path.join(LOG_DIR, "panelboss.log"),
                                       maxBytes=1_000_000, backupCount=3,
                                       encoding="utf-8")
         root.addHandler(handler)
@@ -405,3 +407,66 @@ def get_log_level(level=None):
         "%(asctime)s %(threadName)-12s %(name)s: %(message)s")
     handler.setFormatter(formatter)
     return root
+
+
+def migrate_once():
+    """One-time pre-rename migration, fail-open and idempotent. The old
+    data dir is copied over once (left in place as a backup); the two
+    pre-rename scheduled tasks are retired; the legacy Run value is
+    replaced by its PanelBoss twin, so the autostart the user chose
+    survives the rename. A fresh install (no old dir, no legacy value)
+    is a silent no-op."""
+    log = logging.getLogger("migrate")
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return
+    old_dir = os.path.join(appdata, "ICU-PresenceDetector")
+    if os.path.isdir(old_dir):
+        new_dir = str(Path(appdata) / APP_NAME)
+        if not os.path.exists(os.path.join(new_dir, "config.toml")):
+            try:
+                shutil.copytree(old_dir, new_dir, copy_function=shutil.copy2,
+                                dirs_exist_ok=True)
+                log.info("migrate: copied settings from %s (left in place "
+                         "as backup)", old_dir)
+            except Exception as exc:
+                log.warning("migrate: could not copy settings from %s: %s",
+                            old_dir, exc)
+    # task and Run cleanup run even when the old folder is already
+    # gone: orphans outlive folders
+    for name in ("ICU-PresenceDetector", "ICU-Presence-PowerRequests"):
+        # 0x08000000 = CREATE_NO_WINDOW: no console flash from pythonw.
+        # A gone task is a silent no-op; anything else (an access wall:
+        # the task is SYSTEM-owned and this process is not elevated)
+        # is worth a warning, never a crash - migration never blocks
+        # the boot, and an unscheduled hang of schtasks is a crash.
+        try:
+            proc = subprocess.run(["schtasks", "/Delete", "/F", "/TN", name],
+                                  capture_output=True, timeout=30,
+                                  creationflags=0x08000000, text=True)
+            err = (proc.stderr or "").lower()
+            if proc.returncode != 0 and "cannot find" not in err:
+                log.warning("migrate: could not delete scheduled task %s: "
+                            "%s", name, (proc.stderr or "").strip())
+        except Exception as exc:
+            log.warning("migrate: could not check scheduled task %s: %s",
+                        name, exc)
+    try:
+        import winreg as reg
+        with reg.OpenKey(reg.HKEY_CURRENT_USER,
+                         r"Software\Microsoft\Windows\CurrentVersion\Run",
+                         access=reg.KEY_READ) as key:
+            try:
+                stored, _ = reg.QueryValueEx(key, "ICU Presence Detector")
+            except OSError:
+                stored = None
+        if stored is not None:
+            # replaced, not deleted: startup.enable() writes the entry
+            # for THIS running copy under the new name and retires the
+            # legacy twin
+            from . import startup
+            ok, msg = startup.enable()
+            log.info("migrate: Run entry renamed to PanelBoss, %s", msg)
+    except Exception as exc:
+        log.warning("migrate: could not migrate the legacy Run value: %s",
+                    exc)

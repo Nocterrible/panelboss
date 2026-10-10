@@ -12,7 +12,7 @@ import types
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
 
-from awaywatch import profiles
+from panelboss import profiles
 
 # 1) pin hits: how one saved seat recognises its live windows. A
 # process pin owns EVERY window of that app (the promise the UI
@@ -546,7 +546,7 @@ print("apply flow OK (gate, mercy, belief fallback, real-hdr set+"
 # 7) the two-pass order inside wm.apply_layout itself, with the
 # config API faked: enables first, new primary LAST with
 # CDS_SET_PRIMARY, disables after, one commit at the end.
-from awaywatch import wm
+from panelboss import wm
 
 
 class FakeU32:

@@ -1,4 +1,4 @@
-"""Probe for awaywatch.gpu: exercise usage() twice (each call builds a
+"""Probe for panelboss.gpu: exercise usage() twice (each call builds a
 fresh PDH query), print per-call timing (total wall time and setup
 overhead = wall minus the collect-gap sleep), the top rendering-GPU
 pids, the usability verdict, and a force-fail test (patched
@@ -15,8 +15,8 @@ from ctypes import wintypes as W
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 ".."))
 
-from awaywatch import gpu
-from awaywatch.gpu import pdh
+from panelboss import gpu
+from panelboss.gpu import pdh
 
 try:
     import psutil

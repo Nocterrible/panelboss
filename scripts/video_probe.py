@@ -24,7 +24,7 @@ from ctypes import wintypes as W
 sys.path.insert(0, os.path.join(os.path.dirname(
     os.path.abspath(__file__)), ".."))
 
-from awaywatch import gaming_watch, gpu, wm  # noqa: E402
+from panelboss import gaming_watch, gpu, wm  # noqa: E402
 
 CAP = 400
 # kinds whose whole existence is video: if the game engine ignores

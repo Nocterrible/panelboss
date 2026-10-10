@@ -11,7 +11,7 @@ import time
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
 
-from awaywatch import wm
+from panelboss import wm
 
 failures = []
 

@@ -17,10 +17,10 @@ sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
 
 import numpy as np
 
-from awaywatch import camera as cam_mod
-from awaywatch import config
-from awaywatch import display
-from awaywatch.state import PresenceMonitor
+from panelboss import camera as cam_mod
+from panelboss import config
+from panelboss import display
+from panelboss.state import PresenceMonitor
 
 # the display calls are stubs for every state-level scenario (the
 # unknown_state_test pattern); sent records what would have hit the
@@ -114,7 +114,7 @@ def fresh_monitor(cfg):
 
 
 def scratch_cfg(index_toml, mode_on="boot_per_poll", mode_off="always_on"):
-    d = tempfile.mkdtemp(prefix="icu_multi_")
+    d = tempfile.mkdtemp(prefix="panelboss_multi_")
     with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
         fh.write("[camera]\nindex = %s\nmode_on = \"%s\"\n"
                  "mode_off = \"%s\"\n" % (index_toml, mode_on, mode_off))
@@ -441,7 +441,7 @@ try:
     FAKE_OPEN.clear()
     _enum_cache_saved = getattr(cam_mod, "_enum_cache", None)
     _names_saved, _enum_saved = cam_mod.camera_names, cam_mod.enumerate_cameras
-    d = tempfile.mkdtemp(prefix="icu_multi_")
+    d = tempfile.mkdtemp(prefix="panelboss_multi_")
     with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
         fh.write("[camera]\nindex = [1]\nname_contains = \"webcam\"\n")
     cam_mod._enum_cache = None
@@ -458,7 +458,7 @@ try:
         # eye. The fake tree DOES hold a match at 0, so a merge that
         # slipped past the guard would come back as [-2, 0] / [-1, 0]
         for sentinel in (-2, -1):
-            d2 = tempfile.mkdtemp(prefix="icu_multi_")
+            d2 = tempfile.mkdtemp(prefix="panelboss_multi_")
             with open(os.path.join(d2, "config.toml"), "w",
                       encoding="utf8") as fh:
                 fh.write("[camera]\nindex = %d\nname_contains = "

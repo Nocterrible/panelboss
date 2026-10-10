@@ -1,4 +1,10 @@
-# ICU Presence Detector
+# PanelBoss
+
+Renamed from "ICU Presence Detector" in v0.1.0: the first launch after
+the update copies your settings from `%APPDATA%\ICU-PresenceDetector`
+automatically (the old folder is left in place as a backup), and the
+tray icon's identity was reminted, so it owes one re-pin out of the
+overflow flyout.
 
 Presence-aware monitor power for Windows: watches a webcam, decides
 whether someone is at the desk, and drives the displays into the same
@@ -184,9 +190,9 @@ The **rescue my lost windows** button (on the command bar beside
 sleep/pause/Quit, always visible — useful far
 beyond profiles) walks every visible, non-minimized, grabbable
 window no screen covers and brings it back to the middle of the
-primary monitor. Store: `%APPDATA%\ICU-PresenceDetector\
-profiles.json`; the automatic off/wake desk-memory above stays the
-nightly path — profiles are the manual lever.
+primary monitor. Store: `%APPDATA%\PanelBoss\profiles.json`; the
+automatic off/wake desk-memory above stays the nightly path —
+profiles are the manual lever.
 
 ## Detection modes (`[detection] mode`)
 
@@ -310,7 +316,7 @@ need 240 Hz burning watts and OLED heat all day. The watcher
     made the feature look broken; it now honestly shows `keep`.
 
 VRR: tick **VRR (pin max)** in the card for a panel you have G-SYNC
-on yourself. AwayWatch never writes NVIDIA driver settings - it just
+on yourself. PanelBoss never writes NVIDIA driver settings - it just
 stops flipping that panel's mode (zero flash at a game's start and
 end) and keeps it at the highest rate the driver offers, which is
 where a VRR panel's range tops out anyway. Panels you leave unmarked
@@ -359,7 +365,7 @@ all verified on this 25H2 build - the folklore pile stayed out):
   the honest half of the "0.5 ms fix" (zero admin, zero reboot,
   gone the moment the game leaves; the registry variant of that
   fix is undocumented and skipped).
-* `awaywatch.tweaks` also knows the Game DVR suppressors (overlay,
+* `panelboss.tweaks` also knows the Game DVR suppressors (overlay,
   background capture, record-what-happened, session detection -
   all HKCU, read live so Settings and us never disagree) and the
   machine-wide policy attempt that honestly reports "admin needed".
@@ -372,7 +378,7 @@ all verified on this 25H2 build - the folklore pile stayed out):
 
 Windows 25H2 broke "auto-hide the taskbar until I hover the
 bottom": the bar sometimes refuses to slide back for the edge your
-mouse is on. `awaywatch.taskbar` watches for exactly that and pokes
+mouse is on. `panelboss.taskbar` watches for exactly that and pokes
 the bar into showing (`WM_TIMER` messages the bar itself uses),
 then hides it again when you leave. Off by default - it only
 engages when:
@@ -486,13 +492,13 @@ the windowless `pythonw` directly and pop nothing anywhere.
 Diagnose first:
 
 ```powershell
-.venv\Scripts\python.exe -m awaywatch cameras    # find your index
-.venv\Scripts\python.exe -m awaywatch preview --off-test   # draw + round trip
+.venv\Scripts\python.exe -m panelboss cameras    # find your index
+.venv\Scripts\python.exe -m panelboss preview --off-test   # draw + round trip
 ```
 
-Config: `%APPDATA%\ICU-PresenceDetector\config.toml` (written on first
-run). Logs: same folder, `logs\awaywatch.log`
-(`ICU_PRESENCE_LOG_LEVEL=debug` to see every frame decision).
+Config: `%APPDATA%\PanelBoss\config.toml` (written on first
+run). Logs: same folder, `logs\panelboss.log`
+(`PANELBOSS_LOG_LEVEL=debug` to see every frame decision).
 
 `run.bat` starts the settings window plus the tray icon. The window
 is where everything is tuned (see below); closing it with ✕ hides it to
@@ -506,7 +512,7 @@ The icon's identity is fixed instead of fresh on every start. pystray
 0.19.5 never sends the per-icon id Windows asks for, so the slot used to
 be keyed on the interpreter path, and every relaunch (the venv pythonw,
 the base pythonw it re-runs, a frozen exe) minted a new un-pinned slot.
-awaywatch stamps every call with a stable id and a GUID derived from the
+PanelBoss stamps every call with a stable id and a GUID derived from the
 app name, so all those paths land on one slot and a restart keeps your
 pin. The first run of this version, like a first install, still needs the
 one-time drag out of the overflow flyout (only the user can promote an
@@ -514,13 +520,13 @@ icon), and the icon shows within seconds of a start while the camera and
 GPU probes warm up behind it and fill in their submenus when ready.
 
 Headless (tray only, no window): `ui.enabled = false` in the config or
-`python -m awaywatch run --no-ui`.
+`python -m panelboss run --no-ui`.
 
 Start at logon: both the tray menu and the window's **General**
 card carry a `start with Windows` switch. It writes one value under
-`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (named `ICU
-Presence Detector` — the entry Task Manager's Startup tab lists, so
-the user can verify it in system UI). No admin. The registry is the
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (named
+`PanelBoss` — the entry Task Manager's Startup tab lists, so the
+user can verify it in system UI). No admin. The registry is the
 truth: the switch reads the entry back every time, a stale entry from
 a moved folder is shown as pointing elsewhere, and one flip off and
 on re-points it at the current copy. The command stored is this
@@ -537,7 +543,7 @@ logon, and the mutex answers the second with a notice dialog.
 
 ```powershell
 .venv\Scripts\python.exe -m pip install insightface
-.venv\Scripts\python.exe -m awaywatch enroll --name you
+.venv\Scripts\python.exe -m panelboss enroll --name you
 ```
 
 insightface shares the project's `onnxruntime` wheel, and the
@@ -887,7 +893,7 @@ there is no after-every-upgrade swap dance anymore.
 * PnP camera order and OpenCV indexes do not necessarily match; use
   `camera.index` or `camera.name_contains`
 * model weights (yolo11n.onnx, 10.7 MB) download once into `models\`;
-  mirrors in `awaywatch/inference.py`
+  mirrors in `panelboss/inference.py`
 
 ## Status
 

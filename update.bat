@@ -45,5 +45,5 @@ rem pops no console of its own (this line must match run.bat's -
 rem a test pins the two files against drift). the ping gives the
 rem new window a moment before this console closes itself.
 echo reopening the app...
-start "ICU Presence Detector" ".venv\Scripts\pythonw.exe" -m awaywatch
+start "PanelBoss" ".venv\Scripts\pythonw.exe" -m panelboss
 ping -n 5 127.0.0.1 >nul

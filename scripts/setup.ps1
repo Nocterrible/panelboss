@@ -59,4 +59,4 @@ if (-not (Get-Child models\*.onnx -ErrorAction SilentlyContinue)) {
 #    itself; rerun this script after moving the repo)
 @{ python = ($cmd -join ' '); venv = '.\.venv'; created = (Get-Date).ToString('o') } |
     ConvertTo-Json -Compress | Set-Content setup.json
-Write-Host 'done; start with: .venv\Scripts\pythonw.exe -m awaywatch'
+Write-Host 'done; start with: .venv\Scripts\pythonw.exe -m panelboss'

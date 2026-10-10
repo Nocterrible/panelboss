@@ -8,8 +8,8 @@ import os
 import sys
 
 sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
-from awaywatch import config, display, power
-from awaywatch.state import PresenceMonitor
+from panelboss import config, display, power
+from panelboss.state import PresenceMonitor
 
 # 1) set_hold's flags, captured at the syscall seam
 seen = []
@@ -31,7 +31,7 @@ print("set_hold flags OK (four combinations, no stray bits)")
 
 # 2) the policy, at every state the loop can live in, for each switch
 cfg = config.get_config(verbose=False)
-_scratch = os.path.join(os.environ.get("TEMP", "."), "icu_test_config.toml")
+_scratch = os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml")
 config.write_config = (
     lambda c, path=None, _w=config.write_config: _w(c, _scratch))
 cfg["power"]["assistant_task"] = False
@@ -67,7 +67,7 @@ print("policy OK (each switch alone, together, pause, snooze, dark)")
 # 3) migration: one old hold_timers answer seeds both new keys, keys
 #    the file sets itself always win, and the fossil never survives a
 #    rewrite (the writer persists whatever the dict holds)
-mdir = os.path.join(os.environ.get("TEMP", "."), "icu_hold_cfg")
+mdir = os.path.join(os.environ.get("TEMP", "."), "panelboss_hold_cfg")
 os.makedirs(mdir, exist_ok=True)
 mpath = os.path.join(mdir, "config.toml")
 with open(mpath, "w", encoding="utf8") as fh:
