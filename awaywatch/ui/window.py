@@ -163,17 +163,25 @@ TIPS = {
                      "just the one you picked. 'process + title' is the "
                      "one-window road (right for apps that never "
                      "retitle); 'title' alone matches by name only.",
-    "profile_hdr": "on windows 11 24h2 and later hdr is a READABLE "
-                   "fact: the app asks the display driver per monitor "
-                   "(the live answer sits next to each monitor above) "
-                   "and commands exactly the monitors that disagree, "
-                   "then reads back to confirm - no hotkey involved. "
-                   "older windows cannot answer without confusing hdr "
-                   "with wide-colour-gamut (measured: it says 'enabled' "
-                   "on a panel with no hdr at all), and there the app "
-                   "falls back to pressing win+alt+b plus keeping its "
-                   "own belief, pressing only when belief and wish "
-                   "disagree.",
+    "profile_hdr": "what to do with HDR when the profile applies. "
+                   "'restore as captured' puts every panel back the "
+                   "on/off state the profile saw at capture - per "
+                   "monitor, so two HDR panels can each keep their "
+                   "own habits. 'ignore' never asks anything. 'all "
+                   "on/off' forces EVERY hdr-capable panel the same "
+                   "way - both of yours, if both can; panels without "
+                   "hdr are never ordered to do the impossible. on "
+                   "windows 11 24h2 and later hdr is a READABLE "
+                   "fact: the app asks the driver per monitor (the "
+                   "live answer sits next to each monitor above), "
+                   "commands only the monitors that disagree, then "
+                   "reads back to confirm. on older windows that "
+                   "answer cannot be had: 'restore as captured' "
+                   "skips itself (restoring a guess is not "
+                   "restoring), while all-on/all-off fall back to "
+                   "pressing win+alt+b and keeping their own belief. "
+                   "profiles captured before this snapshot existed "
+                   "have nothing to restore - the apply says so.",
     "profile_apply": "one click reshapes the desk: topology first (new "
                      "primary last - windows refuses to move the "
                      "desktop in the same call that hands it over), "
@@ -296,6 +304,18 @@ WAIT_CHOICES = (5, 10, 15, 30, 45, 60, 90, 120, 180, 300, 600)
 # the restore-at-start lever's vocabularies: (stored value, shown
 # label) - the cfg file stays English-stable, the menus stay human
 RESTORE_LAST = ("last", "the last one for this desk")
+# the hdr ask in human words: the STORED values are the engine's
+# (snap / leave alone / on / off; "toggle" survives only in old
+# profiles and is no longer offered), the menu says what each one
+# really does - per-monitor restore is not the same command as
+# forcing every capable panel
+HDR_ASK_LABELS = {"snap": "restore as captured (per monitor)",
+                  "leave alone": "ignore HDR (leave as found)",
+                  "on": "all hdr-capable panels on",
+                  "off": "all hdr-capable panels off",
+                  "toggle": "flip it (legacy)"}
+HDR_MENU_ORDER = ("snap", "leave alone", "on", "off")
+HDR_BY_LABEL = {label: ask for ask, label in HDR_ASK_LABELS.items()}
 RESTORE_SCOPES = (("full", "the whole desk"),
                   ("monitors", "monitors only (modes + HDR)"),
                   ("windows", "windows only (pinned apps)"))
@@ -447,10 +467,6 @@ class SettingsWindow(ctk.CTk):
         for k, b in self.tab_buttons.items():
             b.configure(**(self.skin.primary() if k == key
                           else self.skin.secondary()))
-        if key == "general" and hasattr(self, "restorep_menu"):
-            # profiles are born on another tab; the login picker
-            # must know about them the moment the lever is visible
-            self._restorep_refresh()
 
     def rebuild_for_skin(self):
         self.tips.kill()
@@ -845,10 +861,11 @@ class SettingsWindow(ctk.CTk):
         self._profiles_render()
 
     def _profiles_render(self):
-        """Swap a whole freshly built pane in. Rebuilt whole on every
-        change because the lists of open windows and live monitor
-        states are snapshots - a half-updated mix of old and new
-        lines is worse. And the rebuild is DOUBLE BUFFERED: CTk
+        """Swap a whole freshly built pane in, then callers may repain
+        individual sections cheaply (see _section). Rebuilt whole on a
+        profile switch because the lists of open windows and live
+        monitor states are snapshots - a half-updated mix of old and
+        new lines is worse. And the rebuild is DOUBLE BUFFERED: CTk
         constructors call update_idletasks(), so building the pane in
         place painted every half-built stage (the whole-window redraw
         storm on every click, user-reported). Built UNPACKED, those
@@ -858,12 +875,33 @@ class SettingsWindow(ctk.CTk):
         self._prof_body = ctk.CTkFrame(self._prof_anchor,
                                        fg_color="transparent")
         self._prof_detail = self._prof_body
+        self._psec = {}
         try:
             self._profiles_fill()
         finally:
             if old is not None:
                 old.destroy()
             self._prof_body.pack(fill="x")
+
+    def _section(self, name, pady=(0, 0)):
+        """A rebuildable slice of the pane. The first call (during a
+        full fill) makes the frame; a later call just empties it, so a
+        click repaints ONE section, not all forty widgets."""
+        f = self._psec.get(name)
+        if f is None:
+            f = self._psec[name] = ctk.CTkFrame(self._prof_detail,
+                                                fg_color="transparent")
+            f.pack(fill="x", pady=pady)
+        else:
+            for w in f.winfo_children():
+                w.destroy()
+        return f
+
+    def _repaint(self, *names):
+        """Re-run just the named sections' builders after a handler
+        changed only that part of the world."""
+        for name in names:
+            getattr(self, "_fill_%s" % name)()
 
     def _profiles_fill(self):
         """The pane's content, built into the (still unpacked) fresh
@@ -934,9 +972,12 @@ class SettingsWindow(ctk.CTk):
         opts.pack(fill="x", pady=(2, 0))
         row = self._row(opts, "hdr", TIPS["profile_hdr"])
         self.hdr_menu = ctk.CTkOptionMenu(
-            row, values=list(profiles.HDR_ASKS), width=130,
-            command=self._prof_hdr, **self.skin.menu_style())
-        self.hdr_menu.set(prof.get("hdr", "leave alone"))
+            row, values=[HDR_ASK_LABELS[k] for k in HDR_MENU_ORDER],
+            width=230, command=self._prof_hdr,
+            **self.skin.menu_style())
+        self._set_menu(self.hdr_menu,
+                       HDR_ASK_LABELS.get(prof.get("hdr", "snap"),
+                                          HDR_ASK_LABELS["snap"]))
         self.hdr_menu.grid(row=0, column=1, sticky="e")
         btns = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
         btns.pack(anchor="w", pady=(6, 0))
@@ -950,53 +991,43 @@ class SettingsWindow(ctk.CTk):
                           **self.skin.secondary()).pack(side="left",
                                                         padx=(6, 0))
 
-        # ---- pinned apps: the seats this profile owns ------------------
-        live = profiles.windows_now()
-        live_key = {(w["proc"], w["title"]): w for w in live}
-        ed = self._pin_edit
-        head = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
-        head.pack(fill="x", pady=(10, 0))
-        ctk.CTkLabel(head, text="pinned apps",
-                     font=self.skin.font(13, "bold"),
-                     **self.skin.text_style()).pack(side="left")
-        self.tips.button(head, TIPS["profile_pins"]).pack(
-            side="left", padx=(6, 0))
-        ctk.CTkButton(head, text="pin every open app", width=150,
-                      command=self._prof_pin_all,
-                      **self.skin.secondary()).pack(side="left",
-                                                    padx=(8, 0))
-        ctk.CTkButton(head, text="re-scan", width=80,
-                      command=self._prof_rescan,
-                      **self.skin.secondary()).pack(side="left",
-                                                    padx=(6, 0))
-        pinf = ctk.CTkScrollableFrame(self._prof_detail, width=590,
-                                      height=112, fg_color="transparent",
-                                      scrollbar_button_color=self.skin.border,
-                                      scrollbar_button_hover_color=self.skin.accent)
-        pinf.pack(fill="x")
-        for w in prof["wins"]:
-            self._pin_row(pinf, w, live_key.get((w["proc"], w["title"])))
-        if not prof["wins"]:
-            ctk.CTkLabel(pinf, text="nothing pinned yet - seat an app below",
-                         font=self.skin.font(11),
-                         **self.skin.text_style("sub")).pack(
-                anchor="w", pady=4, padx=4)
-
         # ---- pin an app: pick a window, set conditions, pin it ---------
-        head2 = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
-        head2.pack(fill="x", pady=(10, 0))
-        ctk.CTkLabel(head2,
-                     text=("editing: %s" % (ed["key"][1] or ed["key"][0])
-                           if ed["key"] else "pin an app"),
+        # the editor sits directly under the list it edits, and the
+        # pinned seats come AFTER it: clicking a seat then loads the
+        # editor just above the row clicked. with the seat list on
+        # top, an edited pin loaded its editor below the fold, off
+        # the bottom of the window (user-reported trap). each block is
+        # a SECTION (_fill_live/_fill_editor/_fill_pins/...): the
+        # handlers repaint only what their click changed - rebuilding
+        # all forty widgets per click was the lag the user felt
+        self._fill_live()
+        self._fill_editor()
+        self._fill_pins()
+        self._restore_section(self._prof_detail)
+        self._fill_status()
+
+
+    def _fill_live(self):
+        """The pick-list section: every open window, the chosen one
+        highlighted. The row buttons are remembered, so selecting a
+        window can re-highlight WITHOUT rebuilding the list at all."""
+        sec = self._section("live", pady=(10, 0))
+        ed = self._pin_edit
+        head = ctk.CTkFrame(sec, fg_color="transparent")
+        head.pack(fill="x")
+        ctk.CTkLabel(head, text="pin an app - click a window, it "
+                                "lands in the editor below",
                      font=self.skin.font(13, "bold"),
                      **self.skin.text_style()).pack(side="left")
-        self.tips.button(head2, TIPS["profile_match"]).pack(
+        self.tips.button(head, TIPS["profile_match"]).pack(
             side="left", padx=(6, 0))
-        lif = ctk.CTkScrollableFrame(self._prof_detail, width=590,
+        lif = ctk.CTkScrollableFrame(sec, width=590,
                                      height=132, fg_color="transparent",
                                      scrollbar_button_color=self.skin.border,
                                      scrollbar_button_hover_color=self.skin.accent)
         lif.pack(fill="x")
+        self._live_rows = {}
+        live = profiles.windows_now()
         for l in live:
             key = (l["proc"], l["title"])
             picked = ed["pick"] == key
@@ -1015,28 +1046,54 @@ class SettingsWindow(ctk.CTk):
                 text_color="#10131a" if picked else self.skin.text,
                 corner_radius=self.skin.radius)
             b.pack(anchor="w", pady=1)
+            self._live_rows[key] = b
         if not live:
             ctk.CTkLabel(lif, text="no open windows to pick",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(
                 anchor="w", pady=4, padx=4)
 
-        # the subject of the editor, live or remembered: needed by
-        # the advanced rows as much as by the fine print below
-        picked = live_key.get(ed["pick"])
+    def _restyle_live(self):
+        """the highlight move, without a rebuild: paint exactly the
+        rows whose picked-state changed"""
+        pick = self._pin_edit["pick"]
+        for key, b in getattr(self, "_live_rows", {}).items():
+            on = key == pick
+            try:
+                b.configure(fg_color=self.skin.accent if on
+                            else self.skin.field_bg,
+                            text_color="#10131a" if on
+                            else self.skin.text)
+            except Exception:
+                pass                    # a destroyed row: harmless
+
+    def _fill_editor(self):
+        """The conditions + fine print for the editor's subject, live
+        or remembered. The section carries its own 'editing:' title -
+        it is what changes when a seat is clicked, and the title is
+        the proof the click landed."""
+        sec = self._section("editor", pady=(4, 0))
+        prof = self._prof_data["profiles"].get(self._prof_sel) \
+            or {"wins": []}
+        ed = self._pin_edit
+        ctk.CTkLabel(sec,
+                     text=("editing: %s" % (ed["key"][1] or ed["key"][0])
+                           if ed["key"] else "the editor"),
+                     font=self.skin.font(13, "bold"),
+                     **self.skin.text_style()).pack(anchor="w")
+        live = profiles.windows_now()
+        picked = next((w for w in live
+                       if (w["proc"], w["title"]) == ed["pick"]), None)
         saved_row = next((w for w in prof["wins"]
                           if (w["proc"], w["title"]) == ed["key"]),
                          None) if ed["key"] else None
-
-        er = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
-        er.pack(fill="x", pady=(4, 0))
-        row = self._row(er, "window matching", TIPS["profile_match"])
+        row = self._row(sec, "window matching", TIPS["profile_match"])
         self.match_menu = ctk.CTkOptionMenu(
             row, values=list(profiles.MATCH_MODES), width=150,
             command=self._pin_match, **self.skin.menu_style())
         self.match_menu.set(ed["match"])
         self.match_menu.grid(row=0, column=1, sticky="e")
-        row = self._row(er, "open it if missing",
+        row = self._row(sec, "open it if missing",
                         TIPS["profile_pin_open"])
         self.pin_open_box = ctk.CTkCheckBox(row, text="",
                                             font=self.skin.font(12),
@@ -1055,7 +1112,7 @@ class SettingsWindow(ctk.CTk):
             # and WHERE the wish knocks. the captured exe is often
             # the wrong door (store stubs, updater wrappers) and
             # only the human knows which launcher opens the window
-            row = self._row(er, "wait up to",
+            row = self._row(sec, "wait up to",
                             TIPS["profile_pin_wait"])
             self.pin_wait_menu = ctk.CTkOptionMenu(
                 row, values=["%d s" % s for s in WAIT_CHOICES],
@@ -1063,7 +1120,7 @@ class SettingsWindow(ctk.CTk):
                 **self.skin.menu_style())
             self.pin_wait_menu.set("%d s" % ed["wait"])
             self.pin_wait_menu.grid(row=0, column=1, sticky="e")
-            row = self._row(er, "launches", TIPS["profile_pin_exe"])
+            row = self._row(sec, "launches", TIPS["profile_pin_exe"])
             exf = ctk.CTkFrame(row, fg_color="transparent")
             show = (ed["exe"]
                     or (picked or saved_row or {}).get("exe")
@@ -1116,12 +1173,12 @@ class SettingsWindow(ctk.CTk):
                          "nothing, then it waits %d s and reports"
                          % (exe, ed["wait"]))
         for t in notes:
-            ctk.CTkLabel(self._prof_detail, text=t,
+            ctk.CTkLabel(sec, text=t,
                          font=self.skin.font(10), wraplength=580,
                          justify="left", anchor="w",
                          **self.skin.text_style("sub")).pack(
                 anchor="w", pady=(2, 0))
-        cbtns = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
+        cbtns = ctk.CTkFrame(sec, fg_color="transparent")
         cbtns.pack(anchor="w", pady=(4, 0))
         ctk.CTkButton(cbtns,
                       text="update pin" if ed["key"] else "pin it",
@@ -1132,8 +1189,45 @@ class SettingsWindow(ctk.CTk):
                           command=self._pin_cancel,
                           **self.skin.secondary()).pack(side="left",
                                                         padx=(6, 0))
+
+    def _fill_pins(self):
+        """The seats this profile owns - below the editor on purpose
+        (see the reorder note in _profiles_fill)."""
+        sec = self._section("pins", pady=(10, 0))
+        prof = self._prof_data["profiles"].get(self._prof_sel) \
+            or {"wins": []}
+        ctk.CTkLabel(sec, text="pinned apps",
+                     font=self.skin.font(13, "bold"),
+                     **self.skin.text_style()).pack(side="left")
+        self.tips.button(sec, TIPS["profile_pins"]).pack(
+            side="left", padx=(6, 0))
+        ctk.CTkButton(sec, text="pin every open app", width=150,
+                      command=self._prof_pin_all,
+                      **self.skin.secondary()).pack(side="left",
+                                                    padx=(8, 0))
+        ctk.CTkButton(sec, text="re-scan", width=80,
+                      command=self._prof_rescan,
+                      **self.skin.secondary()).pack(side="left",
+                                                    padx=(6, 0))
+        pinf = ctk.CTkScrollableFrame(sec, width=590,
+                                      height=112, fg_color="transparent",
+                                      scrollbar_button_color=self.skin.border,
+                                      scrollbar_button_hover_color=self.skin.accent)
+        pinf.pack(fill="x")
+        live_key = {(w["proc"], w["title"]): w
+                    for w in profiles.windows_now()}
+        for w in prof["wins"]:
+            self._pin_row(pinf, w, live_key.get((w["proc"], w["title"])))
+        if not prof["wins"]:
+            ctk.CTkLabel(pinf, text="nothing pinned yet - seat an app above",
+                         font=self.skin.font(11),
+                         **self.skin.text_style("sub")).pack(
+                anchor="w", pady=4, padx=4)
+
+    def _fill_status(self):
+        sec = self._section("status")
         self._prof_status = ctk.CTkLabel(
-            self._prof_detail, text=self._prof_msg,
+            sec, text=self._prof_msg,
             font=self.skin.font(11), wraplength=560, justify="left",
             anchor="w", **self.skin.text_style("sub"))
         self._prof_status.pack(anchor="w", pady=(6, 0))
@@ -1279,6 +1373,10 @@ class SettingsWindow(ctk.CTk):
         self._profiles_render()
 
     def _prof_hdr(self, ask):
+        # the menu hands labels; unknown strings pass through raw
+        # (a hand-edited profile or a test speaks the engine's
+        # tongue directly)
+        ask = HDR_BY_LABEL.get(ask, ask)
         self._prof_data["profiles"][self._prof_sel]["hdr"] = ask
         profiles.save(self._prof_data)
 
@@ -1288,13 +1386,16 @@ class SettingsWindow(ctk.CTk):
 
     def _pin_select(self, key):
         """a click in the open-windows list makes it the editor's
-        subject; clicking the same one again lets go of it"""
+        subject; clicking the same one again lets go of it. the pane
+        is NOT rebuilt whole - the highlight moves on the existing
+        row buttons and only the editor section repaints"""
         if self._pin_edit["pick"] == key and self._pin_edit["key"] \
                 is None:
             self._pin_edit["pick"] = None
         else:
             self._pin_edit.update(key=None, pick=key)
-        self._profiles_render()
+        self._restyle_live()
+        self._repaint("editor")
 
     def _pin_load(self, w):
         """the pinned row clicked: the pin pops back up into the
@@ -1312,7 +1413,8 @@ class SettingsWindow(ctk.CTk):
                               or "process",
                               open=bool(w.get("open")),
                               wait=wait, exe=w.get("exe") or None)
-        self._profiles_render()
+        self._restyle_live()
+        self._repaint("editor")
 
     def _pin_remove(self, w):
         profiles.unpin(self._prof_data, self._prof_sel, w["proc"],
@@ -1320,17 +1422,17 @@ class SettingsWindow(ctk.CTk):
         if self._pin_edit["key"] == (w["proc"], w["title"]):
             self._pin_edit = _fresh_pin_edit()
         self._prof_msg = "forgot: %s" % (w["title"] or w["proc"])[:60]
-        self._profiles_render()
+        self._repaint("pins", "editor", "status")
 
     def _pin_match(self, mode):
         self._pin_edit["match"] = mode
-        self._profiles_render()       # the all-windows warning hangs
-                                      # off this choice
+        self._repaint("editor")         # the all-windows warning
+                                        # hangs off this choice
 
     def _pin_open(self):
         self._pin_edit["open"] = bool(self.pin_open_box.get())
-        self._profiles_render()       # the naive-exe warning and
-                                      # the advanced rows hang off it
+        self._repaint("editor")         # the naive-exe warning and
+                                        # the advanced rows hang off it
 
     def _pin_wait(self, text):
         try:
@@ -1338,7 +1440,7 @@ class SettingsWindow(ctk.CTk):
         except (TypeError, ValueError):
             pass                      # a menu value we did not
                                       # write: keep the current wait
-        self._profiles_render()
+        self._repaint("editor")         # the fine print quotes it
 
     def _pin_browse(self):
         """What the app cannot guess, the human can: when the
@@ -1358,18 +1460,19 @@ class SettingsWindow(ctk.CTk):
             got = ""
         if got:
             self._pin_edit["exe"] = got
-            self._profiles_render()
+            self._repaint("editor")
 
     def _pin_cancel(self):
         self._pin_edit = _fresh_pin_edit()
-        self._profiles_render()
+        self._restyle_live()
+        self._repaint("editor")
 
     def _pin_commit(self):
         ed = self._pin_edit
         key = ed["key"] or ed["pick"]
         if key is None:
             self._prof_msg = "pick one of the open windows first"
-            self._profiles_render()
+            self._repaint("status")
             return
         win = next((w for w in profiles.windows_now()
                     if (w["proc"], w["title"]) == key), None)
@@ -1381,6 +1484,7 @@ class SettingsWindow(ctk.CTk):
             self._prof_msg = "that window is gone - pin something " \
                              "that exists"
             self._pin_cancel()
+            self._repaint("status")
             return
         profiles.pin(self._prof_data, self._prof_sel, win,
                      match=ed["match"], open_if_missing=ed["open"],
@@ -1388,7 +1492,8 @@ class SettingsWindow(ctk.CTk):
         self._prof_msg = "pinned: %s (seat: where it sits now)" % \
             (key[1] or key[0])[:60]
         self._pin_edit = _fresh_pin_edit()
-        self._profiles_render()
+        self._restyle_live()
+        self._repaint("pins", "editor", "status")
 
     def _prof_pin_all(self):
         # one seat per APP, not per window: a process pin owns every
@@ -1407,7 +1512,7 @@ class SettingsWindow(ctk.CTk):
                          match="process")
         self._prof_msg = "pinned one seat per open app (%d)" % \
             len(best)
-        self._profiles_render()
+        self._repaint("pins", "status")
 
     # --------------------------------------------------------- power plan --
     def _build_power(self, page):
@@ -1604,51 +1709,6 @@ class SettingsWindow(ctk.CTk):
                                          **self.skin.text_style("sub"))
         self.startup_note.pack(anchor="w")
         self._startup_sync(startup.enabled())
-
-        # the pre-armed lever: a profile the app applies by itself at
-        # start. which COPY is the logon one is not inferred (the
-        # shell gives no clue) - the Run entry installed here stamps
-        # --autostart on itself, and cli reads that stamp as proof
-        rst = self.cfg.setdefault("restore", {})
-        row = self._row(box, "restore a profile at start",
-                        TIPS["restore_on"])
-        self.restorep_switch = ctk.CTkSwitch(row, text="",
-                                             font=self.skin.font(12),
-                                             command=self._restorep_changed,
-                                             progress_color=self.skin.accent,
-                                             border_color=self.skin.border)
-        self.restorep_switch.grid(row=0, column=1, sticky="e")
-        if rst.get("enabled"):
-            self.restorep_switch.select()
-        row = self._row(box, "which profile", TIPS["restore_profile"])
-        self.restorep_menu = ctk.CTkOptionMenu(
-            row, values=self._restorep_names(), width=240,
-            command=self._restorep_pick, **self.skin.menu_style())
-        self._set_menu(self.restorep_menu,
-                       self._restorep_label(rst.get("profile") or "last"))
-        self.restorep_menu.grid(row=0, column=1, sticky="e")
-        row = self._row(box, "what to restore", TIPS["restore_scope"])
-        self.restorep_scope_menu = ctk.CTkOptionMenu(
-            row, values=[lbl for _, lbl in RESTORE_SCOPES], width=240,
-            command=self._restorep_scope, **self.skin.menu_style())
-        self._set_menu(self.restorep_scope_menu,
-                       self._pair_label(RESTORE_SCOPES,
-                                        rst.get("scope") or "full"))
-        self.restorep_scope_menu.grid(row=0, column=1, sticky="e")
-        row = self._row(box, "applies to", TIPS["restore_when"])
-        self.restorep_when_menu = ctk.CTkOptionMenu(
-            row, values=[lbl for _, lbl in RESTORE_WHENS], width=240,
-            command=self._restorep_when, **self.skin.menu_style())
-        self._set_menu(self.restorep_when_menu,
-                       self._pair_label(RESTORE_WHENS,
-                                        rst.get("when") or "autostart"))
-        self.restorep_when_menu.grid(row=0, column=1, sticky="e")
-        self.restorep_warn = None
-        self.restorep_note = ctk.CTkLabel(
-            box, text=self._restorep_note(), font=self.skin.font(11),
-            wraplength=420, justify="left", anchor="w",
-            **self.skin.text_style("sub"))
-        self.restorep_note.pack(anchor="w")
 
     # ------------------------------------------------------------- helpers --
     @staticmethod
@@ -2029,6 +2089,61 @@ class SettingsWindow(ctk.CTk):
     def _pair_label(pairs, value):
         return dict(pairs).get(value, pairs[0][1])
 
+    def _restore_section(self, parent):
+        """The pre-armed lever, living ON the profiles tab with the
+        profiles it arms (it hid under General; the user hunted for it
+        here). Rebuilt with the pane, so the picker always knows about
+        profiles captured since the window opened. Which COPY is the
+        logon one is not inferred (the shell gives no clue) - the Run
+        entry installed by the startup row stamps --autostart on
+        itself, and cli reads that stamp as proof."""
+        rst = self.cfg.setdefault("restore", {})
+        head = ctk.CTkFrame(parent, fg_color="transparent")
+        head.pack(fill="x", pady=(12, 0))
+        ctk.CTkLabel(head, text="restore a profile at start",
+                     font=self.skin.font(13, "bold"),
+                     **self.skin.text_style()).pack(side="left")
+        self.tips.button(head, TIPS["restore_on"]).pack(
+            side="left", padx=(6, 0))
+        row = self._row(parent, "armed", TIPS["restore_on"])
+        self.restorep_switch = ctk.CTkSwitch(row, text="",
+                                             font=self.skin.font(12),
+                                             command=self._restorep_changed,
+                                             progress_color=self.skin.accent,
+                                             border_color=self.skin.border)
+        self.restorep_switch.grid(row=0, column=1, sticky="e")
+        if rst.get("enabled"):
+            self.restorep_switch.select()
+        row = self._row(parent, "which profile", TIPS["restore_profile"])
+        self.restorep_menu = ctk.CTkOptionMenu(
+            row, values=self._restorep_names(), width=240,
+            command=self._restorep_pick, **self.skin.menu_style())
+        self._set_menu(self.restorep_menu,
+                       self._restorep_label(rst.get("profile") or "last"))
+        self.restorep_menu.grid(row=0, column=1, sticky="e")
+        row = self._row(parent, "what to restore", TIPS["restore_scope"])
+        self.restorep_scope_menu = ctk.CTkOptionMenu(
+            row, values=[lbl for _, lbl in RESTORE_SCOPES], width=240,
+            command=self._restorep_scope, **self.skin.menu_style())
+        self._set_menu(self.restorep_scope_menu,
+                       self._pair_label(RESTORE_SCOPES,
+                                        rst.get("scope") or "full"))
+        self.restorep_scope_menu.grid(row=0, column=1, sticky="e")
+        row = self._row(parent, "applies to", TIPS["restore_when"])
+        self.restorep_when_menu = ctk.CTkOptionMenu(
+            row, values=[lbl for _, lbl in RESTORE_WHENS], width=240,
+            command=self._restorep_when, **self.skin.menu_style())
+        self._set_menu(self.restorep_when_menu,
+                       self._pair_label(RESTORE_WHENS,
+                                        rst.get("when") or "autostart"))
+        self.restorep_when_menu.grid(row=0, column=1, sticky="e")
+        self.restorep_warn = None
+        self.restorep_note = ctk.CTkLabel(
+            parent, text=self._restorep_note(), font=self.skin.font(11),
+            wraplength=560, justify="left", anchor="w",
+            **self.skin.text_style("sub"))
+        self.restorep_note.pack(anchor="w")
+
     def _restorep_names(self):
         """'last' first, then every profile by name - the picker on
         the profiles tab and this one read the same truth."""
@@ -2039,12 +2154,6 @@ class SettingsWindow(ctk.CTk):
 
     def _restorep_value(self, label):
         return "last" if label == RESTORE_LAST[1] else label
-
-    def _restorep_refresh(self):
-        cur = self.cfg.get("restore", {}).get("profile") or "last"
-        self.restorep_menu.configure(values=self._restorep_names())
-        self._set_menu(self.restorep_menu, self._restorep_label(cur))
-        self.restorep_note.configure(text=self._restorep_note())
 
     def _restorep_note(self):
         """fine print that tells the truth about how long login will

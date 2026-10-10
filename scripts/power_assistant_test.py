@@ -468,7 +468,13 @@ def check():
         app.update_idletasks()
         assert any("hdr off" in t and "T" in t for t in _ptexts()), \
             "live hdr note missing from the monitor row"
-        assert app.hdr_menu.get() == "leave alone"
+        assert app.hdr_menu.get() == "restore as captured (per " \
+            "monitor)", app.hdr_menu.get()
+        # the label is for humans; the STORED value is the engine's
+        app._prof_hdr("all hdr-capable panels off")
+        assert prof["hdr"] == "off", prof["hdr"]
+        app._prof_hdr("restore as captured (per monitor)")
+        assert prof["hdr"] == "snap"
         # the new pin editor: matching defaults to PROCESS (titles
         # lie a hundred times a day), no open wish, no advanced
         # rows until one is asked for
@@ -711,9 +717,12 @@ def check():
         app.min_switch.deselect()
         app._start_min_changed()
         assert cfg["ui"]["start_minimized"] is False
-        # the restore-at-start lever: switch, picker, scope, trigger -
-        # every choice lands in the cfg dict the restore worker
-        # reads, and the picker can see the profiles that exist
+        # the restore-at-start lever: lives ON THE PROFILES TAB now (it
+        # arms profiles, so it lives with them - the user hunted for it
+        # there first). rebuilt with the pane, so render fresh here and
+        # the probes below face live widgets
+        app._profiles_render()
+        app.update_idletasks()
         assert app.restorep_switch.get() == 0, "restore defaults off"
         app.restorep_switch.select()
         app._restorep_changed()

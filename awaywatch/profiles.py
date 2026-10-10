@@ -37,7 +37,7 @@ log = logging.getLogger("profiles")
 
 NEW = "create new..."
 MATCH_MODES = ("process", "process + title", "title")
-HDR_ASKS = ("leave alone", "on", "off", "toggle")
+HDR_ASKS = ("snap", "leave alone", "on", "off", "toggle")
 
 
 # ---------------------------------------------------------------- store --
@@ -151,9 +151,16 @@ def target_fp(displays):
 
 def capture():
     """Everything the desk is right now, in profile words."""
-    caps = {}
+    caps, states = {}, {}
     try:
-        caps = {r["gdi"]: bool(r["supported"]) for r in wm.hdr_states()}
+        rows = wm.hdr_states()
+        caps = {r["gdi"]: bool(r["supported"]) for r in rows}
+        # the state snapshot the "restore the captured state" ask
+        # aims back at: only a readable on/off is worth remembering
+        # (an unreadable "unknown" would restore a guess)
+        states = {r["gdi"]: r["state"] for r in rows
+                  if r.get("supported") and r.get("state") in
+                  ("on", "off")}
     except Exception:
         pass                           # capability is garnish, never
     displays = []                      # a blocker
@@ -163,7 +170,8 @@ def capture():
                          "primary": m["primary"], "x": m["x"],
                          "y": m["y"], "w": m["w"], "h": m["h"],
                          "rate": m["rate"], "bits": m["bits"],
-                         "hdr_cap": caps.get(m["gdi"])})
+                         "hdr_cap": caps.get(m["gdi"]),
+                         "hdr_state": states.get(m["gdi"])})
     return displays
 
 
@@ -188,8 +196,7 @@ def windows_now():
     return out
 
 
-def create(data, name, hdr="leave alone", match="process",
-           dir=None):
+def create(data, name, hdr="snap", match="process", dir=None):
     prof = {"fp": wm.fingerprint(), "created": time.time(),
             "used": time.time(), "match": match, "hdr": hdr,
             "displays": capture(), "wins": []}
@@ -367,6 +374,25 @@ def hdr_plan(want, states):
             and s != want]
 
 
+def hdr_snap_plan(displays, states):
+    """Pure decision for the honest ask (testable): put every panel
+    back the way the profile SAW it at capture. Panels whose capture
+    holds no readable state (old profiles, unreadable drivers) are
+    left exactly as they are - restoring a guess is not restoring;
+    panels that cannot do HDR or will not say now are never
+    commanded (same law as hdr_plan); an empty list means the desk
+    already wears its captured face."""
+    out = []
+    for d in displays:
+        want = d.get("hdr_state")
+        if want not in ("on", "off"):
+            continue
+        now = states.get(d["id"])
+        if now in ("on", "off") and now != want:
+            out.append((d["id"], want))
+    return out
+
+
 def _hdr_now():
     """Driver truth joined to monitor ids: ({id: state}, precise,
     {id: gdi}) - the gdi map rides along because after a topology
@@ -473,10 +499,11 @@ def apply(data, name, best_effort=False, scope="full", login=False,
     # Windows, whose only readable API conflates HDR with wide
     # gamut and measurably lies.
     ask = prof.get("hdr", "leave alone")
-    if layout and ask in ("on", "off", "toggle"):
+    if layout and ask in ("snap", "on", "off", "toggle"):
         states, precise, gdis = _hdr_now()
         if precise:
-            plan = hdr_plan(ask, states)
+            plan = (hdr_snap_plan(prof["displays"], states)
+                    if ask == "snap" else hdr_plan(ask, states))
             for mid, goal in plan:
                 trouble = wm.hdr_set(gdis[mid], goal == "on")
                 if trouble:
@@ -493,10 +520,18 @@ def apply(data, name, best_effort=False, scope="full", login=False,
             short = lambda m: (by_id[m]["short"] if m in by_id
                                else m[:12])
             if not plan:
-                say.append("hdr: nothing readable to flip"
-                           if ask == "toggle" else
-                           "hdr: every readable monitor already %s"
-                           % ask)
+                if ask == "snap":
+                    say.append(
+                        "hdr: already as captured"
+                        if any(d.get("hdr_state") in ("on", "off")
+                               for d in prof["displays"]) else
+                        "hdr: nothing was captured to restore - "
+                        "this profile predates the hdr snapshot")
+                else:
+                    say.append("hdr: nothing readable to flip"
+                               if ask == "toggle" else
+                               "hdr: every readable monitor already %s"
+                               % ask)
             elif stuck:
                 say.append("hdr: %s never confirmed" % ", ".join(
                     short(m) for m, _ in stuck))
@@ -507,6 +542,13 @@ def apply(data, name, best_effort=False, scope="full", login=False,
             data["hdr_now"] = "on" if any(v == "on" for v in
                                           got.values()) else "off"
             save(data, dir)
+        elif ask == "snap":
+            # the belief dance only knows one global switch; per-
+            # monitor restore without a readable answer is a coin
+            # flip, and coins do not belong in someone's desk
+            say.append("hdr: restoring what was captured needs the "
+                       "readable driver answer (Win11 24H2+) - "
+                       "left as found")
         else:
             action, believed = hdr_action(ask, data.get(
                 "hdr_now", "unknown"))

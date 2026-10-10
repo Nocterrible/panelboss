@@ -75,6 +75,19 @@ assert sorted(P("toggle", S)) == [("A", "on"), ("B", "off")]
 assert P("on", {"A": "na"}) == []
 print("hdr plan OK (na/unknown never commanded, toggle flips what it sees)")
 
+# 2c) hdr_snap_plan: each panel back to ITS OWN captured state -
+# panels the capture has no state for (old profiles) and panels
+# that cannot do HDR or will not say now are never commanded
+SP = profiles.hdr_snap_plan
+D = [{"id": "A", "hdr_state": "on"}, {"id": "B", "hdr_state": "off"},
+     {"id": "C", "hdr_state": None}, {"id": "D"}]
+assert SP(D, {"A": "off", "B": "on", "C": "on", "D": "off"}) == \
+    [("A", "on"), ("B", "off")], SP(D, {"A": "off", "B": "on"})
+assert SP(D, {"A": "on", "B": "off", "C": "off", "D": "on"}) == []
+assert SP(D, {"A": "na", "B": "unknown"}) == []
+print("hdr snap plan OK (per-monitor targets; unrecorded and mute "
+      "panels left in peace)")
+
 # 3) the store: roundtrip, quarantine of an unparsable file, and a
 # single rotted profile dropped without killing its neighbours
 tmp = tempfile.mkdtemp()
@@ -258,6 +271,39 @@ try:
             {"gdi": BBB["gdi"], "supported": True, "state": "on"}]
     ok6, say6, f6, _, info6 = scenario([TARGET], hdr=rows)
     assert f6.sets == [] and "already on" in say6, say6
+
+    # SNAP: every panel back to the state the profile SAW - AAA was
+    # captured on and BBB off, the desk answers exactly backwards,
+    # so two opposite commands fly and BOTH verify
+    prof6["hdr"] = "snap"
+    prof6["displays"][0]["hdr_state"] = "on"
+    prof6["displays"][1]["hdr_state"] = "off"
+    rows = [{"gdi": AAA["gdi"], "supported": True, "state": "off"},
+            {"gdi": BBB["gdi"], "supported": True, "state": "on"}]
+    ok6, say6, f6, disk, _ = scenario([TARGET], hdr=rows)
+    assert ok6, say6
+    assert sorted(f6.sets) == sorted([(AAA["gdi"], True),
+                                      (BBB["gdi"], False)]), f6.sets
+    assert "AAA on (verified)" in say6 and "BBB off (verified)" \
+        in say6, say6
+
+    # a profile captured before snapshots existed: nothing to
+    # restore, said out loud, and not one command is sent
+    for d in prof6["displays"]:
+        d.pop("hdr_state")
+    ok6, say6, f6, _, _ = scenario([TARGET], hdr=rows)
+    assert f6.sets == [] and "predates the hdr snapshot" in say6, \
+        say6
+
+    # an unreadable OS (no driver rows): restore-by-coin-flip is
+    # refused - the hotkey stays unpressed for a per-monitor wish
+    prof6["displays"][0]["hdr_state"] = "on"
+    ok6, say6, f6, _, _ = scenario([TARGET])
+    assert f6.sets == [] and f6.pressed == [], (f6.sets, f6.pressed)
+    assert "24H2" in say6, say6
+    prof6["hdr"] = "on"
+    for d in prof6["displays"]:
+        d.pop("hdr_state", None)
 
     # a deaf driver: accepts the command, never obeys - the honest
     # complaint is "never confirmed", not a verification lie

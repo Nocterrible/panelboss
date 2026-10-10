@@ -30,7 +30,8 @@ the settings window — four tabs, one subject each: **detection**
 (mode; the model's knobs or the differencer's — they never share the
 screen; the timers; the live preview beside the camera picker),
 **monitor profiles** (named whole-desktop states: panels, modes,
-HDR, window seats — see below), **power plan** (the timer overrides
+HDR, window seats, and the restore-at-start lever — see below),
+**power plan** (the timer overrides
 here, the wake behavior, the powercfg assistant), **General** (the
 meta: skin, start minimized, autostart, updater, logs).
 Anything with more to say has a "?" beside it: hover for the story,
@@ -106,7 +107,11 @@ waits for it to wake (default 30 s, adjustable per pin from 5 s to
 store apps and stub launchers may start nothing; *browse* then
 lets you point the pin at the launcher or binary that really opens
 the window (the shell runs it exactly like a double-click, so a
-`.lnk` shortcut works too). Clicking a pinned row lifts the pin
+`.lnk` shortcut works too). The pinned seats list sits **below**
+the editor on purpose: clicking a row loads the editor directly
+above the row clicked, always on screen (with the seat list on
+top, the editor of an edited pin often fell below the bottom of
+the window). Clicking a pinned row lifts the pin
 back into the editor to change or refresh it, `x` forgets the
 seat, and *pin every open app* seats one window per running
 program at once. At apply each pin moves the windows that answer
@@ -121,8 +126,10 @@ monitor cannot — so applying onto the wrong monitors refuses with
 the honest sentence and a *try anyway (best effort)* button that
 converts what exists and places windows on whatever desk answered.
 
-**The lever can pull itself (restore at start).** The General tab
-holds a pre-armed apply: tick *restore a profile at start*, pick
+**The lever can pull itself (restore at start).** The profiles tab
+holds a pre-armed apply (it arms profiles, so it lives with them
+— General keeps only the autostart entry that proves which copy is
+the logon one): tick *armed*, pick
 which profile ("the last one for this desk" chooses by panel
 IDENTITY — a cold boot may not have reached the profile's modes
 yet, and the exact fingerprint would then hide the profile that
@@ -148,7 +155,18 @@ results arrive as tray balloons (still-missing apps named), never
 a dialog holding a half-woken desktop hostage. If a manual launch
 at the exact moment of logon wins the single-instance race, the
 restore runs in whichever copy survived.
-HDR is a read, then a command: on Windows 11 24H2 and later the
+The profile's HDR dropdown asks in human words and every choice
+means what it says. **restore as captured** (the default for new
+profiles) puts every panel back
+in the on/off state the profile saw at capture — per monitor, so
+two HDR panels each keep their own habits. **ignore HDR** never
+asks anything. **all hdr-capable panels on/off** forces every
+capable panel the same way — both of yours, if both can. (The old
+global **toggle** survives only in hand-edited profiles, where the
+engine still obeys it.) Nothing is ever guessed: panels without
+HDR are never ordered to do the impossible, and a profile captured
+before the snapshot existed says it has nothing to restore. The
+mechanics: HDR is a read, then a command: on Windows 11 24H2 and later the
 DisplayConfig API answers per monitor what colour mode it is
 actually in (`GET_ADVANCED_COLOR_INFO_2` — the call the Settings
 toggle itself is built on) and accepts a direct SET, so the app
@@ -159,7 +177,9 @@ fallback for older Windows, where the one readable answer conflates
 HDR with wide-gamut colour and measurably lies — on this desk it
 reports "supported + enabled" for a panel that cannot do HDR at
 all. The stored belief (`hdr_now` in `profiles.json`) is kept
-calibrated from the reads and matters only on that ancient path.
+calibrated from the reads and matters only on that ancient path —
+and on it, *restore as captured* abstains rather than flip a coin
+(the belief dance knows exactly one global switch).
 The **rescue my lost windows** button (on the command bar beside
 sleep/pause/Quit, always visible — useful far
 beyond profiles) walks every visible, non-minimized, grabbable
@@ -541,7 +561,12 @@ there is no after-every-upgrade swap dance anymore.
   click. The profiles pane is double-buffered: each render builds
   its body UNPACKED (intermediate paints land on an invisible
   frame), destroys the old body and packs the new one as a single
-  swap; the anchor frame is packed once and never touched
+  swap; the anchor frame is packed once and never touched. The pane
+  is ALSO split into named sections (live list, editor, seats,
+  status), so a click rebuilds only the section its handler changed
+  — whole-pane rebuilds felt laggy per click however invisible the
+  swap was made, and a selection click now just re-highlights the
+  existing row buttons without rebuilding anything
 * the shell never tells a launched app WHY it launched it:
   `explorer.exe` parents the Run key, the Startup folder and a
   plain double-click alike, and process-parent checks stop there —
