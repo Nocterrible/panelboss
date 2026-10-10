@@ -108,3 +108,58 @@ MPO folklore is about compositor flicker, not mode changes.
    keep the Hz switcher with its grace timer. The `FIXED_REFRESH`
    per-app override may even remove games-from-the-equation for
    listed titles entirely — worth probing what it does to scanout.
+
+## Oct 10 update - verified dwords + expert brief (no more UNTESTED on names)
+
+Source: NVIDIA/nvapi master NvApiDriverSettings.h fetched directly (raw
+githubusercontent), cross-checked against our own DRS GetSetting reads.
+
+- VRR_MODE 0x1194F158 ("Enable G-SYNC globally"): DISABLED=0x0
+  FULLSCREEN_ONLY=0x1 FULLSCREEN_AND_WINDOWED=0x2. LIVE READ = 1, so
+  the desk is fullscreen-only today; the windowed target is 0x2 -
+  the global write is NOT a no-op (corrects the earlier guess).
+- VRR_APP_OVERRIDE 0x10A879CF / VRR_APP_OVERRIDE_REQUEST_STATE
+  0x10A879AC: ALLOW=0 FORCE_OFF=1 DISALLOW=2 ULMB=3 FIXED_REFRESH=4
+  (ULMB is NVIDIA-UI's "Ultra Low Motion Blur" family label; the
+  FIXED_REFRESH dword the earlier probe was missing is 4).
+- VSYNCVRRCONTROL 0x10A879CE: the "Variable Refresh Rate" switch.
+- DRS write path ids (verified against >=2 public mirrors by the
+  cloud brief, still UNTESTED on this box): SetSetting 0x577DD202,
+  SaveSettings 0xFCBC7E14, DestroySession 0xDAD9CFF8; writes go to
+  the CURRENT-GLOBAL profile handle with settingLocation=0.
+- Brief verdict: DRS has NO display-scoped profiles (per-display
+  "Enable for this model" checkbox lives elsewhere; prime candidate
+  Get/SetAdaptiveSyncData 0xB73D1EE9/0x3EEBBA1D, rc=0 would also
+  settle per-output capability). All-zero GetVRRInfo while
+  VRR_MODE=1 ranks: per-display enable off > GSC under-report.
+- Owner product decision (Oct 10, supersedes the Hz-switcher
+  priority): VRR-capable panels stay pinned at MAX scanout always
+  (desktop draws ~60 frames under VRR, ZERO mode flips, zero flash);
+  desktop_hz hold + game_hz switching serve non-VRR panels only.
+- Next gate: Stage-A read-only probes (GetErrorMessage on -187,
+  GetVRRInfo handle x displayId matrix + bad-version control,
+  GetAdaptiveSyncData both conventions, EnumAvailableSettingIds
+  census) + the user's NVCP "Set up G-SYNC" per-display checkbox
+  screenshot; then Stage-B single risky write with rollback.
+  Stopping condition: enabled + reboot + OSD never deviates ->
+  ship plain Hz switching, delete VRR code.
+
+## Oct 10 backlog - refresh-to-content-rate alignment
+
+Owner ruling: when a panel runs VRR at pinned max, content-rate
+judder is mostly VRR's job (proper players stretch frame intervals,
+23.976 on 240 plays smooth, no cadence pattern). The INTEGER-MULTIPLE
+rule is for the VRR-OFF world (and VRR-unknown fallback): before
+playing video, pick the panel's offered mode that is an integer
+multiple of the content fps (23.976 -> 119.88/239.76 if offered,
+24 -> 144, 25 -> 100/150, 30 -> 120; else keep current) so frames
+repeat in an even cadence instead of 3:2 pulldown judder. Selection
+source: wm.offered_modes(gdi) already parses every mode the driver
+offers - the engine picks min |mode - k*fps| across offered modes
+with exact-tolerance, ties to lower total Hz change (less flash).
+Content-fps SOURCE is the still-gated GPU decode telemetry
+(scripts/video_probe.py, needs the reboot to un-gate). Interaction
+with desktop_hz hold: a video-rate switch is OUR OWN set - the hold
+must not stomp it back mid-playback (watcher learns the video rate
+as temporary truth, restores the configured rate when playback
+ends, same ledger discipline as game mode).
