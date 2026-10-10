@@ -314,6 +314,23 @@ all verified on this 25H2 build - the folklore pile stayed out):
   machine-wide policy attempt that honestly reports "admin needed".
   A UI card for these is the next seat in line.
 
+## Editing profiles by hand
+
+Snapshots are a starting point: every saved profile's monitors
+can be re-picked to ANY mode the driver offers. `live_modes()`
+answers `{"MON<id>": ["3840x2160@144", ...]}` straight from
+`EnumDisplaySettings`, `set_display_mode()` refuses anything not
+on that list - unless the panel is unplugged, in which case the
+edit saves but is stamped UNVERIFIED (the log says so; the apply
+path will still let the driver veto it at switch time, same law
+as everywhere: believe the driver over the wish).
+`blank()` + `add_display()` build a profile from nothing, one
+live panel at a time; `drop_display()` forgets one. Applying an
+edited profile re-runs `wm.apply_layout`, and since today a
+rate-only edit counts as a real change (the old skip-if-already
+check compared size and position but not Hz, so a 60-to-144
+profile edit silently no-opped itself).
+
 ## Settings window & skins
 
 `run.bat` opens a CustomTkinter window (main thread; the monitor loop

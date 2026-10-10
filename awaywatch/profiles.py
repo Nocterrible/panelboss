@@ -208,6 +208,121 @@ def create(data, name, hdr="snap", match="process", dir=None):
     return prof
 
 
+# --------------------------------------------------- manual mode edits ---
+# capture() freezes the desk's CURRENT modes; these are how a user
+# says "this profile, but 4K@144 here and 1080p@60 there", or builds
+# a profile from nothing. Validation leans on the driver's own
+# offered list (wm.offered_modes, same law set_mode enforces at
+# apply time) when the monitor is connected - and says so out loud
+# when it is not.
+
+def live_modes():
+    """monitor id -> ["WxH@Hz", ...] offered on the LIVE desk; the
+    editor's dropdowns are made of exactly this, so a user cannot
+    ask for a mode the panel will not take."""
+    out = {}
+    try:
+        for m in wm.monitors():
+            try:
+                out[m["id"]] = wm.offered_modes(m["gdi"])
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return out
+
+
+def _prof(data, name):
+    return (data.get("profiles") or {}).get(name)
+
+
+def set_display_mode(data, name, monitor_id, w, h, rate, dir=None):
+    """Edit one saved monitor's mode inside a profile. rate must be
+    a real number: the offered list is spelled WxH@Hz and a mode
+    without one is a wish, not a plan. Returns (ok, note)."""
+    prof = _prof(data, name)
+    if prof is None:
+        return False, "no profile '%s'" % name
+    row = next((d for d in prof.get("displays") or []
+                if d.get("id") == monitor_id), None)
+    if row is None:
+        return False, "%s is not in '%s'" % (monitor_id, name)
+    try:
+        w, h, rate = int(w), int(h), int(rate)
+    except (TypeError, ValueError):
+        return False, "w/h/rate must be numbers"
+    if w <= 0 or h <= 0 or rate <= 0:
+        return False, "w/h/rate must be positive"
+    want = "%dx%d@%d" % (w, h, rate)
+    note = ""
+    live = {m["id"]: m["gdi"] for m in wm.monitors()}
+    if monitor_id in live:
+        if want not in wm.offered_modes(live[monitor_id]):
+            return False, "%s is not on the offered list for %s" % (
+                want, row.get("short") or monitor_id)
+    else:
+        note = "%s is offline: %s saved UNVERIFIED" % (
+            row.get("short") or monitor_id, want)
+    row["w"], row["h"], row["rate"] = w, h, rate
+    save(data, dir)
+    log.info("profile '%s': %s -> %s%s", name,
+             row.get("short") or monitor_id, want,
+             " (" + note + ")" if note else "")
+    return True, note
+
+
+def blank(data, name, dir=None):
+    """A profile that starts with nothing; add_display pulls live
+    monitors in one at a time. apply_layout refuses "no monitor
+    would stay on", so a truly blank one saves but does not
+    apply - the editor says so."""
+    profs = data.setdefault("profiles", {})
+    if name in profs:
+        return False, "'%s' already exists" % name
+    profs[name] = {"fp": "manual:" + name, "created": time.time(),
+                   "used": time.time(), "match": "process",
+                   "hdr": "snap", "displays": [], "wins": []}
+    save(data, dir)
+    return True, ""
+
+
+def add_display(data, name, monitor_id, dir=None):
+    """Add a LIVE monitor to a profile, seeded with its current
+    mode and a seat stacked right of the last row (first row owns
+    primacy); set_display_mode fixes the details."""
+    prof = _prof(data, name)
+    if prof is None:
+        return False, "no profile '%s'" % name
+    if any(d.get("id") == monitor_id
+           for d in prof.get("displays") or []):
+        return False, "%s is already in '%s'" % (monitor_id, name)
+    row = next((d for d in capture() if d["id"] == monitor_id), None)
+    if row is None:
+        return False, "%s is not on the live desk" % monitor_id
+    mons = prof.setdefault("displays", [])
+    row["x"] = sum(int(d.get("w") or 0) for d in mons)
+    row["y"] = 0
+    row["primary"] = not mons
+    mons.append(row)
+    save(data, dir)
+    return True, ""
+
+
+def drop_display(data, name, monitor_id, dir=None):
+    """Forget one monitor of a profile (the desk it describes can
+    still come back; the row is re-addable)."""
+    prof = _prof(data, name)
+    if prof is None:
+        return False, "no profile '%s'" % name
+    before = prof.get("displays") or []
+    prof["displays"] = [d for d in before
+                        if d.get("id") != monitor_id]
+    if len(prof["displays"]) == len(before):
+        return False, "%s is not in '%s'" % (monitor_id, name)
+    save(data, dir)
+    return True, ""
+
+
 # --------------------------------------------------------------- pins ---
 # A pin is per APP, not per window: the identity is the process, the
 # title is only a hint for matching and for the human reading the

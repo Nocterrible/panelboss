@@ -581,7 +581,12 @@ def apply_layout(entries):
             py = 0 if dev == primary else int(e["y"])
             return (cur["w"] == int(e["w"]) and cur["h"] == int(e["h"])
                     and cur["x"] == px and cur["y"] == py
-                    and (dev != primary or cur["primary"]))
+                    and (dev != primary or cur["primary"])
+                    and (not e.get("rate")
+                         or cur["rate"] == int(e["rate"])))
+                    # rate too: a profile edited to a new Hz on the
+                    # same w/h/position is a REAL change (the manual
+                    # editor makes this state reachable every day)
         return cur is None                 # already off
 
     pend = [e for e in wanted if not already(e["gdi"], True)]
