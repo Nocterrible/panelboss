@@ -879,6 +879,11 @@ class SettingsWindow(ctk.CTk):
         row = self._row(box, "profile", TIPS["profile_picker"])
         self._prof_data = profiles.load()
         self._prof_msg = ""
+        self._prof_live = {}                    # last live_modes() pass
+        self._mode_notes = {}                   # per-row last note (R2)
+        self._mode_menus = {}                   # per-row res/rate menus
+        self._mode_add_map = {}                 # picker label -> panel id
+        self._mode_add = None
         self._pin_edit = _fresh_pin_edit()
         names = [profiles.NEW] + sorted(self._prof_data["profiles"])
         start = profiles.default_name(self._prof_data,
@@ -967,36 +972,13 @@ class SettingsWindow(ctk.CTk):
             return
 
         mons = wm.monitors()
-        # live HDR truth per monitor, straight from the driver; a
-        # silent {} on ancient Windows (or any trouble) - the row
-        # then simply carries no hdr note, which is honest
-        hdr = {}
-        try:
-            hdr = {r["gdi"]: ("no hdr" if not r.get("supported")
-                              else "hdr on"
-                              if r.get("state") == "on"
-                              else "hdr off"
-                              if r.get("state") == "off"
-                              else "hdr ?")
-                   for r in wm.hdr_states()}
-        except Exception:
-            pass
-        g_of = {m["id"]: m["gdi"] for m in mons}
         gate = profiles.desk_mismatch(prof, mons)
-        desk = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
-        desk.pack(fill="x")
-        for d in prof["displays"]:
-            ctk.CTkLabel(
-                desk, text="%-9s %s %dx%d@%d   at %d,%d%s%s%s" % (
-                    d["short"],
-                    "off " if not d.get("on", True) else "on  ",
-                    d["w"], d["h"], d.get("rate") or 0,
-                    d["x"], d["y"],
-                    "   PRIMARY" if d.get("primary") else "",
-                    "" if d.get("on", True) else "  (dark)",
-                    "   " + hdr.get(g_of.get(d["id"], ""), "")),
-                font=self.skin.font(11),
-                **self.skin.text_style("sub")).pack(anchor="w")
+        # the mode editor: one row per saved panel (resolution +
+        # refresh menus), a blank-profile button, and an add-monitor
+        # picker (R1-R5). live_modes() is read once inside and handed
+        # to every row (R6); every mutation goes through a profiles
+        # primitive and repaints the whole pane (R7).
+        self._fill_monitors(mons)
         warn = ctk.CTkLabel(
             self._prof_detail,
             text=(gate + " - applying anyway is a gamble, best "
@@ -1044,6 +1026,171 @@ class SettingsWindow(ctk.CTk):
         self._restore_section(self._prof_detail)
         self._fill_status()
 
+    def _fill_monitors(self, mons):
+        """The mode editor (R1-R5): one row per saved panel, each with a
+        resolution menu and a refresh menu built from what the LIVE panel
+        offers (the saved value is kept when the driver no longer lists
+        it, so an offline desk still edits - R1/R2). A blank-profile
+        button and an add-monitor picker ride the same bar (R3/R4); every
+        row carries its own remove (R5). live_modes() is read EXACTLY ONCE
+        here and handed to every row (R6); a mutation goes through a
+        profiles primitive and repaints the whole pane (R7); a failure is a
+        gray status line, never a dialog (R8). Each row also carries the
+        panel's LIVE hdr state note (on/off/no hdr/?) straight from the
+        driver - silent {} on ancient Windows means no note, which is
+        honest, and the power assistant's UI test watches for it."""
+        sec = self._section("monitors", pady=(10, 0))
+        prof = self._prof_data["profiles"].get(self._prof_sel)
+        if prof is None:                            # the create-new pane
+            return
+        self._mode_menus = {}        # last render's menus died with
+        #                            its old body: start from clean
+        live = profiles.live_modes()                # R6: once per pass
+        self._prof_live = live
+        hdr = {}
+        try:
+            hdr = {r["gdi"]: ("no hdr" if not r.get("supported")
+                              else "hdr on"
+                              if r.get("state") == "on"
+                              else "hdr off"
+                              if r.get("state") == "off"
+                              else "hdr ?")
+                   for r in wm.hdr_states()}
+        except Exception:
+            pass
+        g_of = {m["id"]: m["gdi"] for m in mons}
+        head = ctk.CTkFrame(sec, fg_color="transparent")
+        head.pack(fill="x")
+        ctk.CTkLabel(head, text="edit panel modes",
+                     font=self.skin.font(13, "bold"),
+                     **self.skin.text_style()).pack(side="left")
+        for d in prof.get("displays") or []:
+            self._mode_row(sec, d, live,
+                           hdr.get(g_of.get(d.get("id"), ""), ""))
+        if not (prof.get("displays") or []):
+            ctk.CTkLabel(sec, text="no panels yet - add one below",
+                         font=self.skin.font(11),
+                         **self.skin.text_style("sub")).pack(
+                             anchor="w", pady=(2, 0))
+        bar = ctk.CTkFrame(sec, fg_color="transparent")
+        bar.pack(fill="x", pady=(6, 0))
+        ctk.CTkButton(bar, text="blank profile", width=130,
+                      command=self._prof_blank,
+                      **self.skin.secondary()).pack(side="left")
+        in_prof = {d.get("id") for d in prof.get("displays") or []}
+        avail = [m for m in mons if m.get("id") not in in_prof]
+        base = [(m.get("short") or m.get("id")) for m in avail]
+        dupes = {b for b in base if base.count(b) > 1}
+        add_vals, self._mode_add_map = [], {}
+        for m, b in zip(avail, base):
+            label = b
+            if b in dupes:
+                # two panels of one model share a short: append the
+                # gdi slot tail so the menu can tell them apart
+                label = "%s (%s)" % (
+                    b, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
+                    [-1] or "?")
+            add_vals.append(label)
+            self._mode_add_map[label] = m["id"]
+        self._mode_add = ctk.CTkOptionMenu(
+            bar, values=add_vals or ["(none)"], width=190,
+            # CTkOptionMenu fires command(VALUE) - proven from the
+            # widget source (ctk_optionmenu:383) - so the bound
+            # command MUST accept the arg or a dropdown pick dies
+            # TypeError inside the widget, past every try here
+            command=lambda v=None: self._prof_add_commit(),
+            **self.skin.menu_style())
+        self._set_menu(self._mode_add, add_vals[0] if add_vals else "(none)")
+        self._mode_add.pack(side="left", padx=(6, 0))
+        ctk.CTkButton(bar, text="add", width=48,
+                      command=self._prof_add_commit,
+                      **self.skin.secondary()).pack(side="left", padx=(4, 0))
+        # the R8 status line: a small gray label under the rows that
+        # every handler's failure lands in (no dialogs, ever)
+        self._mode_status = ctk.CTkLabel(
+            sec, text="", font=self.skin.font(11), wraplength=560,
+            justify="left", anchor="w", **self.skin.text_style("sub"))
+        self._mode_status.pack(anchor="w", pady=(4, 0))
+
+    def _mode_row(self, parent, d, live, hdr_note=""):
+        """One editable panel row: short name (plus its LIVE hdr state,
+        the driver's truth, silent when unknowable), a resolution menu, a
+        refresh menu, a remove. A panel not on the live desk offers only
+        its saved values and a gray 'panel not live' hint; a UNVERIFIED
+        note from the last edit is painted gray under the row (R2)."""
+        mon_id = d.get("id")
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", pady=1)
+        ctk.CTkLabel(
+            row, anchor="w",
+            text="%s%s%s" % (d.get("short") or mon_id,
+                             " (primary)" if d.get("primary") else "",
+                             "   " + hdr_note if hdr_note else ""),
+            font=self.skin.font(11),
+            **self.skin.text_style()).pack(side="left")
+        try:
+            saved_w = int(d.get("w") or 0)
+            saved_h = int(d.get("h") or 0)
+            saved_rate = int(d.get("rate") or 0)
+        except (TypeError, ValueError):
+            saved_w = saved_h = saved_rate = 0
+        saved_res = "%dx%d" % (saved_w, saved_h)
+        live_list = live.get(mon_id) or []
+        if live_list:
+            res_set = set(m.split("@")[0] for m in live_list)
+            res_set.add(saved_res)
+            resolutions = sorted(res_set)
+            offline = False
+        else:                                        # R2: saved only
+            resolutions = ([saved_res]
+                           if saved_res and saved_res != "0x0"
+                           else ["?"])
+            offline = True
+        res_menu = ctk.CTkOptionMenu(
+            row, values=resolutions, width=150,
+            command=lambda v, m=mon_id: self._mode_res(m, v),
+            **self.skin.menu_style())
+        self._set_menu(res_menu, saved_res)
+        res_menu.pack(side="left", padx=(6, 0))
+        rates = self._rates_for(live_list, saved_res, saved_rate, offline)
+        rate_menu = ctk.CTkOptionMenu(
+            row, values=[str(r) for r in rates] or ["?"], width=80,
+            command=lambda v, m=mon_id: self._mode_rate(m, v),
+            **self.skin.menu_style())
+        self._set_menu(rate_menu, str(saved_rate) if saved_rate else "?")
+        rate_menu.pack(side="left", padx=(4, 0))
+        self._mode_menus[mon_id] = (res_menu, rate_menu)
+        ctk.CTkButton(row, text="remove", width=66,
+                      command=lambda m=mon_id: self._mode_remove(m),
+                      **self.skin.secondary()).pack(side="left", padx=(4, 0))
+        if offline:
+            ctk.CTkLabel(parent, text="panel not live",
+                         font=self.skin.font(10),
+                         **self.skin.text_style("sub")).pack(
+                             anchor="w", padx=92)
+        note = self._mode_notes.get(mon_id, "")
+        if "UNVERIFIED" in note:
+            ctk.CTkLabel(parent, text=note, font=self.skin.font(10),
+                         **self.skin.text_style("sub")).pack(
+                             anchor="w", padx=92)
+
+    @staticmethod
+    def _rates_for(live_list, res_text, saved_rate, offline):
+        """The refresh values a panel offers at the chosen resolution,
+        plus the saved rate when the driver no longer lists it. An
+        offline panel offers only its saved rate (R2)."""
+        if offline:
+            return [saved_rate] if saved_rate else []
+        rset = set()
+        for m in live_list:
+            if m.split("@")[0] == res_text:
+                try:
+                    rset.add(int(m.split("@")[1]))
+                except (ValueError, IndexError):
+                    pass
+        if saved_rate:
+            rset.add(saved_rate)
+        return sorted(rset)
 
     def _fill_live(self):
         """The pick-list section: every open window, the chosen one
@@ -1316,6 +1463,7 @@ class SettingsWindow(ctk.CTk):
     def _profile_picked(self, name):
         self._prof_sel = name
         self._prof_msg = ""
+        self._mode_notes = {}                   # stale per-row notes
         self._pin_edit = _fresh_pin_edit()
         self._profiles_render()
 
@@ -1330,6 +1478,126 @@ class SettingsWindow(ctk.CTk):
             self._prof_data["profiles"]))
         self.profile_menu.set(name)
         self._profile_picked(name)
+
+    def _prof_blank(self):
+        """R3: a profile that starts empty, auto-named profile-N (the
+        next unused). The editor switches to it; nothing is ever asked
+        - no dialogs."""
+        try:
+            taken = set(self._prof_data["profiles"])
+            n = 1
+            while ("profile-%d" % n) in taken:
+                n += 1
+            name = "profile-%d" % n
+            ok, note = profiles.blank(self._prof_data, name)
+            if not ok:
+                self._mode_fail(note or "could not create a blank profile")
+                return
+            self.profile_menu.configure(values=[profiles.NEW] + sorted(
+                self._prof_data["profiles"]))
+            self._set_menu(self.profile_menu, name)
+            self._profile_picked(name)
+        except Exception as e:
+            self._mode_fail("blank profile: %s" % e)
+
+    def _prof_add_commit(self):
+        """R4: pull the picked LIVE panel into the profile; the
+        primitive seeds it with the panel's current mode. Resolution is
+        by the label->id map _fill_monitors built THIS render, so two
+        same-model panels never collide (finding: name scan picked the
+        first)."""
+        try:
+            sel = self._mode_add.get()
+            if not sel or sel == "(none)":
+                self._mode_fail("pick a panel to add")
+                return
+            mon_id = (self._mode_add_map or {}).get(sel)
+            if mon_id is None:
+                self._mode_fail("no such panel on the desk")
+                return
+            ok, note = profiles.add_display(
+                self._prof_data, self._prof_sel, mon_id)
+            if not ok:
+                self._mode_fail(note or "could not add the panel")
+                return
+            self._profiles_render()
+        except Exception as e:
+            self._mode_fail("add panel: %s" % e)
+
+    def _mode_res(self, mon_id, res_text):
+        """R1: the resolution changed; keep the saved rate when the new
+        panel still offers it there, else the first rate it offers."""
+        try:
+            w, h = (int(x) for x in res_text.split("x"))
+            prof = self._prof_data["profiles"].get(self._prof_sel) or {}
+            row = next((d for d in prof.get("displays") or []
+                        if d.get("id") == mon_id), None)
+            if row is None:
+                return
+            live_list = (self._prof_live or {}).get(mon_id) or []
+            rset = set()
+            for m in live_list:
+                if m.split("@")[0] == res_text:
+                    try:
+                        rset.add(int(m.split("@")[1]))
+                    except (ValueError, IndexError):
+                        pass
+            cur = int(row.get("rate") or 0)
+            rate = cur if cur in rset else (min(rset) if rset else cur)
+            ok, note = profiles.set_display_mode(
+                self._prof_data, self._prof_sel, mon_id, w, h, rate)
+            self._apply_mode_note(mon_id, note, ok)
+            self._profiles_render()
+        except Exception as e:
+            self._mode_fail("change resolution: %s" % e)
+
+    def _mode_rate(self, mon_id, rate_text):
+        """R1: the refresh changed; the resolution is the row's saved
+        one. An offline panel saves any rate as UNVERIFIED (no driver
+        to check it) - which is exactly what the gray note reports."""
+        try:
+            rate = int(rate_text)
+            prof = self._prof_data["profiles"].get(self._prof_sel) or {}
+            row = next((d for d in prof.get("displays") or []
+                        if d.get("id") == mon_id), None)
+            if row is None:
+                return
+            ok, note = profiles.set_display_mode(
+                self._prof_data, self._prof_sel, mon_id,
+                int(row.get("w") or 0), int(row.get("h") or 0), rate)
+            self._apply_mode_note(mon_id, note, ok)
+            self._profiles_render()
+        except Exception as e:
+            self._mode_fail("change rate: %s" % e)
+
+    def _mode_remove(self, mon_id):
+        """R5: drop one panel; the last row is removable too."""
+        try:
+            ok, note = profiles.drop_display(
+                self._prof_data, self._prof_sel, mon_id)
+            if not ok:
+                self._mode_fail(note or "could not remove the panel")
+                return
+            self._mode_notes.pop(mon_id, None)
+            self._profiles_render()
+        except Exception as e:
+            self._mode_fail("remove panel: %s" % e)
+
+    def _apply_mode_note(self, mon_id, note, ok):
+        """Remember the last note per row so a UNVERIFIED one is painted
+        gray under it on the next repaint (R2); a clean edit clears it,
+        and a refusal also lands in the gray status line (R8)."""
+        self._mode_notes[mon_id] = note or ""
+        if not ok:
+            self._mode_fail(note or "the panel refused the mode")
+
+    def _mode_fail(self, msg):
+        """R8: a failure is a gray status line, never a dialog, and
+        nothing raises into the mainloop."""
+        try:
+            self._mode_status.configure(text=msg)
+        except Exception:
+            pass
 
     def _profile_apply(self, force=False):
         # the reshuffle takes seconds (modes, settle-poll, windows
@@ -1823,9 +2091,14 @@ class SettingsWindow(ctk.CTk):
             row = self._row(box, label)
             sw = ctk.CTkSwitch(row, text="",
                                font=self.skin.font(12),
-                               command=lambda t=tid: self._dvr_toggle(t, sw),
                                progress_color=self.skin.accent,
                                border_color=self.skin.border)
+            # bind BOTH via defaults, after sw exists: binding
+            # only tid left every lambda painting the LAST switch
+            # from registry truth (the classic late-binding trap -
+            # the clicked switch kept its raw state, repaint lied)
+            sw.configure(command=lambda t=tid, s=sw:
+                         self._dvr_toggle(t, s))
             sw.grid(row=0, column=1, sticky="e")
             if tweaks.is_on(tid):
                 sw.select()
