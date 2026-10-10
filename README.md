@@ -312,24 +312,56 @@ all verified on this 25H2 build - the folklore pile stayed out):
   background capture, record-what-happened, session detection -
   all HKCU, read live so Settings and us never disagree) and the
   machine-wide policy attempt that honestly reports "admin needed".
-  A UI card for these is the next seat in line.
+  The **Game DVR card** on the power tab drives exactly those four:
+  every switch paints itself from the registry, not from wishful
+  memory, and a failed write says so in the status line instead of
+  lying with a flipped toggle.
 
-## Editing profiles by hand
+## Taskbar hover-reveal
 
-Snapshots are a starting point: every saved profile's monitors
-can be re-picked to ANY mode the driver offers. `live_modes()`
-answers `{"MON<id>": ["3840x2160@144", ...]}` straight from
-`EnumDisplaySettings`, `set_display_mode()` refuses anything not
-on that list - unless the panel is unplugged, in which case the
-edit saves but is stamped UNVERIFIED (the log says so; the apply
-path will still let the driver veto it at switch time, same law
-as everywhere: believe the driver over the wish).
-`blank()` + `add_display()` build a profile from nothing, one
-live panel at a time; `drop_display()` forgets one. Applying an
-edited profile re-runs `wm.apply_layout`, and since today a
-rate-only edit counts as a real change (the old skip-if-already
-check compared size and position but not Hz, so a 60-to-144
-profile edit silently no-opped itself).
+Windows 25H2 broke "auto-hide the taskbar until I hover the
+bottom": the bar sometimes refuses to slide back for the edge your
+mouse is on. `awaywatch.taskbar` watches for exactly that and pokes
+the bar into showing (`WM_TIMER` messages the bar itself uses),
+then hides it again when you leave. Off by default - it only
+engages when:
+
+* `taskbar.enabled = true` in the config,
+* the bar's own StuckRects flag says it IS on autohide (we read the
+  byte Windows reads; no guessing from window style),
+* no shell mod owns the trick: if ExplorerUI/StartAllBack/7T's/
+  Windhawk extensions are loaded into Explorer, we hand off and
+  sleep - two reveal-engines fight.
+
+Honest quirks: the hidden-ness signal is `IsWindowVisible`, which
+classic autohide historically keeps SET while the bar slides
+off-screen - if reveals never fire on your build, that signal is
+the suspect and the fix is a rect-vs-workarea check. Pokes are
+POSTED, not guaranteed obeyed; the watcher re-posts while the bar
+stays hidden and rests the moment it answers. It never touches a
+visible bar and never writes anything.
+
+## Editing profiles
+
+The **monitor profiles tab** is a full mode editor: every saved
+panel row carries a resolution menu and a refresh menu built from
+what the driver LITERALLY offers that panel (`live_modes()` answers
+`{"MON<id>": ["3840x2160@144", ...]}` straight from
+`EnumDisplaySettings`). Your saved value stays in the menu even if
+the driver stopped offering it - the wish is visible, the driver
+still wins at apply time. A panel that is unplugged edits too, but
+every such save stamps an honest gray UNVERIFIED under the row.
+"blank profile" starts one from nothing, "add monitor" pulls a live
+panel in (seeded with its current mode), "remove" forgets one
+(drop the primary row and primacy moves to the first survivor,
+announced in the data, not silently).
+
+The same primitives (`blank/add_display/set_display_mode/
+drop_display`) are scriptable. Applying an edited profile re-runs
+`wm.apply_layout`, and since October a rate-only edit counts as a
+real change (the old skip-if-already check compared size and
+position but not Hz, so a 60-to-144 profile edit silently
+no-opped itself).
 
 ## Settings window & skins
 
