@@ -185,7 +185,7 @@ def _monitor_for_bar(rect, mons):
     return None
 
 
-def bars():
+def bars(mons=None):
     """Every tray window mapped to the monitor its bar is docked to:
 
         {"hwnd": int, "short": str, "rect": (l, t, r, b), "visible": bool}
@@ -194,10 +194,15 @@ def bars():
     mapped (no monitor matched the rect - the honest answer, not a guess).
     An empty list when the desk has no tray window at all. Read-only: it
     never pokes a bar (the user's taskbar must not flicker under a test).
+
+    Pass ``mons`` (the live monitor list) to skip the enumeration -
+    hover_watch refreshes one on its own cadence; without this,
+    EnumDisplayDevices ran at tick frequency for identical answers.
     """
     out = []
     try:
-        mons = wm.monitors()
+        if mons is None:
+            mons = wm.monitors()
     except Exception:
         mons = []
     for hwnd in _tray_hwnds():
@@ -277,15 +282,17 @@ def poke_hide(hwnd):
         return False
 
 
-def unlock_focus():
+def unlock_focus(progman=None):
     """Nudge the "stuck open" focus gate once: find Progman (the desktop
     window) and SetForegroundWindow it. The docs name the gate
     (PermitAutoHide refuses while the taskbar/flyout owns the
     foreground); one nudge is the whole unlock - one post, no loops.
-    Returns whether the SetForegroundWindow call answered True; a missing
-    Progman answers False. Never raises."""
+    ``progman`` overrides the lookup: tests pass a dead hwnd so the
+    suite never steals the user's foreground. Returns whether the
+    SetForegroundWindow call answered True; a missing Progman answers
+    False. Never raises."""
     try:
-        hwnd = u32.FindWindowW("Progman", None)
+        hwnd = progman or u32.FindWindowW("Progman", None)
         if not hwnd:
             return False
         return bool(u32.SetForegroundWindow(hwnd))
@@ -410,16 +417,31 @@ def _step_one(bar, mons, cx, cy, now, retry_sec, per):
         st = {"prev_edge": False, "since": 0.0}
         per[hwnd] = st
     if at_edge:
+        st["hide_at"] = None                   # a new hover starts the
+        #                                      hide story clean
+        st["unlock_gone"] = False
         if not visible and \
                 (st["since"] <= 0.0 or now - st["since"] >= retry_sec):
-            if poke_show(hwnd):
-                st["since"] = now      # the retry anchor (a swallowed post
-                                       # is retried on the next cadence slot)
-        # else: up and being hovered, or mid-cadence (a post just went out)
-        # - do nothing
+            poke_show(hwnd)
+            st["since"] = now      # stamp the ATTEMPT, not the success:
+            #                        a post that fails must still keep
+            #                        the cadence, never spam every tick
     else:
-        if st["prev_edge"] and visible and poke_hide(hwnd):
-            st["since"] = 0.0        # hide fired; reset the retry anchor
+        if st["prev_edge"] and visible:
+            poke_hide(hwnd)
+            st["hide_at"] = now    # may be swallowed: watch for it
+        elif st.get("hide_at") and visible and not st.get("unlock_gone") \
+                and now - st["hide_at"] > 1.0:
+            unlock_focus()         # the bar ignored our hide for a
+            #                      whole second: the PermitAutoHide
+            #                      gate likely holds the foreground -
+            poke_hide(hwnd)        # one unlock, then ONE more hide
+            st["unlock_gone"] = True
+            #                      post; never a loop
+            st["hide_at"] = None
+        elif not visible:
+            st["hide_at"] = None
+            st["unlock_gone"] = False
     st["prev_edge"] = at_edge
 
 
@@ -429,11 +451,16 @@ def hover_watch(cfg, stop):
     loop, and the loop exits within 100 ms of ``stop`` being set.
 
     It first checks for a tinkerer's mod (cohabitants); if one owns the
-    bar it logs and hands off (sleeps until stop). Then it checks the
-    autohide flag; the module emulates the native show/hide only when the
-    bar is ALREADY autohiding (byte 8 == 3) - it cannot turn autohide on,
-    so with the flag off it idles. Otherwise it polls the cursor at 20 ms
-    and drives each bar's show/hide per :func:`_step_one`."""
+    bar it logs and hands off (sleeps until stop). The autohide flag
+    (StuckRects3 byte 8) is RE-read on the 2 s monitor cadence, never
+    once: the module emulates the native show/hide only while the bar
+    IS autohiding (byte 8 == 3), and a user who pins the bar visible
+    mid-watch must not keep receiving our hide pokes - that would be
+    an override of their intent, not a service. When the flag says
+    otherwise the loop idles (cursor ignored, nothing posted) and
+    re-engages for free if autohide comes back. Otherwise it polls
+    the cursor at 20 ms and drives each bar's show/hide per
+    :func:`_step_one`."""
     try:
         co = cohabitants()
     except Exception:
@@ -442,35 +469,40 @@ def hover_watch(cfg, stop):
         log.info("taskbar: hands off to %s", ", ".join(co))
         stop.wait()
         return
-    if _stuck_byte8() != _STUCK_AUTOHIDE:
-        log.info("taskbar: autohide is off (StuckRects3 byte8 != 3); "
-                 "nothing to emulate; idling")
-        stop.wait()
-        return
     try:
         retry_sec = float((cfg.get("taskbar") or {})
                           .get("retry_ms", 150)) / 1000.0
     except Exception:
         retry_sec = 0.15
-    cache = {"mons": None, "mons_at": 0.0}
+    cache = {"mons": None, "at": 0.0, "autohide": None}
     per = {}
-    log.info("taskbar: hover watch armed (retry %d ms)",
+    log.info("taskbar: hover watch alive (retry %d ms)",
              int(retry_sec * 1000))
     while not stop.is_set():
         try:
-            cx, cy = _cursor()
-            if cx is not None:
-                now = time.monotonic()
-                if cache["mons"] is None or \
-                        now - cache["mons_at"] > 2.0:
-                    cache["mons"] = wm.monitors()
-                    cache["mons_at"] = now
-                mons = cache["mons"]
-                for bar in bars():
-                    try:
-                        _step_one(bar, mons, cx, cy, now, retry_sec, per)
-                    except Exception:
-                        continue
+            now = time.monotonic()
+            if cache["mons"] is None or now - cache["at"] > 2.0:
+                cache["mons"] = wm.monitors()
+                cache["at"] = now
+                was = cache["autohide"]
+                cache["autohide"] = _stuck_byte8()
+                if cache["autohide"] != was:
+                    log.info("taskbar: autohide flag %r (%s)",
+                             cache["autohide"],
+                             "watching" if cache["autohide"]
+                             == _STUCK_AUTOHIDE else "idling")
+                    per.clear()   # every bar's story is stale:
+                    #               hide-at and retry anchors were
+                    #               gathered under the other regime
+            if cache["autohide"] == _STUCK_AUTOHIDE:
+                cx, cy = _cursor()
+                if cx is not None:
+                    for bar in bars(cache["mons"]):
+                        try:
+                            _step_one(bar, cache["mons"], cx, cy,
+                                      now, retry_sec, per)
+                        except Exception:
+                            continue
         except Exception:
             log.debug("taskbar: tick died (fail-open)", exc_info=True)
         stop.wait(0.02)

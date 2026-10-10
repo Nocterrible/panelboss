@@ -255,13 +255,23 @@ def set_display_mode(data, name, monitor_id, w, h, rate, dir=None):
         return False, "w/h/rate must be positive"
     want = "%dx%d@%d" % (w, h, rate)
     note = ""
-    live = {m["id"]: m["gdi"] for m in wm.monitors()}
-    if monitor_id in live:
-        if want not in wm.offered_modes(live[monitor_id]):
+    offered = None
+    try:
+        live = {m["id"]: m["gdi"] for m in wm.monitors()}
+        if monitor_id in live:
+            offered = wm.offered_modes(live[monitor_id])
+    except Exception:
+        log.debug("mode check blind for %s", monitor_id, exc_info=True)
+        offered = None
+    if offered is not None:
+        if want not in offered:
             return False, "%s is not on the offered list for %s" % (
                 want, row.get("short") or monitor_id)
     else:
-        note = "%s is offline: %s saved UNVERIFIED" % (
+        # offline panel OR a driver that will not answer: either way
+        # we cannot verify, and a raise here would break the (ok,
+        # note) contract the UI is built on
+        note = "%s unreachable: %s saved UNVERIFIED" % (
             row.get("short") or monitor_id, want)
     row["w"], row["h"], row["rate"] = w, h, rate
     save(data, dir)
@@ -319,6 +329,14 @@ def drop_display(data, name, monitor_id, dir=None):
                         if d.get("id") != monitor_id]
     if len(prof["displays"]) == len(before):
         return False, "%s is not in '%s'" % (monitor_id, name)
+    # promote a successor ONLY when the row we dropped owned primacy:
+    # a profile that never had one must not silently grow one (the
+    # user's data is the user's).
+    if any(d.get("primary") for d in before
+           if d.get("id") == monitor_id) \
+            and prof["displays"] \
+            and not any(d.get("primary") for d in prof["displays"]):
+        prof["displays"][0]["primary"] = True
     save(data, dir)
     return True, ""
 

@@ -47,9 +47,11 @@ assert isinstance(taskbar.poke_show(0), bool)
 assert isinstance(taskbar.poke_hide(0), bool)
 print("ok - poke on dead hwnd (bool, no raise)")
 
-# 5. unlock_focus() returns a bool, no raise (nudges Progman, not a bar)
-assert isinstance(taskbar.unlock_focus(), bool)
-print("ok - unlock_focus (bool, no raise)")
+# 5. unlock_focus() returns a bool, no raise - with a DEAD hwnd so the
+# "read-only" suite never SetForegroundWindow's the real desktop out
+# from under the user's active app.
+assert isinstance(taskbar.unlock_focus(0x12345), bool)
+print("ok - unlock_focus on a dead hwnd (bool, no focus stolen)")
 
 # 6. cfg gate: DEFAULTS carries the taskbar section, off by default
 assert config.DEFAULTS["taskbar"]["enabled"] is False

@@ -82,7 +82,7 @@ def _put(path, name, data):
         finally:
             winreg.CloseKey(k)
     except OSError as exc:
-        return False, str(exc.strerror)
+        return False, str(exc.strerror or exc)
 
 
 def is_on(tid):
@@ -162,7 +162,7 @@ def _put_str(path, name, data):
         finally:
             winreg.CloseKey(k)
     except OSError as exc:
-        return False, str(exc.strerror)
+        return False, str(exc.strerror or exc)
 
 
 def fso_sync(paths):

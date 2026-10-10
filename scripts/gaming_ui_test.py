@@ -271,6 +271,35 @@ def check():
             tweaks._put(path, name, orig)          # restore (None deletes)
         print("[PASS] dvr toggle apply/revert round-trips against the "
               "live registry")
+        # 8b) THE closure trap itself: clicking one switch must repaint
+        #     THAT row from registry truth. The late-binding bug made
+        #     every lambda paint the LAST switch in the loop - invisible
+        #     unless a bystander row is watched. "capture" clicks,
+        #     "session" watches, and the bystander must not flinch.
+        cap = app.dvr_switches["capture"]
+        ses = app.dvr_switches["session"]
+        p2, n2 = (tweaks.TOGGLES["capture"][1],
+                  tweaks.TOGGLES["capture"][2])
+        orig = tweaks._get(p2, n2)
+        ses_was, cap_was = ses.get(), cap.get()
+        try:
+            cap.cget("command")()      # CTkSwitch has no invoke():
+            #                            cget("command") fires EXACTLY
+            #                            the bound closure under test
+            app.update_idletasks()
+            assert ses.get() == ses_was, "clicking capture painted session"
+            assert cap.get() != cap_was
+            assert tweaks.is_on("capture") == bool(cap.get())
+            assert app.dvr_status.cget("text") in ("", None)
+            cap.cget("command")()
+            app.update_idletasks()
+            assert ses.get() == ses_was, "clicking capture painted session"
+            assert cap.get() == cap_was
+            assert tweaks.is_on("capture") == bool(cap.get())
+        finally:
+            tweaks._put(p2, n2, orig)
+        print("[PASS] a DVR click repaints its OWN row, never the "
+              "neighbour's")
         app.destroy()          # the checks are done: end the loop
     except Exception:
         _fail("check")
