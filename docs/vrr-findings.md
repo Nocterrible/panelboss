@@ -213,3 +213,56 @@ file's opening lines is a different tool altogether and stays a
 candidate for future DRS writes.) Both tools retired for this
 question; gsync_probe.py remains as the evidence harness if a future
 driver build deserves a second look.
+
+## Oct 10 - the ghost-window idea, banked not built
+
+Owner proposal: render a tiny hidden window paced at a chosen fps
+and let VRR track it - zero mode switches, zero flash, fractional
+rates (23.976) for free. Probe: scripts/vrr_ghost.py (popups +
+vsync-observer skeleton). On this box the reporting path ran clean
+but the EXPERIMENT did not: chain creation stops at the export wall
+below, so the ghost never owned a chain, never presented, and the
+pacing/observer path is untested here.
+
+Findings before any COM plumbing was even needed:
+
+- The fossil name-lookup design is dead on this machine, but not
+  for the reason first written here (corrected after a reviewer
+  export census): the creators DO exist - D3D11CreateDeviceAndSwap-
+  Chain is exported by d3d11.dll, D3D10CreateDeviceAndSwapChain by
+  d3d10.dll; they were only ever missing from dxgi.dll, which never
+  hosted them on any build. The surviving wall: the present shims
+  the trick was written against (D3D11SwapChainPresent / D3D10Swap-
+  ChainPresent) exist in NO dll on this box (census: dxgi, d3d11,
+  d3d10, d3d9) - the creator hands back a COM IDXGISwapChain, so
+  every call after that is vtable archaeology. And note the fossil
+  8-arg call shape the probe uses is not the real 12-arg export
+  signature; a COM round 2 rewrites the whole path anyway.
+- (inference from documented DWM flip precedence; not exercised on
+  this box, the chain never presented) blanking cadence follows
+  DWM's FLIPPED window - the topmost opaque unscaled one. A truly
+  hidden window gets composited and can never own the clock; a
+  window that CAN own it is by definition visible, and while it
+  paces at 24 the whole panel (cursor, video, browser) blanks at
+  24 - the judder the trick was meant to cure. The observer design
+  carries the same inference: its own vsync chain may itself pin
+  the cadence to max, so a TRACKED reading there is a lead, not a
+  verdict.
+- (mechanism expectation, OSD sighting pending) VRR *is* already
+  tracking a specified framerate for the frontmost title: a G-SYNC
+  game capped at 100 should blank the panel near 100 - observable
+  on the 240's OSD, not yet witnessed and recorded here. The only
+  genuine gap is windowed-mode players that present badly, and
+  there the cadence must come from the front window (the player),
+  not a ghost behind it.
+
+Decision (owner): banked, not built. The shipped stance already
+covers the space: VRR panels get owner-declared pin-max (zero
+flips, the player's own VRR does the rest); non-VRR panels get the
+Hz switcher; the video-rate backlog (integer multiples) targets
+exactly the VRR-off cases the ghost cannot reach anyway.
+vrr_ghost.py stays as the evidence harness: its popup/pacing/
+observer skeleton is sound and its failure reporting is honest, and
+the comments now mark exactly what a COM round 2 must rewrite (the
+12-arg creator, vtable Present, and the observer-domination
+question) should a bad player ever make the archaeology worth it.
