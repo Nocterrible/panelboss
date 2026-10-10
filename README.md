@@ -204,6 +204,16 @@ other control catches up within a tick over the shared config dict.
 Motion mode never touches onnxruntime, so it also works before any
 model/provider story applies.
 
+**Person mode sees the desk undistorted, and it refuses to be fooled by
+stillness.** The frame is fitted into the model's square by letterboxing
+- scale to the min fit, center on a grey canvas - rather than by
+stretching it, which warped a 16:9 face into an oval and cost the model
+its sensitivity (a downcast profile reading a phone measured 0.14
+stretched against 0.25 letterboxed). On top, presence is two-tiered: a
+clear hit at the confidence floor is present on its own, but a
+borderline one only counts if its region actually moved since the
+previous poll - a jacket on a chair does not move, so it stays absent.
+
 **Depth/IR sensors (Hello bridge included):** motion mode drives any
 grayscale stream. Two ways in:
 

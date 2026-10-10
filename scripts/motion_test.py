@@ -22,6 +22,101 @@ def scene(x=60, size=(480, 640, 3), step=40):
     return frame
 
 
+# 0) the person-mode letterbox + two-tier rule, offline: patch the
+#    session seam so PersonDetector never touches onnxruntime / a model
+class _FakeIn:
+    name = "images"
+
+
+class _FakeSession:
+    def __init__(self, outputs):
+        self._out = outputs
+
+    def get_inputs(self):
+        return [_FakeIn()]
+
+    def run(self, names, feed):
+        return [self._out]
+
+
+def person_with(outputs, conf=0.45):
+    """A PersonDetector whose session is a canned blob (no model load)."""
+    _fs, _fm = detector.inference.get_session, detector.inference.find_model
+    detector.inference.get_session = lambda *a, **k: _FakeSession(outputs)
+    detector.inference.find_model = lambda *a, **k: "stub.onnx"
+    try:
+        return detector.PersonDetector(conf=conf)
+    finally:
+        detector.inference.get_session = _fs
+        detector.inference.find_model = _fm
+
+
+# letterbox geometry round-trip: one person blob at a known canvas
+# location must map back to hand-math frame space for a 1280x720 frame
+# (the old stretch placed it elsewhere - this pins the regression)
+out = np.zeros((1, 84, 8400), np.float32)
+out[0, 0, 10] = 320.0        # cx, canvas space
+out[0, 1, 10] = 320.0        # cy
+out[0, 2, 10] = 200.0        # w
+out[0, 3, 10] = 300.0        # h
+out[0, 4, 10] = 0.8          # person class score
+pd = person_with(out)
+frame = np.zeros((720, 1280, 3), np.uint8)
+boxes, scores = pd.detect(frame)
+assert len(boxes) == 1 and abs(float(scores[0]) - 0.8) < 1e-6, (boxes, scores)
+# 1280x720 -> r = min(640/720, 640/1280) = 0.5, left = 0, top = 140
+# cx_f = (320-0)/0.5 = 640, cy_f = (320-140)/0.5 = 360
+# bw_f = 200/0.5 = 400, bh_f = 300/0.5 = 600
+assert np.allclose(boxes[0], [440.0, 60.0, 840.0, 660.0], atol=1), boxes[0]
+print("letterbox round-trip OK (canvas -> frame hand-math, 1280x720)")
+
+# two-tier: a 0.24 person sits below the 0.45 strict tier but at/above
+# the 0.225 assist tier. Poll the same frame twice -> present stays
+# False (a static blob never moves); patch 20x20 inside the box to 255
+# -> present True (it moved)
+out2 = np.zeros((1, 84, 8400), np.float32)
+out2[0, 0, 10] = 320.0       # canvas box, centered
+out2[0, 1, 10] = 320.0
+out2[0, 2, 10] = 100.0       # w -> 200 in frame space
+out2[0, 3, 10] = 100.0       # h -> 200 in frame space
+out2[0, 4, 10] = 0.24        # 0.24 < 0.45 strict, >= 0.225 assist
+pd2 = person_with(out2, conf=0.45)
+frame2 = np.zeros((720, 1280, 3), np.uint8)
+b1, s1, p1 = pd2.detect_lively(frame2)
+assert len(b1) == 1 and p1 is False, (b1, p1)   # first frame: no reference
+b2, s2, p2 = pd2.detect_lively(frame2)
+assert p2 is False, "a static assist blob must stay absent"
+frame2[280:300, 600:620] = 255       # 20x20 inside the box, set bright
+b3, s3, p3 = pd2.detect_lively(frame2)
+assert p3 is True, "motion inside the assist box must read present"
+print("two-tier OK (static blob absent, moved blob present)")
+
+# the assist floor is clamped at 0.20 no matter how low the user
+# winds confidence: a 0.17 blob at conf 0.3 must not even surface
+# as an assist candidate (unclamped it would floor at 0.15 - yolo
+# noise territory)
+out3 = np.zeros((1, 84, 8400), np.float32)
+out3[0, 0, 10] = 320.0
+out3[0, 1, 10] = 320.0
+out3[0, 2, 10] = 100.0
+out3[0, 3, 10] = 100.0
+out3[0, 4, 10] = 0.17
+pd3 = person_with(out3, conf=0.30)
+b4, _s4, p4 = pd3.detect_lively(frame2)
+assert len(b4) == 0 and p4 is False, (b4, p4)
+print("assist floor clamp OK (conf 0.3 still floors at 0.20)")
+
+# a reopened camera must not phantom-present: reset() forgets the
+# reference, so the next frame - however different - is trusted
+# only from the SECOND poll on, exactly like a cold boot
+frame3 = frame2.copy()
+frame3[100:200, 100:300] = 255         # a huge change inside the box
+pd2.reset()
+b5, _s5, p5 = pd2.detect_lively(frame3)
+assert len(b5) == 1 and p5 is False, "reopened stream must not trust a diff"
+print("detector reset OK (reopened camera cannot phantom-present)")
+
+
 # 1) movement is present, stillness only holds, and the hold expires
 det = MotionDetector({"ratio": 0.001, "diff_level": 10, "hold_sec": 0.4})
 boxes, scores = det.detect(scene(60))

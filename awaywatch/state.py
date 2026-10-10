@@ -397,8 +397,15 @@ class PresenceMonitor:
         frame = self._grab()
         if frame is None:
             return False, 0.0                    # device busy or died
-        boxes, scores = self.detector.detect(frame)
-        present = len(boxes) > 0
+        # two-tier, letterboxed: a clear hit is present, a borderline one
+        # counts only if it moved; motion mode has no detect_lively, so
+        # it takes the plain detect path
+        lively = getattr(self.detector, "detect_lively", None)
+        if lively is not None:
+            boxes, scores, present = lively(frame)
+        else:
+            boxes, scores = self.detector.detect(frame)
+            present = len(boxes) > 0
         score = float(scores.max()) if len(scores) else 0.0
         if self.faces is not None:                     # only known faces count
             present = present and self.faces.known(frame)

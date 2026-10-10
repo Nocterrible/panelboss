@@ -24,7 +24,7 @@ log = logging.getLogger("detector")
 class PersonDetector:
 
     def __init__(self, model="yolo11n", device="auto",
-                 device_id=0, conf=0.45, verbose=False):
+                 device_id=0, conf=0.45, diff_level=22, verbose=False):
         self.session = inference.get_session(
             inference.find_model(model), device=device,
             device_id=device_id)
@@ -32,10 +32,13 @@ class PersonDetector:
         self.conf = conf
         self.classes = [0]              # person, after the boxes
         self.input_size = (640, 640)    # static shape from header
+        self.diff_level = int(diff_level)   # the assist tier's motion gate
+        self._prev_gray = None         # last polled frame, gray: the
+                                       # assist tier diffs against it
 
     def detect(self, frame, conf=None):
         """Boxes (x1y1x2y2) in frame space plus their scores."""
-        img = cv2.resize(frame, self.input_size)   # stretch, aspect lost
+        img, left, top, r = _letterbox(frame, self.input_size)
         img = img[..., ::-1]                  # BGR -> RGB, first
         blob = np.transpose(img, (2, 0, 1)).astype(np.float32)
         blob = blob[np.newaxis] / 255
@@ -47,9 +50,63 @@ class PersonDetector:
         keep = scores >= (conf if conf is not None else self.conf)
         keep = keep & np.isin(classes, self.classes)  # person first
         boxes, scores = boxes[keep], scores[keep]
-        boxes = _scale(boxes, self.input_size, frame.shape[:2])
+        boxes = _scale(boxes, left, top, r, frame.shape[:2])
         keep = _nms(boxes, scores, iou_thresh=0.5)
         return boxes[keep], scores[keep]
+
+    def detect_lively(self, frame, conf=None):
+        """(boxes, scores, present): a clear hit (conf) is present on its
+        own; a borderline one (conf/2) counts only if its region moved
+        since the last polled frame - a jacket frozen on the chair never
+        moves, so it stays absent. On the very first frame there is no
+        reference to diff against, so the assist boxes still come back
+        (present=False) and the debug view can see the candidates."""
+        c = conf if conf is not None else self.conf
+        gray = (frame if frame.ndim == 2
+                else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
+        boxes, scores = self.detect(frame, c)
+        if len(boxes):                         # the strict tier answered
+            self._prev_gray = gray
+            return boxes, scores, True
+        # the assist floor is clamped: conf is user-tunable, and a
+        # slider at 0.3 would otherwise open the gate to 0.15 where
+        # yolo noise boxes live - the weak motion check would then
+        # rubber-stamp pixels that never were a person
+        assist, ascores = self.detect(frame, max(0.20, c * 0.5))
+        moved = False
+        if (len(assist) and self._prev_gray is not None
+                and self._prev_gray.shape == gray.shape):
+            moved = self._moved(gray, assist, self._prev_gray)
+        self._prev_gray = gray                 # the next poll diffs against
+                                               # THIS frame, whatever tier
+        return assist, ascores, moved
+
+    def reset(self):
+        """Camera released or re-pointed: forget the reference frame.
+        Diffing a reopened (or re-indexed, or post-standby) stream
+        against a reference of unknown age is exactly the phantom
+        motion the assist tier must not trust."""
+        self._prev_gray = None
+
+    def _moved(self, gray, boxes, prev_gray):
+        """True when any assist box's region changed enough since
+        prev_gray: pixels above diff_level inside the box (expanded 25%)
+        beat 0.3% of that area. Static blobs - a jacket, a lamp - never
+        pass."""
+        h, w = gray.shape[:2]
+        for x1, y1, x2, y2 in boxes:
+            bw, bh = x2 - x1, y2 - y1
+            ex, ey = int(round(bw * 0.25)), int(round(bh * 0.25))
+            xa, ya = max(0, int(x1 - ex)), max(0, int(y1 - ey))
+            xb, yb = min(w, int(x2 + ex)), min(h, int(y2 + ey))
+            if xb <= xa or yb <= ya:
+                continue
+            changed = np.count_nonzero(
+                cv2.absdiff(gray[ya:yb, xa:xb],
+                            prev_gray[ya:yb, xa:xb]) > self.diff_level)
+            if changed > 0.003 * (xb - xa) * (yb - ya):
+                return True
+        return False
 
     def is_present(self, frame, conf=None):
         """(bool, max_score) presence and the confidence."""
@@ -72,18 +129,39 @@ def build(cfg):
         model=cfg["inference"]["model"],
         device=cfg["inference"]["device"],
         device_id=cfg["inference"]["device_id"],
-        conf=cfg["inference"]["confidence"])
+        conf=cfg["inference"]["confidence"],
+        diff_level=(cfg.get("detection") or {}).get("diff_level", 22))
 
 
-def _scale(boxes, input_size, frame_shape):
-    """cx cy w h (input space) -> x1 y1 x2 y2 (frame space)."""
+def _letterbox(frame, size):
+    """Fit the frame into the model's square WITHOUT stretching it: scale
+    by r = the min fit, center on a grey 114 canvas. Returns
+    (canvas, left, top, r) so _scale can map boxes back to frame space.
+    The old stretch squashed a 16:9 face into an oval and cost the model
+    its sensitivity (measured on the same frame: 0.14 stretched vs 0.25
+    letterboxed - both under the 0.45 floor, but letterbox is the one a
+    borderline hit can reach)."""
+    h, w = frame.shape[:2]
+    sh, sw = size
+    r = min(sh / h, sw / w)
+    nw, nh = int(round(w * r)), int(round(h * r))
+    img = cv2.resize(frame, (nw, nh))
+    canvas = np.full((sh, sw, 3), 114, np.uint8)
+    top = (sh - nh) // 2
+    left = (sw - nw) // 2
+    canvas[top:top + nh, left:left + nw] = img
+    return canvas, left, top, r
+
+
+def _scale(boxes, left, top, r, frame_shape):
+    """cx cy w h (canvas space) -> x1 y1 x2 y2 (frame space). Undo the
+    letterbox: strip the padding (left, top) first, then divide by the
+    fit scale r. A box at the canvas center lands at the frame center."""
     h, w = frame_shape
-    sx = w / float(input_size[1])
-    sy = h / float(input_size[0])
-    cx = boxes[:, 0] * sx
-    cy = boxes[:, 1] * sy
-    bw = boxes[:, 2] * sx
-    bh = boxes[:, 3] * sy
+    cx = (boxes[:, 0] - left) / r
+    cy = (boxes[:, 1] - top) / r
+    bw = boxes[:, 2] / r
+    bh = boxes[:, 3] / r
     out = np.empty_like(boxes)
     out[:, 0] = cx - bw / 2                   # x1 always first
     out[:, 1] = cy - bh / 2
