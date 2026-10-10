@@ -125,13 +125,52 @@ def _set_hz(ledger, m, hz, kind, notify=None, reason=""):
 
 def _release_all(ledger, mons, gcfg):
     """Gaming got switched off while a monitor was ours: give every
-    booked monitor its desktop rate back, then wash our hands."""
+    booked monitor its desktop rate back (default 60 - a panel WE
+    clocked up must not stay clocked up with us gone; panels we
+    never touched were never ours to release), then wash hands."""
     for short in list(ledger):
         m = next((m for m in mons if m["short"] == short), None)
         if m:
             _set_hz(ledger, m, wanted_hz(gcfg, "desktop_hz", m, ()),
                     "switched off")
         ledger.pop(short, None)
+
+
+def _enforce_desktop(ledger, mons, gcfg):
+    """OUTSIDE game mode, desktop_hz is law: every configured panel
+    sits at its configured rate, always, re-set whenever the driver
+    stopped listening. This is the automation: Windows forgets rates
+    after reboots/driver updates (measured: whole desk at 60 after
+    the 10-10 restart) and the user should never have to notice.
+    Panels WITHOUT an entry are nobody's business - profiles, NVCP
+    and the user's hands keep full authority over them, adopted
+    untouched by _adopt_or_hands_off."""
+    want_map = gcfg.get("desktop_hz") or {}
+    for short in want_map:
+        m = next((m for m in mons if m["short"] == short), None)
+        if m is None:
+            continue                     # unplugged: nothing to hold
+        try:
+            want = int(want_map[short])
+        except (TypeError, ValueError):
+            continue
+        live = _live(m["gdi"])
+        if live is None or live[2] == want:
+            continue                     # driver agrees: zero calls
+        mode = "%dx%d@%d" % (live[0], live[1], want)
+        try:
+            offered = wm.offered_modes(m["gdi"])
+        except Exception:
+            offered = ()
+        if mode not in (offered or ()):
+            # the panel cannot comply RIGHT NOW (a cable swap or
+            # driver update rewrote its mode list): set_mode would
+            # refuse before touching the screen, the book would keep
+            # the foreign truth, and next tick we'd be here again -
+            # a 2 s retry storm of scans and log lines for a mode
+            # that cannot land. Park quietly until the list changes.
+            continue
+        _set_hz(ledger, m, want, "desktop hold", None, "not gaming")
 
 
 def _adopt_or_hands_off(st, ledger, mons):
@@ -203,6 +242,8 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
     gaming_now = st.get("mode") == "game"
     if not plan:
         _adopt_or_hands_off(st, ledger, mons)
+        if not gaming_now:
+            _enforce_desktop(ledger, mons, gcfg)
         _apply_power_plan(side, gcfg, gaming_now)
         _timer_boost(side, gaming_now)
         return st, plan

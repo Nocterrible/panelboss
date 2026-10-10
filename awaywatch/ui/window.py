@@ -314,8 +314,15 @@ TIPS = {
     "gaming_rates": "only the rates that panel's driver already offers "
                     "are on the list - the watcher trades from this "
                     "same list, so an unlisted rate is never asked "
-                    "for. 'auto' means the panel's fastest; an unset "
-                    "desktop rate means 60.",
+                    "for. 'auto' means the panel's fastest. THE "
+                    "DESKTOP RATE IS LAW WHILE NOT GAMING: the "
+                    "watcher holds the panel at it always and re-heals "
+                    "it whenever the driver forgets (reboots, driver "
+                    "updates). 'keep' means nobody's business - the "
+                    "watcher never starts a rule on that panel (a "
+                    "panel IT clocked up for a game still comes back "
+                    "to a sane 60 - or your rate - when the game "
+                    "ends).",
     "gaming_games": "the exe names that enter game mode instantly the "
                     "moment they own a monitor - a title screen "
                     "renders at near-zero GPU and still owns the "
@@ -2020,19 +2027,20 @@ class SettingsWindow(ctk.CTk):
             game_menu.grid(row=0, column=1, sticky="e")
             row = self._row(box, "%s - desktop rate" % m["short"],
                             TIPS["gaming_rates"])
-            desk_vals = [str(v) for v in hz]
+            # 'keep' is not a rate, it is the ABSENCE of a rule - the
+            # menu must show that truth, not a fake '60' that config
+            # never agreed to (this exact lie is why the feature
+            # looked broken: menus showed 60, cfg said {}, nothing was
+            # configured, the watcher correctly held nothing)
+            desk_vals = ["keep"] + [str(v) for v in hz]
             desk_menu = ctk.CTkOptionMenu(
                 row, values=desk_vals, width=100,
                 command=lambda v, s=m["short"]:
                 self._gaming_desk_hz(s, v),
                 **self.skin.menu_style())
             stored = (g.get("desktop_hz") or {}).get(m["short"])
-            if stored is not None and str(stored) in desk_vals:
-                desk_menu.set(str(stored))
-            elif "60" in desk_vals:
-                desk_menu.set("60")
-            else:
-                desk_menu.set(desk_vals[0])
+            desk_menu.set(str(stored) if stored is not None
+                          and str(stored) in desk_vals[1:] else "keep")
             desk_menu.grid(row=0, column=1, sticky="e")
             self.gaming_menus[m["short"]] = (game_menu, desk_menu)
         # the two exe lists: one name per line, and the lines ARE the
@@ -2333,7 +2341,14 @@ class SettingsWindow(ctk.CTk):
         self._save()
 
     def _gaming_desk_hz(self, short, label):
-        self.cfg["gaming"]["desktop_hz"][short] = int(label)
+        # 'keep' = delete the rule, not store a string: the watcher
+        # must treat this panel as nobody's business again. int('keep')
+        # would raise INSIDE the widget callback - silently, in
+        # pythonw - and the pick would evaporate before _save().
+        if label == "keep":
+            self.cfg["gaming"]["desktop_hz"].pop(short, None)
+        else:
+            self.cfg["gaming"]["desktop_hz"][short] = int(label)
         self._save()
 
     def _gaming_games_commit(self, event=None):

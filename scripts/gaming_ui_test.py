@@ -173,19 +173,21 @@ def check():
         assert disk["gaming"]["ignore"] == ["cheater.exe"], disk["gaming"]
         print("[PASS] list commits save through a config rewrite")
         # 4) the per-monitor menus: offered rates only, the defaults
-        #    match the engine (unset game = auto, unset desktop = 60),
-        #    and a selection lands in cfg under the right short
+        #    are the TRUTH (unset game = auto = fastest during
+        #    games; unset desktop = keep = the watcher never touches
+        #    this panel outside games - the old cosmetic 60 was the
+        #    lie that made the feature look broken), and a selection
+        #    lands in cfg under the right short
         assert set(app.gaming_menus) == {"T1", "T2"}, app.gaming_menus
         game1, desk1 = app.gaming_menus["T1"]
         game2, desk2 = app.gaming_menus["T2"]
         v1 = str(game1.cget("values"))
         assert "auto" in v1 and "60" in v1 and "144" in v1, v1
         v2 = str(desk2.cget("values"))
-        assert "75" in v2 and "120" in v2, v2
+        assert "75" in v2 and "120" in v2 and "keep" in v2, v2
         assert game1.get() == "auto", game1.get()      # unset = auto
-        assert desk1.get() == "60", desk1.get()        # unset = 60
-        assert desk2.get() == "75", desk2.get()        # 60 unoffered:
-                                                       # the panel's first
+        assert desk1.get() == "keep", desk1.get()      # unset = keep
+        assert desk2.get() == "keep", desk2.get()
         app._gaming_game_hz("T1", "144")
         assert cfg["gaming"]["game_hz"].get("T1") == 144, \
             cfg["gaming"]["game_hz"]
@@ -194,6 +196,12 @@ def check():
         app._gaming_game_hz("T2", "auto")
         assert cfg["gaming"]["game_hz"].get("T2") == "auto", \
             cfg["gaming"]["game_hz"]
+        # keep on a CONFIGURED panel deletes the rule (hands-off
+        # again), it must never store the string "keep"
+        cfg["gaming"]["desktop_hz"]["T2"] = 75
+        app._gaming_desk_hz("T2", "keep")
+        assert "T2" not in cfg["gaming"]["desktop_hz"], \
+            cfg["gaming"]["desktop_hz"]
         app._gaming_desk_hz("T2", "120")
         assert cfg["gaming"]["desktop_hz"].get("T2") == 120, \
             cfg["gaming"]["desktop_hz"]

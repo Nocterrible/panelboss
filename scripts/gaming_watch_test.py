@@ -138,7 +138,13 @@ def fg_on(mon, proc, full=True):
 CFG = {"gaming": {"enabled": True, "threshold_pct": 5.0,
                   "seen_secs": 10.0, "grace_secs": 60.0,
                   "games": ["test.exe"], "ignore": [],
-                  "desktop_hz": {"M1": 60}, "game_hz": {"M1": 240}}}
+                  "desktop_hz": {},   # UNSET here: the classic
+                  # narrative (idle silence, adoption, return-to-60
+                  # via the plan default) all belong to UNCONFIGURED
+                  # panels. The configured-panel HOLD law gets its
+                  # own block at the end - configured means HELD,
+                  # always, no adoption, no fighting.
+                  "game_hz": {"M1": 240}}}
 
 
 def main():
@@ -192,7 +198,8 @@ def main():
     n, plan = tick()
     assert n == 1 and CALLS[-1] == ("D1", 2560, 1440, 60)
     assert not st.get("mode")
-    ok("grace expired -> desktop_hz, resolution preserved")
+    ok("grace expired -> back at the 60 desktop DEFAULT (unset "
+       "entry), resolution preserved")
 
     n, plan = tick()
     assert n == 0
@@ -219,7 +226,8 @@ def main():
     n, plan = tick(fg_on("M1", "test.exe"), enabled=False)
     assert n == 1 and CALLS[-1] == ("D1", 2560, 1440, 60)
     assert not ledger and not st
-    ok("switched off mid-game: monitor handed back at desktop hz")
+    ok("switched off mid-game: booked panel handed back at the "
+       "60 desktop default")
 
     # power plan effector: the game earns the fast plan, leaving
     # gives back the plan that was active BEFORE it
@@ -260,6 +268,37 @@ def main():
     assert gw.wanted_hz({}, "desktop_hz", {"short": "M1", "rate":
                                            144}, ()) == 60
     ok("auto game hz = panel's fastest; desktop unset = 60")
+
+    # the DESKTOP HOLD (the automation the user asked for): with no
+    # game up, a CONFIGURED panel sits at its configured rate always,
+    # self-healing the Windows-forgets-rates bug (measured: the whole
+    # desk answered 60 after the 10-10 reboot). Unconfigured panels
+    # stay nobody's business; the hold never fights a live game.
+    CFG["gaming"]["desktop_hz"] = {"M2": 165}
+    wm.live["D2"] = (1920, 1080, 60)         # the forgotten rate
+    n, plan = tick()
+    assert n == 1 and CALLS[-1] == ("D2", 1920, 1080, 165), CALLS[-3:]
+    assert ledger.get("M2") == ("D2", 1920, 1080, 165)
+    n, plan = tick()
+    assert n == 0
+    ok("not gaming: configured panel held to its rate, then silent")
+
+    # the storm guard: a configured rate the panel's mode list does
+    # NOT currently offer (cable swap, driver update) must be parked
+    # silently - set_mode would refuse, book the foreign truth, and
+    # next tick we'd retry: forever, every 2 s, log line and all.
+    CFG["gaming"]["desktop_hz"] = {"M2": 100}   # 100 offered nowhere
+    n, plan = tick()
+    assert n == 0 and ledger["M2"] == ("D2", 1920, 1080, 165)
+    ok("unofferable rate: parked quietly, zero retry storm")
+    CFG["gaming"]["desktop_hz"] = {"M2": 165}
+
+    n, plan = tick(fg_on("M1", "test.exe"))
+    assert n == 1 and CALLS[-1] == ("D1", 2560, 1440, 240)
+    n, plan = tick(fg_on("M1", "test.exe"))
+    assert n == 0
+    ok("hold stands down while the game owns the desk")
+    CFG["gaming"]["desktop_hz"] = {}
 
     print("GAMING WATCH TESTS OK"
           if os.path.exists(os.path.join(ROOT, "awaywatch",

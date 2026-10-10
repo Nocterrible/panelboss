@@ -263,7 +263,23 @@ need 240 Hz burning watts and OLED heat all day. The watcher
    (native-exclusive titles do exactly that), the watcher takes its
    hands off until the game leaves;
 5. **resolution is never touched** - only the rate is traded, and
-   back; `game_hz = "auto (fastest)"` asks the panel's own list.
+   back; `game_hz = "auto (fastest)"` asks the panel's own list;
+ 6. **the desktop rate is law while NOT gaming, too** - this is the
+    automation: for any panel with a `desktop_hz` entry the watcher
+    holds it at that rate whenever no game owns the desk, and
+    re-heals it the moment the driver forgets (after a reboot or a
+    driver update the whole desk silently drops to 60 - now it snaps
+    back within one tick, no user noticing). A panel with **no**
+    `desktop_hz` entry is `keep` in the card and nobody's business:
+    profiles, `NVCP` and your own hands keep full authority and are
+    adopted, never fought - one honest corner: a panel the watcher
+    itself clocked up for a game is still handed back at the 60
+    default (or your chosen rate) when the game ends, never left
+    burning at game Hz. `desktop_hz` is per-panel and **empty by
+    default**, so enabling gaming changes nothing until you pick a
+    rate for a specific panel - the card used to *display* a phantom
+    `60` for unconfigured panels (the config was really empty), which
+    made the feature look broken; it now honestly shows `keep`.
 
 Detection reads `\GPU Engine(*)\Utilization Percentage` per-instance
 (`gpu.py`); the wildcard-array API is abandoned on this OS (it
