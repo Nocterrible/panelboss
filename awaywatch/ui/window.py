@@ -331,6 +331,9 @@ TIPS = {
                    "comes back when it leaves - never a guessed "
                    "default - and only if nobody else moved it "
                    "meanwhile.",
+     "dvr": "suppresses background recording and the Win+G overlay "
+            "per docs/apack-findings.md; the registry is the truth - "
+            "Windows Settings may rewrite these values at any time.",
 }
 
 
@@ -1698,6 +1701,7 @@ class SettingsWindow(ctk.CTk):
         if bool(self.cfg["power"].get("hdr_off_when_away")):
             self.hdr_away_switch.select()
         self._gaming_section(col)
+        self._dvr_section(col)
 
     def _gaming_section(self, col):
         """The refresh-rate watcher's face: it joins the power-plan
@@ -1803,6 +1807,50 @@ class SettingsWindow(ctk.CTk):
         self.plan_entry.insert(0, g.get("power_plan") or "")
         self.plan_entry.grid(row=0, column=1, sticky="e")
         self.plan_entry.bind("<<FocusOut>>", self._gaming_plan_commit)
+
+    def _dvr_section(self, col):
+        """The Game DVR card: one switch per registry tweak the
+        gaming pack can promise (docs/apack-findings.md). The
+        registry is the truth - a Settings page may rewrite the
+        values at any time - so the switches read their state
+        from the registry at render and hand it back after
+        every click, and a failed write is reported in the
+        status line instead of a dialog."""
+        from .. import tweaks
+        box = self._card(col, "Game DVR", TIPS["dvr"])
+        self.dvr_switches = {}
+        for tid, (label, _path, _name, _data, _timing) in tweaks.TOGGLES.items():
+            row = self._row(box, label)
+            sw = ctk.CTkSwitch(row, text="",
+                               font=self.skin.font(12),
+                               command=lambda t=tid: self._dvr_toggle(t, sw),
+                               progress_color=self.skin.accent,
+                               border_color=self.skin.border)
+            sw.grid(row=0, column=1, sticky="e")
+            if tweaks.is_on(tid):
+                sw.select()
+            self.dvr_switches[tid] = sw
+        self.dvr_status = ctk.CTkLabel(
+            box, text="", font=self.skin.font(11),
+            **self.skin.text_style("sub"))
+        self.dvr_status.pack(anchor="w")
+
+    def _dvr_toggle(self, tid, sw):
+        """The registry decides, not the click: apply when off,
+        revert when on, then repaint the switch from the
+        registry again (the user's click may have lost to a
+        Settings page) and surface the error in the status
+        line - no dialogs."""
+        from .. import tweaks
+        if tweaks.is_on(tid):
+            ok, err = tweaks.revert(tid)
+        else:
+            ok, err = tweaks.apply(tid)
+        if tweaks.is_on(tid):
+            sw.select()
+        else:
+            sw.deselect()
+        self.dvr_status.configure(text="" if ok else err)
 
     @staticmethod
     def _offered_hz(m):
