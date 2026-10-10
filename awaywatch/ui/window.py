@@ -836,17 +836,38 @@ class SettingsWindow(ctk.CTk):
         self.profile_menu.grid(row=0, column=1, sticky="e")
         # (rescue lives on the actions bar now - always in reach)
         self._prof_sel = start
-        self._prof_detail = ctk.CTkFrame(box, fg_color="transparent")
-        self._prof_detail.pack(fill="x", pady=(4, 0))
+        # the anchor is packed ONCE; every render swaps a fresh body
+        # into it (see _profiles_render) - the anchor itself is never
+        # touched, so the swap cannot disturb anything around the pane
+        self._prof_anchor = ctk.CTkFrame(box, fg_color="transparent")
+        self._prof_anchor.pack(fill="x", pady=(4, 0))
+        self._prof_body = None
         self._profiles_render()
 
     def _profiles_render(self):
-        """The detail pane, rebuilt whole on every change: the lists
-        of open windows and live monitor states are a snapshot, and
-        a half-updated mix of old and new lines is worse than two
-        extra milliseconds of drawing."""
-        for w in self._prof_detail.winfo_children():
-            w.destroy()
+        """Swap a whole freshly built pane in. Rebuilt whole on every
+        change because the lists of open windows and live monitor
+        states are snapshots - a half-updated mix of old and new
+        lines is worse. And the rebuild is DOUBLE BUFFERED: CTk
+        constructors call update_idletasks(), so building the pane in
+        place painted every half-built stage (the whole-window redraw
+        storm on every click, user-reported). Built UNPACKED, those
+        intermediate paints hit an invisible frame; the destroy-old
+        pack-new swap is one redraw."""
+        old = self._prof_body
+        self._prof_body = ctk.CTkFrame(self._prof_anchor,
+                                       fg_color="transparent")
+        self._prof_detail = self._prof_body
+        try:
+            self._profiles_fill()
+        finally:
+            if old is not None:
+                old.destroy()
+            self._prof_body.pack(fill="x")
+
+    def _profiles_fill(self):
+        """The pane's content, built into the (still unpacked) fresh
+        body; every self._prof_detail below is that body."""
         prof = self._prof_data["profiles"].get(self._prof_sel)
         if prof is None:                          # the create-new pane
             line = ctk.CTkFrame(self._prof_detail, fg_color="transparent")

@@ -535,6 +535,13 @@ there is no after-every-upgrade swap dance anymore.
   mid-assert. Automated suites set
   `_deactivate_windows_window_header_manipulation = True` (CTk's own
   escape hatch); no probe reads titlebars
+* customtkinter constructors call `update_idletasks()` — building a
+  VISIBLE pane in place paints every half-built stage, so a whole
+  pane rebuild looked like the entire window redrawing on every
+  click. The profiles pane is double-buffered: each render builds
+  its body UNPACKED (intermediate paints land on an invisible
+  frame), destroys the old body and packs the new one as a single
+  swap; the anchor frame is packed once and never touched
 * the shell never tells a launched app WHY it launched it:
   `explorer.exe` parents the Run key, the Startup folder and a
   plain double-click alike, and process-parent checks stop there —
