@@ -88,7 +88,6 @@ def _single_instance():
 
 
 def _run(cfg, autostart=False):
-    from . import detector
     from . import state
     from . import startup
     from . import tray
@@ -106,21 +105,25 @@ def _run(cfg, autostart=False):
             ctypes.byref(ctypes.c_uint()))
         return 0
 
-    det = detector.build(cfg)     # mode-aware: motion never loads onnx
-    faces = None
-    if cfg["faces"]["enabled"]:
-        from . import faces as faces_module
-        faces = faces_module.FaceGate()
+    # the tray registers and pumps first: the icon is the user's only
+    # lever and it must not wait on the model work. the detector build
+    # (onnx session, the optional face gate) moves to _warm_monitor;
+    # until it lands the monitor abstains from the camera (state._poll
+    # checks detector is not None) and the tray menu carries honest
+    # "probing..." placeholders where the slow submenus will be
     ui_events = queue.Queue()               # tray <-> window messages
-    monitor = state.PresenceMonitor(cfg, det, faces, ui_events=ui_events)
+    monitor = state.PresenceMonitor(cfg, None, None, ui_events=ui_events)
     icon = tray.Tray(monitor.events, cfg, ui_events=ui_events)
     icon.start()                            # the tray always runs beside
                                             # the monitor
     monitor.notifier = icon.notify          # burst warnings reach the
                                             # user, not just the log
     # Tk must own the main thread, so the monitor loop drops to a
-    # worker; display (its own thread) and tray are untouched.
-    worker = threading.Thread(target=monitor.run, daemon=True,
+    # worker; the same worker warms the detector before it starts
+    # pumping, so a right-click or a quit in the tray is never lost
+    # (queue puts hold until the first tick drains them)
+    worker = threading.Thread(target=_warm_monitor,
+                              args=(cfg, monitor), daemon=True,
                               name="monitor")
     worker.start()
     startup.selfheal()          # an old flagless Run entry learns
@@ -171,6 +174,33 @@ def _run(cfg, autostart=False):
         monitor._release_camera()
         icon.stop()                          # the tray stops after the run
     return 0
+
+
+def _warm_monitor(cfg, monitor):
+    """The heavy init, off the main thread and off the tray pump:
+    build the detector (the onnx session; motion mode never loads one)
+    and the optional face gate, then start the monitor loop. the loop
+    abstains from the camera until the detector lands (state._poll
+    checks), so a poll can never hit a half-built monitor, and a tray
+    event queued during the warm-up is drained by the first tick."""
+    log = logging.getLogger("warm")
+    try:
+        from . import detector
+        t0 = time.monotonic()
+        monitor.detector = detector.build(cfg)
+        if cfg["faces"]["enabled"]:
+            from . import faces as faces_module
+            monitor.faces = faces_module.FaceGate()
+        log.info("warm: detector ready in %.1f s; the monitor starts "
+                 "pumping", time.monotonic() - t0)
+    except Exception:
+        # the old no-model behavior was death; the new one is the same
+        # exit, seen: the tray stays up, the loop drains the quit and
+        # the window closes after it
+        log.exception("warm: the detector would not build; the app "
+                      "drains a quit and exits")
+        monitor.events.put(("quit", True))
+    monitor.run()
 
 
 def _restore(cfg, autostart, icon):

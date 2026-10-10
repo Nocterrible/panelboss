@@ -6,7 +6,7 @@ opencv-python>=4.10          # capture + preview (imshow needs the GUI build)
 numpy>=1.26
 onnxruntime-directml>=1.20 ; platform_system == 'Windows'   # one wheel: CPU + DirectML GPU provider, no CUDA toolkit or cuDNN dlls needed
 onnxruntime>=1.20 ; platform_system != 'Windows'            # CPU only elsewhere
-pystray>=0.19.4              # system tray icon (pip install pystray, PyPI)
+pystray==0.19.5              # system tray icon (pip install pystray, PyPI); the identity shim in tray.py is verified against 0.19.5 internals ONLY - the wrap, the _message_handlers table, the hID bug
 pillow>=10                   # tray icon + settings window images
 customtkinter>=6             # settings window (the modern skin)
 tomli>=2                     # config parsing (python<3.11 has no tomllib)

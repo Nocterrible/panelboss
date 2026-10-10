@@ -16,9 +16,9 @@ $runpy = Join-Path $repo 'run.py'
 switch ($Action) {
     'install' {
         schtasks /Create /F /SC ONLOGON /TN $task `
-            /TR "$pythonw `"$runpy`"" | Out-Null
+            /TR "$pythonw `"$runpy`" --autostart" | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Error 'schtasks failed' }
-        Write-Host "installed logon task: $pythonw $runpy"
+        Write-Host "installed logon task: $pythonw $runpy --autostart"
     }
     'uninstall' {
         schtasks /Delete /F /TN $task | Out-Null

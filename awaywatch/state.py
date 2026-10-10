@@ -406,6 +406,10 @@ class PresenceMonitor:
         return self.timers["on_poll_sec"]
 
     def _poll(self):
+        if self.detector is None:
+            # the warm-up has not landed yet: abstain like a failed
+            # open - no camera touched, no verdict, no presence hits
+            return None, 0.0
         frame, opened = self._grab()
         if frame is None:
             if not opened:
@@ -565,6 +569,9 @@ class PresenceMonitor:
         """Debug frames while the lease is live: the camera is held,
         detection runs, and the gate and timers are on holiday; the
         phase machine resumes untouched when the lease runs out."""
+        if self.detector is None:
+            return              # no model yet (warm-up) or ever (the
+                                # fail-open build failure): abstain
         if self.camera is None or not self.camera.is_open():
             self._hold_camera()
             if self.camera is None or not self.camera.is_open():
@@ -706,7 +713,11 @@ class PresenceMonitor:
                                              time.monotonic() + value)
             elif action == "confidence":
                 self.inference_cfg["confidence"] = float(value)
-                self.detector.conf = float(value)       # hot, no rebuild
+                if self.detector is not None:
+                    self.detector.conf = float(value)       # hot, no
+                                                            # rebuild
+                # a slider move before the detector lands is not lost:
+                # the warm worker reads the config dict on its build
             elif action == "pause":
                 self.paused = bool(value)
             elif action == "snooze":

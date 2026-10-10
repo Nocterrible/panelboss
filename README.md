@@ -502,6 +502,17 @@ a "running" toast, and the log says `tray icon ready`, so a quiet start
 is a good start. Launching `run.bat` twice is refused by a mutex; the
 notice dialog closes itself after 5 seconds.
 
+The icon's identity is fixed instead of fresh on every start. pystray
+0.19.5 never sends the per-icon id Windows asks for, so the slot used to
+be keyed on the interpreter path, and every relaunch (the venv pythonw,
+the base pythonw it re-runs, a frozen exe) minted a new un-pinned slot.
+awaywatch stamps every call with a stable id and a GUID derived from the
+app name, so all those paths land on one slot and a restart keeps your
+pin. The first run of this version, like a first install, still needs the
+one-time drag out of the overflow flyout (only the user can promote an
+icon), and the icon shows within seconds of a start while the camera and
+GPU probes warm up behind it and fill in their submenus when ready.
+
 Headless (tray only, no window): `ui.enabled = false` in the config or
 `python -m awaywatch run --no-ui`.
 
