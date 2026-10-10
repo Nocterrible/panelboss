@@ -163,3 +163,53 @@ with desktop_hz hold: a video-rate switch is OUR OWN set - the hold
 must not stomp it back mid-playback (watcher learns the video rate
 as temporary truth, restores the configured rate when playback
 ends, same ledger discipline as game mode).
+
+## Oct 10 rerun - the stopping condition is met: per-display VRR is not an API fact (on this driver)
+
+Context: owner GPU-Z screenshot of the GP27 (CMT2704, 144 Hz): its
+G-SYNC row reads **Not supported** while the EDID CTA-861 extension
+block carries the 48-144 Hz LFC range (FreeSync-capable material),
+driver 591.86. Meanwhile the 240 (IOC912B) runs VRR verifiably -
+owner-confirmed, visible in its OSD.
+
+Probe rerun (gsync_probe.py, read-only, unprivileged, 0 SET calls):
+
+- `VRR_MODE 0x1194F158` global `dword=2` - FULLSCREEN_AND_WINDOWED.
+  The owner moved it from 1 in the NVIDIA App since the first read;
+  the 0x2 target from the header study is what a real enabled desk
+  shows. The change landed without any recorded reboot - same-day
+  visibility, consistent with the DRS live-apply mechanism recorded
+  at the top of this file (profile edits apply live, no reboot).
+- `VRR_REQUEST_STATE 0x1094F1F7` global `dword=2` (read 1 before).
+- `VRR_APP_OVERRIDE 0x10A879CF` `dword=0` (ALLOW) at
+  settingLocation=3 - the DEFAULT untouched; the probe never
+  enumerates CreateApplication profiles, so it claims nothing about
+  per-app entries existing or not.
+- Three connected displayIds spanning TWO physical GPUs (the probe's
+  `2-gpu` line; 0x82061083/80/86, combined display+GPU ids);
+  `NvAPI_Disp_GetVRRInfo` rc=0 on all three and **every VRR bit
+  still 0** - including the 240 that is enabled and demonstrably
+  running VRR right now.
+
+Ruling (the pre-registered stopping condition quoted by name
+above): with enabled, working, owner-verified VRR the API never
+deviates from zero on this driver. The condition's `reboot` conjunct
+is discharged by that same live-apply line - a reboot adds nothing a
+live DRS change has not already exposed; and the `OSD never
+deviates` conjunct is exactly what the all-zero sweep over a
+running-VRR 240 means. The pre-registered consequence ("delete VRR
+code") is amended by dc53e32: auto-detection is deleted and stays
+dead, but the OWNER-declared `VRR (pin max)` keeps its place,
+because a fact the API cannot see, the owner can state.
+
+GPU-Z caveat: its G-SYNC row is not a live-state guarantee either -
+"No support" on a panel whose EDID explicitly carries the VRR range
+reads as derived heuristics (EDID + driver posture), not GetVRRInfo
+truth. The NVIDIA Profile Inspector the owner now has installed
+(Nsight Systems Analyze, CUDA-API tracing) is the wrong instrument
+entirely for display state: display NVAPI calls never appear in a
+CUDA trace. (The similarly named DRS profile inspector from this
+file's opening lines is a different tool altogether and stays a
+candidate for future DRS writes.) Both tools retired for this
+question; gsync_probe.py remains as the evidence harness if a future
+driver build deserves a second look.
