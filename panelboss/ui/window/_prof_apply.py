@@ -11,7 +11,7 @@ import customtkinter as ctk
 
 from ... import profiles, wm
 from ._constants import HDR_BY_LABEL
-from ._widgets import _fresh_pin_edit
+from ._widgets import SkewCombo, _fresh_pin_edit
 
 log = logging.getLogger("ui")
 
@@ -51,14 +51,14 @@ class _ModeMixin:
                            if saved_res and saved_res != "0x0"
                            else ["?"])
             offline = True
-        res_menu = ctk.CTkOptionMenu(
+        res_menu = SkewCombo(
             row, values=resolutions, width=150,
             command=lambda v, m=mon_id: self._mode_res(m, v),
             **self.skin.menu_style())
         self._set_menu(res_menu, saved_res)
         res_menu.pack(side="left", padx=(6, 0))
         rates = self._rates_for(live_list, saved_res, saved_rate, offline)
-        rate_menu = ctk.CTkOptionMenu(
+        rate_menu = SkewCombo(
             row, values=[str(r) for r in rates] or ["?"], width=80,
             command=lambda v, m=mon_id: self._mode_rate(m, v),
             **self.skin.menu_style())

@@ -8,7 +8,7 @@ import customtkinter as ctk
 
 from ... import profiles, wm
 from ._constants import TIPS, HDR_ASK_LABELS, HDR_MENU_ORDER
-from ._widgets import _fresh_pin_edit
+from ._widgets import SkewCombo, _fresh_pin_edit
 
 
 class _ProfilesMixin:
@@ -35,7 +35,7 @@ class _ProfilesMixin:
         names = [profiles.NEW] + sorted(self._prof_data["profiles"])
         start = profiles.default_name(self._prof_data,
                                       wm.fingerprint()) or profiles.NEW
-        self.profile_menu = ctk.CTkOptionMenu(
+        self.profile_menu = SkewCombo(
             row, values=names, width=220, command=self._profile_picked,
             **self.skin.menu_style())
         self.profile_menu.set(start)
@@ -127,7 +127,7 @@ class _ProfilesMixin:
         opts = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
         opts.pack(fill="x", pady=(2, 0))
         row = self._row(opts, "hdr", TIPS["profile_hdr"])
-        self.hdr_menu = ctk.CTkOptionMenu(
+        self.hdr_menu = SkewCombo(
             row, values=[HDR_ASK_LABELS[k] for k in HDR_MENU_ORDER],
             width=230, command=self._prof_hdr,
             **self.skin.menu_style())
@@ -229,12 +229,12 @@ class _ProfilesMixin:
                     [-1] or "?")
             add_vals.append(label)
             self._mode_add_map[label] = m["id"]
-        self._mode_add = ctk.CTkOptionMenu(
+        self._mode_add = SkewCombo(
             bar, values=add_vals or ["(none)"], width=190,
-            # CTkOptionMenu fires command(VALUE) - proven from the
-            # widget source (ctk_optionmenu:383) - so the bound
-            # command MUST accept the arg or a dropdown pick dies
-            # TypeError inside the widget, past every try here
+            # SkewCombo._fire calls command(VALUE) - matching CTk,
+            # the widget this replaced - so the bound command MUST
+            # accept the arg or a dropdown pick dies TypeError inside
+            # the widget, past every try here
             command=lambda v=None: self._prof_add_commit(),
             **self.skin.menu_style())
         self._set_menu(self._mode_add, add_vals[0] if add_vals else "(none)")

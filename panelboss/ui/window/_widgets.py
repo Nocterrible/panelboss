@@ -1,8 +1,14 @@
-"""Shared card/row/section widgets, the sleep prompt and
-the pin editor's blank slate.
+"""Shared card/row/section widgets, the sleep prompt, the
+pin editor's blank slate, and SkewCombo - the tk.Menubutton
+drop-in that replaced all 18 CTkOptionMenus (UI-1b2: each CTk
+dropdown was ~30 canvas-backed labels built at grid time,
+~1 s of the 1.44 s build median; this file earns its 230 lines
+by being the whole answer to that measurement).
 """
 
 from __future__ import annotations
+
+import tkinter as tk
 
 import customtkinter as ctk
 
@@ -89,6 +95,130 @@ class _SleepPrompt(ctk.CTkToplevel):
         except Exception:
             pass                             # gone by the time we drop
 
+
+
+class SkewCombo(tk.Menubutton):
+    """CTkOptionMenu drop-in, drawn by plain Tk.
+
+    The measured hot spot: the panel's eighteen CTkOptionMenus together
+    carried ~1 s of the 1.44 s build median (uitime combo1), because
+    every CTk dropdown is a hidden frame of ~30 canvas-backed CTkLabels
+    built at grid time. The Tk version is one Menubutton plus one native
+    Menu - and Tk menus ARE colorable, unlike the ttk.Combobox popup
+    (measured: Windows paints that one native white no matter the
+    style). Square corners are the accepted trade for the speed.
+
+    Call sites spread **skin.menu_style() unchanged, so every CTk-flavored
+    kwarg is swallowed at build AND on configure. The contract the sites
+    and the UI suites actually use: set/get, configure(values=...) (order
+    preserved), cget("values") answering a real LIST (the suites str()
+    it and compare a list repr), cget("text") answering the shown value,
+    and the raw _command attribute (profiles_ui_test dispatches
+    _command(VALUE) itself - no wrapping allowed)."""
+
+    # menu_style() trio keys + the other CTk menu options; corner_radius
+    # is ignored on purpose, the rest would reach Tk as nonsense
+    _IGNORED = ("fg_color", "button_color", "button_hover_color",
+                "text_color", "corner_radius", "dropdown_fg_color",
+                "dropdown_hover_color", "dropdown_text_color",
+                "height", "anchor")
+
+    def __init__(self, master, values=(), width=None, command=None,
+                 **style):
+        self._command = command                    # raw, tests read this
+        self._values = list(values)
+        self._var = tk.StringVar(master, value="")
+        btn = style.get("button_color") or "#4a5568"
+        hov = style.get("button_hover_color") or "#354052"
+        txt = style.get("text_color") or "#dbe2ee"
+        mbg = (style.get("dropdown_fg_color") or style.get("fg_color")
+               or "#242833")                       # fg_color is field_bg
+        mhov = style.get("dropdown_hover_color") or hov
+        kw = dict(textvariable=self._var, bg=btn, fg=txt,
+                  activebackground=hov, activeforeground=txt,
+                  relief="raised", borderwidth=1, highlightthickness=1,
+                  padx=6, pady=3)
+        # DO NOT set relief flat + borderwidth 0: the button collapses to
+        # a 1px sliver (measured trap). px -> chars at ~10 px/char
+        if width:
+            kw["width"] = int(width / 10)
+        tk.Menubutton.__init__(self, master, **kw)
+        self._menu = tk.Menu(self, tearoff=0, bg=mbg, fg=txt,
+                             activebackground=mhov, activeforeground=txt)
+        self["menu"] = self._menu
+        self._rebuild()
+        self.set(values[0] if values else "")
+
+    def _rebuild(self):
+        m = self._menu
+        m.delete(0, "end")
+        for v in self._values:
+            # no variable= on the radiobutton: a CTk dropdown shows no
+            # check either - the pick only relabels the button
+            m.add("radiobutton", label=str(v),
+                  command=lambda v=v: self._fire(v))
+
+    def _fire(self, value):
+        # CTk fires command only on an actual change; re-picking the
+        # shown item must not rebuild the whole panel behind _skin_changed
+        if self._var.get() == str(value):
+            return
+        self._var.set(str(value))
+        if self._command is not None:
+            self._command(value)
+
+    # ------------------------------------------------ CTk menu contract --
+    def set(self, value):
+        self._var.set(str(value))
+
+    def get(self):
+        return self._var.get()
+
+    def configure(self, cnf=None, **kw):
+        if isinstance(cnf, dict):
+            kw = dict(cnf, **kw)
+            cnf = None
+        elif cnf is not None:                      # legacy pair-list form
+            return tk.Menubutton.configure(self, cnf, **kw)
+        if "values" in kw:
+            self._values = list(kw.pop("values"))  # order preserved
+            self._rebuild()
+        state = kw.pop("state", None)
+        for key in self._IGNORED:
+            kw.pop(key, None)                      # re-style kwargs: the
+        # skin switch rebuilds whole windows, so the colors taken at
+        # build time stay the truth for this widget's life
+        if state is not None:
+            # no call site drives state= today; CTk's "readonly" has no
+            # Tk twin, so it degrades to disabled - a button that shows
+            # but does not post is the same visible outcome. Assign via
+            # tk.Menubutton.configure: self["state"]= would re-enter this
+            # override through Widget.__setitem__ and recurse forever.
+            kw.setdefault("state", "disabled"
+                          if state in ("disabled", "readonly") else "normal")
+        if kw:
+            return tk.Menubutton.configure(self, **kw)
+        return None
+
+    config = configure
+    __call__ = configure
+
+    def cget(self, key):
+        if key == "values":
+            return list(self._values)              # suites str() this and
+        # compare the list repr ("['640x480']") - a tuple would differ
+        if key == "text":
+            return self.get()                      # tk would name the var
+        return tk.Menubutton.cget(self, key)
+
+    __getitem__ = cget
+
+    def destroy(self):
+        try:
+            self._menu.destroy()
+        except Exception:
+            pass                                   # parent already gone
+        tk.Menubutton.destroy(self)
 
 
 class _WidgetsMixin:

@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from ... import profiles
 from ._constants import TIPS, RESTORE_LAST, RESTORE_SCOPES, RESTORE_WHENS
+from ._widgets import SkewCombo
 
 
 class _RestoreMixin:
@@ -43,14 +44,14 @@ class _RestoreMixin:
         if rst.get("enabled"):
             self.restorep_switch.select()
         row = self._row(parent, "which profile", TIPS["restore_profile"])
-        self.restorep_menu = ctk.CTkOptionMenu(
+        self.restorep_menu = SkewCombo(
             row, values=self._restorep_names(), width=240,
             command=self._restorep_pick, **self.skin.menu_style())
         self._set_menu(self.restorep_menu,
                        self._restorep_label(rst.get("profile") or "last"))
         self.restorep_menu.grid(row=0, column=1, sticky="e")
         row = self._row(parent, "what to restore", TIPS["restore_scope"])
-        self.restorep_scope_menu = ctk.CTkOptionMenu(
+        self.restorep_scope_menu = SkewCombo(
             row, values=[lbl for _, lbl in RESTORE_SCOPES], width=240,
             command=self._restorep_scope, **self.skin.menu_style())
         self._set_menu(self.restorep_scope_menu,
@@ -58,7 +59,7 @@ class _RestoreMixin:
                                         rst.get("scope") or "full"))
         self.restorep_scope_menu.grid(row=0, column=1, sticky="e")
         row = self._row(parent, "applies to", TIPS["restore_when"])
-        self.restorep_when_menu = ctk.CTkOptionMenu(
+        self.restorep_when_menu = SkewCombo(
             row, values=[lbl for _, lbl in RESTORE_WHENS], width=240,
             command=self._restorep_when, **self.skin.menu_style())
         self._set_menu(self.restorep_when_menu,

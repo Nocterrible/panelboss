@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from ... import config
 from ._constants import TIMER_SPECS, DEVICE_KEYS, DEVICE_BY_LABEL, PERSON_ROWS, MOTION_ROWS, TIPS
+from ._widgets import SkewCombo
 
 
 class _DetectionMixin:
@@ -40,7 +41,7 @@ class _DetectionMixin:
         rows = [("mode", row)]
 
         row = self._row(box, "device", TIPS["device"])
-        menu = ctk.CTkOptionMenu(row, values=[label for _, label in
+        menu = SkewCombo(row, values=[label for _, label in
                                               DEVICE_KEYS], width=160,
                                  command=self._device_changed,
                                  **self.skin.menu_style())
@@ -54,7 +55,7 @@ class _DetectionMixin:
             self.gpu_ids = [(n, "") for n in range(4)]
         labels = ["%s %s" % (gid, name[:32]) for gid, name in self.gpu_ids]
         row = self._row(box, "cuda gpu id", TIPS["gpu"])
-        gpu_menu = ctk.CTkOptionMenu(
+        gpu_menu = SkewCombo(
             row, values=labels, width=200, command=self._gpu_changed,
             **self.skin.menu_style())
         gpu_menu.grid(row=0, column=1, sticky="e")

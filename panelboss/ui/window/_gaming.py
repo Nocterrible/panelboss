@@ -10,6 +10,7 @@ import customtkinter as ctk
 
 from ... import wm
 from ._constants import TIPS
+from ._widgets import SkewCombo
 
 log = logging.getLogger("ui")
 
@@ -56,7 +57,7 @@ class _GamingMixin:
             # games). The card's first entry stays 'auto' - the game
             # menu has no 'keep' (that is the desktop menu's word)
             game_vals = ["auto", "VRR (pin max)"] + [str(v) for v in hz]
-            game_menu = ctk.CTkOptionMenu(
+            game_menu = SkewCombo(
                 row, values=game_vals, width=120,
                 command=lambda v, s=m["short"]:
                 self._gaming_game_hz(s, v),
@@ -79,7 +80,7 @@ class _GamingMixin:
             # looked broken: menus showed 60, cfg said {}, nothing was
             # configured, the watcher correctly held nothing)
             desk_vals = ["keep"] + [str(v) for v in hz]
-            desk_menu = ctk.CTkOptionMenu(
+            desk_menu = SkewCombo(
                 row, values=desk_vals, width=100,
                 command=lambda v, s=m["short"]:
                 self._gaming_desk_hz(s, v),

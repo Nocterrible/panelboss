@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from ... import profiles
 from ._constants import TIPS, WAIT_CHOICES
+from ._widgets import SkewCombo
 from ._scroll import ScrollHost
 
 
@@ -92,7 +93,7 @@ class _EditorMixin:
                           if (w["proc"], w["title"]) == ed["key"]),
                          None) if ed["key"] else None
         row = self._row(sec, "window matching", TIPS["profile_match"])
-        self.match_menu = ctk.CTkOptionMenu(
+        self.match_menu = SkewCombo(
             row, values=list(profiles.MATCH_MODES), width=150,
             command=self._pin_match, **self.skin.menu_style())
         self.match_menu.set(ed["match"])
@@ -118,7 +119,7 @@ class _EditorMixin:
             # only the human knows which launcher opens the window
             row = self._row(sec, "wait up to",
                             TIPS["profile_pin_wait"])
-            self.pin_wait_menu = ctk.CTkOptionMenu(
+            self.pin_wait_menu = SkewCombo(
                 row, values=["%d s" % s for s in WAIT_CHOICES],
                 width=110, command=self._pin_wait,
                 **self.skin.menu_style())

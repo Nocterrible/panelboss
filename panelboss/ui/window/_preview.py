@@ -13,6 +13,7 @@ from PIL import Image
 
 from ... import config
 from ._constants import TIPS
+from ._widgets import SkewCombo
 
 log = logging.getLogger("ui")
 
@@ -35,7 +36,7 @@ class _CameraMixin:
                                                     padx=(6, 0))
         controls = ctk.CTkFrame(card, fg_color="transparent")
         controls.pack(fill="x", padx=14, pady=(6, 2))
-        self.camera_menu = ctk.CTkOptionMenu(
+        self.camera_menu = SkewCombo(
             controls, values=["scanning cameras..."], width=300,
             command=self._camera_changed, **self.skin.menu_style())
         self.camera_menu.pack(side="left")
@@ -54,7 +55,7 @@ class _CameraMixin:
                                 ("mode_off", "while screens are off",
                                  TIPS["cam_off"])):
             row = self._row(zone, label, tip)
-            menu = ctk.CTkOptionMenu(row, values=["boot per poll",
+            menu = SkewCombo(row, values=["boot per poll",
                                                   "always on"], width=150,
                                      command=self._mode_changed(key),
                                      **self.skin.menu_style())

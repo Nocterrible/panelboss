@@ -17,6 +17,7 @@ import customtkinter as ctk
 from ... import config
 from .. import deps, theme
 from ._constants import TIPS
+from ._widgets import SkewCombo
 
 log = logging.getLogger("ui")
 
@@ -29,7 +30,7 @@ class _GeneralMixin:
         col.pack(side="left", fill="y")
         box = self._card(col, "General")
         row = self._row(box, "skin", TIPS["skin"])
-        self.skin_menu = ctk.CTkOptionMenu(
+        self.skin_menu = SkewCombo(
             row, values=[s.label for s in theme.SKINS.values()],
             width=140, command=self._skin_changed,
             **self.skin.menu_style())

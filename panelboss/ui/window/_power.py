@@ -15,6 +15,7 @@ import customtkinter as ctk
 
 from ..shield import shield_pil
 from ._constants import TIPS
+from ._widgets import SkewCombo
 
 log = logging.getLogger("ui")
 
@@ -50,7 +51,7 @@ class _PowerMixin:
 
         box = self._card(col, "when the screens wake on their own")
         row = self._row(box, "unexpected wake", TIPS["wake"])
-        self.policy_menu = ctk.CTkOptionMenu(
+        self.policy_menu = SkewCombo(
             row, values=["re-off after wake", "leave on after wake"],
             width=180, command=self._policy_changed,
             **self.skin.menu_style())
