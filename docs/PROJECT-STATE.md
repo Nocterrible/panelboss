@@ -50,21 +50,36 @@ placeholder), GitHub `Nocterrible/panelboss` (private), Ko-fi
   (PyInstaller path staged), config writer (atomic, round-trip tested),
   rotating logs, `--autostart` proof-of-origin flag.
 - Requires Python 3.10+ (Windows). The full test suite is
-  `run_all.ps1` (currently lives beside the scratch dir; repo-izing it
-  is queued below) - 22 suites; the UI suites SKIP their window
+  `scripts/run_all.ps1` (22 suites); the UI suites SKIP their window
   sections while the live app holds the single-instance mutex, so an
   honest full-green claim needs the app stopped.
 
 ## In flight
 
-- Split #2 next (`wm.py`, then `state.py`, `profiles.py`): the SIZE LAW
-  (design principles, AGENTS.md) applies at each file's next touch;
-  ~15 further files >300 lines carry no note yet - the law grandfathers
-  them until touched, the split series retires them in order.
+- Split #2 DONE (wm/ = 9 parts + fan-out facade; AST-proven, gate
+  PASS 118/118 incl. independent setattr-fanout probe). Next:
+  `state.py`, `profiles.py` at their next-touch
+  occasions; ~15 further files >300 lines carry no note yet - the law
+  grandfathers them until touched, the split series retires them in
+  order.
+- Live-walk (Oct 11, architect, headless+MCP): **close->reopen PASS**
+  (hide semantics: `WM_DELETE -> _hide -> withdraw`; the window is
+  never destroyed in production, so the harness-only `pyimage` poison
+  has no production path - `rebuild_for_skin` ×3 + clean destroy
+  verified headlessly). General tab builds lazily on first select
+  (blank frame <1 s - exactly the snappiness target for Phase 1).
+  Tray protocol captured for scripts: message `0x40B`, lParam
+  `0x202` = activate, `0x205` = menu. REMAINING walk items: tray-menu
+  clicks (pause/snooze/sleep), profiles apply round-trip, camera
+  picker rescan, per-camera policy TOML edit + second camera when the
+  hardware arrives. Desk note: AOC2790 unplugged - restore correctly
+  declined the stale topology ("different desk right now").
 
 ## Planned end state — v1.0, in order
 
-1. **UI Phase 1 (de-CTk + design system)** — the lag is render-side
+1. **UI Phase 1 (de-CTk + design system)** — full plan of record:
+   `docs/UI-PLAN.md` (measurements, phase order, trigger table, design
+   rules). The lag is render-side
    (measured: import is innocent; CTk canvas redraws on 3×4K are not).
    Per researched plan: ttk.Treeview/grid forms under ttkbootstrap or
    sv-ttk + pywinstyles dark titlebar, DPI poller off, preview lane

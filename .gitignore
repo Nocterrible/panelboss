@@ -17,3 +17,6 @@ dist/
 
 # optional extras
 .faces/
+
+# suite runner logs
+scripts/suite_*.log

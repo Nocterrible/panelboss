@@ -1,0 +1,130 @@
+"""Window introspection: one hwnd in, a dict of facts out, and
+the pure `wanted` decision of what we dare to move. Formerly wm.py
+lines 231-346."""
+
+import ctypes
+from ctypes import wintypes
+
+from ._winapi import (DWMWA_CLOAKED, FURNITURE_PREFIX, GA_ROOT,
+                      GWL_EXSTYLE, GWL_STYLE,
+                      PROCESS_QUERY_LIMITED_INFORMATION, RECT,
+                      WS_CHILD, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
+                      WNDENUMPROC, byref, dwm, k32, sizeof, u32)
+
+
+def _class_name(hwnd):
+    buf = ctypes.create_unicode_buffer(256)
+    u32.GetClassNameW(hwnd, buf, 256)
+    return buf.value
+
+
+def _cloaked(hwnd):
+    try:
+        v = wintypes.DWORD()
+        dwm.DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, byref(v),
+                                  sizeof(v))
+        return bool(v.value)
+    except Exception:
+        return False                       # dwmapi is the compositor;
+                                           # no answer = not cloaked
+
+
+def win_title(hwnd):
+    n = u32.GetWindowTextLengthW(hwnd)
+    if n <= 0:
+        return ""
+    buf = ctypes.create_unicode_buffer(min(n, 200) + 1)
+    u32.GetWindowTextW(hwnd, buf, len(buf))
+    return buf.value
+
+
+def _proc_info(hwnd):
+    """(name, full exe path) - one OpenProcess, two answers. The
+    name is the identity a profile matches on (hwnds die, pids are
+    recycled, the name survives relaunches); the full path is what
+    a pin can re-run when the app is not open any more."""
+    try:
+        pid = wintypes.DWORD()
+        if not u32.GetWindowThreadProcessId(hwnd, byref(pid)):
+            return "", ""
+        h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False,
+                            pid.value)
+        if not h:
+            return "", ""
+        try:
+            buf = ctypes.create_unicode_buffer(4096)
+            n = wintypes.DWORD(len(buf))
+            if not k32.QueryFullProcessImageNameW(h, 0, buf, byref(n)):
+                return "", ""
+            full = buf.value
+            return full.split("\\")[-1].lower(), full
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        return "", ""                      # a window dying mid-walk;
+                                           # a profile entry with no
+                                           # proc is simply unmatched
+
+
+def proc_name(hwnd):
+    name, _ = _proc_info(hwnd)
+    return name
+
+
+def true_rect(hwnd):
+    """(x, y, w, h) in the desktop's pixel coordinates. pythonw runs
+    DPI-aware, so GetWindowRect answers in real pixels - the trap
+    this rests is the virtualized rect a dpi-blind caller reads,
+    which would send every restored window to a scaled ghost of its
+    old place."""
+    r = RECT()
+    if not u32.GetWindowRect(hwnd, byref(r)):
+        return None
+    return (r.left, r.top, r.right - r.left, r.bottom - r.top)
+
+
+def wanted(w):
+    """Pure decision, one place, testable: what we dare to move.
+    Everything else is left exactly as it is."""
+    return (w["visible"] and not w["owned"] and not w["iconic"]
+            and not w["cloaked"] and not w["tool"] and not w["ghost"]
+            and not w["furniture"] and w["rect"] is not None
+            and w["rect"][2] > 0 and w["rect"][3] > 0)
+
+
+def _facts(hwnd):
+    style = u32.GetWindowLongW(hwnd, GWL_STYLE)
+    ex = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    cls = _class_name(hwnd)
+    proc, exe = _proc_info(hwnd)
+    return {
+        "hwnd": hwnd,
+        "rect": true_rect(hwnd),
+        "title": win_title(hwnd),
+        "proc": proc,
+        "exe": exe,
+        "visible": bool(u32.IsWindowVisible(hwnd)),
+        "owned": u32.GetAncestor(hwnd, GA_ROOT) != hwnd,
+        "iconic": bool(u32.IsIconic(hwnd)),
+        "zoomed": bool(u32.IsZoomed(hwnd)),
+        "cloaked": _cloaked(hwnd),
+        "tool": bool(ex & WS_EX_TOOLWINDOW),
+        "ghost": bool(ex & WS_EX_TRANSPARENT),
+        "furniture": cls.startswith(FURNITURE_PREFIX)
+        or bool(style & WS_CHILD),
+    }
+
+
+def _toplevel_facts():
+    out = []
+
+    def cb(hwnd, _l):
+        try:
+            out.append(_facts(hwnd))
+        except Exception:
+            pass                           # a window mid-destruction:
+        return 1                           # not ours to move
+
+    proc = WNDENUMPROC(cb)                   # the reference keeps the
+    u32.EnumWindows(proc, 0)                 # callback alive
+    return out
