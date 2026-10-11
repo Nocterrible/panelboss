@@ -51,6 +51,29 @@ Honest ceiling: Tk stays single-threaded GDI; resize/large
 invalidations repaint synchronously. If the result still fails the
 triggers below, Phase 2.
 
+### Progress log (measured, medians of 3 uitime runs)
+
+- UI-1a (d542b44): DPI poller killed, scaling 1.0, ScrollHost for all
+  4 CTkScrollableFrame sites, diff-writes. Tick repaint 0.406 s ->
+  0.0000 s. Build median 1.530 -> 1.442.
+- UI-1b2 (efa4d79): SkewCombo (tk.Menubutton) replaces all 18
+  CTkOptionMenus. Build 1.442 -> 1.095; tab-switch flat ~0.5. The
+  dropdowns were NOT the dominant cost as forecast - profiler indicts
+  CTkTextbox next: the three textboxes (_gaming x2, _power) carry
+  CTk-internal CTkScrollbars (~1.06 s cumtime in the after-combo
+  profile); ScrollHost itself is already pure tk.Canvas +
+  tk.Scrollbar, no CTk left inside it. The <0.6 build target stays
+  open.
+- Gate lesson (efa4d79 review): state= recursed via Widget.__setitem__
+  re-entering the configure override; same-value re-pick fired
+  command where CTk fires only on change. Both fixed per gate.
+- RDP incident harvest (rescue/restore v2, NOT YET COMMITTED - see
+  scratch notes): proposed sliver rescue threshold (<64px = lost,
+  today's LOST_EDGE is 30 and iconic windows stay skipped),
+  placement-repair for iconic
+  windows, wake-restore must relocate only off-canvas windows, never
+  negotiate rates on Remote_Monitor (32 Hz fiction).
+
 ## Design system (kills the tape look; applies to ANY toolkit)
 
 - One spacing scale: 4/8/16/24 (label->value 4, row pitch >=8 at 4K,
