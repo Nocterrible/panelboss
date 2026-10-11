@@ -112,7 +112,14 @@ def _book(ledger, short, gdi):
 
 def _set_hz(ledger, m, hz, kind, notify=None, reason=""):
     """The one driver call in this file: current resolution, new
-    rate. 'already ...' from set_mode is a normal, boring answer."""
+    rate. 'already ...' from set_mode is a normal, boring answer.
+    Session (RDP) displays are exempt (measured Oct 11): the virtual
+    driver reports a fictional 32 Hz and "offers" modes it rewrites
+    at will - negotiating against it loses to the fiction."""
+    if "remote_monitor" in (m.get("id") or "").lower():
+        log.info("gaming hz: %s is a session display (rates are RDP "
+                 "fiction); left alone", m["short"])
+        return
     try:
         cur = wm.current_mode(m["gdi"])
         if cur is None:

@@ -126,10 +126,31 @@ class DISPLAY_DEVICEW(ctypes.Structure):
                 ("DeviceKey", wintypes.WCHAR * 128)]
 
 
+class WINDOWPLACEMENT(ctypes.Structure):
+    """Where a window AGREES to come back: rcNormalPosition survives
+    minimize, so a stale one (remembered from another desk) is the
+    ghost the rescue v2 repairs without ever un-minimizing. SIX
+    members, 44 bytes - the gate's live dword dump proved showCmd
+    sits at offset 8, and that a length=40 Get does NOT fail:
+    Windows truncates the write to whatever length you declare, so
+    a short struct mis-decodes SILENTLY (see tripwire below)."""
+    _fields_ = [("length", wintypes.UINT), ("flags", wintypes.DWORD),
+                ("showCmd", wintypes.UINT),
+                ("ptMinPosition", wintypes.POINT),
+                ("ptMaxPosition", wintypes.POINT),
+                ("rcNormalPosition", RECT)]
+
+
 if ctypes.sizeof(DEVMODEW) != 220:
     raise ImportError("DEVMODEW drift: %d bytes, Windows says 220 - "
                       "EnumDisplaySettings would fail with 87"
                       % ctypes.sizeof(DEVMODEW))
+
+if ctypes.sizeof(WINDOWPLACEMENT) != 44:
+    raise ImportError("WINDOWPLACEMENT drift: %d bytes, Windows says "
+                      "44 - and GetWindowPlacement would truncate "
+                      "silently, decoding garbage (measured Oct 11)"
+                      % ctypes.sizeof(WINDOWPLACEMENT))
 
 u32.EnumDisplayDevicesW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD,
                                    ctypes.POINTER(DISPLAY_DEVICEW),
@@ -173,6 +194,11 @@ _TYPED = {
     "GetWindowTextLengthW": (ctypes.c_void_p,),
     "GetWindowThreadProcessId": (ctypes.c_void_p,
                                  ctypes.POINTER(wintypes.DWORD)),
+    # c_void_p for the struct arg again (the shared-windll lesson):
+    # byref(WINDOWPLACEMENT) satisfies it, and no sibling module
+    # calls these two by these names, so no pin can step on it.
+    "GetWindowPlacement": (ctypes.c_void_p, ctypes.c_void_p),
+    "SetWindowPlacement": (ctypes.c_void_p, ctypes.c_void_p),
 }
 for _name, _args in _TYPED.items():
     getattr(u32, str(_name)).argtypes = list(_args)
@@ -191,6 +217,8 @@ k32.CloseHandle.argtypes = [ctypes.c_void_p]
 u32.GetAncestor.restype = ctypes.c_void_p
 u32.GetWindowLongW.restype = ctypes.c_long
 u32.SetWindowPos.restype = ctypes.c_bool
+u32.GetWindowPlacement.restype = wintypes.BOOL
+u32.SetWindowPlacement.restype = wintypes.BOOL
 u32.GetClassNameW.restype = ctypes.c_int
 dwm.DwmGetWindowAttribute.restype = ctypes.c_long   # the answer lives
                                                     # in the out-param

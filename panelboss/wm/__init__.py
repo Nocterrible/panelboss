@@ -65,7 +65,7 @@ from ._winapi import (DEVMODEW, DISPLAY_DEVICEW,
                       SWP_SHOWWINDOW, SW_SHOWMAXIMIZED,
                       SW_SHOWNORMAL, SW_RESTORE, WS_CHILD,
                       WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WNDENUMPROC,
-                      _DisplayFields, _PrinterFields, _TYPED,
+                      WINDOWPLACEMENT, _DisplayFields, _PrinterFields, _TYPED,
                       _DevmodeUnion, byref, dwm, k32, sizeof, u32)
 
 from ._inspect import (_class_name, _cloaked, _facts, _proc_info,
@@ -94,7 +94,7 @@ from ._hdr import (DCI_GET_ADVANCED_COLOR_INFO,
                    QDC_ONLY_ACTIVE_PATHS, VK, _dc_targets, _n, _s,
                    _want, hdr_set, hdr_states, press_keys)
 
-from ._rescue import lost, rescue_lost
+from ._rescue import GRAB_EDGE, lost, rescue_lost
 
 from ._restore import (SETTLE_SEC, WAIT_BUDGET_SEC, _move, apply,
                        place, restore, restore_async, snapshot,
@@ -122,7 +122,7 @@ __all__ = [
     "DM_POSITION", "DWMWA_CLOAKED", "DISP_CHANGE_RESTART",
     "DISP_CHANGE_SUCCESSFUL", "ENUM_CURRENT_SETTINGS",
     "ENUM_REGISTRY_SETTINGS", "ERROR_NOT_SUPPORTED", "FURNITURE_PREFIX",
-    "GA_ROOT", "GWL_EXSTYLE", "GWL_STYLE", "INPUT_KEYBOARD",
+    "GA_ROOT", "GRAB_EDGE", "GWL_EXSTYLE", "GWL_STYLE", "INPUT_KEYBOARD",
     "KEYBDINPUT", "KEYEVENTF_KEYUP", "LOST_EDGE", "LUID", "POINTL",
     "PROCESS_QUERY_INFORMATION", "PROCESS_QUERY_LIMITED_INFORMATION",
     "PROCESS_VM_READ", "QDC_ONLY_ACTIVE_PATHS", "RECT", "SETTLE_SEC",
@@ -130,7 +130,7 @@ __all__ = [
     "SWP_SHOWWINDOW",
     "SW_SHOWMAXIMIZED", "SW_SHOWNORMAL", "SW_RESTORE", "VK",
     "WAIT_BUDGET_SEC", "WS_CHILD", "WS_EX_TOOLWINDOW",
-    "WS_EX_TRANSPARENT", "WNDENUMPROC", "apply", "apply_layout",
+    "WS_EX_TRANSPARENT", "WNDENUMPROC", "WINDOWPLACEMENT", "apply", "apply_layout",
     "byref", "ctypes", "current_mode", "dwm", "foreground",
     "fingerprint", "has_xinput", "k32", "launch", "list_windows",
     "log", "lost", "monitor_for", "monitors", "offered_modes",

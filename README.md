@@ -202,9 +202,22 @@ and on it, *restore as captured* abstains rather than flip a coin
 (the belief dance knows exactly one global switch).
 The **rescue my lost windows** button (on the command bar beside
 sleep/pause/Quit, always visible — useful far
-beyond profiles) walks every visible, non-minimized, grabbable
-window no screen covers and brings it back to the middle of the
-primary monitor. Store: `%APPDATA%\PanelBoss\profiles.json`; the
+beyond profiles) walks every visible, grabbable window and brings it
+back to the middle of the primary monitor when no screen covers a
+title-bar-grab of it. Since the RDP incident, "lost" means *less than
+64 px of the window visible on any monitor*, not zero: a window
+straddling the canvas edge by 7 px is technically on screen and
+practically unreachable. Minimized windows are no longer skipped —
+their visible rect is the (-32000,-32000) sentinel, so rescue judges
+them by their remembered restore spot (`GetWindowPlacement`) and
+rewrites *that* when it points off-desk; the window stays minimized
+and simply lands on-screen at the next taskbar click. The same
+incident taught the automatic off/wake desk-memory to move back only
+what is actually off-canvas at wake: a window you deliberately moved
+while the screens were dark now stays where you put it. And on a
+remote-desktop session (single virtual `Remote_Monitor`) the gaming
+rate-hold abstains entirely — an RDP canvas reports a fictional 32 Hz
+and negotiating against fiction loses. Store: `%APPDATA%\PanelBoss\profiles.json`; the
 automatic off/wake desk-memory above stays the nightly path —
 profiles are the manual lever.
 

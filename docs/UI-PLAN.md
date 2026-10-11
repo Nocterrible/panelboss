@@ -67,12 +67,13 @@ triggers below, Phase 2.
 - Gate lesson (efa4d79 review): state= recursed via Widget.__setitem__
   re-entering the configure override; same-value re-pick fired
   command where CTk fires only on change. Both fixed per gate.
-- RDP incident harvest (rescue/restore v2, NOT YET COMMITTED - see
-  scratch notes): proposed sliver rescue threshold (<64px = lost,
-  today's LOST_EDGE is 30 and iconic windows stay skipped),
-  placement-repair for iconic
-  windows, wake-restore must relocate only off-canvas windows, never
-  negotiate rates on Remote_Monitor (32 Hz fiction).
+- RDP incident harvest (this branch, rescue-restore-v2): sliver
+  rescue landed (lost := <64px grabbable on any monitor),
+  placement-repair for iconic windows (fix where they'd land, never
+  un-minimize), wake-restore now relocates only off-canvas windows
+  (user moves between snapshot and wake are respected), and the
+  gaming rate-hold abstains on Remote_Monitor (32 Hz fiction).
+  Layout_test blocks 3b/3c/3d + a gaming_watch guard test pin them.
 
 ## Design system (kills the tape look; applies to ANY toolkit)
 
