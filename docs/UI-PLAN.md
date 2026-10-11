@@ -62,12 +62,35 @@ triggers below, Phase 2.
   CTkTextbox next: the three textboxes (_gaming x2, _power) carry
   CTk-internal CTkScrollbars (~1.06 s cumtime in the after-combo
   profile); ScrollHost itself is already pure tk.Canvas +
-  tk.Scrollbar, no CTk left inside it. The <0.6 build target stays
-  open.
+  tk.Scrollbar, no CTk left inside it. (The <0.6 target closed in
+  UI-1b3; the textbox indictment was correct.)
 - Gate lesson (efa4d79 review): state= recursed via Widget.__setitem__
   re-entering the configure override; same-value re-pick fired
   command where CTk fires only on change. Both fixed per gate.
-- RDP incident harvest (this branch, rescue-restore-v2): sliver
+- RDP incident harvest (rescue-restore-v2, merged 018756b): sliver
+  rescue landed (lost := <64px grabbable on any monitor),
+  placement-repair for iconic windows (fix where they'd land, never
+  un-minimize), wake-restore now relocates only off-canvas windows
+  (user moves between snapshot and wake are respected), and the
+  gaming rate-hold abstains on Remote_Monitor (32 Hz fiction).
+  Layout_test blocks 3b/3c/3d + a gaming_watch guard test pin them.
+- UI-1b3 (df912af): SkewText (tk.Text + placed tk.Scrollbar) replaces
+  the three CTkTextboxes - their internal CTkScrollbars + 200 ms
+  auto-hide pollers were the last hot spot. Build 1.326 -> 0.506:
+  UNDER the 0.6 Phase-1 trigger. Honest cost: first tab-switch
+  0.56 -> ~0.8 (deferred layout paid at switch). Gate found the
+  width-minus-scrollbar math able to go NEGATIVE (tk then silently
+  switches units) - floored at 1 char.
+- Gate lesson (struct, 520e8bd): WINDOWPLACEMENT is 44 bytes and
+  HAS showCmd at offset 8; a length=40 GetWindowPlacement does NOT
+  fail, it TRUNCATES the write - silent garbage decode. Tripwire
+  added next to the DEVMODEW one. The green fake hid it; the live
+  dword dump caught it. Measure, don't assume, even struct layouts.
+- RDP harness artifact (df912af): profiles_ui_test rc=1 reproducible
+  under remote-desktop latency - CTk's destroy/title-bar bookkeeping
+  races winfo-vs-interpreter-death. Checks all PASS before it;
+  production never re-enters mainloop after destroy. Test now
+  tolerates the post-PASS TclError and cancels its watchdog.
   rescue landed (lost := <64px grabbable on any monitor),
   placement-repair for iconic windows (fix where they'd land, never
   un-minimize), wake-restore now relocates only off-canvas windows
