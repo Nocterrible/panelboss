@@ -15,6 +15,7 @@ import customtkinter as ctk
 
 from ..shield import shield_pil
 from ._constants import TIPS
+from ._text import SkewText
 from ._widgets import SkewCombo
 
 log = logging.getLogger("ui")
@@ -115,7 +116,7 @@ class _PowerMixin:
         # the blockers report: the red lines are the apps that actually
         # hold the display (they pause the camera); everything else is
         # news. Scrollable: a crowded report never overflows the card.
-        self.blockers_box = ctk.CTkTextbox(
+        self.blockers_box = SkewText(
             box, height=132, width=500, font=self.skin.font(10),
             fg_color=self.skin.field_bg, border_color=self.skin.border,
             border_width=1, corner_radius=self.skin.radius, wrap="word")

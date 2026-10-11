@@ -10,6 +10,7 @@ import customtkinter as ctk
 
 from ... import wm
 from ._constants import TIPS
+from ._text import SkewText
 from ._widgets import SkewCombo
 
 log = logging.getLogger("ui")
@@ -94,7 +95,7 @@ class _GamingMixin:
         # list - the commit on focus-out is the save
         row = self._row(box, "games (one exe per line)",
                         TIPS["gaming_games"])
-        self.games_box = ctk.CTkTextbox(
+        self.games_box = SkewText(
             row, height=84, width=230, font=self.skin.font(11),
             fg_color=self.skin.field_bg, border_color=self.skin.border,
             border_width=1, corner_radius=self.skin.radius, wrap="word")
@@ -110,7 +111,7 @@ class _GamingMixin:
         self.add_fg_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
         row = self._row(box, "never games (one exe per line)",
                         TIPS["gaming_ignore"])
-        self.ignore_box = ctk.CTkTextbox(
+        self.ignore_box = SkewText(
             row, height=60, width=230, font=self.skin.font(11),
             fg_color=self.skin.field_bg, border_color=self.skin.border,
             border_width=1, corner_radius=self.skin.radius, wrap="word")
