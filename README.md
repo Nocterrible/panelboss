@@ -30,12 +30,26 @@ notice the camera blinking and something malicious watching it.
 | another app already holds the display awake (video wake lock, a game, a presentation) | camera polling **stops** while the block is active (no point defending a screen someone else owns); the window's power assistant shows who holds it, and polling resumes when they let go |
 | fullscreen app owns the display | the broadcast is skipped (the message never reaches the swap chain) |
 
-Timers, camera modes (`boot_per_poll` / `always_on`, one choice per
-phase), the wake policy and the overrides below are all editable from
+Timers, camera modes (`boot_per_poll` / `always_on` / `off`, one choice
+per phase), the wake policy and the overrides below are all editable from
 the settings window — four tabs, one subject each: **detection**
 (mode; the model's knobs or the differencer's — they never share the
-screen; the timers; the live preview beside the camera picker),
-**monitor profiles** (named whole-desktop states: panels, modes,
+screen; the timers; the live preview beside the camera picker — it
+splits into a labeled mosaic, one honest tile per rostered camera).
+
+**Per-camera policy (up to four eyes).** The mode choices above are the
+app-wide default; a `[camera.on]` / `[camera.off]` table in the config
+overrides them per index, so your monitor-mounted cam can rest when the
+screens go dark (`off`) while the door-facing one streams the whole
+dark hour and reports who knocked. Cameras vote one per poll,
+round-robin. A wear guard bounds `always_on`: after `always_timeout_sec`
+(default one hour) of continuous streaming the eye degrades to one boot
+every `always_fallback_poll_sec` (default 10 s) until the next display
+flip re-arms it — no webcam sensor grinds for weeks on end again.
+(Heads-up for hand-edited files: `"off"` in the mode fields used to be
+silently ignored; it is a real choice now — no polling.)
+
+The tabs: **monitor profiles** (named whole-desktop states: panels, modes,
 HDR, window seats, and the restore-at-start lever — see below),
 **power plan** (the timer overrides
 here, the wake behavior, the powercfg assistant), **General** (the

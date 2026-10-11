@@ -2,7 +2,13 @@
 currency, and the name matching. No real devices: the camera layer is
 patched per index, every frame encodes the index of the camera that
 made it, and a fake detector reads that back to decide presence.
+
+SIZE-LAW note: this file runs long (sixteen numbered blocks), and the
+additions RIDE an existing file on purpose: the whole value here is the
+one shared fake-camera harness (FAKE_OPEN/PRESENCE/instances/FakeCam),
+and splitting the scenarios would scatter that harness across files.
 """
+import logging
 import os
 import sys
 import tempfile
@@ -481,6 +487,115 @@ try:
     print("config-load merge OK (names merge into the roster at load; a "
           "dead extension leaves the explicit indexes standing; a "
           "sentinel roster stays single-eyed)")
+
+    # 13) the per-index policy DICT, straight at the rotor: the walk
+    #     votes only the eyes that are not off - a boot_per_poll eye
+    #     opens and releases on its turn, an always_on eye is held
+    #     open between turns (exactly one instance, alive in the
+    #     cameras map), an off eye is never opened at all - and the
+    #     warm_up look-ahead steps over the off eye to reach the
+    #     always one without opening anything new
+    FAKE_OPEN.clear()
+    PRESENCE.clear()
+    instances.clear()
+    rot = cam_mod.RotatingCamera([0, 1, 2], warmup=1, width=8, height=8,
+                                 policy={0: "boot_per_poll", 1: "off",
+                                         2: "always_on"})
+    turns = []
+    for _ in range(6):
+        frame = rot.read(mode="always_on")
+        assert frame is not None, (turns, rot.last_index)
+        turns.append(int(frame[0, 0, 0]) - 1)
+    assert turns == [0, 2] * 3, turns
+    opens = {i: sum(1 for c in instances if c.index == i)
+             for i in (0, 1, 2)}
+    assert opens == {0: 3, 1: 0, 2: 1}, (opens, len(instances))
+    assert set(rot.cameras.keys()) == {2}, rot.cameras
+    rot.cursor = 1        # park the cursor ON the off eye: a look-ahead
+                          # that cannot step over it pre-opens nothing
+    assert rot.warm_up(frames=2) == 2, \
+        "the look-ahead skips the off eye and warms the held always one"
+    assert set(rot.cameras.keys()) == {2}, rot.cameras
+    assert sum(1 for c in instances if c.index == 2) == 1, \
+        "the look-ahead reused the open handle, it opened no second one"
+    rot.release()
+    assert not any(c.opened for c in instances), "release is total"
+    print("policy dict OK (off eyes skipped by the walk, always eye "
+          "held, warm_up look-ahead steps over the off one)")
+
+    # 14) a roster switched off whole: no eye is due, so warm_up
+    #     finds nothing to pre-open, read abstains with the no-vote
+    #     shape (no index, no open), and no device is touched at all
+    FAKE_OPEN.clear()
+    instances.clear()
+    rot = cam_mod.RotatingCamera([0, 1, 2], warmup=1, width=8, height=8,
+                                 policy={0: "off", 1: "off", 2: "off"})
+    assert rot.warm_up() == 0
+    assert rot.read(mode="always_on") is None
+    assert rot.last_index is None and rot.last_opened is False
+    assert rot.read(mode="boot_per_poll") is None
+    assert instances == [], "off eyes are never opened"
+    print("all-off roster OK (warm_up 0, read abstains, zero opens)")
+
+    # 15) the [camera.on] / [camera.off] tables through get_config:
+    #     TOML string keys read as ints, and _table_mode resolves the
+    #     full inherit-from-global matrix - a per-index entry beats
+    #     its table's global, a missing index takes the global of ITS
+    #     table (the two tables never leak into each other), and no
+    #     tables at all degenerates to exactly the old globals
+    d = tempfile.mkdtemp(prefix="panelboss_multi_")
+    with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
+        fh.write('[camera]\nindex = [0, 1, 2]\n'
+                 'mode_on = "boot_per_poll"\nmode_off = "always_on"\n'
+                 '[camera.on]\n0 = "always_on"\n'
+                 '[camera.off]\n1 = "off"\n')
+    cfg = config.get_config(dir=d, verbose=False)
+    assert cfg["camera"]["on"] == {0: "always_on"}, cfg["camera"]["on"]
+    assert cfg["camera"]["off"] == {1: "off"}, cfg["camera"]["off"]
+    m = fresh_monitor(cfg)
+    for table, index, mode in (
+            ("on", 0, "always_on"),        # the table entry wins
+            ("on", 1, "boot_per_poll"),    # inherits the ON global
+            ("on", 2, "boot_per_poll"),
+            ("off", 0, "always_on"),       # inherits the OFF global,
+                                           # not the on entry
+            ("off", 1, "off"),             # the off-table entry wins
+            ("off", 2, "always_on")):
+        assert m._table_mode(index, table) == mode, (table, index, mode)
+    m = fresh_monitor(scratch_cfg("[0, 1]"))     # no tables at all
+    assert m._table_mode(0, "on") == "boot_per_poll"
+    assert m._table_mode(1, "off") == "always_on"
+    print("mode tables OK (load int-normalizes keys; inheritance is "
+          "per table; no tables is the old globals)")
+
+    # 16) the mode-table guards: the sentinels -1/-2 are dropped
+    #     QUIETLY (single-eyed devices, the same rule the name match
+    #     obeys), an unknown mode string warns and drops its entry
+    #     (the index keeps the global default), a non-dict is the
+    #     empty table, and a legal string key reads as an int
+    recs = []
+
+    class Grab(logging.Handler):
+        def emit(self, record):
+            recs.append(record)
+
+    h = Grab()
+    config.log.addHandler(h)
+    try:
+        assert config.normalize_camera_modes({"-1": "always_on",
+                                              "-2": "off"}) == {}
+        assert not recs, "dropping the sentinels makes no noise"
+        assert config.normalize_camera_modes({"0": "sometimes"}) == {}
+        assert any("unknown mode" in r.getMessage() for r in recs), recs
+        assert config.normalize_camera_modes(
+            {"1": "off", "2": "boot_per_poll"}) == {1: "off",
+                                                    2: "boot_per_poll"}
+        for junk in (None, "off", 0, ["always_on"]):
+            assert config.normalize_camera_modes(junk) == {}, junk
+    finally:
+        config.log.removeHandler(h)
+    print("mode guards OK (sentinels quiet, unknown warns and drops, "
+          "non-dict is the empty table)")
 
     print("ALL MULTI-CAMERA TESTS OK")
 finally:

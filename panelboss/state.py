@@ -101,6 +101,21 @@ class PresenceMonitor:
         self.display_held_reported = False
         self.layout = None                    # the desk as it was when we
         self.layout_gen = 0                   # turned it off (see wm)
+        # per-index vote policy (config: [camera.on] / [camera.off]
+        # tables + wear guard; see effective_mode). The monitor is the
+        # source of truth the rotor's policy callable reads at vote
+        # time, so a policy change (display-state flip, degradation)
+        # needs no rotor rebuild
+        self.armed = {}                       # index -> when its current
+                                              # continuous always_on run
+                                              # was armed (boot, or the
+                                              # last flip INTO a table)
+        self.last_vote = {}                   # index -> last frame vote;
+                                              # the degraded cadence gate
+        self._rearm("on")                     # boot: the on table applies
+                                              # (unknown counts as on),
+                                              # every effective always
+                                              # eye starts its wear clock
 
     # ------------------------------------------------------------------ run
     def run(self):
@@ -262,6 +277,9 @@ class PresenceMonitor:
             self._wake(now, 0.0)                 # the user is right here
             return
         if now >= self.next_poll:
+            # a door camera voting at night wakes the desk (the owner
+            # accepted the trade: a person at the door IS the presence
+            # the desk wants); nothing here changes that
             present, score = self._poll()
             if present is None:
                 # dead camera: no verdict, no reset of the presence
@@ -285,6 +303,8 @@ class PresenceMonitor:
         display.wake()                           # dance as _wake
         self._hdr_back()
         self.state = "active"
+        self._rearm("on")                     # the unknown->on edge is a
+                                              # wake too: same rule
         self._apply_hold(now)                # present: the plan's timers
                                              # stay suppressed from here on
         self.absent_since = None
@@ -300,6 +320,9 @@ class PresenceMonitor:
         display.wake()                           # come back up
         self._hdr_back()
         self.state = "counting"
+        self._rearm("on")                     # every on-table always eye
+                                              # starts its wear clock with
+                                              # the wake (owner rule)
         self._apply_hold(now)                # back: hold the timers again
         self.absent_since = None
         self.re_off_deadline = math.inf
@@ -331,17 +354,17 @@ class PresenceMonitor:
         # only if the user kept it - it keeps the watcher alive to catch
         # the return
         display.set_hold(False, bool(self.power_cfg.get("hold_sleep")))
-        # mode always_on: the stream rides THROUGH the standby
-        # transition, never released. Reopening inside the transition
-        # is the race that produced forever-dead cameras (measured:
-        # the handle says open, frames never flow again; a probe that
-        # opens AFTER the panels are dark always streams fine). If the
-        # device died mid-count we retry once right now, while the
-        # screens are still lit and an honest open is cheap.
-        if self.camera_cfg["mode_off"] == "always_on":
-            self._hold_camera()
-        else:
-            self._release_camera()
+        # per-index stream-through: an eye whose off table says
+        # always_on keeps its stream THROUGH the standby transition,
+        # never released. Reopening inside the transition is the race
+        # that produced forever-dead cameras (measured: the handle
+        # says open, frames never flow again; a probe that opens
+        # AFTER the panels are dark always streams fine). The duty
+        # roster already caps at four streams (get_config dropped the
+        # rest, loudly), so the kept set can never over-open.
+        keep = [i for i in self._indexes()
+                if self._table_mode(i, "off") == "always_on"]
+        self._off_phase_hold(keep, "before")
         if self.power_cfg.get("hdr_off_when_away"):
             from . import profiles
             self._hdr_snap = profiles.hdr_away_off()
@@ -358,8 +381,12 @@ class PresenceMonitor:
         self.state = "off"
         self.hits = 0
         self.absent_since = None
-        if self.camera_cfg["mode_off"] == "always_on":
-            self._hold_camera()
+        self._rearm("off")                     # the dark is a re-arm too:
+                                               # every off-table always
+                                               # eye's wear clock starts
+                                               # with the dark (owner rule
+                                               # re-arm after every wake)
+        self._off_phase_hold(keep, "after")
         self.next_poll = now + self.timers["off_poll_sec"]
         log.info("screens off after %.0f s of confirmed absence",
                  elapsed)
@@ -405,6 +432,81 @@ class PresenceMonitor:
     def on_poll(self):
         return self.timers["on_poll_sec"]
 
+    def _indexes(self):
+        """The duty roster: the index list exactly as the config holds
+        it (normalized; get_config already applied the four-stream cap
+        and dropped the rest, loudly)."""
+        from . import config
+        return config.normalize_index(self.camera_cfg.get("index", 0))
+
+    def _table_mode(self, index, table):
+        """The RAW per-index mode: the table wins, the table's global
+        default fills the gap; no tables at all is the old behavior
+        (the global decides for everybody)."""
+        fallback = (self.camera_cfg["mode_off"] if table == "off"
+                    else self.camera_cfg["mode_on"])
+        return self.camera_cfg.get(table, {}).get(index, fallback)
+
+    def _rearm(self, table):
+        """The wear clock restarts on every flip INTO a table - wake
+        AND dark both re-arm (owner rule: re-arm after every wake, and
+        the dark transition is where an off-table stream starts). An
+        always_on eye resuming its continuous stream is as fresh as
+        one that has streamed since boot."""
+        now = time.monotonic()
+        for index in self._indexes():
+            if self._table_mode(index, table) == "always_on":
+                self.armed[index] = now
+
+    def effective_mode(self, index):
+        """This eye's vote mode right now, display state included:
+        the per-index table wins, the table's global fills the gap,
+        and an always_on eye whose arming aged past the wear guard
+        degrades to boot_per_poll (open, vote, release) until the next
+        re-arm."""
+        mode = self._table_mode(index,
+                                "off" if self.state == "off" else "on")
+        if mode == "always_on":
+            armed = self.armed.get(index)
+            if armed is None:
+                # first sight of an always eye (the boot arming missed
+                # it, or the table changed under us): a fresh run
+                self.armed[index] = time.monotonic()
+            elif time.monotonic() - armed > \
+                    self.camera_cfg["always_timeout_sec"]:
+                return "boot_per_poll"        # degraded: the LED gets
+                                              # its rest between votes
+        return mode
+
+    def _policy(self, index):
+        """The live per-index view handed to the rotor (and read by the
+        tray). The effective mode, with one twist: a DEGRADED eye
+        (always_on whose wear clock ran out) that is not yet due under
+        the fallback cadence reports as OFF - the rotation walk skips
+        it exactly like a switched-off one, and a tick in which no
+        eye is due abstains instead of opening devices. Native
+        boot_per_poll eyes are never cadence-gated: they vote on the
+        normal cadence, as today."""
+        table = "off" if self.state == "off" else "on"
+        if self._table_mode(index, table) != "always_on":
+            return self.effective_mode(index)
+        if self.effective_mode(index) == "always_on":
+            return "always_on"                # fresh: votes when the
+                                              # walk gets to it
+        due = index not in self.last_vote or \
+            time.monotonic() - self.last_vote[index] >= \
+            self.camera_cfg["always_fallback_poll_sec"]
+        return "boot_per_poll" if due else "off"
+
+    def _note_vote(self, index, frame):
+        """The wear clock's evidence. The fallback cadence counts
+        from a vote that actually carried a frame: an abstain (a dead
+        or stalled camera) must never refresh the clock, or one bad
+        frame could buy an entire hour of wear time for an eye that
+        is genuinely due."""
+        if index is not None and frame is not None:
+            self.last_vote[index] = time.monotonic()
+
     def _poll(self):
         if self.detector is None:
             # the warm-up has not landed yet: abstain like a failed
@@ -448,18 +550,42 @@ class PresenceMonitor:
         could open): that is an abstain, and an abstain is not a
         verdict."""
         try:
-            if self._mode() == "boot_per_poll":
+            indexes = self._indexes()
+            index = indexes[0] if indexes else 0
+            if len(indexes) <= 1 and self._policy(index) == "off":
+                # a switched-off eye (or a degraded one whose fallback
+                # cadence has not turned) never votes: an abstain,
+                # never a verdict - the state machine keeps going
+                return None, False
+            # the single camera's branch is its OWN effective mode -
+            # a per-index table entry wins over the table's global;
+            # the rotor's branch stays on the table's global, because
+            # its walk decides per eye anyway
+            branch = (self.effective_mode(index) if len(indexes) <= 1
+                      else self._mode())
+            if branch == "boot_per_poll":
                 rot = self._rotor()
                 if rot is not None:
                     # the rotation keeps one persistent adapter across
                     # polls: the cursor must outlive the per-poll open
                     # and release, or every poll starts on camera one
                     frame = rot.read(mode="boot_per_poll")
+                    self._note_vote(rot.last_index, frame)
                     return frame, rot.last_opened
+                if self.camera is not None:
+                    # gate finding 1: a degraded always stream must
+                    # hand its held handle back FIRST - opening the
+                    # boot-poll eye over a live exclusive device means
+                    # the LED never rests and the second open is
+                    # refused by real drivers (the vote comes back
+                    # None = fail-closed absent, every fallback tick)
+                    self._release_camera()
                 cam = self._new_camera()
                 try:
                     cam.warm_up()
-                    return cam.read(), True
+                    frame = cam.read()
+                    self._note_vote(index, frame)
+                    return frame, True
                 finally:
                     cam.release()                # the LED rests; the user
                 # can always notice the blink
@@ -473,12 +599,14 @@ class PresenceMonitor:
                 if not rot.is_open():
                     rot.warm_up()
                 frame = rot.read(mode="always_on")
+                self._note_vote(rot.last_index, frame)
                 return frame, rot.last_opened
             cam = self.camera
             if cam is None or not cam.is_open():
                 cam = self.camera = self._new_camera()
                 cam.warm_up()
             frame = cam.read()
+            self._note_vote(index, frame)
             if frame is None and self.camera is not None:
                 # a handle that stopped flowing IS a dead handle,
                 # whatever is_open() swears (measured: the standby
@@ -544,7 +672,11 @@ class PresenceMonitor:
 
     def _new_camera(self):
         from . import camera
-        return camera.open_camera(self.camera_cfg)   # index -2 = hello IR
+        # index -2 = hello IR. The per-index policy is a live call
+        # into the monitor (effective mode + the degraded cadence
+        # gate), so the rotor consults the display state and the wear
+        # clock at read time; policy changes need no rotor rebuild
+        return camera.open_camera(self.camera_cfg, policy=self._policy)
 
     def _hold_camera(self):
         if self.camera is None or not self.camera.is_open():
@@ -553,6 +685,42 @@ class PresenceMonitor:
             # letting the destructor eat it skips both
             self.camera = self._new_camera()
             self.camera.warm_up()
+
+    def _off_phase_hold(self, keep, phase):
+        """The per-index stream-through, in its two moments.
+        phase="before": the panels are still lit - the eyes that do NOT
+        stream through let go now, while an honest release is cheap,
+        and nobody is opened: a camera can only ride the transition
+        if it is open BEFORE it, and what is already open stays.
+        phase="after": the panels are dark - every kept eye is proven
+        open now, the one moment an open is proven safe (a probe that
+        opens after the dark always streams fine), and the non-kept
+        eyes stay released. keep is None (the pre-policy shape) means
+        hold the whole current camera, as today."""
+        rot = self.camera
+        if rot is not None and getattr(rot, "rotating", False):
+            for index in list(rot.indexes):
+                cam = rot.cameras.get(index)
+                kept = keep is None or index in keep
+                if phase == "before":
+                    if not kept and cam is not None:
+                        cam.release()
+                        rot.cameras[index] = None
+                elif kept:
+                    if cam is None or not cam.is_open():
+                        cam = rot._open(index)
+                        rot.cameras[index] = cam
+                        if cam is not None:
+                            cam.warm_up()
+                elif cam is not None:
+                    cam.release()
+                    rot.cameras[index] = None
+            return
+        kept = keep is None or len(keep) == 1
+        if kept:
+            self._hold_camera()
+        else:
+            self._release_camera()
 
     def _release_camera(self):
         if self.camera is not None:
@@ -568,10 +736,27 @@ class PresenceMonitor:
     def _preview(self, now):
         """Debug frames while the lease is live: the camera is held,
         detection runs, and the gate and timers are on holiday; the
-        phase machine resumes untouched when the lease runs out."""
+        phase machine resumes untouched when the lease runs out. One
+        camera previews exactly as it always did; several cameras
+        push the composed mosaic (preview_grid) into the SAME frame
+        slot, so the window's single draw path never learns the
+        difference."""
         if self.detector is None:
             return              # no model yet (warm-up) or ever (the
                                 # fail-open build failure): abstain
+        rot = self.camera
+        if len(self._indexes()) > 1:
+            if rot is None:
+                # the lease owns one rotor and stores it: an unstored
+                # one would be rebuilt every tick, leak its opened
+                # sub-cams, and dodge the lease-end release
+                rot = self.camera = self._new_camera()
+            if getattr(rot, "rotating", False):
+                # the mosaic opens its own sub-cameras: an all-boot
+                # desk's rotor holds nothing open between leases, so
+                # the is_open() gate below would starve the wall
+                self._preview_mosaic(rot)
+                return
         if self.camera is None or not self.camera.is_open():
             self._hold_camera()
             if self.camera is None or not self.camera.is_open():
@@ -581,6 +766,64 @@ class PresenceMonitor:
             return
         boxes, scores = self.detector.detect(frame)
         self.framebox.put(frame, boxes, scores)
+
+    def _preview_mosaic(self, rot):
+        """The wall under a live lease: open EVERY index the lease may
+        look at and feed each frame to compose() with the label that
+        states what the eye actually is. An index that is "off" for
+        the CURRENT display state still opens - it never votes, but a
+        preview is allowed to look; only a PERMANENTLY off index (off
+        in both tables, an eye this app will never need) stays a
+        labeled hole, unopened. A tile whose frame did not arrive is
+        labeled, not faked. Release of all of it is the lease-end
+        _release_camera the single path already uses (the rotor lets
+        go of every sub-cam it holds)."""
+        import cv2
+        import numpy as np
+        from PIL import Image
+        from . import config, preview_grid
+        frames, labels = {}, {}
+        table = "off" if self.state == "off" else "on"
+        for index in rot.indexes:
+            if (self._table_mode(index, "on") == "off"
+                    and self._table_mode(index, "off") == "off"):
+                frames[index] = None
+                labels[index] = "off"
+                continue
+            cam = rot.cameras.get(index)
+            if cam is None or not cam.is_open():
+                cam = rot._open(index)
+                rot.cameras[index] = cam
+                if cam is not None:
+                    try:
+                        cam.warm_up()    # settled frames or an honest
+                    except Exception:    # "closed": an unwarmed eye
+                        pass             # reads dark and lies (gate
+                                         # finding 3)
+            frame = None
+            if cam is not None and cam.is_open():
+                frame = cam.read()
+            if frame is None:
+                frames[index] = None
+                labels[index] = "closed"
+                continue
+            mode = self.effective_mode(index)
+            if self._table_mode(index, table) == "always_on" \
+                    and mode != "always_on":
+                label = "degraded poll"
+            else:
+                label = config.MODE_LABELS.get(mode, "poll")
+            frames[index] = Image.fromarray(
+                cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            labels[index] = label
+        tile_w = max(160, int(self.cfg.get("ui", {}).get(
+            "preview_width", 420)) // 2)
+        mosaic = preview_grid.compose(frames, labels, tile_w=tile_w)
+        if mosaic is None:
+            return
+        bgr = cv2.cvtColor(np.asarray(mosaic), cv2.COLOR_RGB2BGR)
+        boxes, scores = self.detector.detect(bgr)
+        self.framebox.put(bgr, boxes, scores)
 
     # -------------------------------------------------------------- events --
     def _drain_display(self, now):
@@ -615,8 +858,13 @@ class PresenceMonitor:
         if self.state == "unknown":
             self.state = "counting"          # an on-broadcast answers
             self.next_poll = now + self.on_poll()   # the boot question
+            self._rearm("on")                # the boot edge into the on
+                                             # table: same rule
             return
         if self.state == "off" and value == 1.0:
+            self._rearm("on")                # an unexpected wake re-arms
+                                             # the on table's wear clocks
+                                             # like any wake
             self.wake_times = [t for t in self.wake_times
                                if now - t <= self.recovery[
                                    "wake_burst_window_sec"]]

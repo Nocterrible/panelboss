@@ -125,7 +125,8 @@ def _run(cfg, autostart=False):
     # "probing..." placeholders where the slow submenus will be
     ui_events = queue.Queue()               # tray <-> window messages
     monitor = state.PresenceMonitor(cfg, None, None, ui_events=ui_events)
-    icon = tray.Tray(monitor.events, cfg, ui_events=ui_events)
+    icon = tray.Tray(monitor.events, cfg, ui_events=ui_events,
+                     monitor=monitor)
     icon.start()                            # the tray always runs beside
                                             # the monitor
     monitor.notifier = icon.notify          # burst warnings reach the

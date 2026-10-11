@@ -184,13 +184,17 @@ class HelloIrCamera:
         return cam is not None and bool(cam.is_opened)
 
 
-def open_camera(cam_cfg):
+def open_camera(cam_cfg, policy=None):
     """The one way to get a camera. Index -2 is the Hello IR bridge;
     a single index is the old cv2 path with the old arguments; several
     indexes are one RotatingCamera (one camera votes per poll,
     round-robin). Name matching is resolved HERE, at open time, not at
     config load: the device tree can change under a long-running app,
-    and a fresh probe is the only honest answer."""
+    and a fresh probe is the only honest answer. `policy` (optional) is
+    a per-index vote policy - a callable index->mode or an
+    index->mode dict - consulted by the rotating vote at read time, so
+    the caller can change it (display state, degradation) without
+    rebuilding the rotor."""
     indexes = config.normalize_index(cam_cfg.get("index", 0))
     names = config.normalize_name_contains(cam_cfg.get("name_contains"))
     if indexes == [HELLO_IR]:
@@ -208,7 +212,8 @@ def open_camera(cam_cfg):
                       width=width,
                       height=height)
     return RotatingCamera(indexes, warmup=warmup,
-                          width=width, height=height)
+                          width=width, height=height,
+                          policy=policy)
 
 
 class Camera:
@@ -316,12 +321,21 @@ class RotatingCamera:
     frame it returns is the frame the detector sees. A camera that
     cannot open, or opens but stalls, ABSTAINS on its turn: a dead eye
     can never veto a live one, and a wall of dead opens never looks
-    like an empty desk."""
+    like an empty desk.
+
+    An optional per-index `policy` (callable index->mode, or an
+    index->mode dict) decides, per eye, whether it votes at all this
+    display state: "off" eyes are skipped by the walk (they can still
+    be opened by a preview lease, they just never vote), "always_on"
+    eyes stay open between polls, "boot_per_poll" eyes open, vote,
+    release. The policy is consulted at read/open time, so the caller
+    may change it - a display-state flip, an always_on degradation -
+    without rebuilding the rotor."""
 
     rotating = True
 
     def __init__(self, indexes, warmup=4, width=1280, height=720,
-                 verbose=False):
+                 verbose=False, policy=None):
         self.indexes = [int(i) for i in indexes]
         self.cursor = 0                  # whose turn is next
         self.warmup = warmup
@@ -330,10 +344,24 @@ class RotatingCamera:
         self.cameras = {}                # index -> held sub-camera; the
                                          # always_on mode keeps them open
                                          # between polls
+        self.policy = policy             # per-index mode source, or None
+                                         # (one mode for the whole rotor)
         self.last_index = None           # the camera that last voted
         self.last_opened = False         # True only when that vote came
                                          # with a frame
         self.started = time.perf_counter()
+
+    def _mode_for(self, index, mode):
+        """This index's vote mode right now. No policy: the single mode
+        the caller passed (the old whole-rotor behavior). Callable:
+        the caller's live view of the desk. Dict: the table value,
+        falling back to the caller's mode for an index the table does
+        not list."""
+        if self.policy is None:
+            return mode
+        if callable(self.policy):
+            return self.policy(index)
+        return self.policy.get(index, mode)
 
     def _open(self, index):
         """One sub-camera, or None when it will not open. cv2 usually
@@ -363,8 +391,24 @@ class RotatingCamera:
         turn is next. Opening all of them here would cost N x the open
         time right at the standby transition, and the open that is
         proven safe is the one issued AFTER the panels are dark; the
-        rest settle on their own turns."""
-        index = self.indexes[self.cursor % len(self.indexes)]
+        rest settle on their own turns. With a per-index policy the
+        look-ahead skips "off" eyes, and only an always_on eye is
+        pre-opened here - a boot_per_poll eye's one open belongs to
+        its own vote and must not be left lying open."""
+        n = len(self.indexes)
+        if self.policy is None:
+            index = self.indexes[self.cursor % n]
+        else:
+            index = None
+            for step in range(n):
+                candidate = self.indexes[(self.cursor + step) % n]
+                if self._mode_for(candidate, "always_on") != "off":
+                    index = candidate
+                    break
+            if index is None:
+                return 0
+            if self._mode_for(index, "always_on") != "always_on":
+                return 0
         cam = self.cameras.get(index)
         if cam is None or not cam.is_open():
             cam = self._open(index)
@@ -382,8 +426,25 @@ class RotatingCamera:
         """One frame from one camera, or an abstain (None). The cursor
         moves at the END of the cycle, so a warm_up() that pre-opened
         the cursor's camera finds it open and ready, and the next
-        cycle is already the next camera's turn."""
-        index = self.indexes[self.cursor % len(self.indexes)]
+        cycle is already the next camera's turn. With a per-index
+        policy, "off" eyes are skipped by the walk (they never vote,
+        though a preview lease may still open one) and a cycle in
+        which every eye is off abstains outright."""
+        n = len(self.indexes)
+        index = None
+        for _ in range(n):
+            candidate = self.indexes[self.cursor % n]
+            if self._mode_for(candidate, mode) != "off":
+                index = candidate
+                break
+            self.cursor = (self.cursor + 1) % n
+        if index is None:
+            # every eye is switched off for this display state: there
+            # is simply no vote to cast this cycle
+            self.last_index = None
+            self.last_opened = False
+            return None
+        mode = self._mode_for(index, mode)
         if mode == "boot_per_poll":
             cam = self._open(index)
             frame = None
@@ -410,7 +471,7 @@ class RotatingCamera:
         # several eyes and this one simply could not look
         self.last_index = index
         self.last_opened = frame is not None
-        self.cursor = (self.cursor + 1) % len(self.indexes)
+        self.cursor = (self.cursor + 1) % n
         return frame
 
     def release(self):

@@ -170,11 +170,13 @@ def _image(state="active"):
 
 class Tray(threading.Thread):
 
-    def __init__(self, queue_, config, ui_events=None):
+    def __init__(self, queue_, config, ui_events=None, monitor=None):
         super().__init__(daemon=True, name="tray")
         self.events = queue_
         self.ui_events = ui_events             # "open" the window requests
         self.config = config
+        self.monitor = monitor                 # the live source for the
+                                               # picker's mode tail
         self.icon = None
         self._full_menu = None                 # the warm worker's result,
                                               # read by _on_menu_ready
@@ -343,14 +345,17 @@ class Tray(threading.Thread):
 
     def _camera_menu(self):
         """Which index opens; the PnP names come after the indexes and
-        are unreliable (documented in the README)."""
+        are unreliable (documented in the README). Each picker carries
+        the eye's mode right now as a tail - display only, the tray
+        never edits the policy."""
         from . import camera
         names = camera.camera_names()
         items = []
         ir = camera.hello_ir_names()   # [] without the whircam bridge;
         if ir:                         # first entry = IR group 0
             items.append(pystray.MenuItem(
-                "hello IR: %s" % ir[0],
+                "hello IR: %s%s" % (ir[0],
+                                    self._mode_suffix(camera.HELLO_IR)),
                 action=self._camera_picker(camera.HELLO_IR),
                 checked=self._camera_checker(camera.HELLO_IR)))
         for index, opened, width in camera.enumerate_cameras():
@@ -359,6 +364,7 @@ class Tray(threading.Thread):
             label = "index %s (%s px wide)" % (index, int(width))
             if index < len(names):
                 label += " %s" % names[index]
+            label += self._mode_suffix(index)
             items.append(pystray.MenuItem(
                 label, action=self._camera_picker(index),
                 checked=self._camera_checker(index)))
@@ -421,6 +427,20 @@ class Tray(threading.Thread):
             return index in config.normalize_index(
                 self.config["camera"]["index"])
         return check
+
+    def _mode_suffix(self, index):
+        """The picker's tail: "- always on", "- poll" or "- off", the
+        eye's mode right now (the live state decides: an always eye
+        past its wear guard reads "poll"). Display only, and it must
+        never kill the warm menu, so a failure degrades to no tail."""
+        if self.monitor is None:
+            return ""
+        from . import config
+        try:
+            mode = self.monitor.effective_mode(index)
+        except Exception:
+            return ""
+        return " - %s" % config.MODE_LABELS.get(mode, mode)
 
     def _settings(self, icon=None):
         if self.ui_events is not None:

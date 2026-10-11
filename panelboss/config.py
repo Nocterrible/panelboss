@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -57,6 +58,18 @@ DEFAULTS = {
         "warmup_frames": 4,     # auto-exposure needs time to settle before inference
         "mode_on": "boot_per_poll",   # "boot_per_poll" | "always_on", while screens are on
         "mode_off": "always_on",      # while screens are off, LED is invisible anyway
+        # per-index overrides of the two globals above, per display
+        # state: {index: mode} with modes CAMERA_MODES. An index
+        # missing from a table inherits that table's global; no tables
+        # at all is exactly the old one-mode-everyone behavior
+        "on": {},
+        "off": {},
+        # wear guard: an always_on camera that has streamed without a
+        # re-arm (boot, or any wake / dark transition) longer than
+        # this falls back to boot_per_poll ("degraded") and votes at
+        # the fallback cadence below until the next re-arm
+        "always_timeout_sec": 3600,
+        "always_fallback_poll_sec": 10,
     },
     "inference": {
         "model": "yolo11n",
@@ -234,6 +247,41 @@ def normalize_name_contains(value):
     return out
 
 
+CAMERA_MODES = ("boot_per_poll", "always_on", "off")
+# the short words the tray and the preview tiles show for a mode
+MODE_LABELS = {"boot_per_poll": "poll", "always_on": "always on",
+               "off": "off"}
+
+
+def normalize_camera_modes(value):
+    """A [camera] mode table (the on/off sub-tables) in its in-memory
+    shape: {int index: mode}. TOML table keys are strings, so "2" and
+    2 both read; an unknown mode string warns and drops its entry (the
+    index then inherits the global default); the sentinels -1/-2 never
+    take an entry - they are single-eyed devices, the same rule the
+    name match obeys - and are dropped quietly; a non-dict value (an
+    old or hand-broken file) is the empty table, i.e. the globals."""
+    out = {}
+    if not isinstance(value, dict):
+        return out
+    for key, mode in value.items():
+        try:
+            index = int(str(key))
+        except (TypeError, ValueError):
+            log.warning("camera mode table: %r is not an index; "
+                        "dropped", key)
+            continue
+        if index in (-1, -2):
+            continue
+        mode = "" if mode is None else str(mode)
+        if mode not in CAMERA_MODES:
+            log.warning("camera index %s: unknown mode %r; the index "
+                        "keeps the global default", index, mode)
+            continue
+        out[index] = mode
+    return out
+
+
 def find_config(dir=CONFIG_DIR, config_name="config.toml"):
     """Returns the config path, creating parent directories."""
     if not os.path.exists(dir):
@@ -317,6 +365,30 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
             except Exception:
                 log.exception("camera name match failed; running on "
                               "the explicit indexes alone")
+        # the per-index mode tables and the wear-guard knobs normalize
+        # here too: in memory the table keys are ints, the fallback
+        # cadence has a floor (a 1 s "fallback" would be always_on
+        # with extra steps), the timeout never goes negative
+        camera_merged["on"] = normalize_camera_modes(
+            camera_merged.get("on"))
+        camera_merged["off"] = normalize_camera_modes(
+            camera_merged.get("off"))
+        camera_merged["always_timeout_sec"] = max(
+            0, int(camera_merged.get("always_timeout_sec", 3600)))
+        camera_merged["always_fallback_poll_sec"] = max(
+            5, int(camera_merged.get("always_fallback_poll_sec", 10)))
+        indexes = camera_merged["index"]
+        if len(indexes) > 4:
+            # four open streams is the cap: an always_on index holds
+            # its device open at all times, and past four held
+            # streams the drivers start to wedge. The duty roster is
+            # the FIRST four of the index list; the rest are dropped
+            # here and now, loudly
+            log.warning("camera roster holds %d indexes but only four "
+                        "open streams are supported: the first four "
+                        "(%s) are on duty, the rest are dropped",
+                        len(indexes), indexes[:4])
+            camera_merged["index"] = indexes[:4]
     return merged
 
 
@@ -343,18 +415,43 @@ def _format_value(value):
     return str(value)
 
 
+def _dumps_key(key):
+    """A TOML key: bare when legal, quoted otherwise (json's basic
+    string quoting IS TOML's). EDID-derived names earn spaces and
+    dots often enough that the quoted form is the normal one."""
+    key = str(key)
+    if re.fullmatch(r"[A-Za-z0-9_-]+", key):
+        return key
+    return json.dumps(key)
+
+
 def _dumps(data):
-    """Emit TOML for our config shape; there is no writer package to buy."""
-    lines, tables = [], []
-    for key, value in data.items():
-        if isinstance(value, dict):
-            tables.append("[%s]" % key)
-            tables.extend("%s = %s" % (k, _format_value(v))
-                          for k, v in value.items())
-            tables.append("")
-        else:
-            lines.append("%s = %s" % (key, _format_value(value)))
-    return "\n".join(lines + tables).rstrip() + "\n"
+    """Emit TOML for our config shape; there is no writer package to
+    buy. A dict value inside a section becomes its own table
+    ([section.key]) - the [camera.on] / [camera.off] mode tables are
+    the regular case; an EMPTY one is skipped, because a missing
+    table and an empty one mean the same thing (the globals)."""
+    lines = []
+    _emit_table(data, "", lines)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _emit_table(table, path, lines):
+    """One table's lines in two passes: its own key = value lines
+    FIRST, its sub-tables only after - TOML ends a table at its first
+    sub-table header, so the passes cannot be intermixed, and every
+    key (and dotted-header part) goes through _dumps_key."""
+    for key, value in table.items():
+        if not isinstance(value, dict):
+            lines.append("%s = %s" % (_dumps_key(key),
+                                     _format_value(value)))
+    for key, value in table.items():
+        if not (isinstance(value, dict) and value):
+            continue
+        header = ".".join(p for p in (path, _dumps_key(key)) if p)
+        lines.append("[%s]" % header)
+        _emit_table(value, header, lines)
+        lines.append("")
 
 
 def write_config(config, path=None):
@@ -375,6 +472,16 @@ def write_config(config, path=None):
         names = normalize_name_contains(cam.get("name_contains"))
         cam["name_contains"] = (names[0] if len(names) == 1
                                 else names if names else "")
+        # the mode tables: in memory they are {int: mode}; on disk the
+        # keys are strings (TOML table keys are) and an EMPTY table is
+        # not written at all - a missing table means the same as an
+        # empty one (the global applies to every index)
+        for table_key in ("on", "off"):
+            table = normalize_camera_modes(cam.get(table_key))
+            if table:
+                cam[table_key] = {str(k): v for k, v in table.items()}
+            else:
+                cam.pop(table_key, None)
         data["camera"] = cam
     # atomic: the app saves while it runs, and a crash between
     # truncate and finish used to leave a half file (or none)
