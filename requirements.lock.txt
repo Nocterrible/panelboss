@@ -5,4 +5,6 @@ onnxruntime-directml==1.23.0
 opencv-python==5.0.0.93
 pillow==12.3.0
 pystray==0.19.5
+pywinstyles==1.8
 tomli==2.5.0
+ttkbootstrap==2.2.3

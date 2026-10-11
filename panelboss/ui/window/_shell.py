@@ -34,6 +34,7 @@ from .. import theme
 from ..helpbtn import Tips
 from ..kofi import kofi_pil
 from ._constants import TABS, TIPS
+from ._scroll import ScrollHost
 from ._widgets import _SleepPrompt
 from ._widgets import _WidgetsMixin
 from ._runtime import _RuntimeMixin
@@ -121,23 +122,25 @@ class SettingsWindow(
             self.tab_buttons[key] = b
         self.pages = {}
         for key in TABS:
-            self.pages[key] = ctk.CTkScrollableFrame(
-                self._body, fg_color="transparent",
-                scrollbar_button_color=self.skin.button,
-                scrollbar_fg_color=self.skin.panel)
-        self._build_detection(self.pages["detection"])
-        self._build_profiles(self.pages["monitor profiles"])
-        self._build_power(self.pages["power plan"])
-        self._build_general(self.pages["general"])
+            self.pages[key] = ScrollHost(self._body, bg=self.skin.bg)
+        self._build_detection(self.pages["detection"].inner)
+        self._build_profiles(self.pages["monitor profiles"].inner)
+        self._build_power(self.pages["power plan"].inner)
+        self._build_general(self.pages["general"].inner)
         self._show_tab(self._tab)
 
 
     def _show_tab(self, key):
+        page = self.pages[key]
+        if key == self._tab and page.winfo_manager():
+            return                     # the page is already up: a tab
+            # button on the visible tab must not unmap-and-remap the
+            # whole widget tree (repaint profile: the remap IS the cost)
         self.tips.kill()                 # a tooltip anchored to a row
         self._tab = key                  # would float over the new page
-        for page in self.pages.values():
-            page.pack_forget()
-        self.pages[key].pack(fill="both", expand=True)
+        for other in self.pages.values():
+            other.pack_forget()
+        page.pack(fill="both", expand=True)
         for k, b in self.tab_buttons.items():
             b.configure(**(self.skin.primary() if k == key
                           else self.skin.secondary()))

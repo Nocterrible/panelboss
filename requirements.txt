@@ -9,6 +9,8 @@ onnxruntime>=1.20 ; platform_system != 'Windows'            # CPU only elsewhere
 pystray==0.19.5              # system tray icon (pip install pystray, PyPI); the identity shim in tray.py is verified against 0.19.5 internals ONLY - the wrap, the _message_handlers table, the hID bug
 pillow>=10                   # tray icon + settings window images
 customtkinter>=6             # settings window (the modern skin)
+ttkbootstrap==2.2.3          # dark ttk theming hook for the window's fast paths (import-guarded: the window opens without it, logged)
+pywinstyles==1.8             # Win11 dark titlebar for the settings window (same guard)
 tomli>=2                     # config parsing (python<3.11 has no tomllib)
 # (no tomli writer on PyPI; we emit config.toml ourselves in config.py)
 

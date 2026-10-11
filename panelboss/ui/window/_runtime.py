@@ -8,6 +8,8 @@ import logging
 import queue
 import time
 
+from ._widgets import set_text
+
 log = logging.getLogger("ui")
 
 
@@ -82,17 +84,28 @@ class _RuntimeMixin:
         state = self.monitor.state
         if self.monitor.paused:
             state = "paused"
-        self.chip.configure(text=state, fg_color=self.skin.chip(state))
+        # every write below is diffed (set_text / cget): each CTk label
+        # and button is a software canvas and a no-op configure still
+        # repaints it whole - this runs every tick, so unchanged text
+        # must cost nothing (the 0.4 s tick repaint, profiled)
+        chip = {"text": state}
+        color = self.skin.chip(state)
+        if self.chip.cget("fg_color") != color:
+            chip["fg_color"] = color
+        if len(chip) == 1:
+            set_text(self.chip, state)      # text-only: diff-guarded
+        else:
+            self.chip.configure(**chip)     # color moved: whole repaint
         idle = self._idle()
         age = "never" if slot is None else "%.1f s" % (now - slot[3])
-        self.idle_label.configure(
-            text="idle %.0f s · frame %s old · %d seen"
-            % (idle, age, len(slot[1]) if slot else 0))
-        self.pause_button.configure(
-            text="Resume" if self.monitor.paused else "Pause")
+        set_text(self.idle_label,
+                 "idle %.0f s · frame %s old · %d seen"
+                 % (idle, age, len(slot[1]) if slot else 0))
+        set_text(self.pause_button,
+                 "Resume" if self.monitor.paused else "Pause")
         paused_re = getattr(self.monitor, "re_off_paused", False)
-        self.reoff_label.configure(
-            text="PAUSED (camera slipped?)" if paused_re else "on")
+        set_text(self.reoff_label,
+                 "PAUSED (camera slipped?)" if paused_re else "on")
         self.reoff_button.configure(
             state="normal" if paused_re else "disabled")
         self._update_blockers()

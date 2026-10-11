@@ -21,6 +21,25 @@ import cv2
 import customtkinter as ctk
 from PIL import Image
 
+# UI-PLAN Phase 1 step 2, at the ONLY seam that guarantees the rule:
+# this module is what creates SettingsWindow, and this block runs at
+# its import time - before any CTk class anywhere is instantiated.
+# CTk activates process DPI awareness on the first widget and then
+# re-applies scaling from its poller; Tk's font metrics do NOT follow
+# a late awareness flip, so the kill must come first, not early.
+ctk.deactivate_automatic_dpi_awareness()
+ctk.set_widget_scaling(1.0)         # device pixels, no hidden multipliers
+# The Phase-1 ttk toolkit is optional at runtime (fail-open religion):
+# absent or broken, the window still opens in its CTk skin. Imported
+# only - the app owns zero ttk widgets today (grepped), so binding the
+# dark style is the reskin packet's job; this is just the seam.
+try:
+    import ttkbootstrap  # noqa: F401 probed, not used
+    import pywinstyles   # noqa: F401 probed, not used
+except Exception:
+    logging.getLogger("ui").info(
+        "ttkbootstrap/pywinstyles unavailable - staying CTk-skinned")
+
 from ... import config, profiles, wm
 from .. import deps, theme
 from ..helpbtn import Tips

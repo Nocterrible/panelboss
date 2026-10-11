@@ -122,11 +122,10 @@ class OverridesWindow(ctk.CTkToplevel):
             "folds in whatever new popped up.",
             font=skin.font(10), wraplength=560, justify="left",
             **skin.text_style("sub")).pack(anchor="w", padx=14, pady=(2, 6))
-        self.listing = ctk.CTkScrollableFrame(
-            self, fg_color="transparent",
-            scrollbar_button_color=skin.button,
-            scrollbar_fg_color=skin.panel)
-        self.listing.pack(fill="both", expand=True, padx=14)
+        from .window._scroll import ScrollHost  # here, not at import
+        self.list_host = ScrollHost(self, bg=skin.panel)
+        self.list_host.pack(fill="both", expand=True, padx=14)
+        self.listing = self.list_host.inner
         bar = ctk.CTkFrame(self, fg_color="transparent")
         bar.pack(fill="x", padx=14, pady=(6, 10))
         self.status = ctk.CTkLabel(bar, text="", font=skin.font(11),

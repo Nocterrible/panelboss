@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from ... import profiles
 from ._constants import TIPS, WAIT_CHOICES
+from ._scroll import ScrollHost
 
 
 class _EditorMixin:
@@ -25,10 +26,7 @@ class _EditorMixin:
                      **self.skin.text_style()).pack(side="left")
         self.tips.button(head, TIPS["profile_match"]).pack(
             side="left", padx=(6, 0))
-        lif = ctk.CTkScrollableFrame(sec, width=590,
-                                     height=132, fg_color="transparent",
-                                     scrollbar_button_color=self.skin.border,
-                                     scrollbar_button_hover_color=self.skin.accent)
+        lif = ScrollHost(sec, bg=self.skin.panel, width=590, height=132)
         lif.pack(fill="x")
         self._live_rows = {}
         live = profiles.windows_now()
@@ -36,7 +34,7 @@ class _EditorMixin:
             key = (l["proc"], l["title"])
             picked = ed["pick"] == key
             b = ctk.CTkButton(
-                lif, width=540, anchor="w",
+                lif.inner, width=540, anchor="w",
                 text="%s   %s %dx%d at %d,%d on %s" % (
                     (l["title"] or "(untitled)")[:40],
                     l["proc"][:14], l["rect"][2], l["rect"][3],
@@ -52,7 +50,7 @@ class _EditorMixin:
             b.pack(anchor="w", pady=1)
             self._live_rows[key] = b
         if not live:
-            ctk.CTkLabel(lif, text="no open windows to pick",
+            ctk.CTkLabel(lif.inner, text="no open windows to pick",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(
                 anchor="w", pady=4, padx=4)
@@ -216,17 +214,15 @@ class _EditorMixin:
                       command=self._prof_rescan,
                       **self.skin.secondary()).pack(side="left",
                                                     padx=(6, 0))
-        pinf = ctk.CTkScrollableFrame(sec, width=590,
-                                      height=112, fg_color="transparent",
-                                      scrollbar_button_color=self.skin.border,
-                                      scrollbar_button_hover_color=self.skin.accent)
+        pinf = ScrollHost(sec, bg=self.skin.panel, width=590, height=112)
         pinf.pack(fill="x")
         live_key = {(w["proc"], w["title"]): w
                     for w in profiles.windows_now()}
         for w in prof["wins"]:
-            self._pin_row(pinf, w, live_key.get((w["proc"], w["title"])))
+            self._pin_row(pinf.inner, w, live_key.get((w["proc"], w["title"])))
         if not prof["wins"]:
-            ctk.CTkLabel(pinf, text="nothing pinned yet - seat an app above",
+            ctk.CTkLabel(pinf.inner,
+                         text="nothing pinned yet - seat an app above",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(
                 anchor="w", pady=4, padx=4)

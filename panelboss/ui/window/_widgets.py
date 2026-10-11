@@ -6,6 +6,20 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
+def set_text(widget, text):
+    """Write a label/button text only when it actually CHANGED. Every
+    CTkLabel/CTkButton is a software canvas: a no-op configure(text=...)
+    still redraws the whole rounded widget (the tick loop paid a full
+    repaint per unchanged label - profiled). cget() answers plain on
+    CTk widgets and on tk ones alike (measured)."""
+    try:
+        if widget.cget("text") == text:
+            return
+    except Exception:
+        pass                        # exotic widget: write blindly
+    widget.configure(text=text)
+
+
 def _fresh_pin_edit():
     """The pin editor's blank slate, in one place so no reset ever
     forgets a field the editor grew later."""
