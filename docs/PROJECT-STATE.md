@@ -8,10 +8,14 @@ says where the project STANDS and what DONE looks like.
 
 A Windows tray app that commands the desk's displays: camera presence
 decides screen power, per-monitor law decides refresh rates, profiles
-decide whole-desktop states. Portable Python, fail-open by religion,
-no installer, no cloud, no admin. PyPI name `panelboss` (0.0.1
-placeholder), GitHub `Nocterrible/panelboss` (private), Ko-fi
-`ko-fi.com/nocterrible`. Renamed from "ICU Presence Detector" at 0.1.0.
+decide whole-desktop states. Fail-open by religion, no cloud, no
+admin. **MIT licensed** (2026-10-11). Distribution is
+**installer-first** (owner decision 2026-10-11): the shipped artifact
+will be a per-user installer wrapping the PyInstaller onedir build;
+the portable git-clone + venv path stays the developer experience.
+PyPI name `panelboss` (0.0.1 placeholder), GitHub
+`Nocterrible/panelboss` (private), Ko-fi `ko-fi.com/nocterrible`.
+Renamed from "ICU Presence Detector" at 0.1.0.
 
 ## Shipped (all live-verified on the dev desk, 22/22 suites green)
 
@@ -69,11 +73,14 @@ placeholder), GitHub `Nocterrible/panelboss` (private), Ko-fi
   verified headlessly). General tab builds lazily on first select
   (blank frame <1 s - exactly the snappiness target for Phase 1).
   Tray protocol captured for scripts: message `0x40B`, lParam
-  `0x202` = activate, `0x205` = menu. REMAINING walk items: tray-menu
-  clicks (pause/snooze/sleep), profiles apply round-trip, camera
-  picker rescan, per-camera policy TOML edit + second camera when the
-  hardware arrives. Desk note: AOC2790 unplugged - restore correctly
-  declined the stale topology ("different desk right now").
+   `0x202` = activate, `0x205` = menu. The tray menu itself
+   WALKED: 18 items enumerated via the #32768 probe, Pause->Resume
+   drove the real modal loop (menu actions are log-silent by design -
+   state changes, not events). REMAINING walk items: profiles apply
+   round-trip, camera picker rescan, per-camera policy TOML edit +
+   second camera when the hardware arrives. Desk note: AOC2790
+   unplugged - restore correctly declined the stale topology
+   ("different desk right now").
 
 ## Planned end state — v1.0, in order
 
@@ -89,15 +96,23 @@ placeholder), GitHub `Nocterrible/panelboss` (private), Ko-fi
    today) and the parked focus-blip investigation (instrument ready).
    Phase-2 migration (pywebview/WebView2 first, Qt last) triggers ONLY
    on measured failure: tab build >300 ms, mosaic <20 fps, visible jank.
-2. **Launcher exe**: `PanelBoss.exe` with a version resource — kills the
-   "Python" label in Windows Settings, stabilizes identity+autostart.
-   Prereq: **license decision** (PyInstaller's GPL exception favors
-   MIT/Apache; copyleft choice needs review).
+2. **Installer track** (license settled MIT - PyInstaller's runtime
+   exception is happy): `PanelBoss.exe` keeps its version resource
+   (kills the "Python" label in Windows Settings' tray page; one
+   stable exe path = the tray pin and Run-key identity outlive
+   updates), wrapped by an **Inno Setup** per-user installer (no
+   admin, `%LOCALAPPDATA%\Programs` default, Start Menu entry,
+   uninstall cleans the Run value it owns). `build_release.ps1`'s
+   onedir output becomes the installer payload; `update.bat` graduates
+   from git-pull to "fetch + run the new setup". Stretch: winget
+   manifest once the first signed release ships.
 3. **Real PyPI 0.1.x/0.2.x**: `pip install panelboss && python -m
-   panelboss`; needs a `pyproject.toml` (none exists yet - packaging is
-   created, not configured); repo folder rename (venv rebuild rides
-   with it); README quickstart = the PyPI path. The PyPI placeholder
-   0.0.1 (name claim only) gets superseded by the first real release.
+   panelboss` as the script path alongside the installer; needs a
+   `pyproject.toml` (none exists yet - packaging is created, not
+   configured); repo folder rename (venv rebuild rides with it);
+   README quickstart = installer first, PyPI second. The PyPI
+   placeholder 0.0.1 (name claim only) gets superseded by the first
+   real release.
 4. **Gaming field-pass**: live matrix (mark pin-max cams, set real
    desktop_hz on the gaming card, trust-list, hot-plug) — the code is
    shipped but this desk has never played a game through it.
@@ -119,13 +134,15 @@ KV offload (owner: wrong-session research, ignored here).
 PanelBoss appears <2 s, settings window responds instantly (no measured
 jank at 4K), one door cam + one desk cam run off policy tables edited
 IN THE UI, screens obey the presence law for a week of daily use with
-zero false-offs the owner can demonstrate, an update via `git pull` +
-`update.bat` keeps the pin, and every file in the repo is either
+zero false-offs the owner can demonstrate, an update via the new installer keeps the pin and
+the Run entry (same exe identity end to end), and every file in the repo is either
 ≤~300 lines or carries its SIZE LAW note.
 
 ## Standing constraints (binding, older than any feature)
 
-Portable-first (no installer assumptions), fail-open (a broken optional
-feature must never eat the core promise), silent at logon, driver
-settings belong to the owner, review gate before every commit, lane
-doctrine per fleet-capacity, design principles per AGENTS.md.
+Fail-open (a broken optional feature must never eat the core promise),
+silent at logon, driver settings belong to the owner, no admin
+required for install or operation, review gate before every commit,
+lane doctrine per fleet-capacity, design principles per AGENTS.md.
+(Portable-first retired 2026-10-11 in favor of installer-first; the
+venv dev path survives untouched.)
