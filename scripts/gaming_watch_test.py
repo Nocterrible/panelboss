@@ -293,6 +293,22 @@ def main():
     assert n == 0
     ok("not gaming: configured panel held to its rate, then silent")
 
+    # the RDP fiction guard (measured Oct 11): a session display's
+    # class is Remote_Monitor and its reported rate is driver
+    # imagination - gaming must negotiate beside it, never against it.
+    wm.MONS.append(dict(id="MONITOR\\Remote_Monitor\\{4d36e96e}\\0005",
+                        short="Remote_Monitor", gdi="D5",
+                        x=0, y=0, w=3840, h=2160, rate=32, bits=32,
+                        primary=False))
+    wm.live["D5"] = (3840, 2160, 32)
+    _ncalls = len(CALLS)
+    gw._set_hz(ledger, wm.monitors()[-1], 60, "switched off")
+    assert len(CALLS) == _ncalls, CALLS[-3:]
+    assert "Remote_Monitor" not in ledger        # not even booked
+    wm.MONS.pop()
+    del wm.live["D5"]
+    ok("session display (Remote_Monitor) exempt from the rate games")
+
     # the storm guard: a configured rate the panel's mode list does
     # NOT currently offer (cable swap, driver update) must be parked
     # silently - set_mode would refuse, book the foreign truth, and

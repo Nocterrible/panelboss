@@ -8,7 +8,8 @@ import threading
 import time
 
 from ._inspect import _toplevel_facts, true_rect, wanted
-from ._monitors import fingerprint
+from ._monitors import fingerprint, monitors
+from ._rescue import lost
 from ._winapi import (SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW,
                       SW_SHOWMAXIMIZED, SW_RESTORE, u32)
 
@@ -57,9 +58,17 @@ def _move(w):
 
 
 def apply(snap):
-    """Move everything back. Same rect already = Windows put it back
-    itself, and arguing with that is how loops are born."""
+    """Put back what the sleep cycle actually displaced. v2 (RDP
+    incident): the old rule was "position differs from the snapshot,
+    move it back" - which rolled back every window the user (or a
+    third-party app re-persisting its own stale memory) had moved
+    between snapshot and wake, canonizing the snatch forever. A
+    window grabbly-on-screen at wake is wherever its owner wants it;
+    we relocate only windows no monitor covers now, which is exactly
+    what a scrambled wake stack produces. Same rect = Windows put it
+    back itself, and arguing with that is how loops are born."""
     moved = kept = gone = skipped = 0
+    mons = monitors()
     for w in snap["wins"]:
         cur = true_rect(w["hwnd"])
         if cur is None:
@@ -68,6 +77,9 @@ def apply(snap):
         if cur == w["rect"]:
             kept += 1
             continue
+        if mons and not lost(cur, mons):
+            skipped += 1                   # moved since the snapshot,
+            continue                       # still reachable: leave it
         result = _move(w)
         if result == "ok":
             moved += 1

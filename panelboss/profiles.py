@@ -868,7 +868,10 @@ def apply(data, name, best_effort=False, scope="full", login=False,
                 if cur == tuple(s["rect"]) and not s.get("zoomed"):
                     placed += 1              # already parked, floating,
                     continue                 # right there: don't move it
-                                             # (mirrors wm.apply's skip)
+                                             # (same-rect skip only; unlike wm.apply, an
+                                              # explicit profile apply MOVES
+                                              # even a reachable user-moved
+                                              # window - that's the point)
                 if wm.place(l["hwnd"], tuple(s["rect"]),
                             s.get("zoomed")) == "ok":
                     placed += 1
