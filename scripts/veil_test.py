@@ -12,6 +12,7 @@ import os
 import queue
 import sys
 import time
+import tkinter as tk
 
 os.environ.setdefault("PANELBOSS_STATE", os.path.join(
     os.environ.get("TEMP", "/tmp"), "panelboss-veil-test"))
@@ -35,9 +36,9 @@ class NoBlockQueue(queue.Queue):
     # The fake must answer None instead of lying about the cadence.
     def get(self, *a, **k):
         try:
-            return self.get_nowait()
-        except queue.Empty:
-            return None
+            return queue.Queue.get(self, block=False)   # not
+        except queue.Empty:                             # get_nowait:
+            return None                                 # that re-enters
 
 
 class FakeMonitor:
@@ -77,6 +78,26 @@ events.put(("open", None))
 app._drain_ui_events()
 check(app._veil_lbl is not None, "first manual open veiled")
 check(app._manual_open_done is True, "manual open consumes the budget")
+
+# (Oct 12, owner: "items drawing above the veil") tk law, measured
+# with a pixel probe this session: a child created AFTER the veil
+# paints OVER it (fresh children stack top). The probe also settled
+# the query direction: winfo_children lists BOTTOM-FIRST - before
+# any raise the veil is listed first while painting UNDER; after
+# tkraise it is listed first painting OVER. So HIGH index = top of
+# the pile. The boot sweep is exactly when late widgets are born;
+# the veil must re-take the top, and both law and repair assert here.
+late = tk.Label(app, text="lateborn")
+late.pack()
+kids = app.winfo_children()
+check(kids.index(late) > kids.index(app._veil_lbl),
+      "late-born child stacks over the veil (measured tk law)")
+app._tick_inner()
+kids = app.winfo_children()
+check(kids.index(app._veil_lbl) > kids.index(late),
+      "one tick re-buries the late-born under the veil")
+late.destroy()
+
 time.sleep(0.4)
 app.update()
 

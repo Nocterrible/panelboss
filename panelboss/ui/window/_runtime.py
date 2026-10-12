@@ -44,6 +44,18 @@ class _RuntimeMixin:
 
     def _tick_inner(self):
         now = time.monotonic()
+        # the veil holds the TOP, not just at birth: tk stacks every
+        # later-created sibling ABOVE it, and the boot sweep is
+        # exactly when late widgets are born (roster tiles, first
+        # status fills). One raise per tick while it lives is the
+        # cheap invariant - a widget that pops over the veil has
+        # <=1 tick (~90 ms) of daylight before it's buried again.
+        if getattr(self, "_veil_lbl", None) is not None:
+            try:
+                self._veil_lbl.tkraise()
+            except Exception:
+                pass                      # mid-teardown: the dying
+                                          # flag ends the ticks
         # veil watchdog: a veil that outlives its rebuild is a bricked
         # UI, and every failure path between veil() and unveil() would
         # otherwise be allowed to leave one up. The tick lifts it after
@@ -94,6 +106,19 @@ class _RuntimeMixin:
                 self._startup_sync(startup.enabled())
             if message == "cameras":
                 self._apply_cameras(_value)
+        if getattr(self, "_veil_lbl", None) is not None:
+            # tk law: fresh children stack OVER the veil, and the
+            # handlers above build exactly such children. This end-of-
+            # drain raise lands in the same tick, before any paint -
+            # a drain-born tile never gets one frame of daylight. The
+            # head-of-tick raise in _tick_inner covers the draw-path
+            # births; together they make the veil hold the top for its
+            # whole lifetime, not just at birth (owner: items drawn
+            # "above" the veil during the boot sweep).
+            try:
+                self._veil_lbl.tkraise()
+            except Exception:
+                pass
 
 
     def _update_status(self, now, slot):
