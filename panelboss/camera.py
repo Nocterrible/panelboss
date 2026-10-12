@@ -22,6 +22,7 @@ seams). Rotor+camera basics remain the split candidates.
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 import threading
@@ -163,28 +164,45 @@ def _open_door(index, width=None, height=None):
     return cap, "auto"
 
 
-def camera_names():
-    """Friendly names via PnP. Enum order does not necessarily match the
-    OpenCV indexes; it is used for reporting and the optional name_contains
-    match only."""
-    cmd = ("(Get-PnpDevice -Class Camera).FriendlyName")
+def camera_devices():
+    """[{name, instance, status}] - every PnP camera, one query. The
+    InstanceId is the identity the wizard keys labels and hides on:
+    friendly names collide across identical models and OpenCV indexes
+    DRIFT on replugs (measured Oct 12: roster [6,1] -> [6,1,0,2] ->
+    [0,2]); the instance path is pinned to the device. -Compress keeps
+    the payload ONE JSON document, so commas and spaces in names
+    cannot break a line-split parse; a lone device arrives unwrapped.
+    CREATE_NO_WINDOW is mandatory: a windowless parent gets a fresh
+    VISIBLE console per console-app child (camera_names' successor of
+    the powershell-window incident - the user counted them)."""
+    cmd = ("(Get-PnpDevice -Class Camera | Select-Object "
+           "FriendlyName,InstanceId,Status | ConvertTo-Json -Compress)")
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-Command", cmd],
                              capture_output=True, timeout=10,
-                             # windowless parents get a FRESH VISIBLE
-                             # console for every console-app child:
-                             # without this flag each scan and each
-                             # tray-menu rebuild popped a powershell
-                             # window (the user counted them)
                              creationflags=subprocess.CREATE_NO_WINDOW)
         try:
-            names = out.stdout.decode("utf-8").splitlines()
+            text = out.stdout.decode("utf-8")
         except UnicodeDecodeError:               # the console encoding is
-            names = out.stdout.decode("cp850",   # never utf-16, whatever
-                errors="replace").splitlines()     # the driver claims
+            text = out.stdout.decode(            # never utf-16, whatever
+                "cp850", errors="replace")       # the driver claims
+        data = json.loads(text) if text.strip() else []
     except Exception:
-        return []
-    return [n.strip().rstrip(",") for n in names if n.strip()]
+        return []                              # dead engine, no names,
+    if isinstance(data, dict):                 # or error prose where
+        data = [data]                          # JSON should have been
+    return [{"name": str(d.get("FriendlyName") or "").strip(),
+             "instance": str(d.get("InstanceId") or "").strip(),
+             "status": str(d.get("Status") or "").strip()}
+            for d in data if isinstance(d, dict)]
+
+
+def camera_names():
+    """Friendly names via PnP (the names of camera_devices(), same
+    order). Enum order does not necessarily match the OpenCV indexes;
+    it is used for reporting and the optional name_contains match
+    only."""
+    return [d["name"] for d in camera_devices() if d["name"]]
 
 
 def enumerate_cameras(start=0, stop=8):

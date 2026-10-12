@@ -70,6 +70,14 @@ DEFAULTS = {
         # the fallback cadence below until the next re-arm
         "always_timeout_sec": 3600,
         "always_fallback_poll_sec": 10,
+        # camera identity (v1 wizard): keyed on the PnP InstanceId,
+        # NOT the index - indexes drift on replugs (measured Oct 12),
+        # the instance path does not. labels maps instance -> the
+        # user's name; hidden lists instances the picker and the
+        # roster menu lines suppress (the engine still honors a
+        # hidden index already on duty - its row wears a badge)
+        "labels": {},
+        "hidden": [],
     },
     "inference": {
         "model": "yolo11n",
