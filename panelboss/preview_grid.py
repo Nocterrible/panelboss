@@ -23,13 +23,34 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw, ImageFont
 
-HEADER_H = 16                 # the strip carrying "index  label"
+HEADER_H = 22                 # the strip carrying "index  label"
 PAD = 6                       # header/placeholder inset
 BG = (16, 16, 20)             # the gap between tiles: every skin's dark
 HEADER_BG = (30, 30, 38)
-INK = (220, 220, 226)         # header text
-SUBTLE = (150, 150, 158)      # placeholder text
+INK = (220, 220, 226)         # header text AND placeholder text: the
+                              # old ~9 px dark-gray read as DEAD (the
+                              # owner's "cam 2 black")
 FALLBACK_AR = 9 / 16          # tile shape when no frame is there to say
+
+
+def _readable_font():
+    """Oct 12: the default bitmap font at ~9 px made every placeholder
+    and header illegible on a near-black wall. load_default(size) (the
+    properly rendered scaled face) needs Pillow 10.1+, which this venv
+    carries (12.3); the truetype and bitmap arms keep the module
+    honest on an older Pillow instead of crashing the wall."""
+    try:
+        return ImageFont.load_default(size=16)
+    except TypeError:
+        pass
+    try:
+        return ImageFont.truetype("segoeui.ttf", 14)
+    except OSError:
+        return ImageFont.load_default()
+
+
+FONT = _readable_font()
+_FONT_H = FONT.getmetrics()[0] + FONT.getmetrics()[1]   # header centering
 
 
 def compose(frames, labels, tile_w, cols=2):
@@ -45,13 +66,13 @@ def compose(frames, labels, tile_w, cols=2):
     rows = (len(indexes) + cols - 1) // cols
     grid = Image.new("RGB", (cols * tile_w, rows * (HEADER_H + tile_h)), BG)
     draw = ImageDraw.Draw(grid)
-    font = ImageFont.load_default()
+    font = FONT                    # the readable face (module header)
     for pos, index in enumerate(indexes):
         x = (pos % cols) * tile_w
         y = (pos // cols) * (HEADER_H + tile_h)
         label = str(labels.get(index) or "")
         draw.rectangle((x, y, x + tile_w - 1, y + HEADER_H), fill=HEADER_BG)
-        draw.text((x + PAD, y + (HEADER_H - 9) // 2),
+        draw.text((x + PAD, y + (HEADER_H - _FONT_H) // 2),
                   "%s  %s" % (index, _clip(draw, label, tile_w - 2 * PAD,
                                            font)),
                   font=font, fill=INK)
@@ -93,8 +114,11 @@ def _width(draw, text, font):
 
 def _centered(draw, x, y, tile_w, tile_h, text, font):
     """The placeholder: the reason for the missing frame, dead center
-    on the tile's own rectangle (below its header)."""
+    on the tile's own rectangle (below its header). INK, not the old
+    dim gray: a permanently-off eye's "off" must be READ, not squinted
+    at - labeled, not faked, and labelABLE (the owner's half of the
+    report: the black tile nobody could tell dead from dark)."""
     box = draw.textbbox((0, 0), text, font=font)
     draw.text((x + (tile_w - box[2] + box[0]) // 2 - box[0],
                y + HEADER_H + (tile_h - box[3] + box[1]) // 2 - box[1]),
-              text, font=font, fill=SUBTLE)
+              text, font=font, fill=INK)

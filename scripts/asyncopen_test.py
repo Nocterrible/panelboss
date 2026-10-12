@@ -384,4 +384,48 @@ state_boot.PREVIEW_COOLOFF_SEC = 5.0
 print("PROBE 8 OK  single-camera leased tick %.0f ms against a 1.0 s open;"
       " publish, cooloff, attach, respawn all honest" % first8)
 
+# ---- 9. the VOTE path is async too: abstain, adopt, blink, re-open ----
+# (Oct 12: the owner's "20 s to open" complaint was _grab opening the
+# boot_per_poll eye ON the tick thread; the vote now rides the SAME
+# AsyncOpener the leases use. FakeCam sleeps 1 s as the driver's tax,
+# and no _poll call may feel it.)
+logging.getLogger("state").setLevel(logging.DEBUG)    # the abstain line
+                                                      # logs on "state"
+FakeCam.builds = 0
+FakeCam.instances = []
+FakeCam.sleeps = {6: 1.0}
+mon9 = PresenceMonitor(scratch_cfg('index = 6\nmode_on = "boot_per_poll"\n'
+                                   'mode_off = "boot_per_poll"\n'),
+                       FakeDetector())        # the REAL _poll: the phase
+mon9.state = "counting"                      # machine is not under test
+_t = time.perf_counter()
+p9 = mon9._poll()
+ms9a = (time.perf_counter() - _t) * 1000
+assert ms9a < 100, "the vote BLOCKED on the open: %.0f ms" % ms9a
+assert p9 == (None, 0.0), p9                 # abstain: the eye is opening
+op9 = mon9._single_opener
+assert op9 is not None and op9.inflight, "the vote spawned no open worker"
+assert FakeCam.builds == 1, "the vote opened the eye twice itself"
+op9.inflight[6].thread.join(10)              # the fake open lands
+_t = time.perf_counter()
+p9 = mon9._poll()
+ms9b = (time.perf_counter() - _t) * 1000
+assert ms9b < 100, "the adopting vote blocked: %.0f ms" % ms9b
+assert p9[0] is False and p9[1] == 0.0, p9   # a REAL verdict: the eye looked
+cam9 = [c for c in FakeCam.instances if c.index == 6][-1]
+assert cam9.released, "the boot vote did not blink the LED"
+assert op9.held.get(6) is None, "the vote kept the handle - boot must not"
+assert 6 not in op9.inflight, "evict left the row behind: no fresh open"
+_t = time.perf_counter()
+p9 = mon9._poll()
+ms9c = (time.perf_counter() - _t) * 1000
+assert ms9c < 100, "the re-open vote blocked: %.0f ms" % ms9c
+assert p9 == (None, 0.0), p9                 # abstain again...
+assert FakeCam.builds == 2, \
+    "boot did not re-spawn: one open per vote is the promise"
+assert saw("eye 6 still opening; abstain"), "the abstain said nothing"
+print("PROBE 9 OK  boot vote: abstain %.0f ms / vote+evict %.0f ms / "
+      "re-abstain %.0f ms, LED blinked, one open per vote"
+      % (ms9a, ms9b, ms9c))
+
 print("ASYNC OPEN PROBE OK")

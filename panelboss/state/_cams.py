@@ -1,5 +1,14 @@
 """Camera handling: the vote path (_poll/_grab), the duty roster's
-rotor, stream holds and releases. Formerly state.py lines 510-734."""
+rotor, stream holds and releases. Formerly state.py lines 510-734.
+Since Oct 12 the VOTE opens ride the lease's AsyncOpener too: an eye
+that is opening abstains, a known-dead single open keeps its
+fail-closed ABSENT through the opener's failed record (and camera's
+new evict keeps the boot blink off the loop thread), and no driver's
+17 s tax is ever paid on the loop thread again.
+SIZE LAW: ~320 lines: the two single-desk vote arms grew, but they
+ARE one contract (the (frame, opened) abstain/fail-closed split) and
+splitting them from _grab would put the vote's truth two files away
+from the code that casts it."""
 
 import logging
 
@@ -43,13 +52,34 @@ class _CamsMixin:
             return self.camera_cfg["mode_off"]
         return self.camera_cfg["mode_on"]
 
+    def _opener(self):
+        """The single-eye desk's ONE AsyncOpener (created on first
+        use; the preview lease builds and re-reads the same object):
+        the VOTE path rides the lease's machinery now - the worker
+        opens and warms off the loop thread, publishes into the
+        opener's held dict, and the next vote adopts that handle.
+        _preview_open is the factory: it never hands out a corpse,
+        so a silent cv2 zombie records a failed open the vote can
+        tell apart from an eye still opening."""
+        op = self._single_opener
+        if op is None:
+            from .. import camera as camera_mod
+            op = self._single_opener = camera_mod.AsyncOpener(
+                self._preview_open)      # its own held dict: the vote
+                                         # and the lease re-read it
+        return op                        # every poll
+
     def _grab(self):
         """(frame, opened): opened is True when a camera handle was
         actually constructed and then failed to deliver a frame (a
         stall: today's fail-closed vote), False when the open itself
         failed (a real driver error, or a rotation in which no camera
         could open): that is an abstain, and an abstain is not a
-        verdict."""
+        verdict. Since Oct 12 NO open blocks this thread: an eye that
+        is opening votes ABSTAIN (the open itself failed contract in
+        the shape of "not open yet"), and the single desk's KNOWN-dead
+        open keeps its fail-closed ABSENT through the opener's failed
+        record."""
         try:
             indexes = self._indexes()
             index = indexes[0] if indexes else 0
@@ -69,7 +99,12 @@ class _CamsMixin:
                 if rot is not None:
                     # the rotation keeps one persistent adapter across
                     # polls: the cursor must outlive the per-poll open
-                    # and release, or every poll starts on camera one
+                    # and release, or every poll starts on camera one.
+                    # read(mode="boot_per_poll") opens through the
+                    # rotor's AsyncOpener now: the eye that is opening
+                    # abstains (rot.last_opened False = no frame), and
+                    # the eye whose open landed votes, releases and
+                    # evicts - the LED blink survives, the block dies
                     frame = rot.read(mode="boot_per_poll")
                     self._note_vote(rot.last_index, frame)
                     return frame, rot.last_opened
@@ -81,31 +116,63 @@ class _CamsMixin:
                     # refused by real drivers (the vote comes back
                     # None = fail-closed absent, every fallback tick)
                     self._release_camera()
-                cam = self._new_camera()
+                op = self._opener()
+                cam = op.open_async(index)
+                if cam is None:
+                    if index in op.dropped:
+                        op.rearm(index)  # the vote retries like the
+                    # old synchronous boot did: the no-re-pin tombstone
+                    # guards the preview lease, and a vote never pins
+                    dead = index in op.failed
+                    log.debug("eye %s %s", index,
+                              "open died; fail-closed" if dead
+                              else "still opening; abstain")
+                    # an eye that is merely OPENING abstains (the
+                    # shipped no-verdict contract); an open that is
+                    # KNOWN dead keeps the single desk's fail-closed
+                    # ABSENT (multi_cam_test 7) - only never on this
+                    # thread again
+                    return None, dead
                 try:
-                    cam.warm_up()
                     frame = cam.read()
                     self._note_vote(index, frame)
                     return frame, True
                 finally:
-                    cam.release()                # the LED rests; the user
-                # can always notice the blink
+                    op.evict(index)      # the LED rests; the user
+                # can always notice the blink: ONE open-read-release
+                # per vote, the boot promise intact, off the loop thread
             rot = self._rotor()
             if rot is not None:
                 # a rotor is never recreated here: every index keeps
                 # its own slot (a dead one retried on its turn, a
                 # stalled one released and reopened) and the cursor
                 # must outlive the dead ones, so a dead camera can
-                # never veto a live one
-                if not rot.is_open():
-                    rot.warm_up()
+                # never veto a live one. The warm_up() pre-open is
+                # gone: it paid the driver's tax (17.4 s measured) on
+                # THIS thread, and read's lazy async open abstains
+                # meanwhile - the wake transition loses a cycle, not
+                # the whole loop
                 frame = rot.read(mode="always_on")
                 self._note_vote(rot.last_index, frame)
                 return frame, rot.last_opened
             cam = self.camera
             if cam is None or not cam.is_open():
-                cam = self.camera = self._new_camera()
-                cam.warm_up()
+                if self.camera is not None:
+                    self._release_camera()   # present-but-dead: the
+                # honest release + detector reset before replacing it
+                op = self._opener()
+                cam = op.open_async(index)
+                if cam is None:
+                    if index in op.dropped:
+                        op.rearm(index)
+                    dead = index in op.failed
+                    log.debug("eye %s %s", index,
+                              "open died; fail-closed" if dead
+                              else "still opening; abstain")
+                    return None, dead
+                self.camera = cam            # ADOPT the published
+                # handle: every other seam (hold, lease, cooloff,
+                # release) knows the desk's live eye through self.camera
             frame = cam.read()
             self._note_vote(index, frame)
             if frame is None and self.camera is not None:
@@ -113,7 +180,9 @@ class _CamsMixin:
                 # whatever is_open() swears (measured: the standby
                 # transition leaves open-yet-frozen cameras behind;
                 # reading the corpse every poll forever is exactly
-                # the "no LED, no wake, mouse required" symptom)
+                # the "no LED, no wake, mouse required" symptom). The
+                # release sweeps the opener's row too (invalidate +
+                # held release), so the next vote re-opens fresh
                 self._release_camera()
             return frame, True
         except Exception:
@@ -125,7 +194,10 @@ class _CamsMixin:
             # absent - only a rotation may abstain (a dead camera must
             # never veto a live one; a lone dead camera has no live
             # one to veto, and abstaining would keep the screens lit
-            # forever with nobody ever seen again)
+            # forever with nobody ever seen again). the async vote
+            # arms honour the same split: a lone desk whose open has
+            # ALREADY died votes absent through the opener's failed
+            # record; only the not-yet-landed eye abstains
             return None, not self._multi_cam()
 
     def _multi_cam(self):
@@ -233,14 +305,13 @@ class _CamsMixin:
             # the monitor, so the gen bump that makes an in-flight open
             # release its own fresh handle has to happen here
             for held in list(self._single_opener.held.values()):
-                held.release()           # gate finding 1 (HIGH): a
-            self._single_opener.held.clear()   # publish that landed
-                                             # after the last leased
-                                             # tick would otherwise sit
-                                             # LED-on with no owner -
-                                             # the rotor seam survives
-                                             # ONLY because release()
-                                             # sweeps its store
+                if held is not None:       # gate finding 1 (HIGH): a
+                    held.release()         # publish that landed
+                # after the last leased tick would otherwise sit LED-on
+                # with no owner - the rotor seam survives ONLY because
+                # release() sweeps its store. None rows are the vote's
+                # evict footprint: already released on the spot.
+            self._single_opener.held.clear()
         if self.camera is not None:
             self.camera.release()
             self.camera = None

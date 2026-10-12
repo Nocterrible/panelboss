@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 import tempfile
+import time
 import types as _types
 
 try:
@@ -119,6 +120,30 @@ def fresh_monitor(cfg):
     return mon
 
 
+def drain(rot):
+    """Join the async open workers the VOTE path spawns (Oct 12): the
+    async contract is tick-N opens-in-background and abstains,
+    tick-N+1 votes; a test that wants the vote NOW lets the workers
+    land first (the asyncopen_test wait_inflight pattern)."""
+    if rot is None:
+        return
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        with rot._async_lock:
+            th = [j.thread for j in list(rot._inflight.values())
+                  if j is not None and j.thread.is_alive()]
+        if not th:
+            return
+        th[0].join(5)
+    raise AssertionError("vote opens never finished")
+
+
+def drain_mon(m):
+    rot = getattr(m, "camera", None)
+    if rot is not None and getattr(rot, "rotating", False):
+        drain(rot)
+
+
 def scratch_cfg(index_toml, mode_on="boot_per_poll", mode_off="always_on"):
     d = tempfile.mkdtemp(prefix="panelboss_multi_")
     with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
@@ -161,17 +186,23 @@ _fake_ir.find_groups = lambda: []
 _real_camera = cam_mod.Camera
 cam_mod.Camera = FakeCam
 try:
-    # 1) the rotation: nine cycles visit every index twice over, in
-    #    both modes, and the cursor survives the per-poll open/release
+    # 1) the rotation: nine votes visit every index twice over, in
+    #    both modes, and the cursor survives the per-poll open/release.
+    #    Oct 12 (vote async): the FIRST cycle of each eye opens in the
+    #    background and abstains; the test drains the workers where the
+    #    old synchronous open voted in place, so the vote pattern it
+    #    guards is unchanged
     for mode in ("boot_per_poll", "always_on"):
         FAKE_OPEN.clear()
         instances.clear()
         rot = cam_mod.RotatingCamera([0, 1, 2], warmup=1, width=8,
                                      height=8)
         turns = []
-        for _ in range(9):
+        while len(turns) < 9:
             frame = rot.read(mode=mode)
-            assert frame is not None, (mode, rot.last_index)
+            if frame is None:
+                drain(rot)                    # an eye still opening
+                continue                                    # abstains
             turns.append(int(frame[0, 0, 0]) - 1)
         assert turns == [0, 1, 2, 0, 1, 2, 0, 1, 2], (mode, turns)
         rot.release()
@@ -180,7 +211,10 @@ try:
 
     # 2) a dead camera abstains on its turn and the cursor still moves
     #    on: the live ones keep voting, and the dead one gets an
-    #    honest retry every turn
+    #    honest retry every turn. Oct 12 (vote async): the FIRST round
+    #    of cycles opens in the background - all three abstain - and
+    #    the old pattern (live votes, dead abstains, one open attempt
+    #    per dead turn) starts with the SECOND round
     FAKE_OPEN.clear()
     FAKE_OPEN.update({0: True, 1: False, 2: True})
     PRESENCE.clear()
@@ -192,10 +226,12 @@ try:
         pattern.append((rot.last_index, rot.last_opened,
                         None if frame is None
                         else int(frame[0, 0, 0]) - 1))
+        drain(rot)
     rot.release()
     assert [p[0] for p in pattern] == [0, 1, 2] * 3, pattern
-    assert [p[1] for p in pattern] == [True, False, True] * 3, pattern
-    assert [p[2] for p in pattern] == [0, None, 2] * 3, pattern
+    assert [p[1] for p in pattern] == [False] * 3 + [True, False, True] * 2, \
+        pattern
+    assert [p[2] for p in pattern] == [None] * 3 + [0, None, 2] * 2, pattern
     assert len([i for i in instances if i.index == 1]) == 3, \
         "a dead camera gets one open attempt per turn (three turns here)"
     print("abstain OK (dead camera never votes, rotation does not stall)")
@@ -221,7 +257,13 @@ try:
     print("all-dead OK (40 abstains: no clock, no off, no wake)")
 
     # 4) screens off, camera A dead and B sees a person: the abstains
-    #    do not reset the hits, and two B votes wake the desk
+    #    do not reset the hits, and two B votes wake the desk. Oct 12
+    #    (vote async): the opening cycles push the wake from the 5th
+    #    poll to the 8th (B must first open in the background, and the
+    #    dead eyes consume their turns as before); the wake shape -
+    #    abstains between the hits, exactly one wake, hits reset - is
+    #    what this block guards, so it DRAINS the workers and widens
+    #    the window instead of pre-seeding the store
     FAKE_OPEN.clear()
     FAKE_OPEN.update({0: False, 1: True, 2: False})
     PRESENCE.clear()
@@ -232,7 +274,8 @@ try:
     m.state = "off"
     m.next_poll = 160.0               # as _screens_off would have left it
     m.hits = 0
-    for i in range(5):
+    for i in range(8):
+        drain_mon(m)
         m._off_phase(160.0 + 0.2 * i, idle=90.0)
     assert m.state == "counting", m.state
     assert sent == ["wake"], sent
@@ -257,7 +300,11 @@ try:
 
     # 6) both cameras live, nobody in front of either: the fail-closed
     #    path still converges - the absence clock runs on real frames
-    #    and the screens go dark after the confirm window
+    #    and the screens go dark after the confirm window. Oct 12
+    #    (vote async): the two first rounds are opening-abstains (they
+    #    must NOT start the clock), so the clock starts on the THIRD
+    #    poll and off lands two on_poll cycles later than before -
+    #    exactly what EDIT 3 promised the owner's min_hits=4 as well
     FAKE_OPEN.clear()
     FAKE_OPEN.update({0: True, 1: True})
     PRESENCE.clear()
@@ -271,12 +318,14 @@ try:
     for i in range(25):
         t = 100.0 + 3 * i
         m.next_poll = 0
+        drain_mon(m)
         m._on_phase(t, idle=90.0)
         if m.state == "off":
             off_at = t
             break
     assert m.state == "off" and off_at is not None, (m.state, sent)
-    assert off_at == 100.0 + config.DEFAULTS["timers"]["absent_confirm_sec"], \
+    assert off_at == 100.0 + 2 * m.timers["on_poll_sec"] + \
+        config.DEFAULTS["timers"]["absent_confirm_sec"], \
         (off_at, "the clock must start on the first real absent frame")
     assert sent[-1] == "off", sent
     print("fail-closed OK (both live, no person: off after %.0f s)"
@@ -302,8 +351,18 @@ try:
     cam_mod.Camera = DeadEye
     try:
         p, s = m._poll()
-        assert (p, s) == (False, 0.0), (p, s)   # the absent vote, not the
-                                               # abstain's None
+        # the worker races the failed-record check: the first poll is
+        # EITHER the absent vote (open already died) or the abstain's
+        # None (open still landing) - both are honest, only a frame
+        # would lie. Drain the worker and the vote is deterministic.
+        assert (p, s) in ((False, 0.0), (None, 0.0)), (p, s)
+        while m._single_opener.inflight:
+            time.sleep(0.01)             # the failed record lands with
+                                         # the row's last lock release
+        p, s = m._poll()
+        assert (p, s) == (False, 0.0), (p, s)   # KNOWN-dead single eye:
+                                               # fail-closed absent, not
+                                               # the abstain's None
         m.state = "counting"
         off_at = None
         for i in range(25):
@@ -490,11 +549,14 @@ try:
 
     # 13) the per-index policy DICT, straight at the rotor: the walk
     #     votes only the eyes that are not off - a boot_per_poll eye
-    #     opens and releases on its turn, an always_on eye is held
-    #     open between turns (exactly one instance, alive in the
-    #     cameras map), an off eye is never opened at all - and the
-    #     warm_up look-ahead steps over the off eye to reach the
-    #     always one without opening anything new
+    #     opens and releases on its turn (Oct 12: the open rides the
+    #     opener's worker, so the eye abstains while opening and the
+    #     always eye takes the extra laps - the block guards WHO votes
+    #     and WHOSE handle survives, not the lap interleaving), an
+    #     always_on eye is held open between turns (exactly one
+    #     instance, alive in the cameras map), an off eye is never
+    #     opened at all - and the warm_up look-ahead steps over the
+    #     off eye to reach the always one without opening anything new
     FAKE_OPEN.clear()
     PRESENCE.clear()
     instances.clear()
@@ -502,20 +564,33 @@ try:
                                  policy={0: "boot_per_poll", 1: "off",
                                          2: "always_on"})
     turns = []
-    for _ in range(6):
+    while len(turns) < 6:
         frame = rot.read(mode="always_on")
-        assert frame is not None, (turns, rot.last_index)
+        if frame is None:
+            drain(rot)                    # the opening cycle abstains
+            continue
         turns.append(int(frame[0, 0, 0]) - 1)
-    assert turns == [0, 2] * 3, turns
+    assert set(turns) == {0, 2}, turns
+    # one more vote to let the boot eye spend the handle its last
+    # spawn published: the rotation ends where the old one ended - the
+    # always eye held, the boot eye holding nothing
+    frame = rot.read(mode="always_on")
+    if frame is None:
+        drain(rot)
+        frame = rot.read(mode="always_on")
     opens = {i: sum(1 for c in instances if c.index == i)
              for i in (0, 1, 2)}
     assert opens == {0: 3, 1: 0, 2: 1}, (opens, len(instances))
-    assert set(rot.cameras.keys()) == {2}, rot.cameras
+    assert {i for i, c in rot.cameras.items()
+            if c is not None} == {2}, rot.cameras   # the evicted boot
+    # eye leaves an honest None row (the shape the engine's own
+    # dead-handle arms already write), not an open handle
     rot.cursor = 1        # park the cursor ON the off eye: a look-ahead
                           # that cannot step over it pre-opens nothing
     assert rot.warm_up(frames=2) == 2, \
         "the look-ahead skips the off eye and warms the held always one"
-    assert set(rot.cameras.keys()) == {2}, rot.cameras
+    assert {i for i, c in rot.cameras.items() if c is not None} == {2}, \
+        rot.cameras
     assert sum(1 for c in instances if c.index == 2) == 1, \
         "the look-ahead reused the open handle, it opened no second one"
     rot.release()

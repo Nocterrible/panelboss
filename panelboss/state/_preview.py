@@ -59,12 +59,8 @@ class _PreviewMixin:
                 # the is_open() gate below would starve the wall
                 self._preview_mosaic(rot)
                 return
-        op = self._single_opener
-        if op is None:
-            from .. import camera as camera_mod
-            op = self._single_opener = camera_mod.AsyncOpener(
-                self._preview_open)      # its own held dict: the tick
-                                         # re-reads it every poll
+        op = self._opener()              # the SAME AsyncOpener the vote
+        # path builds (state._cams): one async discipline per seam
         if self.camera is None or not self.camera.is_open():
             if self.camera is not None:
                 self._release_camera()   # a present-but-dead handle:

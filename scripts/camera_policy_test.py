@@ -120,6 +120,24 @@ def drain_open(m):
         th[0].join(10)
 
 
+def drain_vote(m):
+    """Oct 12 (vote async): join the background opens the VOTE path
+    spawned - through the single desk's opener or the rotor's, whoever
+    exists; the contract is the same tick 1 spawns (abstain), tick 2
+    votes."""
+    for op in (getattr(m, "_single_opener", None),
+               getattr(getattr(m, "camera", None), "_opener", None)):
+        if op is None:
+            continue
+        while True:
+            with op.lock:
+                th = [j.thread for j in list(op.inflight.values())
+                      if j is not None and j.thread.is_alive()]
+            if not th:
+                break
+            th[0].join(10)
+
+
 def scratch_cfg(camera_toml):
     d = tempfile.mkdtemp(prefix="panelboss_policy_")
     with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
@@ -134,7 +152,11 @@ def scratch_cfg(camera_toml):
 try:
     # 1) boot arming and the wear timeout: an always_on eye armed at
     #    boot degrades at timeout+1, and the degraded vote opens
-    #    boot-style - the handle is released again on the spot
+    #    boot-style - the handle is released again on the spot. Oct 12
+    #    (vote async): the degraded poll that STARTS the open abstains
+    #    and the next one votes; the boot promise (open, vote, release,
+    #    wear clock fed only by a real frame) is what is asserted, as
+    #    the owner's own desk exercises it
     m = fresh_monitor(scratch_cfg('index = 2\nmode_on = "always_on"\n'
                                   'mode_off = "boot_per_poll"\n'))
     assert m.armed.get(2) == 1000.0, m.armed      # armed at boot
@@ -145,6 +167,10 @@ try:
     assert m.effective_mode(2) == "boot_per_poll", "3600 + 1 degrades"
     m.state = "counting"
     p, s = m._poll()
+    assert (p, s) == (None, 0.0), (p, s)   # abstain: the eye is opening
+    drain_vote(m)
+    p, s = m._poll()
+    assert p is False and s == 0.0, (p, s)
     assert instances[-1].index == 2 and not instances[-1].opened, \
         "a degraded open is boot-style: released the moment it voted"
     assert m.last_vote.get(2) == clock.t, m.last_vote
@@ -205,7 +231,10 @@ try:
     m.state = "counting"
     instances.clear()
     for _ in range(4):
-        m._poll()
+        m._poll()                        # Oct 12 (vote async): opening
+    drain_vote(m)                        # cycles abstain among them
+    # (the fake opens land instantly, so some votes come in); the
+    # claim guarded is that ONLY eye 1 was ever opened for a vote
     assert instances and all(c.index == 1 for c in instances), \
         "the off eye never opened for a vote"
     m.detector = Det()
@@ -264,21 +293,32 @@ try:
     # 8) the gate regression (finding 1): degrading FROM A HELD always
     #    phase must hand the held handle back before opening the
     #    boot-poll eye, or the LED never rests and real exclusive
-    #    drivers refuse the second open - the wear guard's whole point
+    #    drivers refuse the second open - the wear guard's whole point.
+    #    Oct 12 (vote async): the always cycle's open now arrives via
+    #    the opener (tick 1 abstains while opening, tick 2 adopts and
+    #    holds), the degraded tick releases it BEFORE spawning its
+    #    replacement, and the boot vote lands the fresh handle and
+    #    blinks it - one live open at a time, end to end
     cfg = scratch_cfg('index = 2\nmode_on = "always_on"\n'
                       'mode_off = "always_on"\n')
     m = fresh_monitor(cfg)
     instances.clear()
     m.state = "counting"                 # lit and always: the HOLD
     frame, _ = m._poll()                 # phase (same branch the live
-    held = instances[-1]                 # desk has ridden all week)
+    assert (frame, _) == (None, False)   # desk has ridden all week):
+                                         # the opening cycle abstains
+    drain_vote(m)                        # the open lands in the store
+    frame, _ = m._poll()                 # this one adopts and votes
+    held = instances[-1]
     assert held.opened, "the always phase holds its eye open"
     clock.t += 3601                      # it wears out while held
     m.state = "counting"
-    frame, _ = m._poll()                 # the degraded boot branch
+    frame, _ = m._poll()                 # the degraded boot branch:
     assert not held.opened, \
         "the degrade released the held handle BEFORE opening the new"
-    assert len(instances) == 2, len(instances)
+    drain_vote(m)
+    frame, _ = m._poll()                 # the boot vote lands, blinks,
+    assert len(instances) == 2, len(instances)   # and evicts
     assert not any(c.opened for c in instances), "no leaked handle"
     print("held-degrade OK (held handle handed back first, one live "
           "open at a time, nothing leaked)")

@@ -11,7 +11,7 @@
   back open-yet-frozen forever (measured), so we never close across it,
   and any handle that stops delivering frames is released and reopened
 
-SIZE LAW: ~730 lines, grandfathered - Camera (device+warmup) and the
+SIZE LAW: ~790 lines, grandfathered - Camera (device+warmup) and the
 Rotor (rotation+async opens) share the module-level _open_lock and the
 enumeration cache; splitting now buys two files that must re-declare
 that shared state. The known seam paid its first dividend Oct 12: the
@@ -390,6 +390,12 @@ class AsyncOpener:
         self.inflight = {}             # index -> _OpenJob
         self.dropped = set()           # indices past grace: no respawn
                                        # until the next invalidate()
+        self.failed = set()            # indices whose LAST attempt died
+                                       # at the open: the VOTE reads
+                                       # this to keep the single desk's
+                                       # shipped fail-closed contract -
+                                       # a dead open is not an opening
+                                       # eye (publish clears it)
         self.gen = 0                   # invalidate() bumps it: every
                                        # open still in flight goes STALE
         self.lock = threading.Lock()
@@ -454,6 +460,12 @@ class AsyncOpener:
                      or time.monotonic() >= deadline)
             if cam is not None and not stale:
                 self._store(index, cam)
+                self.failed.discard(index)       # the eye lives again
+            elif cam is None and mine:
+                self.failed.add(index)           # the open DIED at the
+                # factory: the next vote can tell a dead eye from an
+                # opening one (the single desk keeps its fail-closed
+                # vote; a replaced row belongs to whoever replaced it)
         if cam is None:
             return                     # the factory logged the abstain
         if stale:
@@ -502,20 +514,46 @@ class AsyncOpener:
     def invalidate(self):
         """Make every open still in flight stale: whoever finishes from
         here on releases its own fresh handle and drops it. Clears the
-        grace tombstones too - a new lease gets a fresh chance at an
-        eye this lease gave up on."""
+        grace tombstones AND the failed-open record too - a new lease
+        gets a fresh chance at an eye this lease gave up on."""
         with self.lock:
             self.gen += 1
             self.dropped.clear()
+            self.failed.clear()
 
-    def rearm(self):
+    def rearm(self, index=None):
         """Attach-time amnesty: clear the grace tombstones WITHOUT the
         gen bump, so in-flight opens survive the warm window's re-attach
         (gate finding 2: attach preserved the tombstones, blinding the
         attached lease - an eye dropped at grace could never retry until
-        a real release landed)."""
+        a real release landed). index=... : a VOTED eye surrenders only
+        its own tombstone (gate LOW: whole-set here let a sibling's
+        vote respawn a grace-dropped eye's pin loop - the loop the
+        tombstone exists to end); None = amnesty for all (lease attach)."""
         with self.lock:
-            self.dropped.clear()
+            if index is None:
+                self.dropped.clear()
+            else:
+                self.dropped.discard(index)
+
+    def evict(self, index):
+        """Forget ONE eye's row and let go of its handle, under the
+        publish lock: the VOTE's boot_per_poll arm hands a landed
+        handle back the moment it has read it (the LED still blinks
+        every vote) so the next open_async spawns a FRESH open - one
+        open-read-release per vote, the exact old synchronous promise,
+        just never on the loop thread. The store keeps a None row (the
+        shape the engine's own dead-handle arms already write). An
+        in-flight worker for the same eye is de-registered the same
+        way: it finds its row gone, calls itself stale, and releases
+        its own handle - orphan-LED discipline, scoped to one eye."""
+        with self.lock:
+            cam = self._lookup(index)
+            if cam is not None:
+                self._store(index, None)
+            self.inflight.pop(index, None)
+        if cam is not None:
+            cam.release()
 
 
 class RotatingCamera:
@@ -531,7 +569,9 @@ class RotatingCamera:
     display state: "off" eyes are skipped by the walk (they can still
     be opened by a preview lease, they just never vote), "always_on"
     eyes stay open between polls, "boot_per_poll" eyes open, vote,
-    release. The policy is consulted at read/open time, so the caller
+    release - the open and the warm ride the AsyncOpener's worker
+    thread (Oct 12), so a slow driver never blocks the vote loop. The
+    policy is consulted at read/open time, so the caller
     may change it - a display-state flip, an always_on degradation -
     without rebuilding the rotor."""
 
@@ -640,8 +680,8 @@ class RotatingCamera:
     def _invalidate(self):
         self._opener.invalidate()
 
-    def rearm(self):
-        self._opener.rearm()             # attach-time tombstone amnesty
+    def rearm(self, index=None):
+        self._opener.rearm(index)        # tombstone amnesty (scoped)
 
     # the _inflight/_dropped/_gen/_async_lock shims below are READ-ONLY
     # properties (gate nit): pokes may MUTATE the returned objects but
@@ -691,7 +731,15 @@ class RotatingCamera:
         cycle is already the next camera's turn. With a per-index
         policy, "off" eyes are skipped by the walk (they never vote,
         though a preview lease may still open one) and a cycle in
-        which every eye is off abstains outright."""
+        which every eye is off abstains outright. EVERY open rides
+        the AsyncOpener now (Oct 12): an eye that is not open yet
+        opens on the worker thread and the cycle abstains - the eye
+        is opening, not dead - because the synchronous open here was
+        the owner's complaint (17.4 s of driver tax measured ON the
+        vote thread). The always_on eye that has a live handle votes
+        with it and keeps it; the boot_per_poll eye reads its landed
+        handle and hands it straight back (evict): one
+        open-read-release per vote, the LED blinks every vote."""
         n = len(self.indexes)
         index = None
         for _ in range(n):
@@ -707,30 +755,33 @@ class RotatingCamera:
             self.last_opened = False
             return None
         mode = self._mode_for(index, mode)
-        if mode == "boot_per_poll":
-            cam = self._open(index)
-            frame = None
-            if cam is not None:
-                cam.warm_up()
+        cam = self._opener.open_async(index)
+        frame = None
+        if cam is None:
+            if index in self._opener.dropped:
+                self._opener.rearm(index)  # the VOTE retries like the old
+            # synchronous boot did: the no-respawn tombstone guards the
+            # preview lease from its own re-pin loop, and a vote never
+            # pins anything - an eye that once blew its grace must not
+            # go permanently blind on a desk that only votes
+            log.debug("eye %s still opening; abstain", index)
+        elif mode == "boot_per_poll":
+            try:
                 frame = cam.read(timeout=timeout)
-                cam.release()           # the LED rests; the user
-                # can always notice the blink
+            finally:
+                self._opener.evict(index)   # the LED rests; the user
+            # can always notice the blink
         else:
-            cam = self.cameras.get(index)
-            if cam is None or not cam.is_open():
-                cam = self._open(index)
-                self.cameras[index] = cam
-            frame = None
-            if cam is not None:
-                frame = cam.read(timeout=timeout)
-                if frame is None:
-                    # a handle that stopped flowing IS a dead handle,
-                    # whatever is_open() swears; release the corpse
-                    cam.release()
-                    self.cameras[index] = None
-        # in a rotation any cycle without a frame - an open that
-        # failed, an open that stalled - is an abstain: the desk has
-        # several eyes and this one simply could not look
+            frame = cam.read(timeout=timeout)
+            if frame is None:
+                # a handle that stopped flowing IS a dead handle,
+                # whatever is_open() swears; evict (release + drop the
+                # row) so the next vote opens a fresh one
+                self._opener.evict(index)
+        # in a rotation any cycle without a frame - an eye still
+        # opening, an open that failed, an open that stalled - is an
+        # abstain: the desk has several eyes and this one simply could
+        # not look
         self.last_index = index
         self.last_opened = frame is not None
         self.cursor = (self.cursor + 1) % n
