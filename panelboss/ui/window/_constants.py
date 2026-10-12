@@ -47,8 +47,11 @@ TIPS = {
             "immediately.",
     "confidence": "how sure a detection must be before a frame counts "
                    "as a person. Applied to the next frame; no restart.",
-    "min_hits": "consecutive positive frames before the screens are "
-                "re-woken. One lucky frame is never believed.",
+    "min_hits": "consecutive positive frames before the screens wake - "
+                "any eye on duty may vote. The rotor never resets the "
+                "streak when cameras rotate (two votes may come from "
+                "different eyes); an unreadable camera abstains - adds "
+                "nothing, resets nothing.",
     "frame changes": "share of the (downscaled) frame that must move "
                       "before a poll counts as motion. Applies "
                       "immediately.",

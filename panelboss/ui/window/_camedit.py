@@ -56,10 +56,17 @@ class _CamEditMixin:
         zone grows a bounded amount and the card's own page already
         scrolls. Rows appear when a scan reports cameras; until then
         the zone carries an honest empty line, not a blank stare."""
-        ctk.CTkLabel(zone, text="per camera",
-                     font=self.skin.font(12, "bold"),
-                     **self.skin.text_style()).pack(
-            anchor="w", pady=(theme.S_ROW, 0))
+        head = ctk.CTkLabel(zone, text="per camera",
+                            font=self.skin.font(12, "bold"),
+                            **self.skin.text_style())
+        head.pack(anchor="w", pady=(theme.S_ROW, 0))
+        # UI-1c reversal: the per-camera paragraph rides the heading's
+        # hover, the exact path the old "?" chip used
+        head.bind("<Enter>",
+                  lambda e=None: self.tips._schedule(TIPS["cam_policies"],
+                                                     head),
+                  add="+")
+        head.bind("<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
         self._hint(zone, TIPS["cam_policies"], chars=42)
         self._cam_rows_frame = ctk.CTkFrame(zone, fg_color="transparent")
         self._cam_rows_frame.pack(anchor="w", fill="x",

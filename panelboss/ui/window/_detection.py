@@ -54,15 +54,15 @@ class _DetectionMixin:
         self.gpu_ids = inference.cuda_gpus()
         if not self.gpu_ids:
             self.gpu_ids = [(n, "") for n in range(4)]
-        labels = ["%s %s" % (gid, name[:32]) for gid, name in self.gpu_ids]
+        labels = ["%s %s" % (gid, name[:40]) for gid, name in self.gpu_ids]
         row = self._row(box, "cuda gpu id", TIPS["gpu"], hint_chars=42)
         gpu_menu = SkewCombo(
-            row, values=labels, width=200, command=self._gpu_changed,
+            row, values=labels, width=300, command=self._gpu_changed,
             **self.skin.menu_style())
         gpu_menu.grid(row=0, column=1, sticky="e")
         for gid, name in self.gpu_ids:
             if gid == self.cfg["inference"]["device_id"]:
-                self._set_menu(gpu_menu, "%s %s" % (gid, name[:32]))
+                self._set_menu(gpu_menu, "%s %s" % (gid, name[:40]))
                 break
         rows.append(("cuda gpu id", row))
 

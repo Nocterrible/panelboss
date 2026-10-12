@@ -38,13 +38,19 @@ class _CameraMixin:
         head = ctk.CTkFrame(card, fg_color="transparent")
         head.pack(anchor="w", padx=theme.S_SECTION,
                   pady=(theme.S_ROW, 0))
-        ctk.CTkLabel(head, text="Camera", font=self.skin.font(15, "bold"),
-                     **self.skin.text_style()).pack(side="left")
+        head_lbl = ctk.CTkLabel(head, text="Camera",
+                                font=self.skin.font(15, "bold"),
+                                **self.skin.text_style())
+        head_lbl.pack(side="left")
         # the camera card is a preview_width+30 (~350 px) column; the
-        # hint line caps to the zone's 320 px budget (chars, not px -
-        # an uncapped hint balloons the card and pack clips the label
-        # mid-word, screenshot-verified before the cap)
-        self._hint(card, TIPS["camera"], padx=theme.S_SECTION, chars=42)
+        # paragraph that used to ride the inline hint line now pops on
+        # the heading's hover (UI-1c reversal - bubbles back)
+        head_lbl.bind("<Enter>",
+                      lambda e=None: self.tips._schedule(TIPS["camera"],
+                                                         head_lbl),
+                      add="+")
+        head_lbl.bind("<Leave>", lambda e=None: self.tips._hide_soon(),
+                      add="+")
         controls = ctk.CTkFrame(card, fg_color="transparent")
         controls.pack(fill="x", padx=theme.S_SECTION,
                       pady=(theme.S_FIELD, 0))

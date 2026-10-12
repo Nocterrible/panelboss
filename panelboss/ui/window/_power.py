@@ -112,6 +112,15 @@ class _PowerMixin:
             font=self.skin.font(12), command=self._power_assistant_changed,
             **self.skin.switch_style())
         self.power_switch.pack(side="left")
+        # UI-1c reversal: the assistant paragraph pops on the switch's
+        # own label (CTkSwitch.bind forwards to its canvas + text label)
+        self.power_switch.bind(
+            "<Enter>",
+            lambda e=None: self.tips._schedule(TIPS["assistant"],
+                                               self.power_switch),
+            add="+")
+        self.power_switch.bind(
+            "<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
         self._hint(cell, TIPS["assistant"])
         if self.cfg["power"]["assistant_task"]:
             self.power_switch.select()

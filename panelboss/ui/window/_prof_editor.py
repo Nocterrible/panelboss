@@ -204,9 +204,17 @@ class _EditorMixin:
         sec = self._section("pins", pady=(theme.S_ROW, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel) \
             or {"wins": []}
-        ctk.CTkLabel(sec, text="pinned apps",
-                     font=self.skin.font(13, "bold"),
-                     **self.skin.text_style()).pack(side="left")
+        head = ctk.CTkLabel(sec, text="pinned apps",
+                            font=self.skin.font(13, "bold"),
+                            **self.skin.text_style())
+        head.pack(side="left")
+        # UI-1c reversal (gate catch): the paragraph rides this heading's
+        # hover, the exact path the old "?" chip used
+        head.bind("<Enter>",
+                  lambda e=None: self.tips._schedule(TIPS["profile_pins"],
+                                                     head),
+                  add="+")
+        head.bind("<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
         ctk.CTkButton(sec, text="pin every open app", width=150,
                       command=self._prof_pin_all,
                       **self.skin.secondary()).pack(side="left",
@@ -215,8 +223,7 @@ class _EditorMixin:
                       command=self._prof_rescan,
                       **self.skin.secondary()).pack(side="left",
                                                     padx=(theme.S_FIELD, 0))
-        # the chip is gone: one hint line under the header, in layout
-        # from build so the list below never dances when help appears
+        # _hint is the hover-era no-op; kept so every old call site compiles
         self._hint(sec, TIPS["profile_pins"])
         pinf = ScrollHost(sec, bg=self.skin.panel, width=590, height=112)
         pinf.pack(fill="x")

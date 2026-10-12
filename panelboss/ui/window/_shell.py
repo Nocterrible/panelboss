@@ -344,6 +344,15 @@ class SettingsWindow(
             cell, text="rescue my lost windows", width=170,
             command=self._rescue_now, **self.skin.secondary())
         self.rescue_button.pack(anchor="w")
+        # UI-1c reversal: the panic button's story pops on its own
+        # hover (the _hint line below is the documented no-op twin)
+        self.rescue_button.bind(
+            "<Enter>",
+            lambda e=None: self.tips._schedule(TIPS["profile_rescue"],
+                                               self.rescue_button),
+            add="+")
+        self.rescue_button.bind(
+            "<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
         self._hint(cell, TIPS["profile_rescue"])
         right = ctk.CTkFrame(self._actions, fg_color="transparent")
         right.pack(side="right")

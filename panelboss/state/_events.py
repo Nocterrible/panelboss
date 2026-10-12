@@ -47,13 +47,21 @@ class _EventsMixin:
         if self.state == "unknown":
             self.state = "counting"          # an on-broadcast answers
             self.next_poll = now + self.on_poll()   # the boot question
-            self._rearm("on")                # the boot edge into the on
-                                             # table: same rule
+            if not self.previewing:          # the boot edge into the on
+                                             # table: same rule - but a
+                                             # display broadcast during a
+                                             # live preview lease must not
+                                             # revert the tight cadence
+                                             # (the lease owns next_poll
+                                             # and _rearm until it expires)
+                self._rearm("on")
             return
         if self.state == "off" and value == 1.0:
-            self._rearm("on")                # an unexpected wake re-arms
+            if not self.previewing:          # an unexpected wake re-arms
                                              # the on table's wear clocks
-                                             # like any wake
+                                             # like any wake - same lease
+                                             # guard as the arm above
+                self._rearm("on")
             self.wake_times = [t for t in self.wake_times
                                if now - t <= self.recovery[
                                    "wake_burst_window_sec"]]
@@ -146,8 +154,15 @@ class _EventsMixin:
                 if value <= 0:
                     self.preview_until = 0.0
                 else:
+                    was_live = time.monotonic() < self.preview_until
                     self.preview_until = max(self.preview_until,
                                              time.monotonic() + value)
+                    if (value > 0 and not was_live):
+                        # a FRESH lease (not a heartbeat stretching a live
+                        # one): poll now, do not wait out the old table's
+                        # next_poll, or the first preview frame is late
+                        self.next_poll = time.monotonic()
+                        log.info("preview lease began; polling now")
             elif action == "confidence":
                 self.inference_cfg["confidence"] = float(value)
                 if self.detector is not None:

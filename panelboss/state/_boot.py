@@ -83,14 +83,18 @@ class _BootMixin:
     def run(self):
         display.watch()                    # the sink always starts first
         while not self.quit:
+            d = None
             try:
-                self._tick()
+                d = self._tick()
             except Exception:              # a driver hiccup (the virtual
                 log.exception("tick failed; the loop goes on")   # camera
                 self._release_camera()     # has killed threads before)
-            time.sleep(0.2)
+            time.sleep(0.2 if d is None else d)
 
     def _tick(self):
+        """One loop cycle. Returns the lease's poll delay (seconds)
+        while the preview lease is held, None everywhere else - the
+        run loop's idle 0.2 s stays the whole story outside leases."""
         now = time.monotonic()             # the clock always comes after
                                            # every sleep
         self._drain_tray()
@@ -103,13 +107,21 @@ class _BootMixin:
         leased = now < self.preview_until
         if leased:
             # the settings window holds the camera; the lease expires on
-            # its own so a killed UI cannot pin the device
+            # its own so a killed UI cannot pin the device. The lease
+            # cadence is what the card's "~5 fps" promised; poll_while_*
+            # stays untouched outside leases
+            pps = max(50, min(2000, int((self.cfg.get("ui") or {})
+                                        .get("preview_poll_ms",
+                                             200)))) / 1000.0
+            self.next_poll = now + pps
             self.previewing = True
             self._preview(now)
-            return
+            return pps
         if self.previewing:
             self.previewing = False
             self._release_camera()             # back to the scheduled modes
+            self.next_poll = now               # the phase machine re-arms
+                                               # its own cadence next tick
         if self.paused or now < self.snooze_until:
             self._release_camera()
             self.next_poll = math.inf

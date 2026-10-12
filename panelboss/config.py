@@ -198,6 +198,10 @@ DEFAULTS = {
                                    # icon (left-click opens the window)
         "skin": "modern",       # "modern" (the unfun one) | "fun" (palette stub for now)
         "preview_width": 420,   # debug camera panel width in px
+        "preview_poll_ms": 200,  # applies ONLY while a preview lease is
+                                 # held; clamped 50..2000 at the read
+                                 # (state-side clamp already covers
+                                 # hand-built cfgs)
     },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a

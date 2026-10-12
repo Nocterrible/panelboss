@@ -1,11 +1,7 @@
-"""Shared card/row/section widgets (the hint line's text side lives
-in _hints.py), the sleep prompt, the pin editor's blank slate, and
-SkewCombo - the tk.Menubutton drop-in that replaced all 18
-CTkOptionMenus (UI-1b2: each CTk dropdown was ~30 canvas-backed
-labels built at grid time, ~1 s of the 1.44 s build median; this
-file earns its length by being the whole answer to that
-measurement, minus the hint helper the size-law gate split out).
-"""
+"""Shared card/row/section widgets, the sleep prompt, the pin
+editor's blank slate, and SkewCombo - the tk.Menubutton drop-in
+that replaced all 18 CTkOptionMenus. The UI-1b2 measurement that
+earns this file's length is documented on the class."""
 
 from __future__ import annotations
 
@@ -14,7 +10,7 @@ import tkinter as tk
 import customtkinter as ctk
 
 from .. import theme
-from ._hints import HINT_WRAP, hint_text as _hint_text
+from ._hints import HINT_WRAP
 
 def set_text(widget, text):
     """Write a label/button text only when it actually CHANGED. Every
@@ -101,7 +97,6 @@ class _SleepPrompt(ctk.CTkToplevel):
             self.attributes("-topmost", False)
         except Exception:
             pass                             # gone by the time we drop
-
 
 
 class SkewCombo(tk.Menubutton):
@@ -242,55 +237,52 @@ class _WidgetsMixin:
             anchor="w", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         if sub:
             # wraplength or the label clips: the sub lines are longer
-            # than any column, and clipped text reads like a bug in the
-            # app, not in the label
-            ctk.CTkLabel(frame, text=sub, font=self.skin.font(11),
-                         wraplength=HINT_WRAP, justify="left", anchor="w",
-                         **self.skin.text_style("sub")).pack(
-                anchor="w", padx=theme.S_SECTION)
+            # than any column. The sub doubles as the heading's hover
+            # bubble (UI-1c reversal: the bubbles are back, on the labels)
+            sub_lbl = ctk.CTkLabel(frame, text=sub, font=self.skin.font(11),
+                                   wraplength=HINT_WRAP, justify="left",
+                                   anchor="w", **self.skin.text_style("sub"))
+            sub_lbl.pack(anchor="w", padx=theme.S_SECTION)
+            sub_lbl.bind("<Enter>",
+                         lambda e=None: self.tips._schedule(sub, sub_lbl),
+                         add="+")
+            sub_lbl.bind("<Leave>", lambda e=None: self.tips._hide_soon(),
+                         add="+")
         inner = ctk.CTkFrame(frame, fg_color="transparent")
         inner.pack(fill="x", padx=theme.S_SECTION,
                    pady=(theme.S_FIELD, theme.S_ROW))
         return inner
 
-
     def _hint(self, parent, tip, chars=90, **pack):
-        """The "?" chip's replacement, called wherever a chip used to
-        ride beside a heading: a secondary-tier ONE-LINER packed under
-        the control, present in the layout from build. Deep help is a
-        later phase (F1 palette); the row stays honest and still.
-        Narrow cards pass a smaller `chars` - a clipped hint reads
-        worse than a short one."""
-        lbl = ctk.CTkLabel(parent, text=_hint_text(tip, chars),
-                           font=self.skin.font(11),
-                           wraplength=HINT_WRAP, justify="left",
-                           anchor="w", **self.skin.text_style("sub"))
-        lbl.pack(anchor="w", pady=(theme.S_FIELD, 0), **pack)
-        return lbl
-
+        """Documented no-op (UI-1c reversal: the hover bubbles are back,
+        riding the controls themselves). The signature survives so every
+        call site compiles unchanged; no caller chains the return."""
+        return None
 
     def _row(self, parent, label, tip="", hint_chars=90):
-        """One settings row: label left, widget right, and - when the
-        setting carries help - a pre-allocated hint row underneath.
-        Widgets are created ON THE ROW so grid only ever manages
-        children of the row, pack only ever manages children of the
-        card. The tip is static text at tier 2: no "?" chip, no
-        hover dance."""
+        """One settings row: label left, widget right. When the setting
+        carries help, the LABEL pops the full tip paragraph on hover
+        (the old "?" chip's exact path into the Tips engine); the text
+        also lands on row._tip for the probes to read. hint_chars is a
+        kept-for-compatibility relic of the inline-hint era - the bubble
+        wraps at its own width. Widgets are created ON THE ROW so grid
+        only ever manages children of the row, pack only ever manages
+        children of the card."""
         row = ctk.CTkFrame(parent, fg_color="transparent")
         row.pack(fill="x", pady=(0, theme.S_ROW))
         row.grid_columnconfigure(0, weight=1)
         cell = ctk.CTkFrame(row, fg_color="transparent")
         cell.grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(cell, text=label, font=self.skin.font(12),
-                     **self.skin.text_style()).pack(side="left")
+        lbl = ctk.CTkLabel(cell, text=label, font=self.skin.font(12),
+                           **self.skin.text_style())
+        lbl.pack(side="left")
+        row._tip = tip
         if tip:
-            ctk.CTkLabel(row, text=_hint_text(tip, hint_chars),
-                         font=self.skin.font(11), wraplength=HINT_WRAP,
-                         justify="left", anchor="w",
-                         **self.skin.text_style("sub")).grid(
-                row=1, column=0, sticky="w", pady=(theme.S_FIELD, 0))
+            lbl.bind("<Enter>", lambda e=None: self.tips._schedule(tip, lbl),
+                     add="+")
+            lbl.bind("<Leave>", lambda e=None: self.tips._hide_soon(),
+                     add="+")
         return row
-
 
     def _section(self, name, pady=(0, 0)):
         """A rebuildable slice of the pane. The first call (during a
@@ -305,4 +297,3 @@ class _WidgetsMixin:
             for w in f.winfo_children():
                 w.destroy()
         return f
-
