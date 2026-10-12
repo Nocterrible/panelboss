@@ -109,6 +109,12 @@ class _CameraMixin:
     def _mode_changed(self, key):
         def command(label):
             self.cfg["camera"][key] = self._mode_value(label)
+            # the global pair IS the fallback tier for every follow-
+            # global row: its change moves their dim truth under the
+            # engine's own feet, so re-verify all of them now (gate
+            # finding 2: a row dimmed via inherited-off must un-dim
+            # the moment the global it inherits from turns on)
+            self._cam_refresh()
             self._save()
         return command
 
@@ -123,7 +129,8 @@ class _CameraMixin:
             if shown.startswith("index %s " % entry[0]):
                 self.cfg["camera"]["index"] = entry[0]
                 self.monitor.events.put(("camera", entry[0]))
-                self._save()
+                self._cam_refresh()          # duty labels follow the
+                self._save()                 # roster the same instant
                 return
         if shown.startswith("index %s" % camera.HELLO_IR):
             # "index -2 hello IR <group>": the bridge lives, the wish
@@ -204,7 +211,7 @@ class _CameraMixin:
             self._dep_prompt(switch=False)
         # the per-camera editor mirrors the SAME scan: rebuild the
         # rows from the tables (never from the outgoing widgets), so a
-        # rescan that renames the set can cannot strand stale rows
+        # rescan that renames the set cannot strand stale rows
         self._rebuild_cam_rows(found)
 
 

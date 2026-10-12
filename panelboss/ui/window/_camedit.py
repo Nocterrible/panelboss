@@ -95,8 +95,17 @@ class _CamEditMixin:
             menu.grid(row=0, column=1, sticky="e")
             menu.set(self._cam_policy_label(index, table))
             menus[table] = menu
-        self._cam_rows[index] = {"head": head, "menus": menus}
+        self._cam_rows[index] = {"head": head, "menus": menus,
+                                 "title": title}
         self._cam_dim(index)
+
+    def _cam_refresh(self):
+        """Re-run every row's dim/duty verdict: any change to the
+        GLOBAL pair or the rotation roster can move a row's truth
+        underneath it, and the engine recomputes both at every poll -
+        the row must not lag the table it mirrors."""
+        for index in list(getattr(self, "_cam_rows", {})):
+            self._cam_dim(index)
 
     def _cam_table_mode(self, index, table):
         """The engine's own resolution, recomputed from the cfg dict
@@ -138,3 +147,16 @@ class _CamEditMixin:
                and self._cam_table_mode(index, "off") == "off")
         row["head"].configure(**self.skin.text_style(
             "disabled" if off else "text"))
+        # duty truth, recomputed exactly as the engine roster reads
+        # it: a policy on an off-roster camera persists and displays,
+        # but the camera cannot vote until the picker (or TOML) puts
+        # it on - the row says so rather than letting the policy
+        # look silently live
+        from ... import config as _cfg
+        try:
+            on_duty = index in _cfg.normalize_index(
+                self.cfg["camera"].get("index", 0))
+        except Exception:
+            on_duty = True
+        row["head"].configure(text=row["title"] + (
+            "" if on_duty else "  ·  not on duty"))
