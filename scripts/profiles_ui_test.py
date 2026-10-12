@@ -93,7 +93,10 @@ _held = None
 try:
     ctypes.windll.kernel32.OpenMutexW.restype = ctypes.c_void_p
     _held = ctypes.windll.kernel32.OpenMutexW(0x00100001, False,
-                                              "PanelBoss")
+                                              "Global\\PanelBoss")
+    if not _held:      # the transition belt: an OLD build still
+        _held = ctypes.windll.kernel32.OpenMutexW(   # running under
+            0x00100001, False, "PanelBoss")           # the bare name
 except Exception:
     pass
 if _held:

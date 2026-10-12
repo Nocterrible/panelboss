@@ -54,7 +54,7 @@ def main(argv=None):
         "panelboss 0.1.0 boot (pid %s, tree %s, code from %s)",
         os.getpid(), _here,
         time.strftime("%H:%M", time.localtime(
-            os.path.getmtime(os.path.join(_here, "cli.py"))))),
+            os.path.getmtime(os.path.join(_here, "cli.py")))))
     config.migrate_once()             # the one-time pre-rename migration,
                                       # before any config read; fail-open
     cfg = config.get_config()
@@ -92,15 +92,53 @@ def _cameras():
         print("pnp order:", ", ".join(names))
 
 
+_MUTEX_HANDLE = None   # set by _single_instance on the win path
+
+
 def _single_instance():
     """Named mutex; a second copy exits before touching the camera.
-    The handle and ownership always come before the name."""
+    Global\\ so the guard spans sessions (MSDN kernel-object-namespaces;
+    no SeCreateGlobalPrivilege needed for mutexes). Handle + last-error
+    are read together - CreateMutexW returns a LIVE handle even when
+    the object exists (MSDN createmutexw, windows-rs#2710), so the
+    handle alone must never be the verdict, and a NULL handle is a
+    real failure: confessed, never a silent win. The handle rides in
+    _MUTEX_HANDLE for the life of the process; the kernel closes it
+    at exit - that exit is the release."""
+    global _MUTEX_HANDLE
     kernel32 = ctypes.windll.kernel32
     kernel32.CreateMutexW.restype = ctypes.c_void_p
     kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int,
                                         ctypes.c_wchar_p]
-    kernel32.CreateMutexW(0, False, "PanelBoss")
-    return kernel32.GetLastError() != 183        # ERROR_ALREADY_EXISTS
+    kernel32.OpenMutexW.restype = ctypes.c_void_p   # 64-bit handles
+    kernel32.OpenMutexW.argtypes = [ctypes.c_ulong, ctypes.c_int,   # do
+                                      ctypes.c_wchar_p]             # not
+    kernel32.CloseHandle.restype = ctypes.c_int                     # trunc
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    get_last_error = kernel32.GetLastError   # resolved BEFORE the
+    h = kernel32.CreateMutexW(0, False, "Global\\PanelBoss")
+    err = get_last_error()                   # create (ctypes habit)
+    if not h:                                # genuine failure: loud
+        logging.getLogger("cli").error(
+            "single-instance mutex FAILED (CreateMutexW errno %s); "
+            "starting unguarded", err)
+        return True
+    if err == 183:                           # ERROR_ALREADY_EXISTS
+        kernel32.CloseHandle(h)              # the redundant handle,
+        return False                         # out of courtesy
+    # one-release belt (gate finding 2): a still-running OLD build
+    # holds the bare session name and cannot see Global\; refuse to
+    # double up against it. One-directional by nature - the old
+    # builds are the ones that go away.
+    old = kernel32.OpenMutexW(0x00100001, False, "PanelBoss")
+    if old:
+        kernel32.CloseHandle(old)
+        kernel32.CloseHandle(h)
+        logging.getLogger("cli").info("an older build holds the bare-"
+                                      "name mutex; standing down")
+        return False
+    _MUTEX_HANDLE = h                        # kernel closes at exit
+    return True
 
 
 LOGIN_FRESH_SEC = 180      # how young the session must be for an
@@ -206,6 +244,9 @@ def _run(cfg, autostart=False):
                 5000,                                 # closes on its own
                 ctypes.byref(ctypes.c_uint()))
         return 0
+    logging.getLogger("cli").info(
+        "instance guard: %s" % ("won" if _MUTEX_HANDLE
+                                else "UNGUARDED (see error above)"))
 
     # the tray registers and pumps first: the icon is the user's only
     # lever and it must not wait on the model work. the detector build
