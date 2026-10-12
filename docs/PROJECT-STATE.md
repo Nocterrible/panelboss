@@ -152,3 +152,16 @@ required for install or operation, review gate before every commit,
 lane doctrine per fleet-capacity, design principles per AGENTS.md.
 (Portable-first retired 2026-10-11 in favor of installer-first; the
 venv dev path survives untouched.)
+
+## Test plan of record (owner, Oct 11 late)
+
+1. ONE AT A TIME manual feature test of the shipped surface
+   (presence modes, timers, rescue, profiles apply/restore, per-
+   camera policy incl. second camera, gaming matrix + vrr pin,
+   assistant + overrides, taskbar autohide, sleep prompt, skins).
+2. Installer milestone: Inno Setup per-user package, versioned
+   PanelBoss.exe (tray-label fix), update.bat graduation.
+3. Clean-machine install test on OldBeast (second box): from
+   installer alone, no venv, no git - cold-start experience IS
+   the product test. Icon art deferred to a ComfyUI session on
+   the 5090 (owner), placeholder green circle meanwhile.

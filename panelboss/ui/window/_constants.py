@@ -223,12 +223,17 @@ TIPS = {
                "is slow (the virtual camera alone takes 16 s), so the "
                "list fills in after the window opens and rescans on "
                "demand.",
-    "cam_on": "camera life while the screens are on: boot per poll "
-               "rests the LED, always on streams through the standby "
-               "transition.",
-    "cam_off": "camera life while the screens are dark: always on is "
-                "the measured-reliable choice (a device reopened "
-                "INSIDE the standby transition never streams again).",
+    "cam_on": "the screens-on default for cameras set to follow "
+               "global: boot per poll rests the LED, always on streams "
+               "through the standby transition.",
+    "cam_off": "the screens-off default for cameras set to follow "
+                "global: always on is the measured-reliable choice (a "
+                "device reopened INSIDE the standby transition never "
+                "streams again).",
+    "cam_policies": "per-camera overrides of the two defaults above. "
+                     "follow global keeps a camera on the pair; off "
+                     "in both states parks that eye for good - it is "
+                     "never opened.",
     "live": "holds the camera open for this window at ~5 fps so the "
             "picture shows exactly what the detector judged. The hold "
             "is a lease: closing the window releases the device.",

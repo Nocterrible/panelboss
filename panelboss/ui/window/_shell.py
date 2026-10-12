@@ -42,6 +42,7 @@ from ._widgets import _WidgetsMixin
 from ._runtime import _RuntimeMixin
 from ._detection import _DetectionMixin
 from ._preview import _CameraMixin
+from ._camedit import _CamEditMixin
 from ._profiles import _ProfilesMixin
 from ._prof_editor import _EditorMixin
 from ._prof_apply import _ModeMixin
@@ -58,6 +59,7 @@ class SettingsWindow(
     _RuntimeMixin,
     _DetectionMixin,
     _CameraMixin,
+    _CamEditMixin,
     _ProfilesMixin,
     _EditorMixin,
     _ModeMixin,

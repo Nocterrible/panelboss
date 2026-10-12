@@ -74,6 +74,10 @@ class _CameraMixin:
                                      **self.skin.menu_style())
             menu.grid(row=0, column=1, sticky="e")
             menu.set(self._mode_label(self.cfg["camera"][key]))
+        # the per-camera policy rows ride below the global pair (the
+        # pair is the DEFAULT for rows left on follow global); the
+        # rows themselves are _camedit's - the size-law seam
+        self._build_cam_policy_zone(zone)
         row = self._row(zone, "live preview", TIPS["live"], hint_chars=42)
         self.live_switch = ctk.CTkSwitch(row, text="", font=self.skin.font(12),
                                          command=self._live_changed,
@@ -198,6 +202,10 @@ class _CameraMixin:
                 and not getattr(self, "_dep_asked", False)):
             self._dep_asked = True
             self._dep_prompt(switch=False)
+        # the per-camera editor mirrors the SAME scan: rebuild the
+        # rows from the tables (never from the outgoing widgets), so a
+        # rescan that renames the set can cannot strand stale rows
+        self._rebuild_cam_rows(found)
 
 
     def _draw(self, slot):

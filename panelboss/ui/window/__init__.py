@@ -61,6 +61,9 @@ from ._detection import \
 from ._preview import \
     _CameraMixin
 
+from ._camedit import \
+    _CamEditMixin
+
 from ._profiles import \
     _ProfilesMixin
 
@@ -105,6 +108,7 @@ __all__ = [
     "TIMER_SPECS",
     "TIPS",
     "WAIT_CHOICES",
+    "_CamEditMixin",
     "_CameraMixin",
     "_DetectionMixin",
     "_EditorMixin",
