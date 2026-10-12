@@ -48,12 +48,13 @@ TIPS = {
     "confidence": "how sure a detection must be before a frame counts "
                    "as a person. Applied to the next frame; no restart.",
     "min_hits": "consecutive positive frames before the screens wake - "
-                "any eye on duty may vote. The rotor never resets the "
-                "streak when cameras rotate (two votes may come from "
-                "different eyes); an unreadable or BLINDED camera "
-                "(another app holds it - a work call through NVIDIA "
-                "Broadcast - or the room is dark) abstains: no verdict, "
-                "adds nothing, resets nothing.",
+                "any eye on duty may vote. Presence is an OR: a warm "
+                "desk is never vetoed by an empty door, and the rotor "
+                "never resets the streak when cameras rotate (two votes "
+                "may come from different eyes). Absence is an AND - one "
+                "empty eye is noise; a reset needs every eye on duty to "
+                "have voted empty since the last sighting. An "
+                "abstaining (blind or dead) eye never joins that tally.",
     "frame changes": "share of the (downscaled) frame that must move "
                       "before a poll counts as motion. Applies "
                       "immediately.",
