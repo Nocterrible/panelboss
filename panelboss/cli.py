@@ -94,6 +94,87 @@ def _single_instance():
     return kernel32.GetLastError() != 183        # ERROR_ALREADY_EXISTS
 
 
+LOGIN_FRESH_SEC = 180      # how young the session must be for an
+                           # --autostart stamp to count as a real
+                           # login: the Run entry fires within seconds
+                           # of the shell, anything stamped on an
+                           # already-running session is a relaunch
+                           # wearing a login costume (Oct 12: twelve
+                           # fake login restores, each re-applying
+                           # modes, each a monitor flicker the owner
+                           # watched mid-work)
+
+
+def _session_age_sec():
+    """Seconds since the OUR-session explorer.exe was created - the
+    shell's birthday is the practical session birthday: winlogon is
+    the honest answer but a SYSTEM process an ordinary token cannot
+    OpenProcess (measured: ERROR_ACCESS_DENIED, and it misreported
+    its own session too). A mid-session explorer restart re-arms the
+    freshness - and re-launching the shell genuinely feels like a
+    re-logon to everything shell-started, so we agree with it.
+    None when unreadable: the caller trusts the stamp (fail open,
+    named: a real login must not lose its ceremony to a ctypes
+    stumble)."""
+    import ctypes.wintypes as wt
+    k32 = ctypes.windll.kernel32
+    sid = wt.DWORD()
+    if not k32.ProcessIdToSessionId(k32.GetCurrentProcessId(),
+                                    ctypes.byref(sid)):
+        return None
+
+    class PE(ctypes.Structure):
+        _fields_ = [("dwSize", wt.DWORD), ("cntUsage", wt.DWORD),
+                    ("th32ProcessID", wt.DWORD),
+                    ("th32DefaultHeapID", ctypes.c_void_p),
+                    ("th32ModuleID", wt.DWORD), ("cntThreads", wt.DWORD),
+                    ("th32ParentProcessID", wt.DWORD),
+                    ("pcPriClassBase", ctypes.c_long),
+                    ("dwFlags", wt.DWORD),
+                    ("szExeFile", wt.WCHAR * 260)]
+
+    # 64-bit discipline: default restypes truncate HANDLEs to int
+    k32.CreateToolhelp32Snapshot.restype = wt.HANDLE
+    k32.CreateToolhelp32Snapshot.argtypes = [wt.DWORD, wt.DWORD]
+    k32.Process32FirstW.argtypes = [wt.HANDLE, ctypes.c_void_p]
+    k32.Process32NextW.argtypes = [wt.HANDLE, ctypes.c_void_p]
+    k32.OpenProcess.restype = wt.HANDLE
+    k32.CloseHandle.argtypes = [wt.HANDLE]
+    k32.GetProcessTimes.argtypes = [wt.HANDLE] + \
+        [ctypes.POINTER(wt.FILETIME)] * 4
+    snap = k32.CreateToolhelp32Snapshot(0x2, 0)   # SNAPPROCESS, all
+    if not snap or ctypes.c_void_p(snap).value == ctypes.c_void_p(-1).value:
+        return None
+    pe = PE()
+    pe.dwSize = ctypes.sizeof(pe)
+    found = k32.Process32FirstW(snap, ctypes.byref(pe))
+    while found:
+        if pe.szExeFile.lower() == "explorer.exe":
+            esid = wt.DWORD()
+            if (k32.ProcessIdToSessionId(pe.th32ProcessID,
+                                         ctypes.byref(esid))
+                    and esid.value == sid.value):
+                h = k32.OpenProcess(0x1000, False,      # QUERY_LIMITED
+                                    pe.th32ProcessID)
+                if h:
+                    ct = wt.FILETIME()
+                    d = wt.FILETIME()
+                    if k32.GetProcessTimes(h, ctypes.byref(ct),
+                                           ctypes.byref(d),
+                                           ctypes.byref(d),
+                                           ctypes.byref(d)):
+                        k32.CloseHandle(h)
+                        k32.CloseHandle(snap)
+                        ft = (ct.dwHighDateTime << 32
+                              | ct.dwLowDateTime)
+                        unix = (ft - 116444736000000000) / 1e7
+                        return max(0.0, time.time() - unix)
+                    k32.CloseHandle(h)
+        found = k32.Process32NextW(snap, ctypes.byref(pe))
+    k32.CloseHandle(snap)
+    return None
+
+
 def _run(cfg, autostart=False):
     from . import state
     from . import startup
@@ -231,6 +312,23 @@ def _restore(cfg, autostart, icon):
             log.info("restore: manual start, and the box says "
                      "autostart only")
             return
+        fresh = True
+        if autostart:
+            age = _session_age_sec()
+            if age is None:
+                log.debug("restore: session age unread; trusting the "
+                          "stamp")           # fail open: a real login
+                #                      must not lose its ceremony to
+                #                      an unreadable clock
+            elif age > LOGIN_FRESH_SEC:
+                fresh = False                # the stamp lied (or an
+                log.info("restore: autostart stamp on a %d s old "
+                         "session - a relaunch wearing a login "
+                         "costume; no ceremony", int(age))
+                if want.get("when", "autostart") == "autostart":
+                    return                   # owner asked for LOGON
+                    #                        starts only: this is not
+                    #                        one
         time.sleep(5)              # let the first dust settle; the
                                    # rest of the storm waits inside
                                    # apply, before any launch
@@ -248,12 +346,12 @@ def _restore(cfg, autostart, icon):
             return
         ok, say, info = profiles.apply(data, name,
                                        scope=want.get("scope") or "full",
-                                       login=bool(autostart))
+                                       login=bool(autostart and fresh))
         lg = info.get("login") or {}
         if lg.get("delay_next"):
             say += " ; next login sits out %d s first" % lg["delay_next"]
         log.info("restore '%s' (%s): %s [%s]", name,
-                 "login" if autostart else "manual", say,
+                 "login" if (autostart and fresh) else "manual", say,
                  "ok" if ok else "not ok")
         icon.notify("profile restore: %s" % say[:180])
         missing = sorted({m["proc"] or m["title"]
