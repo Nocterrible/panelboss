@@ -12,6 +12,12 @@ private worker - the monitor's framebox carries the duty mosaic, not
 candidates, and driving the lease would rewrite the roster per cycle.
 Duty eyes release between polls under boot_per_poll; a still-busy
 device earns the honest busy line.
+
+SIZE LAW: 270, one window - the step machine and its borrowed-frame
+worker share one _gen/_dying lifecycle, and splitting the widget
+shell from the identity core would scatter a protocol debugged by
+reading top to bottom (the importable helpers the picker filter reuses
+stay module-level anyway).
 """
 
 from __future__ import annotations
