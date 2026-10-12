@@ -187,42 +187,46 @@ class SettingsWindow(
         self._build_profiles(self.pages["monitor profiles"].inner)
         self._build_power(self.pages["power plan"].inner)
         self._build_general(self.pages["general"].inner)
-        self._show_tab(self._tab)
+        # The layer law (owner, Oct 12: "tabbing just reveals them
+        # instead of fully redrawing them each time"): every page is
+        # placed ONCE into the body and stays mapped and painted for
+        # the life of the build - the overlap is the point, and
+        # relwidth/relheight track body resizes for free.
+        for p in self.pages.values():
+            p.place(in_=self._body, x=0, y=0, relwidth=1, relheight=1)
+        start = self._tab
+        self._tab = None               # fresh layers, undressed buttons:
+        self._show_tab(start)          # the first call must run past
+                                       # the guard (rebuild_for_skin
+                                       # lands here too)
 
 
     def _show_tab(self, key):
+        """The layer law (re-cut Oct 12, owner: "can we draw all
+        screens and just layer them behind each other so tabbing just
+        reveals them instead of fully redrawing them each time?"):
+        the pages were ALWAYS all built at boot; the crawl lived in
+        the pack_forget/pack remap - every CTk canvas re-renders on
+        re-map (issue #40 class). They now ride the body as
+        permanently mapped layers and a switch is ONE tkraise: no
+        unmap, no burst, so the switch veil, its forced update() and
+        its 120 ms lift die with the remap that needed them. The
+        boot/skin veils STAY: _show_first and rebuild_for_skin sweep
+        with real widget births, which no layering can hide."""
         page = self.pages[key]
-        if key == self._tab and page.winfo_manager():
-            return                     # the page is already up: a tab
-            # button on the visible tab must not unmap-and-remap the
-            # whole widget tree (repaint profile: the remap IS the cost)
-        real_switch = self._tab != key
-        if real_switch and self.winfo_viewable():
-            # A real tab change unmaps a whole built page and remaps
-            # another: every CTk canvas re-renders event by event on
-            # the VISIBLE window - the crawl the owner sees. The body
-            # veil rides the swap (relative mode: it tracks the body,
-            # and the body never dies here); the redraw burst lands
-            # under it inside the forced update, and the lift is
-            # ordered AFTER the redraws by the event queue itself.
-            # Timed short (120 ms cap via the tick watchdog's rules):
-            # a tab switch that flashes a cover longer than it crawls
-            # is worse than the crawl.
-            self._veil()
+        if key == self._tab and page.winfo_manager() == "place":
+            return                     # already the revealed layer: a
+            # click on the lit tab must not re-dress anything (build_all
+            # nulls _tab first, so a fresh build never trips this)
         self.tips.kill()                 # a tooltip anchored to a row
         self._tab = key                  # would float over the new page
-        for other in self.pages.values():
-            other.pack_forget()
-        page.pack(fill="both", expand=True)
+        page.tkraise()                   # THE WHOLE SWITCH
+        page.sync_region()               # belt for the wheel: geometry
+        # did not move under a raise, but this is exactly the seam
+        # _page_region's law says a re-measure belongs (one loop late)
         for k, b in self.tab_buttons.items():
             b.configure(**(self.skin.primary() if k == key
                           else self.skin.secondary()))
-        if real_switch and self.winfo_viewable():
-            try:
-                self.update()            # draw the new page UNDER cover
-            except Exception:
-                pass
-            self.after(120, self._unveil)
 
 
     def rebuild_for_skin(self):

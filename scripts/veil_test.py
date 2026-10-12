@@ -7,7 +7,10 @@ The veil now rides every map up to the first MANUAL open - an unasked
 boot map may veil (the sweep is worth hiding from any glance), but
 only a tray-open consumes the budget. Asserts both halves and that
 later opens stay pixel-instant (the DWM-surface reopen, owner-chosen).
-The window runs against a fake monitor; cameras are stubbed out."""
+The window runs against a fake monitor; cameras are stubbed out. The
+switch half of this file was re-cut the same day to layer-raise law
+(owner: "tabbing just reveals them"): pages ride the body as mapped
+layers and the checks assert the stack, not a cover."""
 import os
 import queue
 import sys
@@ -20,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from panelboss import config                        # noqa: E402
 from panelboss.ui.window import _shell              # noqa: E402
+from panelboss.ui.window._constants import TABS     # noqa: E402
 
 fails = []
 
@@ -108,6 +112,31 @@ events.put(("open", None))
 app._drain_ui_events()
 check(app._veil_lbl is None, "later opens stay pixel-instant")
 check(app.state() == "normal", "and the window is up")
+
+# (Oct 12 re-cut, owner: "tabbing just reveals them") the switch half
+# moved to layer law: no cover is BORN for a switch any more, and the
+# contract is the STACK - the switched-to page sits TOP of the body's
+# children (bottom-first list, law measured above), still mapped,
+# while the page it replaced rides back under.
+first, away = list(TABS)[1], list(TABS)[0]
+body = app._body
+app._show_tab(first)
+app.update()
+kids = body.winfo_children()
+check(app._veil_lbl is None, "a switch takes no cover any more")
+check(app.pages[first].winfo_ismapped()
+      and kids.index(app.pages[first]) == len(kids) - 1,
+      "switch raises the layer to the top of the body (enter)")
+app._show_tab(away)                     # away
+app.update()
+app._show_tab(first)                    # and BACK: the second entry
+kids = body.winfo_children()
+check(app._veil_lbl is None
+      and app.pages[first].winfo_ismapped()
+      and kids.index(app.pages[first]) == len(kids) - 1
+      and kids.index(app.pages[away]) < kids.index(app.pages[first]),
+      "switch raises the layer to the top of the body (re-enter)")
+app.update()
 
 app.destroy()
 print("veil-budget: %d failure(s)" % len(fails))

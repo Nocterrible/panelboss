@@ -420,19 +420,23 @@ def check():
         app._update_status(time.time(), None)
         assert app.mode_button.get() == "person (AI)", app.mode_button.get()
         assert rows["confidence"].winfo_manager() != "", "rows follow"
-        # tabs: exactly one page is ever visible. the probe is the
-        # MANAGED frame: customtkinter's page object delegates pack()
+        # tabs: the layer law (Oct 12 re-cut) - every page is placed
+        # for life and exclusivity moved from MANAGER to STACK: the
+        # visible tab is the TOP of the body's children (bottom-first
+        # list, measured in veil_test). The probe is still the
+        # managed frame: customtkinter's page object delegates pack()
         # down to _parent_frame, and its own winfo_manager forever
         # answers "canvas" (measured) - a probe there measures nothing
         managed = lambda k: app.pages[k]._parent_frame.winfo_manager()
+        top = lambda: app._body.winfo_children()[-1]
         app._show_tab("power plan")
         app.update_idletasks()
-        assert managed("power plan") == "pack"
-        assert managed("detection") == "" and managed("general") == ""
+        assert managed("power plan") == "place"
+        assert top() is app.pages["power plan"]
         app._show_tab("detection")
         app.update_idletasks()
-        assert managed("detection") == "pack"
-        assert managed("power plan") == ""
+        assert managed("detection") == "place"
+        assert top() is app.pages["detection"]
         # monitor profiles tab, live in this window (fake desk "T",
         # scratch store): the picker opens on create-new, create
         # captures the desk, pin rows tag the monitor they sit on,
@@ -443,8 +447,8 @@ def check():
             _clock.monotonic() - _T0), flush=True)
         app._show_tab("monitor profiles")
         app.update_idletasks()
-        assert managed("monitor profiles") == "pack"
-        assert managed("detection") == ""
+        assert managed("monitor profiles") == "place"
+        assert top() is app.pages["monitor profiles"]
         assert app.profile_menu.get() == PF.NEW, app.profile_menu.get()
         assert app.rescue_button.winfo_manager() != ""
         app._prof_name.insert(0, "test desk")
