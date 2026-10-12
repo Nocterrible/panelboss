@@ -10,6 +10,11 @@
   standby transition: an open issued DURING the panels' sleep can come
   back open-yet-frozen forever (measured), so we never close across it,
   and any handle that stops delivering frames is released and reopened
+
+SIZE LAW: ~550 lines, grandfathered - Camera (device+warmup) and the
+Rotor (rotation+async opens) share the module-level _open_lock and the
+enumeration cache; splitting now buys two files that must re-declare
+that shared state. The seam is known: Rotor+helpers out first.
 """
 
 from __future__ import annotations
@@ -350,6 +355,11 @@ class RotatingCamera:
         self.last_opened = False         # True only when that vote came
                                          # with a frame
         self.started = time.perf_counter()
+        self._inflight = {}              # index -> bg-open thread (the
+                                         # preview lease's private seam)
+        self._gen = 0                    # release() bumps it: every open
+                                         # still in flight goes STALE
+        self._async_lock = threading.Lock()
 
     def _mode_for(self, index, mode):
         """This index's vote mode right now. No policy: the single mode
@@ -385,6 +395,70 @@ class RotatingCamera:
                      index)
             return None
         return cam
+
+    def open_async(self, index):
+        """The preview lease's seam: a live handle now, or a background
+        open and None for this tick. The tick must never block on a
+        slow driver (a 38 s enumeration was measured), so the eye that
+        is not open yet opens on its own thread and the mosaic labels
+        it "opening" until it lands. The open itself is the SAME _open
+        the vote calls, so the driver sees the same serialised opens -
+        only the tick's wait is gone. A failed open records nothing:
+        the next tick retries, exactly as the old synchronous block
+        retried, and _open already logged the abstain."""
+        cam = self.cameras.get(index)
+        if cam is not None and cam.is_open():
+            return cam
+        with self._async_lock:
+            cam = self.cameras.get(index)
+            if cam is not None and cam.is_open():
+                return cam
+            if self._inflight.get(index) is not None:
+                return None             # an open for this eye is running
+            gen = self._gen
+            th = threading.Thread(target=self._open_bg,
+                                  args=(index, gen), daemon=True,
+                                  name="cam-open-%s" % index)
+            self._inflight[index] = th
+        log.info("camera %d opening in background", index)
+        try:
+            th.start()
+        except Exception:                # thread exhaustion (or a policy
+            with self._async_lock:       # refusal): the registration must
+                self._inflight.pop(index, None)   # not strand the eye
+            raise                        # "opening" with no worker
+        return None
+
+    def _open_bg(self, index, gen):
+        """open_async's worker: _open, warm up, and only THEN decide
+        whether the handle is still wanted. The publish and the stale
+        check share one lock with _invalidate, so a concurrent
+        release() can neither miss a handle this thread publishes nor
+        be missed: a lease that ended mid-open makes this thread
+        release the handle it just paid for - the LED never keeps an
+        orphan."""
+        try:
+            cam = self._open(index)
+            if cam is not None:
+                try:
+                    cam.warm_up()       # settled frames or an honest
+                except Exception:       # hole: an unwarmed eye reads
+                    pass                # dark and lies (gate finding 3)
+        except Exception:
+            cam = None
+        with self._async_lock:
+            self._inflight.pop(index, None)
+            stale = self._gen != gen
+            if cam is not None and not stale:
+                self.cameras[index] = cam
+        if cam is not None and stale:
+            cam.release()
+
+    def _invalidate(self):
+        """Make every open still in flight stale: whoever finishes from
+        here on releases its own fresh handle and drops it."""
+        with self._async_lock:
+            self._gen += 1
 
     def warm_up(self, frames=None):
         """Settle the auto-exposure of ONE camera only: the one whose
@@ -475,7 +549,10 @@ class RotatingCamera:
         return frame
 
     def release(self):
-        for cam in self.cameras.values():
+        self._invalidate()               # FIRST: an open still in
+        # flight must release its own fresh handle - a lease that dies
+        # mid-open leaves no orphan LED behind.
+        for cam in list(self.cameras.values()):
             if cam is not None:
                 cam.release()
         self.cameras.clear()

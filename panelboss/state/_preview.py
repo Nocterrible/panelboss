@@ -56,6 +56,11 @@ class _PreviewMixin:
                 self._preview_mosaic(rot)
                 return
         if self.camera is None or not self.camera.is_open():
+            # SYNC on purpose: a single-eye desk boots the one eye it
+            # will poll anyway, so this wait is the same one the normal
+            # poll already pays. If a single-eye desk ever complains,
+            # the mosaic path below is the model (rotor.open_async,
+            # labeled holes, progressive fill).
             self._hold_camera()
             if self.camera is None or not self.camera.is_open():
                 return                                 # still booting
@@ -73,9 +78,13 @@ class _PreviewMixin:
         preview is allowed to look; only a PERMANENTLY off index (off
         in both tables, an eye this app will never need) stays a
         labeled hole, unopened. A tile whose frame did not arrive is
-        labeled, not faked. Release of all of it is the lease-end
-        _release_camera the single path already uses (the rotor lets
-        go of every sub-cam it holds)."""
+        labeled, not faked: an eye the lease does not hold yet opens on
+        its own thread (rotor.open_async) and carries "opening" until
+        it lands, so the wall appears with the fast eye and fills in -
+        the tick never blocks on a slow driver. Release of all of it is
+        the lease-end _release_camera the single path already uses (the
+        rotor lets go of every sub-cam it holds, and _invalidate makes
+        an open that was still in flight release its own fresh handle)."""
         import cv2
         import numpy as np
         from PIL import Image
@@ -90,17 +99,17 @@ class _PreviewMixin:
                 continue
             cam = rot.cameras.get(index)
             if cam is None or not cam.is_open():
-                cam = rot._open(index)
-                rot.cameras[index] = cam
-                if cam is not None:
-                    try:
-                        cam.warm_up()    # settled frames or an honest
-                    except Exception:    # "closed": an unwarmed eye
-                        pass             # reads dark and lies (gate
-                                         # finding 3)
-            frame = None
-            if cam is not None and cam.is_open():
-                frame = cam.read()
+                # Never wait for an eye: rotor.open_async opens it on
+                # its own thread and this tick shows a labeled hole.
+                # The fast eye lands on the wall at once, the slow one
+                # fills in when its driver lets go (38 s was measured)
+                # - the tile says "opening" until then, labeled, not
+                # faked.
+                rot.open_async(index)
+                frames[index] = None
+                labels[index] = "opening"
+                continue
+            frame = cam.read()
             if frame is None:
                 frames[index] = None
                 labels[index] = "closed"
@@ -114,6 +123,9 @@ class _PreviewMixin:
             frames[index] = Image.fromarray(
                 cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             labels[index] = label
+        # every tick composes: an all-"opening" wall beats freezing the
+        # last pre-lease frame for 38 s and letting a stale picture read
+        # as live (gate finding; preview_grid paints the labeled holes)
         tile_w = max(160, int(self.cfg.get("ui", {}).get(
             "preview_width", 420)) // 2)
         mosaic = preview_grid.compose(frames, labels, tile_w=tile_w)

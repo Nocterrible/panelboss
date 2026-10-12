@@ -14,9 +14,9 @@ framebox the single-camera preview already uses; the settings window
 draws whatever arrives and never learns the difference.
 
 An empty tile does not freeze and does not go black in silence: it
-states its reason ("closed", "off", "degraded poll"), and the header
-strip above every tile names what the eye IS, so a tile can never
-fake a mode it is not running in.
+states its reason ("opening", "closed", "off", "degraded poll"), and
+the header strip above every tile names what the eye IS, so a tile can
+never fake a mode it is not running in.
 """
 
 from __future__ import annotations

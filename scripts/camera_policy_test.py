@@ -106,6 +106,20 @@ def fresh_monitor(cfg):
     return mon
 
 
+def drain_open(m):
+    """Join the preview lease's background opens: the async contract
+    is tick 1 spawns, tick 2 composes; a test that wants "the wall"
+    after the spawn has to let the workers land first."""
+    rot = m.camera
+    while True:
+        with rot._async_lock:            # lock-free reads can see a
+            th = [t for t in list(rot._inflight.values())   # popped
+                  if t is not None and t.is_alive()]        # pre-publish
+        if not th:
+            return
+        th[0].join(10)
+
+
 def scratch_cfg(camera_toml):
     d = tempfile.mkdtemp(prefix="panelboss_policy_")
     with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
@@ -195,7 +209,9 @@ try:
     assert instances and all(c.index == 1 for c in instances), \
         "the off eye never opened for a vote"
     m.detector = Det()
-    m._preview(clock.t)
+    m._preview(clock.t)                  # async contract: tick 1 spawns
+    drain_open(m)
+    m._preview(clock.t)                  # tick 2 composes
     assert any(c.index == 2 for c in instances), \
         "the lease CAN open the eye the walk skips"
     slot = m.framebox.get()
@@ -218,7 +234,9 @@ try:
     m = fresh_monitor(cfg)
     m.state = "counting"
     instances.clear()
-    m._preview(clock.t)
+    m._preview(clock.t)                  # spawn tick
+    drain_open(m)
+    m._preview(clock.t)                  # compose tick
     assert not any(c.index == 2 for c in instances), \
         "a permanently-off eye is never opened, lease included"
     assert m.framebox.get() is not None, "the wall still composed"
