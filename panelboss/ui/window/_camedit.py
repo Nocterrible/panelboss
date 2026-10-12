@@ -1,11 +1,16 @@
-"""Per-camera policy editor (UI-1e): one row per scanned camera in
-the camera card, so enabling a second eye never means editing
-config.toml. The rows write the engine's OWN tables -
+"""Per-camera policy editor (UI-1e, corrected by owner review): rows
+follow the ROSTER, not the scan - a camera appears here only after
+the picker adds it to duty, and the picker (which then disappears
+from the menu, killing the old redundancy) is how a second eye
+joins at all. The rows write the engine's OWN tables -
 cfg["camera"]["on"] / ["off"], {index: mode} over CAMERA_MODES -
 which is exactly what state/_policy._table_mode resolves (an absent
 index inherits that table's global) and exactly what
 config.write_config emits as [camera.on] / [camera.off] with string
-keys. The widgets are a view; the tables are the truth, so every
+keys. A freshly added camera has no entries, so it starts at
+follow-global (owner: never a silent "off"); REMOVE drops it from
+the roster and wipes its entries, so re-adding is pristine.
+The widgets are a view; the tables are the truth, so every
 rebuild re-reads them, never the old widgets.
 """
 
@@ -25,6 +30,19 @@ TO_MODE = {"boot per poll": "boot_per_poll", "always on": "always_on",
            "off": "off"}
 TO_LABEL = {mode: label for label, mode in TO_MODE.items()}
 FOLLOW = POLICY_LABELS[0]
+ADD_LABEL = "add a camera..."       # the picker's face and no-op verb
+
+
+def duty_roster(camera_cfg):
+    """The roster VERBATIM, not through config.normalize_index: its
+    "empty means the stock default" guard fits loading a file, but an
+    empty list the window just wrote (removing the last camera) must
+    display as honest empty duty, and the bare-int shape (-2/-1
+    sentinels, historic single camera) reads as the one camera."""
+    value = camera_cfg.get("index", 0)
+    if isinstance(value, (list, tuple)):
+        return [int(i) for i in value]
+    return [int(value)]
 NAME_CLIP = 24                    # "cam 0 <name>" must survive the 320
                                   # px zone; the id never clips, only
                                   # the name does
@@ -57,13 +75,14 @@ class _CamEditMixin:
         for widget in self._cam_rows_frame.winfo_children():
             widget.destroy()
         self._cam_rows = {}
+        roster = set(duty_roster(self.cfg["camera"]))
         for entry in found:
             index, name = entry[0], entry[3]
-            if isinstance(index, int) and index >= 0:
+            if isinstance(index, int) and index in roster:
                 self._cam_row(index, name)
         if not self._cam_rows:
             ctk.CTkLabel(self._cam_rows_frame,
-                         text="no cameras to list - rescan",
+                         text="no cameras on duty - add one above",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(anchor="w")
 
@@ -74,16 +93,30 @@ class _CamEditMixin:
         rhythm)."""
         row = ctk.CTkFrame(self._cam_rows_frame, fg_color="transparent")
         row.pack(fill="x", pady=(theme.S_FIELD, 0))
+        row.grid_columnconfigure(0, weight=1)
         title = "cam %s" % index
         if name:
             title += " · %s" % str(name)[:NAME_CLIP]
         head = ctk.CTkLabel(row, text=title, font=self.skin.font(12),
                             **self.skin.text_style())
-        head.pack(anchor="w")
+        head.grid(row=0, column=0, sticky="w")
+        # every duty camera owns its exit: removal drops it from the
+        # roster AND wipes its table entries, so re-adding starts
+        # pristine at follow-global (owner's rule, no silent offs)
+        ctk.CTkButton(row, text="remove", width=64,
+                      font=self.skin.font(11),
+                      command=self._cam_remove(index),
+                      **self.skin.secondary()).grid(
+            row=0, column=1, sticky="e")
         menus = {}
-        for table, label in (("on", "while on"), ("off", "while off")):
+        for n, (table, label) in enumerate((("on", "while on"),
+                                            ("off", "while off"))):
+            # the line frames ride the SAME manager as the header (a
+            # grid frame may not host pack slaves); full width under
+            # both header columns keeps the label-left combo-right
+            # rhythm the columnconfigure weight buys
             line = ctk.CTkFrame(row, fg_color="transparent")
-            line.pack(fill="x")
+            line.grid(row=1 + n, column=0, columnspan=2, sticky="we")
             line.grid_columnconfigure(0, weight=1)
             ctk.CTkLabel(line, text=label, font=self.skin.font(11),
                          **self.skin.text_style("sub")).grid(
@@ -98,6 +131,20 @@ class _CamEditMixin:
         self._cam_rows[index] = {"head": head, "menus": menus,
                                  "title": title}
         self._cam_dim(index)
+
+    def _cam_remove(self, index):
+        def command():
+            roster = [i for i in duty_roster(self.cfg["camera"])
+                      if i != index]
+            self.cfg["camera"]["index"] = roster
+            for table in ("on", "off"):
+                entries = self.cfg["camera"].get(table)
+                if isinstance(entries, dict):
+                    entries.pop(index, None)   # re-add starts pristine
+            self.monitor.events.put(("camera", list(roster)))
+            self._apply_cameras(self._cams)    # row gone, menu regains
+            self._save()
+        return command
 
     def _cam_refresh(self):
         """Re-run every row's dim/duty verdict: any change to the
@@ -147,16 +194,6 @@ class _CamEditMixin:
                and self._cam_table_mode(index, "off") == "off")
         row["head"].configure(**self.skin.text_style(
             "disabled" if off else "text"))
-        # duty truth, recomputed exactly as the engine roster reads
-        # it: a policy on an off-roster camera persists and displays,
-        # but the camera cannot vote until the picker (or TOML) puts
-        # it on - the row says so rather than letting the policy
-        # look silently live
-        from ... import config as _cfg
-        try:
-            on_duty = index in _cfg.normalize_index(
-                self.cfg["camera"].get("index", 0))
-        except Exception:
-            on_duty = True
-        row["head"].configure(text=row["title"] + (
-            "" if on_duty else "  ·  not on duty"))
+        # duty needs no badge here: rows exist ONLY for roster members
+        # (owner review); an off-roster camera is not listed at all,
+        # and the picker offers it again

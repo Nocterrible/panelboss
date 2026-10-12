@@ -219,10 +219,11 @@ TIPS = {
                     "the slowest observed boot + 20 s (never under "
                     "30 s), and every 'open it' is 60 s more "
                     "patient than its own number.",
-    "camera": "which camera the frames come from. Opening every index "
-               "is slow (the virtual camera alone takes 16 s), so the "
-               "list fills in after the window opens and rescans on "
-               "demand.",
+    "camera": "picks ADD a camera to duty; on-duty cameras show as "
+               "policy rows below (and leave this menu). Opening every "
+               "index is slow (the virtual camera alone takes 16 s), "
+               "so the list fills in after the window opens and "
+               "rescans on demand.",
     "cam_on": "the screens-on default for cameras set to follow "
                "global: boot per poll rests the LED, always on streams "
                "through the standby transition.",
@@ -231,9 +232,10 @@ TIPS = {
                 "device reopened INSIDE the standby transition never "
                 "streams again).",
     "cam_policies": "per-camera overrides of the two defaults above. "
-                     "follow global keeps a camera on the pair; off "
-                     "in both states parks that eye for good - it is "
-                     "never opened.",
+                    "a camera joins this list when the menu adds it, "
+                    "starting at follow global; remove takes it off "
+                    "duty and wipes its overrides, so re-adding is "
+                    "pristine.",
     "live": "holds the camera open for this window at ~5 fps so the "
             "picture shows exactly what the detector judged. The hold "
             "is a lease: closing the window releases the device.",

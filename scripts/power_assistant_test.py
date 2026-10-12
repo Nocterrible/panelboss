@@ -662,7 +662,16 @@ def check():
         # camera alone; config pointing at -2 without the bridge asks
         # by itself once; installing = the same updater, deps flag
         from panelboss import camera as cam
-        found = [(0, True, 1280, "Integrated Camera")]
+        # OWNER MODEL (UI-1e v2): the picker is an ADD widget - the
+        # values are ["add a camera...", ...unrostered cams..., IR
+        # entries] (on-duty cams own policy rows, not menu lines);
+        # picking a cam APPENDS to the roster and the event carries
+        # the whole list ("camera", [list]); the bare-int hello-IR
+        # sentinel path ("camera", -2) is UNCHANGED. The old pins
+        # below retarget from replace-picker to add-picker - no
+        # non-camera assertion touched.
+        found = [(0, True, 1280, "Integrated Camera"),
+                 (1, True, 640, "Logitech Webcam C270")]
         real_present, real_names = cam.optional_present, cam.hello_ir_names
         idx0 = cfg["camera"]["index"]
         cfg["camera"]["index"] = 0
@@ -671,12 +680,21 @@ def check():
             cam.hello_ir_names = lambda: []
             app._apply_cameras(found)
             vals = app.camera_menu.cget("values")
-            assert vals[0].startswith("index 0"), vals
+            assert vals[0] == "add a camera...", vals
+            assert any(v.startswith("index 1 ") for v in vals), vals
+            assert not any(v.startswith("index 0 ") for v in vals), vals
             assert W.SettingsWindow.IR_INSTALL in vals, vals
             app._camera_changed(W.SettingsWindow.IR_INSTALL)
             assert cfg["camera"]["index"] == 0, "invitation is not a camera"
             assert app._dep_win is not None and app._dep_win.winfo_exists()
             app._dep_win.destroy()
+            # the add beside the veteran: roster list, list-event,
+            # both rows, and the joiner leaves the menu (it is on duty)
+            app._camera_changed("index 1 (640 px) Logitech Webcam C270")
+            assert cfg["camera"]["index"] == [0, 1], cfg["camera"]["index"]
+            assert ("camera", [0, 1]) in list(fm.events.queue), \
+                list(fm.events.queue)
+            assert set(app._cam_rows) == {0, 1}, sorted(app._cam_rows)
             cam.optional_present = lambda name: True
             cam.hello_ir_names = lambda: ["Windows Hello Contextual Cam"]
             app._apply_cameras(found)

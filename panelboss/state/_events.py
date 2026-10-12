@@ -179,12 +179,18 @@ class _EventsMixin:
                 config.write_config(self.cfg)
                 log.info("assistant flag written to disk: %s", bool(value))
             elif action == "camera":
-                self.camera_cfg["index"] = int(value)
+                # value is either a bare int (one camera, or the IR
+                # sentinels - the historic contract) or the full
+                # rotation LIST the window assembles when a camera is
+                # ADDED beside the current ones
+                self.camera_cfg["index"] = (
+                    list(value) if isinstance(value, (list, tuple))
+                    else int(value))
                 self._release_camera()             # the next poll opens the
                                                    # chosen one
                 from .. import config
                 config.write_config(self.cfg)
-                log.info("camera switched to index %s", value)
+                log.info("camera roster now %s", self.camera_cfg["index"])
             elif action == "device":
                 self.inference_cfg["device"] = value
                 self._rebuild_detector()        # cpu<->gpu swap

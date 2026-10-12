@@ -12,7 +12,7 @@ import customtkinter as ctk
 from PIL import Image
 
 from .. import theme
-from ... import config
+from ._camedit import ADD_LABEL, duty_roster
 from ._constants import TIPS
 from ._widgets import SkewCombo
 
@@ -121,16 +121,25 @@ class _CameraMixin:
 
     def _camera_changed(self, shown):
         from ... import camera
+        if shown == ADD_LABEL:
+            return                        # the widget's face, not a wish
         if shown == self.IR_INSTALL:
             self._apply_cameras(self._cams)   # undo the menu choice -
             self._dep_prompt(switch=True)     # picking the invitation
             return                            # is not picking a camera
         for entry in (self._cams or []):
             if shown.startswith("index %s " % entry[0]):
-                self.cfg["camera"]["index"] = entry[0]
-                self.monitor.events.put(("camera", entry[0]))
-                self._cam_refresh()          # duty labels follow the
-                self._save()                 # roster the same instant
+                # picking ADDS to duty beside the current roster -
+                # it never replaces (owner): joining cameras should
+                # not send the veterans home, and the engine rotates
+                # the whole list (one vote per poll, multi_cam_test)
+                roster = duty_roster(self.cfg["camera"])
+                if entry[0] not in roster:
+                    roster.append(entry[0])
+                self.cfg["camera"]["index"] = roster
+                self.monitor.events.put(("camera", list(roster)))
+                self._apply_cameras(self._cams)   # row + picker rebuild
+                self._save()
                 return
         if shown.startswith("index %s" % camera.HELLO_IR):
             # "index -2 hello IR <group>": the bridge lives, the wish
@@ -171,14 +180,21 @@ class _CameraMixin:
     def _apply_cameras(self, found):
         from ... import camera
         self._cams = found
+        # the picker is an ADD widget: on-duty cameras own policy rows
+        # below, not menu lines (the old listing was the redundancy
+        # the owner named); rostered entries vanish from the menu
+        roster = set(duty_roster(self.cfg["camera"]))
         labels = []
         for index, opened, width, name in found:
+            if index in roster and index >= 0:
+                continue
             label = "index %s (%s px)" % (index, int(width))
             if name:
                 label += " %s" % name
             labels.append(label)
-        if not labels:
+        if not found:
             labels = ["no camera opens"]
+        labels.insert(0, ADD_LABEL)
         # the hello IR entry rides on the end either way: the real
         # groups when the whircam bridge lives, an invitation when it
         # does not - the feature must be reachable without ever
@@ -190,17 +206,21 @@ class _CameraMixin:
         else:
             labels.append(self.IR_INSTALL)
         self.camera_menu.configure(values=labels)
-        # the roster may be a list (multi-camera); the picker is a
-        # one-choice widget, so it shows the rotation's first post
-        # and picking any single entry collapses the roster onto it
-        current = config.normalize_index(self.cfg["camera"]["index"])[0]
-        want = self.IR_INSTALL if current == camera.HELLO_IR else None
-        for label in labels:
-            if label == want or \
-                    label.startswith("index %s " % current) or \
-                    label == "index %s" % current:
-                self._set_menu(self.camera_menu, label)
-                break
+        # an ADD widget wears its verb: the face is the invitation,
+        # never a selection echo (duty is visible as policy rows
+        # below); the ONE exception is hello IR, which has no row
+        # machinery and must keep showing as the chosen eye
+        roster_list = duty_roster(self.cfg["camera"])
+        current = roster_list[0] if roster_list else -1
+        self._set_menu(self.camera_menu, ADD_LABEL)
+        if current == camera.HELLO_IR:
+            want = self.IR_INSTALL if not camera.optional_present(
+                "whircam") else None
+            for label in labels:
+                if label == want or label.startswith(
+                        "index %s" % camera.HELLO_IR):
+                    self._set_menu(self.camera_menu, label)
+                    break
         # config already points at hello IR but the bridge is missing
         # (a hand-edited config, or a venv rebuilt without -Optional):
         # the camera would only fail into the log - ask instead, once
