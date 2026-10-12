@@ -80,7 +80,10 @@ class _PreviewMixin:
                 if op.inflight_live(now):
                     self._pin_lease()
                 return
-        frame = self.camera.read()
+        # screen=0: the wall shows whatever the stream serves at lease
+        # cadence - screening a preview tile would stall the mosaic
+        # (the vote path keeps its 2 s; it runs every 10-60 s)
+        frame = self.camera.read(screen=0)
         if frame is None:
             return
         boxes, scores = self.detector.detect(frame)
@@ -167,7 +170,10 @@ class _PreviewMixin:
                 labels[index] = ("opening" if age is None
                                  else "opening %ds" % min(int(age), 999))
                 continue
-            frame = cam.read()
+            # screen=0: the wall must never stall the lease cadence on
+            # an intermittently black stream - screening is the VOTE's
+            # medicine, not the mosaic's
+            frame = cam.read(screen=0)
             if frame is None:
                 frames[index] = None
                 labels[index] = "closed"

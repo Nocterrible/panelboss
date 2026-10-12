@@ -11,7 +11,7 @@
   back open-yet-frozen forever (measured), so we never close across it,
   and any handle that stops delivering frames is released and reopened
 
-SIZE LAW: ~790 lines, grandfathered - Camera (device+warmup) and the
+SIZE LAW: ~1000 lines, grandfathered - Camera (device+warmup) and the
 Rotor (rotation+async opens) share the module-level _open_lock and the
 enumeration cache; splitting now buys two files that must re-declare
 that shared state. The known seam paid its first dividend Oct 12: the
@@ -49,6 +49,14 @@ BLACK_CEIL = 16      # a frame whose brightest pixel is below this is
                      # (owner doctrine Oct 12; _delivers and the vote
                      # path share the number so the two verdicts can
                      # never drift apart)
+
+SCREEN_SEC = 2.0     # the black-screening budget: a stream that
+                     # serves black is re-read until this window
+                     # closes before we call the eye blind (owner:
+                     # "take a 2 second sample... feed anything
+                     # bright to the model"). The budget only pays
+                     # when black actually happens: a bright frame
+                     # short-circuits at the first read.
 
 
 def _set_props(cap, width, height):
@@ -299,7 +307,12 @@ class HelloIrCamera:
                 got += 1
         return got
 
-    def read(self, timeout=3):
+    def read(self, timeout=3, screen=None):
+        # NOTE (Oct 12 screening): this read keeps its own shape - the
+        # pump's timeout semantics differ from the cv2 stream's - it
+        # just ACCEPTS the screen kwarg so the preview seam's uniform
+        # screen=0 opt-out cannot TypeError on an IR desk. No screening
+        # here: the bridge either has a frame or it does not.
         try:
             ok, frame = self._cam.read(timeout=timeout)
         except RuntimeError:            # pump crashed mid-poll: dead
@@ -371,25 +384,83 @@ class Camera:
         elapsed = time.perf_counter() - self.started
         log.debug("camera %s opened after %.2f s", index, elapsed)
 
+    def _read_raw(self):
+        """one frame from the cap, no screening, exception-honest
+        (the zombie-driver shape _delivers already guards)."""
+        try:
+            ok, frame = self.cap.read()
+        except Exception:
+            return None
+        return frame if ok else None
+
     def warm_up(self, frames=None):
-        """Discard the auto-exposure settle frames."""
+        """Discard the auto-exposure settle frames - screened
+        through: a stream that starts black (AE settle, MJPEG
+        keyframe wait) gets SCREEN_SEC of re-reads BEFORE the handle
+        is published, so the AsyncOpener worker never hands the vote
+        a black-headed stream. Once lit (or screened out), finish
+        discarding the warmup frames - a bright stream's behavior and
+        count are the old ones."""
         frames = self.warmup if frames is None else frames
-        got = 0
-        for _ in range(frames):
-            ok, _frame = self.cap.read()
-            if ok:
+        blacks = 0
+        first = None
+        screen_until = time.monotonic() + SCREEN_SEC
+        while first is None and time.monotonic() < screen_until:
+            frame = self._read_raw()
+            if frame is not None:
+                if int(frame.max()) >= BLACK_CEIL:
+                    first = frame
+                else:
+                    blacks += 1
+            if first is None:
+                time.sleep(0.03)
+        if blacks and not getattr(self, "_screen_logged", False):
+            self._screen_logged = True
+            log.info("camera %d stream intermittently black: "
+                     "%d black frames screened in %.1f s",
+                     self.index, blacks,
+                     time.perf_counter() - self.started)
+        got = 1 if first is not None else 0
+        for _ in range(max(frames - got, 0)):
+            if self._read_raw() is not None:
                 got += 1
         return got
 
-    def read(self, timeout=3):
-        """One frame, or None when the device died mid-poll."""
+    def read(self, timeout=3, screen=None):
+        """One frame. A BLACK frame (the stream intermittently dark -
+        AE settle, MJPEG keyframe wait, KVM USB jitter - or a genuinely
+        dark room) is screened through: keep sampling while the screen
+        budget lasts; the first BRIGHT frame wins. Budget exhausted on
+        all-black = return the black frame anyway (the caller's abstain
+        doctrine then applies - blind AFTER screening is an honest
+        verdict, blind on first sight was the bug). screen=0 opts out
+        (the preview tiles: a human decides what black means, and the
+        mosaic must never stall the lease cadence)."""
+        screen = SCREEN_SEC if screen is None else screen
         deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            ok, frame = self.cap.read()
-            if ok:
-                return frame
-            time.sleep(0.05)
-        return None
+        screen_until = (time.monotonic() + min(screen, timeout)
+                        if screen else 0.0)
+        last = None
+        blacks = 0
+        while True:
+            frame = self._read_raw()
+            if frame is not None:
+                last = frame
+                if int(frame.max()) >= BLACK_CEIL:
+                    if blacks and not getattr(self, "_screen_logged",
+                                              False):
+                        self._screen_logged = True
+                        log.info("camera %d stream intermittently "
+                                 "black: %d black frames screened in "
+                                 "%.1f s", self.index, blacks,
+                                 time.perf_counter() - self.started)
+                    return frame
+                blacks += 1
+            if time.monotonic() >= (screen_until if last is None or
+                                    blacks else deadline):
+                break
+            time.sleep(0.03)
+        return last
 
     def release(self):
         if self.cap is not None:
