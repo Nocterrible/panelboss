@@ -3,6 +3,7 @@ Formerly wm.py lines 903-951. v2 (RDP incident, Oct 11): a sliver
 inside the canvas counts as lost, and minimized windows get their
 stale restore spot repaired without ever being un-minimized."""
 
+import ctypes
 import logging
 
 from ._inspect import _toplevel_facts
@@ -80,7 +81,7 @@ def rescue_lost():
     if not mons:
         return []
     prim = next((m for m in mons if m["primary"]), mons[0])
-    brought, repaired = [], []
+    brought, repaired, denied = [], [], []
     for w in _toplevel_facts():
         if not w["visible"] or w["cloaked"] or w["furniture"]:
             continue
@@ -104,11 +105,21 @@ def rescue_lost():
         if u32.SetWindowPos(w["hwnd"], None, nx, ny, cx, cy,
                             SWP_NOACTIVATE | SWP_SHOWWINDOW):
             brought.append(name)
+        elif ctypes.GetLastError() == 5:        # ERROR_ACCESS_DENIED:
+            # an elevated window above our integrity (UIPI) - the
+            # rescue is not blind, it is out-ranked. Say which, and
+            # say why: a silent miss reads as a broken tool, which
+            # is exactly what the owner experienced with an
+            # elevated Task Manager at 22:27.
+            denied.append("(denied: elevated) " + name)
     msg = []
     if brought:
         msg.append("brought back " + ", ".join(brought))
     if repaired:
         msg.append("re-stored the off-desk spot of " + ", ".join(repaired))
+    if denied:
+        msg.append("out-ranked by " + ", ".join(denied))
     log.info("rescue: %s", "; ".join(msg)[:300] if msg
              else "nothing was off screen")
-    return brought + ["(min) " + n for n in repaired]
+    return (brought + ["(min) " + n for n in repaired]
+            + denied)
