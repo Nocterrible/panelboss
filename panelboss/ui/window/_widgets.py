@@ -128,7 +128,7 @@ class SkewCombo(tk.Menubutton):
     _IGNORED = ("fg_color", "button_color", "button_hover_color",
                 "text_color", "corner_radius", "dropdown_fg_color",
                 "dropdown_hover_color", "dropdown_text_color",
-                "height", "anchor")
+                "height", "anchor", "font")
 
     def __init__(self, master, values=(), width=None, command=None,
                  **style):

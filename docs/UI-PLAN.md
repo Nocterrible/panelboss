@@ -147,3 +147,13 @@ one or two parts; the suites are the contract.
   bare tk and bare CTk fine; passed again once the container
   cycled the camera. A Display Container restart was the planned
   fix and turned out unnecessary - note it as the escalation path.
+- Fonts: modern skin = Segoe UI (Win11-native, DirectWrite); the
+  CTk-default bundled Roboto under GDI was the terminal-y look.
+  menu_style() carries font so SkewCombo follows; tk.Text boxes
+  already took call-site fonts (Courier avoided). Fun: Consolas
+  stays, deliberate.
+- Veil v2 (owner caught v1 missing the actual complaint): the CTk
+  root maps AT BIRTH; __init__ withdraws first act, _show_first
+  does the one veiled first map (full client, timed 300 ms lift).
+  Startup, tray-open-after-minimized and skin-rebuild are all
+  covered; reopens stay pixel-instant via the DWM surface.

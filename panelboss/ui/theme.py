@@ -114,7 +114,8 @@ class Skin:
                     button_hover_color=self.button_hover,
                     dropdown_fg_color=self.panel,
                     dropdown_hover_color=self.button_hover,
-                    text_color=self.text, corner_radius=self.radius)
+                    text_color=self.text, corner_radius=self.radius,
+                    font=self.font(13))
 
     def switch_style(self):
         # one dict for the eight CTkSwitch call sites (they used to
@@ -148,6 +149,11 @@ class Skin:
 MODERN = Skin(
     key="modern", label="modern", mode="dark",
     # the defaults above ARE the modern skin; only identity is set here
+    # - except the font: the CTk default (bundled Roboto, GDI-unhinted)
+    # reads terminal-y at our sizes; Segoe UI is the native Win11
+    # settings font, DirectWrite-hinted, and matches the OS chrome the
+    # window's own title bar already uses
+    font_family="Segoe UI",
 )
 
 # The fun skin is a palette stub. Its full look (art, fonts, corner

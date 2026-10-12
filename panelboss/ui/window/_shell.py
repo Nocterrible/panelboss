@@ -74,6 +74,12 @@ class SettingsWindow(
 
     def __init__(self, cfg, monitor, ui_events):
         super().__init__()
+        # the CTk root maps at BIRTH, before a single widget exists:
+        # withdraw instantly so the empty window never gets a frame on
+        # screen - the first pixels a user may ever see come from
+        # _show_first (veil included), never from a build sweep
+        self.withdraw()
+        self._ever_mapped = False
         self.cfg = cfg
         self.monitor = monitor
         self.ui_events = ui_events
@@ -94,11 +100,33 @@ class SettingsWindow(
         self.configure(fg_color=self.skin.bg)
         self.build_all()
         if self.cfg["ui"].get("start_minimized"):
-            self.withdraw()                # straight to the tray: this
-            # happens before mainloop maps anything, so there is no
-            # show-then-hide blink; the tray's left click opens home
+            pass                         # straight to the tray: the
+            # window stays withdrawn unmapped; the first tray-open
+            # pays the veiled first map, every later one is a pixel
+            # instant (the DWM surface already holds the drawn UI)
+        else:
+            self._show_first()
         self._scan_cameras()
         self.after(90, self._tick_ui)
+
+
+    def _show_first(self):
+        """The ONE first map, veiled. deiconify marks the window for
+        mapping; the veil is placed before the first update() so the
+        first COMPOSITE carries the veil, not the half-drawn UI. The
+        real widgets paint behind it clipped-cheap; the timed lift
+        (300 ms) lands after the burst - tk cannot pre-paint a
+        withdrawn window (documented trap), so the veil covers the
+        burst itself instead. After this, every reopen is a plain
+        deiconify: DWM still holds the drawn surface, Electron's
+        actual trick, available free."""
+        self.deiconify()
+        if not self._ever_mapped:
+            self._ever_mapped = True
+            self._veil("PanelBoss", full=True)
+            self.after(300, self._unveil)
+        else:
+            self.lift()
 
 
     # ------------------------------------------------------------- build --
@@ -175,7 +203,7 @@ class SettingsWindow(
 
     # ------------------------------------------------------------ top bar --
     # ------------------------------------------------------------- veil --
-    def _veil(self, note="PanelBoss", absolute=False):
+    def _veil(self, note="PanelBoss", absolute=False, full=False):
         """The Electron ready-to-show trick, tkinter edition: an
         OPAQUE frame at the page tier covering the body, painted
         BEFORE whatever rebuild happens, destroyed after. CTk's own
@@ -213,6 +241,11 @@ class SettingsWindow(
                                  y=self._body.winfo_y(),
                                  width=self._body.winfo_width(),
                                  height=self._body.winfo_height())
+        elif full:
+            # the first map: nothing is drawn yet, so the veil owns
+            # the WHOLE client area (tabs and top bar included); the
+            # title bar is non-client and already native chrome
+            self._veil_lbl.place(x=0, y=0, relwidth=1, relheight=1)
         else:
             self._veil_lbl.place(in_=self._body, relwidth=1, relheight=1)
         self._veil_lbl.tkraise()
