@@ -7,6 +7,7 @@ files are what change) and reopens with the feature live; the window
 says exactly that, because an unannounced restart is a broken
 promise, not a surprise."""
 
+from . import theme
 import customtkinter as ctk
 
 
@@ -20,18 +21,19 @@ class Deprompt(ctk.CTkToplevel):
         self.transient(parent)           # stays above the settings
         ctk.CTkLabel(self, text="%s needs %s" % (feature, package),
                      font=skin.font(15, "bold"),
-                     **skin.text_style()).pack(anchor="w", padx=16,
-                                               pady=(14, 0))
+                     **skin.text_style()).pack(anchor="w", padx=theme.S_SECTION,
+                                               pady=(theme.S_SECTION, 0))
         ctk.CTkLabel(self, text=why, font=skin.font(12), wraplength=380,
                      justify="left", anchor="w",
-                     **skin.text_style("sub")).pack(anchor="w", padx=16,
-                                                    pady=(8, 0))
+                     **skin.text_style("sub")).pack(anchor="w",
+                                                    padx=theme.S_SECTION,
+                                                    pady=(theme.S_ROW, 0))
         row = ctk.CTkFrame(self, fg_color="transparent")
-        row.pack(fill="x", padx=16, pady=(14, 14))
+        row.pack(fill="x", padx=theme.S_SECTION, pady=(theme.S_SECTION, theme.S_SECTION))
         self._on_install = on_install
         ctk.CTkButton(row, text="update & restart",
                       command=self._go, **skin.primary()).pack(
-            side="right", padx=(8, 0))
+            side="right", padx=(theme.S_ROW, 0))
         ctk.CTkButton(row, text="not now", command=self.destroy,
                       **skin.secondary()).pack(side="right")
         self.update_idletasks()

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
+from .. import theme
 from ... import config
 from ._constants import TIMER_SPECS, DEVICE_KEYS, DEVICE_BY_LABEL, PERSON_ROWS, MOTION_ROWS, TIPS
 from ._widgets import SkewCombo
@@ -31,7 +32,7 @@ class _DetectionMixin:
         box = self._card(left, "Detection")
         # the mode row leads the card: motion mode has no model at all,
         # so the model's device and thresholds below it are mere trivia
-        row = self._row(box, "mode", TIPS["mode"])
+        row = self._row(box, "mode", TIPS["mode"], hint_chars=42)
         self.mode_button = ctk.CTkSegmentedButton(
             row, values=["person (AI)", "motion (no AI)"], height=26,
             width=230, command=self._detect_mode_changed,
@@ -40,7 +41,7 @@ class _DetectionMixin:
         self.mode_button.grid(row=0, column=1, sticky="e")
         rows = [("mode", row)]
 
-        row = self._row(box, "device", TIPS["device"])
+        row = self._row(box, "device", TIPS["device"], hint_chars=42)
         menu = SkewCombo(row, values=[label for _, label in
                                               DEVICE_KEYS], width=160,
                                  command=self._device_changed,
@@ -54,7 +55,7 @@ class _DetectionMixin:
         if not self.gpu_ids:
             self.gpu_ids = [(n, "") for n in range(4)]
         labels = ["%s %s" % (gid, name[:32]) for gid, name in self.gpu_ids]
-        row = self._row(box, "cuda gpu id", TIPS["gpu"])
+        row = self._row(box, "cuda gpu id", TIPS["gpu"], hint_chars=42)
         gpu_menu = SkewCombo(
             row, values=labels, width=200, command=self._gpu_changed,
             **self.skin.menu_style())
@@ -65,10 +66,10 @@ class _DetectionMixin:
                 break
         rows.append(("cuda gpu id", row))
 
-        row = self._row(box, "confidence", TIPS["confidence"])
+        row = self._row(box, "confidence", TIPS["confidence"], hint_chars=42)
         self.conf_label = ctk.CTkLabel(row, font=self.skin.font(12),
                                        **self.skin.text_style("sub"))
-        self.conf_label.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        self.conf_label.grid(row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
         slider = ctk.CTkSlider(row, from_=0.1, to=0.9,
                                number_of_steps=80, width=180,
                                command=self._confidence_changed,
@@ -79,7 +80,7 @@ class _DetectionMixin:
             text="%.2f" % self.cfg["inference"]["confidence"])
         rows.append(("confidence", row))
 
-        row = self._row(box, "min hits", TIPS["min_hits"])
+        row = self._row(box, "min hits", TIPS["min_hits"], hint_chars=42)
         hits = ctk.CTkSegmentedButton(
             row, values=["1", "2", "3", "4"], height=26, width=170,
             command=self._min_hits_changed, **self.skin.segmented_style())
@@ -89,7 +90,7 @@ class _DetectionMixin:
 
         # motion's own knobs, hidden in person mode exactly as the
         # model's knobs are hidden here: each mode shows its controls
-        row = self._row(box, "frame changes", TIPS["frame changes"])
+        row = self._row(box, "frame changes", TIPS["frame changes"], hint_chars=42)
         self.motion_labels = {}
         slider = ctk.CTkSlider(row, from_=0.0005, to=0.02,
                                number_of_steps=39, width=180,
@@ -100,12 +101,12 @@ class _DetectionMixin:
         slider.grid(row=0, column=1, sticky="e")
         shown = ctk.CTkLabel(row, font=self.skin.font(12),
                              **self.skin.text_style("sub"))
-        shown.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        shown.grid(row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
         shown.configure(text="%.4f" % self.cfg["detection"]["ratio"])
         self.motion_labels["ratio"] = shown
         rows.append(("frame changes", row))
 
-        row = self._row(box, "pixel delta", TIPS["pixel delta"])
+        row = self._row(box, "pixel delta", TIPS["pixel delta"], hint_chars=42)
         slider = ctk.CTkSlider(row, from_=1, to=128, number_of_steps=127,
                                width=180,
                                command=lambda v, k="diff_level":
@@ -115,12 +116,12 @@ class _DetectionMixin:
         slider.grid(row=0, column=1, sticky="e")
         shown = ctk.CTkLabel(row, font=self.skin.font(12),
                              **self.skin.text_style("sub"))
-        shown.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        shown.grid(row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
         shown.configure(text="%d" % self.cfg["detection"]["diff_level"])
         self.motion_labels["diff_level"] = shown
         rows.append(("pixel delta", row))
 
-        row = self._row(box, "motion hold", TIPS["motion hold"])
+        row = self._row(box, "motion hold", TIPS["motion hold"], hint_chars=42)
         slider = ctk.CTkSlider(row, from_=10, to=600, number_of_steps=59,
                                width=180,
                                command=lambda v, k="hold_sec":
@@ -130,7 +131,7 @@ class _DetectionMixin:
         slider.grid(row=0, column=1, sticky="e")
         shown = ctk.CTkLabel(row, font=self.skin.font(12),
                              **self.skin.text_style("sub"))
-        shown.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        shown.grid(row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
         shown.configure(text="%ss" % self.cfg["detection"]["hold_sec"])
         self.motion_labels["hold_sec"] = shown
         rows.append(("motion hold", row))
@@ -153,14 +154,14 @@ class _DetectionMixin:
             widget.pack_forget()
         for key, widget in self._det_rows:
             if key == "mode" or key in keep:
-                widget.pack(fill="x", pady=2)
+                widget.pack(fill="x", pady=(0, theme.S_ROW))
         self.detect_note.pack_forget()
         self.detect_note.configure(
             text=("no model: the differencer is rebuilt the moment a "
                   "slider moves" if mode == "motion" else
                   "device applies immediately; the model file itself "
                   "needs a restart"))
-        self.detect_note.pack(anchor="w", pady=(6, 0))
+        self.detect_note.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
 
     def _build_timers(self, left):
@@ -169,10 +170,10 @@ class _DetectionMixin:
                          "loop runs")
         self.timer_labels = {}
         for section, key, label, lo, hi, step, tip in TIMER_SPECS:
-            row = self._row(box, label, tip)
+            row = self._row(box, label, tip, hint_chars=42)
             value_label = ctk.CTkLabel(row, font=self.skin.font(12),
                                        **self.skin.text_style("sub"))
-            value_label.grid(row=0, column=2, sticky="e", padx=(6, 0))
+            value_label.grid(row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
             slider = ctk.CTkSlider(row, from_=lo, to=hi,
                                    number_of_steps=int((hi - lo) / step),
                                    width=180,
@@ -187,7 +188,7 @@ class _DetectionMixin:
                                          wraplength=350, justify="left",
                                          anchor="w",
                                          **self.skin.text_style("sub"))
-        self.worst_label.pack(anchor="w", pady=(6, 0))
+        self.worst_label.pack(anchor="w", pady=(theme.S_FIELD, 0))
         self._update_worst()
 
 

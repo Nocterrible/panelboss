@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
+from .. import theme
 from ... import profiles, wm
 from ._constants import TIPS, HDR_ASK_LABELS, HDR_MENU_ORDER
 from ._widgets import SkewCombo, _fresh_pin_edit
@@ -46,7 +47,7 @@ class _ProfilesMixin:
         # into it (see _profiles_render) - the anchor itself is never
         # touched, so the swap cannot disturb anything around the pane
         self._prof_anchor = ctk.CTkFrame(box, fg_color="transparent")
-        self._prof_anchor.pack(fill="x", pady=(4, 0))
+        self._prof_anchor.pack(fill="x", pady=(theme.S_FIELD, 0))
         self._prof_body = None
         self._profiles_render()
 
@@ -93,18 +94,18 @@ class _ProfilesMixin:
                 line, width=240, font=self.skin.font(12),
                 placeholder_text="new profile name",
                 fg_color=self.skin.field_bg, border_width=1,
-                border_color=self.skin.border,
+                border_color=self.skin.border_raised,
                 corner_radius=self.skin.radius)
             self._prof_name.pack(side="left")
             ctk.CTkButton(line, text="capture this desktop", width=150,
                           command=self._profile_create,
                           **self.skin.secondary()).pack(side="left",
-                                                        padx=(6, 0))
+                                                        padx=(theme.S_FIELD, 0))
             self._prof_status = ctk.CTkLabel(
                 self._prof_detail, text=self._prof_msg,
                 font=self.skin.font(11), wraplength=560, justify="left",
                 anchor="w", **self.skin.text_style("sub"))
-            self._prof_status.pack(anchor="w", pady=(6, 0))
+            self._prof_status.pack(anchor="w", pady=(theme.S_FIELD, 0))
             return
 
         mons = wm.monitors()
@@ -122,10 +123,10 @@ class _ProfilesMixin:
             else "this desk matches the profile",
             font=self.skin.font(11), wraplength=560, justify="left",
             anchor="w", **self.skin.text_style("sub"))
-        warn.pack(anchor="w", pady=(4, 0))
+        warn.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
         opts = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
-        opts.pack(fill="x", pady=(2, 0))
+        opts.pack(fill="x", pady=(theme.S_FIELD, 0))
         row = self._row(opts, "hdr", TIPS["profile_hdr"])
         self.hdr_menu = SkewCombo(
             row, values=[HDR_ASK_LABELS[k] for k in HDR_MENU_ORDER],
@@ -136,7 +137,7 @@ class _ProfilesMixin:
                                           HDR_ASK_LABELS["snap"]))
         self.hdr_menu.grid(row=0, column=1, sticky="e")
         btns = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
-        btns.pack(anchor="w", pady=(6, 0))
+        btns.pack(anchor="w", pady=(theme.S_FIELD, 0))
         ctk.CTkButton(btns, text="apply profile", width=130,
                       command=lambda: self._profile_apply(False),
                       **self.skin.primary()).pack(side="left")
@@ -145,7 +146,7 @@ class _ProfilesMixin:
                           width=180,
                           command=lambda: self._profile_apply(True),
                           **self.skin.secondary()).pack(side="left",
-                                                        padx=(6, 0))
+                                                        padx=(theme.S_FIELD, 0))
 
         # ---- pin an app: pick a window, set conditions, pin it ---------
         # the editor sits directly under the list it edits, and the
@@ -176,7 +177,7 @@ class _ProfilesMixin:
         panel's LIVE hdr state note (on/off/no hdr/?) straight from the
         driver - silent {} on ancient Windows means no note, which is
         honest, and the power assistant's UI test watches for it."""
-        sec = self._section("monitors", pady=(10, 0))
+        sec = self._section("monitors", pady=(theme.S_ROW, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel)
         if prof is None:                            # the create-new pane
             return
@@ -208,9 +209,9 @@ class _ProfilesMixin:
             ctk.CTkLabel(sec, text="no panels yet - add one below",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(
-                             anchor="w", pady=(2, 0))
+                              anchor="w", pady=(theme.S_FIELD, 0))
         bar = ctk.CTkFrame(sec, fg_color="transparent")
-        bar.pack(fill="x", pady=(6, 0))
+        bar.pack(fill="x", pady=(theme.S_FIELD, 0))
         ctk.CTkButton(bar, text="blank profile", width=130,
                       command=self._prof_blank,
                       **self.skin.secondary()).pack(side="left")
@@ -238,16 +239,17 @@ class _ProfilesMixin:
             command=lambda v=None: self._prof_add_commit(),
             **self.skin.menu_style())
         self._set_menu(self._mode_add, add_vals[0] if add_vals else "(none)")
-        self._mode_add.pack(side="left", padx=(6, 0))
+        self._mode_add.pack(side="left", padx=(theme.S_FIELD, 0))
         ctk.CTkButton(bar, text="add", width=48,
                       command=self._prof_add_commit,
-                      **self.skin.secondary()).pack(side="left", padx=(4, 0))
+                      **self.skin.secondary()).pack(
+            side="left", padx=(theme.S_FIELD, 0))
         # the R8 status line: a small gray label under the rows that
         # every handler's failure lands in (no dialogs, ever)
         self._mode_status = ctk.CTkLabel(
             sec, text="", font=self.skin.font(11), wraplength=560,
             justify="left", anchor="w", **self.skin.text_style("sub"))
-        self._mode_status.pack(anchor="w", pady=(4, 0))
+        self._mode_status.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
 
     @staticmethod

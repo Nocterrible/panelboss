@@ -100,16 +100,19 @@ class SettingsWindow(
     # ------------------------------------------------------------- build --
     def build_all(self):
         self._top = ctk.CTkFrame(self, fg_color="transparent")
-        self._top.pack(fill="x", padx=14, pady=(12, 2))
+        self._top.pack(fill="x", padx=theme.S_PAGE,
+                       pady=(theme.S_ROW, theme.S_FIELD))
         self._actions = ctk.CTkFrame(self, fg_color="transparent")
-        self._actions.pack(fill="x", padx=14)     # rescue/sleep/pause/
-        # quit row: the desk commands belong above the tabs, not
+        self._actions.pack(fill="x", padx=theme.S_PAGE)     # rescue/sleep/
+        # pause/quit row: the desk commands belong above the tabs, not
         # welded to the title (and the title row keeps room for the
         # one link that is not a command)
         self._tabs_bar = ctk.CTkFrame(self, fg_color="transparent")
-        self._tabs_bar.pack(fill="x", padx=14, pady=(6, 0))
+        self._tabs_bar.pack(fill="x", padx=theme.S_PAGE,
+                            pady=(theme.S_FIELD, 0))
         self._body = ctk.CTkFrame(self, fg_color="transparent")
-        self._body.pack(fill="both", expand=True, padx=14, pady=(6, 12))
+        self._body.pack(fill="both", expand=True, padx=theme.S_PAGE,
+                        pady=(theme.S_FIELD, theme.S_ROW))
         self.tips = Tips(self.skin, self)
         self._build_top()
         self._build_actions()
@@ -118,7 +121,8 @@ class SettingsWindow(
             b = ctk.CTkButton(self._tabs_bar, text=key, width=120,
                               height=30,
                               command=lambda k=key: self._show_tab(k))
-            b.pack(side="left", padx=(0, 6), pady=(0, 8))
+            b.pack(side="left", padx=(0, theme.S_FIELD),
+                   pady=(0, theme.S_ROW))
             self.tab_buttons[key] = b
         self.pages = {}
         for key in TABS:
@@ -164,12 +168,13 @@ class SettingsWindow(
                      font=self.skin.font(18, "bold"),
                      **self.skin.text_style()).pack(side="left")
         self.chip = ctk.CTkLabel(self._top, text=self.monitor.state,
-                                 width=90, pady=3, corner_radius=10,
+                                 width=90, pady=theme.S_FIELD,
+                                 corner_radius=10,
                                  font=self.skin.font(12, "bold"),
-                                 text_color="#10131a",
+                                 text_color=self.skin.on_accent,
                                  fg_color=self.skin.chip(
                                      self.monitor.state))
-        self.chip.pack(side="left", padx=14)
+        self.chip.pack(side="left", padx=theme.S_SECTION)
         self.idle_label = ctk.CTkLabel(self._top, text="",
                                        font=self.skin.font(12),
                                        **self.skin.text_style("sub"))
@@ -198,12 +203,16 @@ class SettingsWindow(
         tab, and a panic button behind a tab click is not a panic
         button. pack stacks from the right edge inwards, so Quit -
         which always owns the last cell - is packed first."""
+        # the rescue hint rides UNDER the button (the design system's
+        # inline hint row, not a "?" chip): a cell frame gives the hint
+        # its own line without pushing the rest of the action row
+        cell = ctk.CTkFrame(self._actions, fg_color="transparent")
+        cell.pack(side="left")
         self.rescue_button = ctk.CTkButton(
-            self._actions, text="rescue my lost windows", width=170,
+            cell, text="rescue my lost windows", width=170,
             command=self._rescue_now, **self.skin.secondary())
-        self.rescue_button.pack(side="left")
-        self.tips.button(self._actions, TIPS["profile_rescue"]).pack(
-            side="left", padx=(4, 0))
+        self.rescue_button.pack(anchor="w")
+        self._hint(cell, TIPS["profile_rescue"])
         right = ctk.CTkFrame(self._actions, fg_color="transparent")
         right.pack(side="right")
         self.quit_button = ctk.CTkButton(
@@ -212,15 +221,15 @@ class SettingsWindow(
             hover_color=self.skin.button,
             text_color=self.skin.text,
             corner_radius=self.skin.radius)
-        self.quit_button.pack(side="right", padx=3)
+        self.quit_button.pack(side="right", padx=theme.S_FIELD)
         self.pause_button = ctk.CTkButton(right, text="Pause", width=90,
                                           command=self._pause_toggle,
                                           **self.skin.secondary())
-        self.pause_button.pack(side="right", padx=3)
+        self.pause_button.pack(side="right", padx=theme.S_FIELD)
         self.sleep_button = ctk.CTkButton(right, text="sleep", width=90,
                                           command=self._sleep_dialog,
                                           **self.skin.secondary())
-        self.sleep_button.pack(side="right", padx=3)
+        self.sleep_button.pack(side="right", padx=theme.S_FIELD)
 
 
     def _sleep_dialog(self):

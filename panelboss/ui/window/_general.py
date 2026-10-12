@@ -40,8 +40,7 @@ class _GeneralMixin:
         self.min_switch = ctk.CTkSwitch(row, text="",
                                         font=self.skin.font(12),
                                         command=self._start_min_changed,
-                                        progress_color=self.skin.accent,
-                                        border_color=self.skin.border)
+                                        **self.skin.switch_style())
         self.min_switch.grid(row=0, column=1, sticky="e")
         if self.cfg["ui"].get("start_minimized"):
             self.min_switch.select()
@@ -69,8 +68,7 @@ class _GeneralMixin:
         self.startup_switch = ctk.CTkSwitch(row, text="",
                                             font=self.skin.font(12),
                                             command=self._startup_changed,
-                                            progress_color=self.skin.accent,
-                                            border_color=self.skin.border)
+                                            **self.skin.switch_style())
         self.startup_switch.grid(row=0, column=1, sticky="e")
         self.startup_note = ctk.CTkLabel(box, text="",
                                          font=self.skin.font(11),

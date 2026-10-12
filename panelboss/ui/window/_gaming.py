@@ -8,6 +8,7 @@ import threading
 
 import customtkinter as ctk
 
+from .. import theme
 from ... import wm
 from ._constants import TIPS
 from ._text import SkewText
@@ -36,8 +37,7 @@ class _GamingMixin:
         self.gaming_switch = ctk.CTkSwitch(row, text="",
                                            font=self.skin.font(12),
                                            command=self._gaming_changed,
-                                           progress_color=self.skin.accent,
-                                           border_color=self.skin.border)
+                                           **self.skin.switch_style())
         self.gaming_switch.grid(row=0, column=1, sticky="e")
         if g.get("enabled"):
             self.gaming_switch.select()
@@ -97,7 +97,8 @@ class _GamingMixin:
                         TIPS["gaming_games"])
         self.games_box = SkewText(
             row, height=84, width=230, font=self.skin.font(11),
-            fg_color=self.skin.field_bg, border_color=self.skin.border,
+            fg_color=self.skin.field_bg,
+            border_color=self.skin.border_raised,
             border_width=1, corner_radius=self.skin.radius, wrap="word")
         self.games_box.grid(row=0, column=1, sticky="e")
         self.games_box.insert("1.0", "\n".join(g.get("games") or []))
@@ -108,12 +109,14 @@ class _GamingMixin:
         self.add_fg_button = ctk.CTkButton(
             row, text="add what's in front of me", width=170,
             command=self._gaming_add_foreground, **self.skin.secondary())
-        self.add_fg_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        self.add_fg_button.grid(row=0, column=2, sticky="e",
+                                padx=(theme.S_FIELD, 0))
         row = self._row(box, "never games (one exe per line)",
                         TIPS["gaming_ignore"])
         self.ignore_box = SkewText(
             row, height=60, width=230, font=self.skin.font(11),
-            fg_color=self.skin.field_bg, border_color=self.skin.border,
+            fg_color=self.skin.field_bg,
+            border_color=self.skin.border_raised,
             border_width=1, corner_radius=self.skin.radius, wrap="word")
         self.ignore_box.grid(row=0, column=1, sticky="e")
         self.ignore_box.insert("1.0", "\n".join(g.get("ignore") or []))
@@ -126,7 +129,7 @@ class _GamingMixin:
             row, width=180, font=self.skin.font(12),
             placeholder_text="fragment or guid ('' = never)",
             fg_color=self.skin.field_bg, border_width=1,
-            border_color=self.skin.border,
+            border_color=self.skin.border_raised,
             corner_radius=self.skin.radius)
         self.plan_entry.insert(0, g.get("power_plan") or "")
         self.plan_entry.grid(row=0, column=1, sticky="e")

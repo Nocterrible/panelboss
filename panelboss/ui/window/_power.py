@@ -2,6 +2,10 @@
 assistant, the Game DVR card, overrides viewer, hdr-while-away.
 The gaming rate section lives in _gaming.py beside it: it shares
 this tab's column but trades monitor rates, not powercfg flags.
+Size law (~350, 2026-10): this is ONE page's paint-and-refresh
+routine; splitting the cards across files would scatter the tab's
+ordering lessons for zero readability the window/ split already
+took its share - this one stays whole.
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ import time
 
 import customtkinter as ctk
 
+from .. import theme
 from ..shield import shield_pil
 from ._constants import TIPS
 from ._text import SkewText
@@ -35,8 +40,7 @@ class _PowerMixin:
         self.hold_display_switch = ctk.CTkSwitch(row, text="",
                                                  font=self.skin.font(12),
                                                  command=self._hold_changed,
-                                                 progress_color=self.skin.accent,
-                                                 border_color=self.skin.border)
+                                                 **self.skin.switch_style())
         self.hold_display_switch.grid(row=0, column=1, sticky="e")
         if self.cfg["power"].get("hold_display"):
             self.hold_display_switch.select()
@@ -44,8 +48,7 @@ class _PowerMixin:
         self.hold_sleep_switch = ctk.CTkSwitch(row, text="",
                                                font=self.skin.font(12),
                                                command=self._hold_changed,
-                                               progress_color=self.skin.accent,
-                                               border_color=self.skin.border)
+                                               **self.skin.switch_style())
         self.hold_sleep_switch.grid(row=0, column=1, sticky="e")
         if self.cfg["power"].get("hold_sleep"):
             self.hold_sleep_switch.select()
@@ -66,8 +69,7 @@ class _PowerMixin:
         self.fullscreen_switch = ctk.CTkSwitch(row, text="",
                                                font=self.skin.font(12),
                                                command=self._fullscreen_changed,
-                                               progress_color=self.skin.accent,
-                                               border_color=self.skin.border)
+                                               **self.skin.switch_style())
         self.fullscreen_switch.grid(row=0, column=1, sticky="e")
         if self.cfg["guards"]["fullscreen"]:
             self.fullscreen_switch.select()
@@ -80,14 +82,14 @@ class _PowerMixin:
             row, text="resume now", width=110,
             command=lambda: self.monitor.events.put(("reoff", False)),
             **self.skin.secondary())
-        self.reoff_button.grid(row=0, column=2, sticky="e", padx=(6, 0))
+        self.reoff_button.grid(row=0, column=2, sticky="e",
+                               padx=(theme.S_FIELD, 0))
         row = self._row(box, "put window positions back after wake",
                         TIPS["restore_windows"])
         self.restore_switch = ctk.CTkSwitch(row, text="",
                                             font=self.skin.font(12),
                                             command=self._restore_changed,
-                                            progress_color=self.skin.accent,
-                                            border_color=self.skin.border)
+                                            **self.skin.switch_style())
         self.restore_switch.grid(row=0, column=1, sticky="e")
         if self.cfg["power"].get("restore_windows"):
             self.restore_switch.select()
@@ -96,7 +98,9 @@ class _PowerMixin:
         # that ticking it means one admin confirm (drawn to match the
         # system icon: quartered blue/amber, silver cross, ui.shield)
         box = self._card(col, "powercfg assistant")
-        prow = ctk.CTkFrame(box, fg_color="transparent")
+        cell = ctk.CTkFrame(box, fg_color="transparent")
+        cell.pack(anchor="w")
+        prow = ctk.CTkFrame(cell, fg_color="transparent")
         prow.pack(anchor="w")
         self._shield_img = ctk.CTkImage(
             light_image=shield_pil(16), dark_image=shield_pil(16),
@@ -106,11 +110,9 @@ class _PowerMixin:
         self.power_switch = ctk.CTkSwitch(
             prow, text="wait out other display locks",
             font=self.skin.font(12), command=self._power_assistant_changed,
-            progress_color=self.skin.accent,
-            border_color=self.skin.border)
+            **self.skin.switch_style())
         self.power_switch.pack(side="left")
-        self.tips.button(prow, TIPS["assistant"]).pack(side="left",
-                                                        padx=(6, 0))
+        self._hint(cell, TIPS["assistant"])
         if self.cfg["power"]["assistant_task"]:
             self.power_switch.select()
         # the blockers report: the red lines are the apps that actually
@@ -118,9 +120,10 @@ class _PowerMixin:
         # news. Scrollable: a crowded report never overflows the card.
         self.blockers_box = SkewText(
             box, height=132, width=500, font=self.skin.font(10),
-            fg_color=self.skin.field_bg, border_color=self.skin.border,
+            fg_color=self.skin.field_bg,
+            border_color=self.skin.border_raised,
             border_width=1, corner_radius=self.skin.radius, wrap="word")
-        self.blockers_box.pack(anchor="w", pady=(6, 0))
+        self.blockers_box.pack(anchor="w", pady=(theme.S_FIELD, 0))
         # NOT state="disabled": that repaints every tag the same flat
         # color (measured - the red vanished). It stays enabled so the
         # tag colors live, and reads as a report by swallowing edits
@@ -165,8 +168,7 @@ class _PowerMixin:
         self.hdr_away_switch = ctk.CTkSwitch(row, text="",
                                              font=self.skin.font(12),
                                              command=self._hdr_away_changed,
-                                             progress_color=self.skin.accent,
-                                             border_color=self.skin.border)
+                                             **self.skin.switch_style())
         self.hdr_away_switch.grid(row=0, column=1, sticky="e")
         if bool(self.cfg["power"].get("hdr_off_when_away")):
             self.hdr_away_switch.select()
@@ -189,8 +191,7 @@ class _PowerMixin:
             row = self._row(box, label)
             sw = ctk.CTkSwitch(row, text="",
                                font=self.skin.font(12),
-                               progress_color=self.skin.accent,
-                               border_color=self.skin.border)
+                               **self.skin.switch_style())
             # bind BOTH via defaults, after sw exists: binding
             # only tid left every lambda painting the LAST switch
             # from registry truth (the classic late-binding trap -
@@ -290,7 +291,8 @@ class _PowerMixin:
         try:
             if on:
                 if not self.overrides_button.winfo_manager():
-                    self.overrides_button.pack(anchor="w", pady=(6, 0))
+                    self.overrides_button.pack(anchor="w",
+                                               pady=(theme.S_FIELD, 0))
             else:
                 self.overrides_button.pack_forget()
         except Exception:

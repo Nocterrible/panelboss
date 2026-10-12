@@ -1,8 +1,13 @@
 """Profiles tab verbs: mode edits, profile create and
 apply, the noshows dialog, rescue.
+Size law (~330, 2026-10): the apply pipeline is one transaction -
+snapshot, layout plan, dialog, rescue - whose halves argue over
+shared state; split cost paid per read beats the split itself here.
 """
 
 from __future__ import annotations
+
+from .. import theme
 
 import logging
 import threading
@@ -25,7 +30,7 @@ class _ModeMixin:
         note from the last edit is painted gray under the row (R2)."""
         mon_id = d.get("id")
         row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", pady=1)
+        row.pack(fill="x", pady=theme.S_FIELD)
         ctk.CTkLabel(
             row, anchor="w",
             text="%s%s%s" % (d.get("short") or mon_id,
@@ -56,28 +61,28 @@ class _ModeMixin:
             command=lambda v, m=mon_id: self._mode_res(m, v),
             **self.skin.menu_style())
         self._set_menu(res_menu, saved_res)
-        res_menu.pack(side="left", padx=(6, 0))
+        res_menu.pack(side="left", padx=(theme.S_FIELD, 0))
         rates = self._rates_for(live_list, saved_res, saved_rate, offline)
         rate_menu = SkewCombo(
             row, values=[str(r) for r in rates] or ["?"], width=80,
             command=lambda v, m=mon_id: self._mode_rate(m, v),
             **self.skin.menu_style())
         self._set_menu(rate_menu, str(saved_rate) if saved_rate else "?")
-        rate_menu.pack(side="left", padx=(4, 0))
+        rate_menu.pack(side="left", padx=(theme.S_FIELD, 0))
         self._mode_menus[mon_id] = (res_menu, rate_menu)
         ctk.CTkButton(row, text="remove", width=66,
                       command=lambda m=mon_id: self._mode_remove(m),
-                      **self.skin.secondary()).pack(side="left", padx=(4, 0))
+                      **self.skin.secondary()).pack(side="left", padx=(theme.S_FIELD, 0))
         if offline:
             ctk.CTkLabel(parent, text="panel not live",
                          font=self.skin.font(10),
                          **self.skin.text_style("sub")).pack(
-                             anchor="w", padx=92)
+                             anchor="w", padx=92)  # column indent, not a gap
         note = self._mode_notes.get(mon_id, "")
         if "UNVERIFIED" in note:
             ctk.CTkLabel(parent, text=note, font=self.skin.font(10),
                          **self.skin.text_style("sub")).pack(
-                             anchor="w", padx=92)
+                             anchor="w", padx=92)  # column indent, not a gap
 
 
     # ---- profiles: handlers ---------------------------------------------
@@ -272,9 +277,9 @@ class _ModeMixin:
                       "Fix the profile? 'let it be' keeps them "
                       "quiet about future failures." % names,
             font=self.skin.font(12), justify="left",
-            **self.skin.text_style()).pack(padx=20, pady=(14, 8))
+            **self.skin.text_style()).pack(padx=theme.S_SECTION, pady=(theme.S_SECTION, theme.S_ROW))
         line = ctk.CTkFrame(dlg, fg_color="transparent")
-        line.pack(pady=(0, 14))
+        line.pack(pady=(0, theme.S_SECTION))
 
         def fix():
             if len(misses) == 1:
@@ -295,7 +300,7 @@ class _ModeMixin:
             dlg.destroy()
         ctk.CTkButton(line, text="I'll fix it", width=110,
                       command=fix, **self.skin.primary()).pack(
-            side="left", padx=(0, 6))
+            side="left", padx=(0, theme.S_FIELD))
         ctk.CTkButton(line, text="let it be", width=110,
                       command=quiet, **self.skin.secondary()).pack(
             side="left")

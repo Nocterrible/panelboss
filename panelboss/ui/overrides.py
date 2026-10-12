@@ -1,5 +1,8 @@
 """Manage powercfg overrides.
 
+Size law (~350, 2026-10): the viewer and its typelist apply share a
+live-accumulating row model; the docstring below is the protocol.
+
 One row per object (a process, driver or service that either holds a
 power request or owns an override entry), and a CHECKBOX PER REQUEST
 TYPE - the per-object typelist is the unit powercfg itself thinks in,
@@ -19,6 +22,7 @@ the same handoff-elevate-then-verify dance the assistant install uses
 (truth comes from a fresh dump, never from the exit code). The data
 source is the assistant dump, so this window is only opened while the
 powercfg assistant is on."""
+from . import theme
 import logging
 import threading
 import time
@@ -106,7 +110,7 @@ class OverridesWindow(ctk.CTkToplevel):
         self._busy = False
         self._reading = False
         head = ctk.CTkFrame(self, fg_color="transparent")
-        head.pack(fill="x", padx=14, pady=(10, 0))
+        head.pack(fill="x", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         ctk.CTkLabel(head, text="manage powercfg overrides",
                      font=skin.font(15, "bold"),
                      **skin.text_style()).pack(side="left")
@@ -121,13 +125,13 @@ class OverridesWindow(ctk.CTkToplevel):
             "the override. The list accumulates while open - refresh "
             "folds in whatever new popped up.",
             font=skin.font(10), wraplength=560, justify="left",
-            **skin.text_style("sub")).pack(anchor="w", padx=14, pady=(2, 6))
+            **skin.text_style("sub")).pack(anchor="w", padx=theme.S_SECTION, pady=(theme.S_FIELD, theme.S_FIELD))
         from .window._scroll import ScrollHost  # here, not at import
         self.list_host = ScrollHost(self, bg=skin.panel)
-        self.list_host.pack(fill="both", expand=True, padx=14)
+        self.list_host.pack(fill="both", expand=True, padx=theme.S_SECTION)
         self.listing = self.list_host.inner
         bar = ctk.CTkFrame(self, fg_color="transparent")
-        bar.pack(fill="x", padx=14, pady=(6, 10))
+        bar.pack(fill="x", padx=theme.S_SECTION, pady=(theme.S_FIELD, theme.S_ROW))
         self.status = ctk.CTkLabel(bar, text="", font=skin.font(11),
                                    **skin.text_style("sub"))
         self.status.pack(side="left")
@@ -177,10 +181,10 @@ class OverridesWindow(ctk.CTkToplevel):
                               "assistant must be ticking",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(anchor="w",
-                                                             pady=8)
+                                                             pady=theme.S_ROW)
         for g in sorted(self.seen.values(), key=lambda x: x["label"]):
             row = ctk.CTkFrame(self.listing, fg_color="transparent")
-            row.pack(fill="x", pady=3)
+            row.pack(fill="x", pady=theme.S_FIELD)
             ctk.CTkLabel(
                 row, anchor="w", text=g["label"],
                 font=self.skin.font(11),
@@ -219,7 +223,8 @@ class OverridesWindow(ctk.CTkToplevel):
                     variable=var, checkbox_width=14, checkbox_height=14,
                     fg_color=self.skin.accent,
                     hover_color=self.skin.accent_hover,
-                    border_color=self.skin.border,
+                    border_color=self.skin.border_raised,
+                    text_color_disabled=self.skin.txt3,
                     command=lambda k=g["key"], t=t, v=var:
                     self._toggled(k, t, bool(v.get())))
                 if not live:
@@ -236,7 +241,8 @@ class OverridesWindow(ctk.CTkToplevel):
                     checkbox_width=14, checkbox_height=14,
                     fg_color=self.skin.button,
                     hover_color=self.skin.button,
-                    border_color=self.skin.border,
+                    border_color=self.skin.border_raised,
+                    text_color_disabled=self.skin.txt3,
                     state="disabled")
                 cb.grid(row=j // 3, column=j % 3, sticky="w")
                 j += 1
@@ -274,7 +280,7 @@ class OverridesWindow(ctk.CTkToplevel):
         if n and not self._busy:
             self.save_button.configure(text="apply overrides (%d)" % n)
             if not self.save_button.winfo_manager():
-                self.save_button.pack(side="right", padx=(0, 8))
+                self.save_button.pack(side="right", padx=(0, theme.S_ROW))
             self.status.configure(
                 text="%d object(s) staged - apply elevates once" % n,
                 text_color=self.skin.subtext)

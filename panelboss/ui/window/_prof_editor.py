@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
+from .. import theme
 from ... import profiles
 from ._constants import TIPS, WAIT_CHOICES
 from ._widgets import SkewCombo
@@ -17,16 +18,17 @@ class _EditorMixin:
         """The pick-list section: every open window, the chosen one
         highlighted. The row buttons are remembered, so selecting a
         window can re-highlight WITHOUT rebuilding the list at all."""
-        sec = self._section("live", pady=(10, 0))
+        sec = self._section("live", pady=(theme.S_ROW, 0))
         ed = self._pin_edit
-        head = ctk.CTkFrame(sec, fg_color="transparent")
-        head.pack(fill="x")
+        cell = ctk.CTkFrame(sec, fg_color="transparent")
+        cell.pack(anchor="w", fill="x")
+        head = ctk.CTkFrame(cell, fg_color="transparent")
+        head.pack(anchor="w")
         ctk.CTkLabel(head, text="pin an app - click a window, it "
                                 "lands in the editor below",
                      font=self.skin.font(13, "bold"),
                      **self.skin.text_style()).pack(side="left")
-        self.tips.button(head, TIPS["profile_match"]).pack(
-            side="left", padx=(6, 0))
+        self._hint(cell, TIPS["profile_match"])
         lif = ScrollHost(sec, bg=self.skin.panel, width=590, height=132)
         lif.pack(fill="x")
         self._live_rows = {}
@@ -46,15 +48,15 @@ class _EditorMixin:
                 fg_color=self.skin.accent if picked
                 else self.skin.field_bg,
                 hover_color=self.skin.accent_hover,
-                text_color="#10131a" if picked else self.skin.text,
+                text_color=self.skin.on_accent if picked else self.skin.text,
                 corner_radius=self.skin.radius)
-            b.pack(anchor="w", pady=1)
+            b.pack(anchor="w", pady=(theme.S_FIELD, 0))
             self._live_rows[key] = b
         if not live:
             ctk.CTkLabel(lif.inner, text="no open windows to pick",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(
-                anchor="w", pady=4, padx=4)
+                anchor="w", pady=theme.S_FIELD, padx=theme.S_FIELD)
 
 
     def _restyle_live(self):
@@ -66,7 +68,7 @@ class _EditorMixin:
             try:
                 b.configure(fg_color=self.skin.accent if on
                             else self.skin.field_bg,
-                            text_color="#10131a" if on
+                            text_color=self.skin.on_accent if on
                             else self.skin.text)
             except Exception:
                 pass                    # a destroyed row: harmless
@@ -77,7 +79,7 @@ class _EditorMixin:
         or remembered. The section carries its own 'editing:' title -
         it is what changes when a seat is clicked, and the title is
         the proof the click landed."""
-        sec = self._section("editor", pady=(4, 0))
+        sec = self._section("editor", pady=(theme.S_FIELD, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel) \
             or {"wins": []}
         ed = self._pin_edit
@@ -105,7 +107,7 @@ class _EditorMixin:
                                             command=self._pin_open,
                                             checkbox_width=18,
                                             checkbox_height=18,
-                                            border_color=self.skin.border,
+                                            border_color=self.skin.border_raised,
                                             fg_color=self.skin.accent,
                                             hover_color=self.skin.accent)
         self.pin_open_box.grid(row=0, column=1, sticky="e")
@@ -182,9 +184,9 @@ class _EditorMixin:
                          font=self.skin.font(10), wraplength=580,
                          justify="left", anchor="w",
                          **self.skin.text_style("sub")).pack(
-                anchor="w", pady=(2, 0))
+                anchor="w", pady=(theme.S_FIELD, 0))
         cbtns = ctk.CTkFrame(sec, fg_color="transparent")
-        cbtns.pack(anchor="w", pady=(4, 0))
+        cbtns.pack(anchor="w", pady=(theme.S_FIELD, 0))
         ctk.CTkButton(cbtns,
                       text="update pin" if ed["key"] else "pin it",
                       width=130, command=self._pin_commit,
@@ -199,22 +201,23 @@ class _EditorMixin:
     def _fill_pins(self):
         """The seats this profile owns - below the editor on purpose
         (see the reorder note in _profiles_fill)."""
-        sec = self._section("pins", pady=(10, 0))
+        sec = self._section("pins", pady=(theme.S_ROW, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel) \
             or {"wins": []}
         ctk.CTkLabel(sec, text="pinned apps",
                      font=self.skin.font(13, "bold"),
                      **self.skin.text_style()).pack(side="left")
-        self.tips.button(sec, TIPS["profile_pins"]).pack(
-            side="left", padx=(6, 0))
         ctk.CTkButton(sec, text="pin every open app", width=150,
                       command=self._prof_pin_all,
                       **self.skin.secondary()).pack(side="left",
-                                                    padx=(8, 0))
+                                                    padx=(theme.S_ROW, 0))
         ctk.CTkButton(sec, text="re-scan", width=80,
                       command=self._prof_rescan,
                       **self.skin.secondary()).pack(side="left",
-                                                    padx=(6, 0))
+                                                    padx=(theme.S_FIELD, 0))
+        # the chip is gone: one hint line under the header, in layout
+        # from build so the list below never dances when help appears
+        self._hint(sec, TIPS["profile_pins"])
         pinf = ScrollHost(sec, bg=self.skin.panel, width=590, height=112)
         pinf.pack(fill="x")
         live_key = {(w["proc"], w["title"]): w
@@ -226,7 +229,7 @@ class _EditorMixin:
                          text="nothing pinned yet - seat an app above",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(
-                anchor="w", pady=4, padx=4)
+                anchor="w", pady=theme.S_FIELD, padx=theme.S_FIELD)
 
 
     def _fill_status(self):
@@ -235,7 +238,7 @@ class _EditorMixin:
             sec, text=self._prof_msg,
             font=self.skin.font(11), wraplength=560, justify="left",
             anchor="w", **self.skin.text_style("sub"))
-        self._prof_status.pack(anchor="w", pady=(6, 0))
+        self._prof_status.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
 
     def _pin_row(self, parent, w, live):
@@ -245,7 +248,7 @@ class _EditorMixin:
         seat. Badges tell the truth the plain text cannot: closed,
         'open it', a non-default match."""
         row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(anchor="w", fill="x", pady=1)
+        row.pack(anchor="w", fill="x", pady=theme.S_FIELD)
         badges = ""
         if w.get("open"):
             try:
@@ -274,9 +277,9 @@ class _EditorMixin:
         ctk.CTkButton(row, text="edit", width=48,
                       command=lambda r=w: self._pin_load(r),
                       **self.skin.secondary()).pack(side="left",
-                                                    padx=(4, 0))
+                                                    padx=(theme.S_FIELD, 0))
         ctk.CTkButton(row, text="x", width=30,
                       command=lambda r=w: self._pin_remove(r),
                       **self.skin.secondary()).pack(side="left",
-                                                    padx=(4, 0))
+                                                    padx=(theme.S_FIELD, 0))
 

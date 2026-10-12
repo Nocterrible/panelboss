@@ -42,9 +42,11 @@ from __future__ import annotations
 import tkinter as tk
 import tkinter.font as tkfont
 
-# fallbacks read from the modern skin's field_bg/text (theme.py);
-# call sites pass both explicitly, these answer hand-built uses
-_BG, _FG = "#20232a", "#eef1f4"
+from .. import theme
+
+# fallbacks ARE the design tiers; call sites pass both explicitly,
+# these answer hand-built uses
+_BG, _FG = theme.RAISED, theme.TXT_1
 _SB_W = 10                      # the ScrollHost width, _scroll.py:24
 
 # menu_style()-shaped keys + CTkTextbox's own options: absorbed on

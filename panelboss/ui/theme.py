@@ -17,23 +17,47 @@ from dataclasses import dataclass
 
 import customtkinter as ctk
 
+# ------------------------------------------------- design-system tiers --
+# docs/UI-PLAN.md "Design system" (UI-1c): three surfaces, one accent,
+# four spacing numbers. THE single source - call sites take these names
+# (raw hexes here and nowhere else); a missing name raises at import,
+# loud, there is no silent fallback.
+PAGE = "#17181A"           # window background
+CARD = "#202123"           # card / frame fill
+RAISED = "#2A2C2F"         # buttons, fields, combo faces
+BORDER_CARD = "#141517"    # card border: one step DARKER than the card
+BORDER_RAISED = "#3A3D41"  # raised-control border and hover: LIGHTER
+ACCENT = "#2dd6a6"         # the shipped green - active tab, primary
+                           # button, selected state; the ONLY accent
+ACCENT_HOVER = "#25b890"   # accent's own press shade (accent-derived)
+ON_ACCENT = "#10131a"      # dark ink on accent fills (accent-derived)
+TXT_1 = "#e7e9ea"          # primary text
+TXT_2 = "#a0a4a8"          # secondary: hints, unit labels, status lines
+TXT_3 = "#6b6e72"          # disabled
+# the only four layout numbers in the UI (label->value, row, section,
+# page) - shared by both skins: this is layout, not palette
+S_PAGE, S_SECTION, S_ROW, S_FIELD = 24, 16, 8, 4
+
 
 @dataclass
 class Skin:
     key: str
     label: str                       # name shown in the skin picker
     mode: str = "dark"               # CTk appearance mode
-    # palette
-    bg: str = "#1f2126"              # window background
-    panel: str = "#2b2e34"           # card / frame fill
-    border: str = "#3a3e46"
-    text: str = "#eef1f4"
-    subtext: str = "#9aa2ae"
-    accent: str = "#2dd6a6"          # primary button, switch on
-    accent_hover: str = "#25b890"
-    button: str = "#3a3e46"          # secondary button
-    button_hover: str = "#474c55"
-    field_bg: str = "#20232a"        # slider track, option menu
+    # palette (the defaults ARE the modern skin's design-system tiers)
+    bg: str = PAGE                   # window background
+    panel: str = CARD                # card / frame fill
+    border: str = BORDER_CARD        # card border, one step darker
+    border_raised: str = BORDER_RAISED   # raised controls, one lighter
+    text: str = TXT_1
+    subtext: str = TXT_2
+    txt3: str = TXT_3                # disabled tier
+    accent: str = ACCENT             # primary button, switch on
+    accent_hover: str = ACCENT_HOVER
+    on_accent: str = ON_ACCENT       # text drawn on accent fills
+    button: str = RAISED             # secondary button
+    button_hover: str = BORDER_RAISED
+    field_bg: str = RAISED           # slider track, entry, combo face
     # status chip colors (kept in step with the tray icon meaning)
     ok: str = "#4caf62"
     counting: str = "#d9a13c"
@@ -54,36 +78,61 @@ class Skin:
 
     # -- style kwargs, one per widget kind, so window.py stays generic --
     def panel_style(self):
+        # elevation = contrast tiers + a 1px border DARKER than the
+        # card, never a shadow (the Monitorian/PowerToys recipe)
         return dict(fg_color=self.panel, border_color=self.border,
                     border_width=1, corner_radius=self.radius)
 
     def primary(self):
         return dict(fg_color=self.accent, hover_color=self.accent_hover,
-                    text_color="#10131a", corner_radius=self.radius)
+                    text_color=self.on_accent,
+                    border_color=self.border_raised, border_width=1,
+                    corner_radius=self.radius)
 
     def secondary(self):
         return dict(fg_color=self.button, hover_color=self.button_hover,
-                    text_color=self.text, corner_radius=self.radius)
+                    text_color=self.text,
+                    border_color=self.border_raised, border_width=1,
+                    corner_radius=self.radius)
 
     def text_style(self, kind="text"):
-        color = self.text if kind == "text" else self.subtext
+        color = (self.txt3 if kind == "disabled"
+                 else self.subtext if kind == "sub" else self.text)
         return dict(fg_color="transparent", text_color=color)
 
     def slider_style(self):
         return dict(fg_color=self.field_bg, progress_color=self.accent,
                     button_color=self.accent,
                     button_hover_color=self.accent_hover,
-                    border_color=self.border, corner_radius=self.radius)
+                    border_color=self.border_raised,
+                    corner_radius=self.radius)
 
     def menu_style(self):
-        return dict(fg_color=self.field_bg, button_color=self.accent,
-                    button_hover_color=self.accent_hover,
+        # the combo face is a RAISED control, not decoration: it takes
+        # the field tier, and the accent stays reserved for live state
+        return dict(fg_color=self.field_bg, button_color=self.field_bg,
+                    button_hover_color=self.button_hover,
                     dropdown_fg_color=self.panel,
                     dropdown_hover_color=self.button_hover,
                     text_color=self.text, corner_radius=self.radius)
 
+    def switch_style(self):
+        # one dict for the eight CTkSwitch call sites (they used to
+        # hand-pick progress/border and let the defaults color the
+        # rest - the audit's job is exactly to stop that)
+        return dict(fg_color=self.field_bg, progress_color=self.accent,
+                    border_color=self.border_raised,
+                    button_color=self.text,
+                    button_hover_color=self.accent_hover)
+                    # (no hover_color: CTkSwitch rejects it, measured -
+                    # that kwarg belongs to buttons only)
+
     def segmented_style(self):
-        return dict(fg_color=self.panel,
+        # CTkSegmentedButton takes NO border_color (measured: it raises
+        # __init__ TypeError on it, unlike the switch) - the tier is
+        # carried by fg/unselected, which is the whole visible frame
+        # for this widget anyway.
+        return dict(fg_color=self.field_bg,
                     unselected_color=self.field_bg,
                     unselected_hover_color=self.button_hover,
                     selected_color=self.accent,

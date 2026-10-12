@@ -584,7 +584,11 @@ def check():
         # every tab), Quit owns the far right (pack stacks from the
         # right edge, so the rightmost command is the first child),
         # and sleep is one slider dialog that snoozes only on ok
-        assert app.rescue_button.master is app._actions
+        # the reskin (UI-1c) wraps the rescue button in a cell frame so
+        # its hint line can ride UNDER it; the intent stands: the
+        # button lives on the actions bar, one frame deep at most.
+        assert app.rescue_button.master.master is app._actions \
+            or app.rescue_button.master is app._actions
         kids = app.quit_button.master.winfo_children()
         assert kids[0] is app.quit_button, "Quit is not the far right"
         assert app.sleep_button in kids and app.pause_button in kids

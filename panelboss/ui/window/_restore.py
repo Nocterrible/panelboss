@@ -4,6 +4,8 @@ arm, profile, scope, when.
 
 from __future__ import annotations
 
+from .. import theme
+
 import customtkinter as ctk
 
 from ... import profiles
@@ -28,18 +30,17 @@ class _RestoreMixin:
         itself, and cli reads that stamp as proof."""
         rst = self.cfg.setdefault("restore", {})
         head = ctk.CTkFrame(parent, fg_color="transparent")
-        head.pack(fill="x", pady=(12, 0))
+        head.pack(fill="x", pady=(theme.S_ROW, 0))
         ctk.CTkLabel(head, text="restore a profile at start",
                      font=self.skin.font(13, "bold"),
                      **self.skin.text_style()).pack(side="left")
-        self.tips.button(head, TIPS["restore_on"]).pack(
-            side="left", padx=(6, 0))
+        # (the chip is gone: the "armed" row below already carries
+        # this same tip as its inline hint - the chip was a duplicate)
         row = self._row(parent, "armed", TIPS["restore_on"])
         self.restorep_switch = ctk.CTkSwitch(row, text="",
                                              font=self.skin.font(12),
                                              command=self._restorep_changed,
-                                             progress_color=self.skin.accent,
-                                             border_color=self.skin.border)
+                                             **self.skin.switch_style())
         self.restorep_switch.grid(row=0, column=1, sticky="e")
         if rst.get("enabled"):
             self.restorep_switch.select()
@@ -133,7 +134,7 @@ class _RestoreMixin:
                       "the slowest boot it measured + 20 s (never "
                       "under 30 s, never over 10 min).",
             font=self.skin.font(12), justify="left", wraplength=340,
-            **self.skin.text_style()).pack(padx=20, pady=(14, 8))
+            **self.skin.text_style()).pack(padx=theme.S_SECTION, pady=(theme.S_SECTION, theme.S_ROW))
 
         def close():
             dlg.destroy()
@@ -141,7 +142,7 @@ class _RestoreMixin:
                 self.restorep_warn = None
 
         ctk.CTkButton(dlg, text="got it", width=110, command=close,
-                      **self.skin.primary()).pack(pady=(0, 14))
+                      **self.skin.primary()).pack(pady=(0, theme.S_SECTION))
         dlg.after(30, dlg.focus_force)       # Windows steals focus
                                              # back without this
 

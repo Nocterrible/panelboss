@@ -11,6 +11,7 @@ import cv2
 import customtkinter as ctk
 from PIL import Image
 
+from .. import theme
 from ... import config
 from ._constants import TIPS
 from ._widgets import SkewCombo
@@ -25,53 +26,67 @@ class _CameraMixin:
         # window cannot promise the preview height fits, so the page
         # scrolls (unscrollable, the switch was simply born below the
         # clip edge - seen live)
-        card = ctk.CTkFrame(band, width=int(self.cfg["ui"]["preview_width"])
-                            + 30, **self.skin.panel_style())
-        card.pack(anchor="nw", padx=(12, 0))
+        # the card matches the preview width for column alignment, but
+        # NEVER narrower than its own form (320 px zone + section
+        # pads): a debug-sized preview_width (the harness config's 140)
+        # used to clip every label mid-word - the card bows to the
+        # preview, not below its own content
+        card = ctk.CTkFrame(band, width=max(
+            int(self.cfg["ui"]["preview_width"]) + 30, 360),
+            **self.skin.panel_style())
+        card.pack(anchor="nw", padx=(theme.S_SECTION, 0))
         head = ctk.CTkFrame(card, fg_color="transparent")
-        head.pack(anchor="w", padx=14, pady=(10, 0))
+        head.pack(anchor="w", padx=theme.S_SECTION,
+                  pady=(theme.S_ROW, 0))
         ctk.CTkLabel(head, text="Camera", font=self.skin.font(15, "bold"),
                      **self.skin.text_style()).pack(side="left")
-        self.tips.button(head, TIPS["camera"]).pack(side="left",
-                                                    padx=(6, 0))
+        # the camera card is a preview_width+30 (~350 px) column; the
+        # hint line caps to the zone's 320 px budget (chars, not px -
+        # an uncapped hint balloons the card and pack clips the label
+        # mid-word, screenshot-verified before the cap)
+        self._hint(card, TIPS["camera"], padx=theme.S_SECTION, chars=42)
         controls = ctk.CTkFrame(card, fg_color="transparent")
-        controls.pack(fill="x", padx=14, pady=(6, 2))
+        controls.pack(fill="x", padx=theme.S_SECTION,
+                      pady=(theme.S_FIELD, 0))
         self.camera_menu = SkewCombo(
             controls, values=["scanning cameras..."], width=300,
             command=self._camera_changed, **self.skin.menu_style())
         self.camera_menu.pack(side="left")
         ctk.CTkButton(controls, text="rescan", width=80,
                       command=self._scan_cameras,
-                      **self.skin.secondary()).pack(side="left", padx=6)
+                      **self.skin.secondary()).pack(
+            side="left", padx=theme.S_FIELD)
         # the label zone is a 320 px form, not the card's full width:
         # full width flings labels to one edge and menus to the other
         # and the eye has to cross a canyon to read the pair (the
         # screenshot's complaint); 320 keeps every control's right
         # edge on one line, close enough to its label to belong to it
         zone = ctk.CTkFrame(card, width=320, fg_color="transparent")
-        zone.pack(anchor="w", padx=14)
+        zone.pack(anchor="w", padx=theme.S_SECTION)
         for key, label, tip in (("mode_on", "while screens are on",
                                  TIPS["cam_on"]),
                                 ("mode_off", "while screens are off",
                                  TIPS["cam_off"])):
-            row = self._row(zone, label, tip)
+            row = self._row(zone, label, tip, hint_chars=42)
             menu = SkewCombo(row, values=["boot per poll",
                                                   "always on"], width=150,
                                      command=self._mode_changed(key),
                                      **self.skin.menu_style())
             menu.grid(row=0, column=1, sticky="e")
             menu.set(self._mode_label(self.cfg["camera"][key]))
-        row = self._row(zone, "live preview", TIPS["live"])
+        row = self._row(zone, "live preview", TIPS["live"], hint_chars=42)
         self.live_switch = ctk.CTkSwitch(row, text="", font=self.skin.font(12),
                                          command=self._live_changed,
-                                         progress_color=self.skin.accent,
-                                         border_color=self.skin.border)
-        self.live_switch.grid(row=0, column=1, sticky="e", padx=(0, 4))
+                                         **self.skin.switch_style())
+        self.live_switch.grid(row=0, column=1, sticky="e",
+                              padx=(0, theme.S_FIELD))
         self.power_msg = ""                      # install/uninstall result
         self.power_msg_ts = 0.0
         self.preview_frame = ctk.CTkFrame(card, fg_color=self.skin.field_bg,
                                           corner_radius=self.skin.radius)
-        self.preview_frame.pack(anchor="w", pady=(4, 4), padx=14)
+        self.preview_frame.pack(anchor="w",
+                                pady=(theme.S_FIELD, theme.S_FIELD),
+                                padx=theme.S_SECTION)
         self.preview_label = ctk.CTkLabel(self.preview_frame,
                                           text="no frames yet - flip on "
                                           "live preview",
@@ -83,7 +98,8 @@ class _CameraMixin:
                                          wraplength=400, justify="left",
                                          anchor="w",
                                          **self.skin.text_style("sub"))
-        self.preview_info.pack(anchor="w", padx=14, pady=(0, 10))
+        self.preview_info.pack(anchor="w", padx=theme.S_SECTION,
+                               pady=(0, theme.S_ROW))
 
 
     def _mode_changed(self, key):

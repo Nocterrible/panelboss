@@ -1,9 +1,10 @@
-"""Shared card/row/section widgets, the sleep prompt, the
-pin editor's blank slate, and SkewCombo - the tk.Menubutton
-drop-in that replaced all 18 CTkOptionMenus (UI-1b2: each CTk
-dropdown was ~30 canvas-backed labels built at grid time,
-~1 s of the 1.44 s build median; this file earns its 230 lines
-by being the whole answer to that measurement).
+"""Shared card/row/section widgets (the hint line's text side lives
+in _hints.py), the sleep prompt, the pin editor's blank slate, and
+SkewCombo - the tk.Menubutton drop-in that replaced all 18
+CTkOptionMenus (UI-1b2: each CTk dropdown was ~30 canvas-backed
+labels built at grid time, ~1 s of the 1.44 s build median; this
+file earns its length by being the whole answer to that
+measurement, minus the hint helper the size-law gate split out).
 """
 
 from __future__ import annotations
@@ -11,6 +12,9 @@ from __future__ import annotations
 import tkinter as tk
 
 import customtkinter as ctk
+
+from .. import theme
+from ._hints import HINT_WRAP, hint_text as _hint_text
 
 def set_text(widget, text):
     """Write a label/button text only when it actually CHANGED. Every
@@ -49,16 +53,19 @@ class _SleepPrompt(ctk.CTkToplevel):
         self._lbl = ctk.CTkLabel(self, text="wake again in 30 min",
                                  font=skin.font(15, "bold"),
                                  **skin.text_style())
-        self._lbl.pack(padx=20, pady=(14, 0))
+        self._lbl.pack(padx=theme.S_SECTION, pady=(theme.S_SECTION, 0))
         self._sld = ctk.CTkSlider(self, from_=5, to=180,
                                   number_of_steps=35, scroll_step=5,
-                                  command=self._show)
+                                  command=self._show,
+                                  **skin.slider_style())
         self._sld.set(30)
-        self._sld.pack(padx=20, pady=(10, 0))
+        self._sld.pack(padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         row = ctk.CTkFrame(self, fg_color="transparent")
-        row.pack(fill="x", padx=16, pady=(14, 14))
+        row.pack(fill="x", padx=theme.S_SECTION,
+                 pady=(theme.S_SECTION, theme.S_SECTION))
         ctk.CTkButton(row, text="ok", command=self._go,
-                      **skin.primary()).pack(side="right", padx=(8, 0))
+                      **skin.primary()).pack(side="right",
+                                             padx=(theme.S_ROW, 0))
         ctk.CTkButton(row, text="cancel", command=self.destroy,
                       **skin.secondary()).pack(side="right")
         self.update_idletasks()
@@ -137,6 +144,11 @@ class SkewCombo(tk.Menubutton):
         kw = dict(textvariable=self._var, bg=btn, fg=txt,
                   activebackground=hov, activeforeground=txt,
                   relief="raised", borderwidth=1, highlightthickness=1,
+                  # tk's default highlight ring is LIGHT GRAY - on the
+                  # dark panel it was the one non-design pixel left in
+                  # the UI (screenshot-verified); sink it into the
+                  # face and let the raised relief carry the edge
+                  highlightbackground=mbg, highlightcolor=hov,
                   padx=6, pady=3)
         # DO NOT set relief flat + borderwidth 0: the button collapses to
         # a 1px sliver (measured trap). px -> chars at ~10 px/char
@@ -224,37 +236,59 @@ class SkewCombo(tk.Menubutton):
 class _WidgetsMixin:
     def _card(self, parent, title, sub=""):
         frame = ctk.CTkFrame(parent, **self.skin.panel_style())
-        frame.pack(fill="x", pady=(0, 10))
+        frame.pack(fill="x", pady=(0, theme.S_SECTION))
         ctk.CTkLabel(frame, text=title, font=self.skin.font(15, "bold"),
-                     **self.skin.text_style()).pack(anchor="w", padx=14,
-                                               pady=(10, 0))
+                     **self.skin.text_style()).pack(
+            anchor="w", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         if sub:
             # wraplength or the label clips: the sub lines are longer
             # than any column, and clipped text reads like a bug in the
             # app, not in the label
             ctk.CTkLabel(frame, text=sub, font=self.skin.font(11),
-                         wraplength=480, justify="left", anchor="w",
+                         wraplength=HINT_WRAP, justify="left", anchor="w",
                          **self.skin.text_style("sub")).pack(
-                anchor="w", padx=14)
+                anchor="w", padx=theme.S_SECTION)
         inner = ctk.CTkFrame(frame, fg_color="transparent")
-        inner.pack(fill="x", padx=14, pady=(6, 12))
+        inner.pack(fill="x", padx=theme.S_SECTION,
+                   pady=(theme.S_FIELD, theme.S_ROW))
         return inner
 
 
-    def _row(self, parent, label, tip=""):
-        """One settings row: label left, widget right. Widgets are
-        created ON THE ROW so grid only ever manages children of the
-        row, pack only ever manages children of the card. The label
-        cell hosts the "?" beside the text."""
+    def _hint(self, parent, tip, chars=90, **pack):
+        """The "?" chip's replacement, called wherever a chip used to
+        ride beside a heading: a secondary-tier ONE-LINER packed under
+        the control, present in the layout from build. Deep help is a
+        later phase (F1 palette); the row stays honest and still.
+        Narrow cards pass a smaller `chars` - a clipped hint reads
+        worse than a short one."""
+        lbl = ctk.CTkLabel(parent, text=_hint_text(tip, chars),
+                           font=self.skin.font(11),
+                           wraplength=HINT_WRAP, justify="left",
+                           anchor="w", **self.skin.text_style("sub"))
+        lbl.pack(anchor="w", pady=(theme.S_FIELD, 0), **pack)
+        return lbl
+
+
+    def _row(self, parent, label, tip="", hint_chars=90):
+        """One settings row: label left, widget right, and - when the
+        setting carries help - a pre-allocated hint row underneath.
+        Widgets are created ON THE ROW so grid only ever manages
+        children of the row, pack only ever manages children of the
+        card. The tip is static text at tier 2: no "?" chip, no
+        hover dance."""
         row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", pady=2)
+        row.pack(fill="x", pady=(0, theme.S_ROW))
         row.grid_columnconfigure(0, weight=1)
         cell = ctk.CTkFrame(row, fg_color="transparent")
         cell.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(cell, text=label, font=self.skin.font(12),
                      **self.skin.text_style()).pack(side="left")
         if tip:
-            self.tips.button(cell, tip).pack(side="left", padx=(6, 0))
+            ctk.CTkLabel(row, text=_hint_text(tip, hint_chars),
+                         font=self.skin.font(11), wraplength=HINT_WRAP,
+                         justify="left", anchor="w",
+                         **self.skin.text_style("sub")).grid(
+                row=1, column=0, sticky="w", pady=(theme.S_FIELD, 0))
         return row
 
 

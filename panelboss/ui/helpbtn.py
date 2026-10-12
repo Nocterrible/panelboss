@@ -13,6 +13,8 @@ way in every toolkit that forgot it).
 
 from __future__ import annotations
 
+from . import theme
+
 import tkinter as tk
 
 import customtkinter as ctk
@@ -96,11 +98,11 @@ class Tips:
         tip.transient(self.root)               # note at the cursor, not
                                                # a window that announces
                                                # itself as another app
-        frame = tk.Frame(tip, bg=self.skin.border, padx=1, pady=1)
+        frame = tk.Frame(tip, bg=self.skin.border, padx=1, pady=1)  # hairline border, not a gap
         frame.pack(fill="both", expand=True)
         tk.Label(frame, text=text, bg=self.skin.panel, fg=self.skin.text,
                  font=("Segoe UI", 10), justify="left", anchor="nw",
-                 wraplength=WIDTH - 24, padx=10, pady=8).pack(anchor="nw")
+                 wraplength=WIDTH - 24, padx=theme.S_ROW, pady=theme.S_FIELD).pack(anchor="nw")
         tip.update_idletasks()
         w, h = tip.winfo_width(), tip.winfo_height()
         x = max(min(x, self.root.winfo_rootx() + self.root.winfo_width()
