@@ -74,8 +74,12 @@ class _RuntimeMixin:
                 self.destroy()
                 return
             if message == "open":
-                self.deiconify()
-                self.lift()
+                # NOT a bare deiconify: the first open of a
+                # start-minimized app maps a window that has never
+                # painted (Tk draws no pixels while withdrawn), and a
+                # raw map replays the whole build sweep on screen -
+                # _show_first owns the one veiled map, every flavor
+                self._show_first()
                 self.focus_force()
             if message == "assistant_truth":
                 self._assistant_truth(_value)
