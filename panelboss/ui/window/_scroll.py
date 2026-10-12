@@ -72,6 +72,7 @@ class ScrollHost(tk.Frame):
         # **ignored eats leftover CTk-style kwargs (scrollbar_button_color
         # and friends) so call sites can age out of them one at a time
         super().__init__(master, bg=bg)
+        self._dead = False              # the <Destroy> binding's opt-out
         self._sb = tk.Scrollbar(self, width=10, bg=bg, troughcolor=bg,
                                 activebackground=bg, highlightthickness=0)
         self._sb.pack(side="right", fill="y")
@@ -90,6 +91,23 @@ class ScrollHost(tk.Frame):
         self._sb.configure(command=self._canvas.yview)
         # width tracks the viewport; height is the scroll region
         self.inner.bind("<Configure>", self._region, add="+")
+        # a child DESTROY is the other half of the region story (Oct
+        # 12, owner's blank band): shrinking content fires NO
+        # <Configure> for the frame left behind (measured: pack/
+        # destroy coalesces, and a descendant Destroy does NOT hit a
+        # middle frame's binding either - Tk routes it through the
+        # DESTROYED widget's bindtags, where the toplevel sits). So
+        # the toplevel is the truthful seat: every removal anywhere
+        # in the page re-measures here, through the loop turn that
+        # lets geometry settle (sync_region). Four hosts share the
+        # seat; a re-measure is microseconds. DEAD hosts opt out (gate
+        # finding, MEDIUM): profile repaints churn ScrollHosts, and an
+        # unbinding-less binding would tax every future destroy with
+        # the ghosts of every dead section buffer.)
+        self.winfo_toplevel().bind(
+            "<Destroy>",
+            lambda e: None if getattr(self, "_dead", False)
+            else self.sync_region(), add="+")
         self._canvas.bind("<Configure>", self._width, add="+")
         # the wheel: one dispatcher, installed once, owned by no host.
         # UNCONDITIONAL (gate finding 1): PanelBoss owns <MouseWheel>
@@ -110,7 +128,27 @@ class ScrollHost(tk.Frame):
 
     def _region(self, _event=None):
         try:
-            self._canvas.configure(scrollregion=self._canvas.bbox("all") or ())
+            reg = self._canvas.bbox("all") or ()
+            self._canvas.configure(scrollregion=reg)
+            # clamp a stranded view (Oct 12, owner's "blank space at
+            # the top"): rows that leave (collapsed tiles, retracting
+            # update lines) SHRINK the region, and tk never re-clamps
+            # yview when that happens - the view stays parked in
+            # content that no longer exists, showing blank above the
+            # survivors. Re-pack used to hide this by resetting the
+            # view on every tab visit; the layer law keeps pages
+            # mapped, so the clamp belongs here where the region
+            # changes. Content that does not fill the viewport has
+            # exactly ONE sane position: the top.
+            if len(reg) == 4 and reg[3] <= self._canvas.winfo_height():
+                self._canvas.yview_moveto(0.0)
+            # the same law's partial-shrink arm (gate finding, LOW,
+            # measured there): a region that shrinks but still
+            # overhangs the viewport leaves a parked view's fraction
+            # OUT of range (0.9 -> 1.0033) - the band's bigger
+            # sibling. Past-the-end views snap back to the edge.
+            elif self._canvas.yview()[1] > 1.0:
+                self._canvas.yview_moveto(1.0)
         except tk.TclError:      # canvas gone mid-teardown: nothing to
             pass                 # measure, nothing to confess
 
@@ -120,12 +158,18 @@ class ScrollHost(tk.Frame):
         through mid-burst fires nothing and the region stays whatever
         bbox saw mid-destroy (0x0 -> scrollregion dead, scroll gone).
         Deferred one loop turn so the pending geometry has settled.
+        TWO passes (Oct 12, band hunt): a destroy burst outlives a
+        single 1 ms hop - the first re-measure can still catch the
+        transient, and Tk sends no follow-up event when the settle
+        passes silently. The second lands after the burst has truly
+        finished; _region is idempotent and microseconds cheap.
         after() survives _region being gone only until destroy()
         deletes the callit - a swap that raised mid-teardown can fire
         it on a dead canvas: the TclError is exactly the silent hole
         class, guarded (gate finding 4)."""
         try:
             self.after(1, self._region)
+            self.after(50, self._region)
         except tk.TclError:
             pass
 
@@ -136,6 +180,9 @@ class ScrollHost(tk.Frame):
         self._canvas.yview_scroll(int(-event.delta / 120), "units")
 
     def destroy(self):
+        self._dead = True             # the toplevel <Destroy>
+        # binding must not tax future events with this host's
+        # funeral (gate finding, MEDIUM)
         try:
             _LIVE.remove(self)
         except ValueError:

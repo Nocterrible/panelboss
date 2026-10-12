@@ -141,6 +141,38 @@ check(app._veil_lbl is None
       "switch raises the layer to the top of the body (re-enter)")
 app.update()
 
+# (Oct 12, owner: "large blank space at the top of the pages") the
+# stranded-view law: a region that SHRINKS under an already-scrolled
+# view leaves tk parked inside content that no longer exists - blank
+# on top. The host must clamp; re-pack used to hide this, the layer
+# law made it permanent, so the law is asserted here forever.
+p = app.pages["general"]             # the SHORT page: 272 px of content
+c = p._canvas
+_calls = {"sync": 0}
+_orig_sync = type(p).sync_region
+def _spy(self, *a, **k):
+    _calls["sync"] += 1
+    return _orig_sync(self, *a, **k)
+type(p).sync_region = _spy
+big = tk.Frame(p.inner, height=3000)
+big.pack(fill="x")
+app.update()
+c.yview_moveto(0.5)
+check(c.yview()[0] > 0.0, "the scrolled page really scrolls (setup)")
+big.destroy()
+settle = time.time() + 0.6           # let the region burst finish
+while time.time() < settle:
+    app.update()                     # (the re-measure rides the loop
+    time.sleep(0.01)                 # turns, as in production)
+regs = str(c.cget("scrollregion")).split()
+check(len(regs) == 4 and int(regs[3]) <= c.winfo_height()
+      and c.yview()[0] == 0.0,
+      "a shrunken region clamps the stranded view back to the top"
+      + ("" if c.yview()[0] == 0.0 else
+         " [dbg region=%s yview=%s syncs=%s]"
+         % (c.cget("scrollregion"), c.yview(), _calls["sync"])))
+type(p).sync_region = _orig_sync
+
 app.destroy()
 print("veil-budget: %d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
