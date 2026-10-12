@@ -42,8 +42,27 @@ def _scroll_up(under, step):
     while w is not None:
         for host in live:
             if host._canvas is w:
-                lo, hi = w.yview()
-                if hi - lo > 1e-6:
+                reg = w.bbox("all")
+                # the region-vs-viewport law (Oct 12, ghost hunt):
+                # yview() is a liar on a FITTED canvas - it reports
+                # (0,1) for "all visible" while yview_scroll still
+                # moves the RENDERED view (measured Tk 8.6/3.10.6:
+                # -95px per wheel-up, canvasy(0) walks, yview never
+                # budges). The old hi-lo guard read (0,1) as
+                # scrollable and took the event; the host's own
+                # clamp then snapped the offset back from the
+                # <Configure> the move itself generates, and the
+                # flashed frame at the offset is the ghosted card
+                # bottoms the owner saw. The bbox test mirrors the
+                # clamp's law exactly (same quantity, same
+                # comparison), so accept and snap can never
+                # disagree.
+                if reg is not None and len(reg) == 4 \
+                        and reg[3] > w.winfo_height():
+                    # reg[3] (not reg[3]-reg[1]) mirrors the clamp's
+                    # law verbatim - premise: inner is pack-managed
+                    # at y=0, no negative content; both arms would
+                    # change together if that ever breaks.
                     w.yview_scroll(step, "units")
                     return True
                 break            # this host cannot: keep walking out

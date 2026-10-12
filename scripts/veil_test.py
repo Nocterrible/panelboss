@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from panelboss import config                        # noqa: E402
 from panelboss.ui.window import _shell              # noqa: E402
+from panelboss.ui.window import _scroll             # noqa: E402
 from panelboss.ui.window._constants import TABS     # noqa: E402
 
 fails = []
@@ -65,7 +66,13 @@ cfg = config.get_config()
 events = queue.Queue()
 app = ProbeWindow(cfg, FakeMonitor(), events)
 
-# an UNASKED map (the boot flavor) veils but does not consume
+# an UNASKED map (the boot flavor) veils but does not consume.
+# drain init's own veil+lift FIRST (under gauntlet load the 300 ms
+# lift can mature between construction and the first explicit map -
+# a stale timer firing inside _veil's forced paint ate the check
+# once, mid-suite, observed 15:2x ALL GREEN:False)
+time.sleep(0.45)
+app.update()
 if app.state() != "withdrawn":
     app._hide()
     time.sleep(0.2)
@@ -172,6 +179,41 @@ check(len(regs) == 4 and int(regs[3]) <= c.winfo_height()
          " [dbg region=%s yview=%s syncs=%s]"
          % (c.cget("scrollregion"), c.yview(), _calls["sync"])))
 type(p).sync_region = _orig_sync
+
+# (Oct 12, owner: short pages "ghost their card bottoms as if they
+# expected to draw a scroll then rubber band") the fitted-page law,
+# other half: a page whose region fits its viewport must not take
+# the wheel. yview() is no witness here -- a fitted canvas reports
+# (0,1) while yview_scroll STILL moves the rendered view (measured:
+# canvasy(0) walks -95px per wheel-up, the clamp's own
+# yview_moveto(0) snaps it back from the <Configure> the move
+# generates; the flashed frame at the offset is the ghost). The
+# honest witness is canvasy(0) sampled BEFORE any pump, so the law
+# is asserted in canvasy terms - deterministic, in-process, no
+# pixels, no timing.
+app.geometry("920x1080")                 # the live-app size, whatever
+app._size_pair = (920, 1080)             # was recalled (no resize-recall)
+app.update()
+app._show_tab("general")                 # raise the fitted page: the
+app.update(); time.sleep(0.15)           # wheel must land on ITS layer
+app.update()
+gs = app.pages["general"]                # the fitted page
+gcv = gs._canvas
+_off = gcv.canvasy(0)
+_pt = (gcv.winfo_rootx() + gcv.winfo_width() // 2,
+       gcv.winfo_rooty() + 60)
+_und = app.winfo_containing(*_pt)
+_und.event_generate("<MouseWheel>", x=10, y=10, delta=120)
+check(gcv.canvasy(0) == _off,
+      "a fitted page does not flash a scroll (canvasy(0) unmoved"
+      " straight after the wheel event, before the clamp could)"
+      + ("" if gcv.canvasy(0) == _off else
+         " [dbg cy0 %s -> %s]" % (_off, gcv.canvasy(0))))
+app.update()
+check(_scroll._scroll_up(_und, -1) is False,
+      "the fitted host refuses the wheel outright (innermost-first"
+      " step-aside law; yview_scroll must never be reached)")
+check(gcv.canvasy(0) == _off, "and the refusal leaves the view parked")
 
 app.destroy()
 print("veil-budget: %d failure(s)" % len(fails))
