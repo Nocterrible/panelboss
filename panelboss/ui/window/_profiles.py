@@ -87,6 +87,9 @@ class _ProfilesMixin:
             if old is not None:
                 old.destroy()
             self._prof_body.pack(fill="x")
+            self._page_region()   # same rule as _repaint: the whole
+            #                   body just swapped - re-measure (see
+            #                   scroll_probe, Oct 12)
 
 
     def _repaint(self, *names):
@@ -128,6 +131,22 @@ class _ProfilesMixin:
             # quietly until its own section repaints again.
             for f in self._psec_old.pop(name, []):
                 f.destroy()
+        self._page_region()         # the swap changed (or kept) the
+        #                           pane's height: re-measure the page
+        #                           scroll region after EVERY swap -
+        #                           coalesced <Configure>s can leave a
+        #                           stale region and the owner's dead
+        #                           wheel (scroll_probe, Oct 12)
+
+
+    def _page_region(self):
+        """the ScrollHost of this tab, re-measured one loop turn
+        late (sync_region): after a pack/destroy burst the pending
+        geometry needs one idle pass before bbox("all") tells the
+        truth."""
+        host = self.pages.get("monitor profiles")
+        if host is not None:
+            host.sync_region()
 
 
     def _profiles_fill(self):

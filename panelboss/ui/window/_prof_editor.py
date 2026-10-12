@@ -1,7 +1,7 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
 
-SIZE LAW: ~330. These are the pane's five section fills plus the
+SIZE LAW: ~336. These are the pane's five section fills plus the
 row builder - one story (what a section looks like when painted),
 split from the VERBS (_prof_pins.py) that mutate them in place. The
 fills must stay together for _repaint's readers; splitting the row
@@ -206,14 +206,20 @@ class _EditorMixin:
 
     def _fill_pins(self):
         """The seats this profile owns - below the editor on purpose
-        (see the reorder note in _profiles_fill)."""
+        (see the reorder note in _profiles_fill). Oct 12 (owner,
+        screenshot): the heading, the two buttons and the list own
+        ONE ROW EACH - the old pack mixed side="left" head/buttons
+        with a top-pack ScrollHost, so the buttons crowded into the
+        heading's band and the ScrollHost landed squished right."""
         sec = self._section("pins", pady=(theme.S_ROW, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel) \
             or {"wins": []}
-        head = ctk.CTkLabel(sec, text="pinned apps",
+        hrow = ctk.CTkFrame(sec, fg_color="transparent")
+        hrow.pack(fill="x")
+        head = ctk.CTkLabel(hrow, text="pinned apps",
                             font=self.skin.font(13, "bold"),
                             **self.skin.text_style())
-        head.pack(side="left")
+        head.pack(anchor="w")
         # UI-1c reversal (gate catch): the paragraph rides this heading's
         # hover, the exact path the old "?" chip used
         head.bind("<Enter>",
@@ -221,18 +227,19 @@ class _EditorMixin:
                                                      head),
                   add="+")
         head.bind("<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
-        ctk.CTkButton(sec, text="pin every open app", width=150,
+        brow = ctk.CTkFrame(sec, fg_color="transparent")
+        brow.pack(fill="x", pady=(theme.S_FIELD, 0))
+        ctk.CTkButton(brow, text="pin every open app", width=150,
                       command=self._prof_pin_all,
-                      **self.skin.secondary()).pack(side="left",
-                                                    padx=(theme.S_ROW, 0))
-        ctk.CTkButton(sec, text="re-scan", width=80,
+                      **self.skin.secondary()).pack(side="left")
+        ctk.CTkButton(brow, text="re-scan", width=80,
                       command=self._prof_rescan,
                       **self.skin.secondary()).pack(side="left",
                                                     padx=(theme.S_FIELD, 0))
         # _hint is the hover-era no-op; kept so every old call site compiles
         self._hint(sec, TIPS["profile_pins"])
         pinf = ScrollHost(sec, bg=self.skin.panel, width=590, height=112)
-        pinf.pack(fill="x")
+        pinf.pack(fill="x", pady=(theme.S_FIELD, 0))
         # the in-place-update trackers (owner ruling, Oct 12): a pin
         # click appends or reconfigures ONE row, an unpin destroys its
         # own row - the section itself only rebuilds on a full render

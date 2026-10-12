@@ -20,6 +20,11 @@ Rules this file lives by:
   rows themselves stay one line short
 
 Skins come from theme.py; nothing here hardcodes a color.
+
+SIZE LAW: grandfathered at ~530 - window lifecycle, size recall, and
+the reveal-veil machinery are one story (how the window appears and
+remembers itself); the scroll hosts already live in _scroll.py and the
+next seam to split out is the size-recall trio if this grows again.
 """
 
 
@@ -88,8 +93,15 @@ class SettingsWindow(
         self.skin = theme.get_skin(cfg["ui"]["skin"])
         theme.apply_ctk_font(self.skin)
         self.title("PanelBoss")
-        self.geometry("920x640")
-        self.minsize(760, 520)
+        # size (Oct 12, owner: "open larger, and remember how large I
+        # dragged it"): the recalled [w, h], clamped at birth; the
+        # minsize is the clamp's floor, so a recalled window is never
+        # smaller than what the recall promises
+        self._size_job = None
+        self._size_pair = self._initial_size()
+        self.geometry("%dx%d" % self._size_pair)
+        self.minsize(600, 420)
+        self.bind("<Configure>", self._on_configure)
         self.protocol("WM_DELETE_WINDOW", self._hide)     # close = to tray
         self._cams = None
         self._shown_ts = None
@@ -399,12 +411,104 @@ class SettingsWindow(
             log.exception("config save failed")
 
 
+    # ------------------------------------------------------ size recall --
+    # The owner drags the window once; every later launch opens it that
+    # size. Only the PAIR is remembered - never the position (the desk
+    # moves windows; a remembered corner is how apps grow onto dead
+    # monitors) - and only through the settings card's own save path,
+    # behind a 750 ms debounce so a drag writes once, not per pixel.
+
+    SIZE_LO = (600, 420)            # clamp floor; minsize()'s twin above
+
+    def _workarea(self):
+        """The primary screen's work area (taskbar excluded - a window
+        that opens 48 px too tall loses its buttons under the bar).
+        tk only knows the FULL screen, so ask Windows; the fallback is
+        honest (full screen) where the call is unavailable."""
+        try:
+            import ctypes
+            from ctypes.wintypes import RECT
+            r = RECT()
+            ctypes.windll.user32.SystemParametersInfoW(
+                0x0030, 0, ctypes.byref(r), 0)      # SPI_GETWORKAREA
+            return max(r.right - r.left, 600), max(r.bottom - r.top, 420)
+        except Exception:
+            return (self.winfo_screenwidth(), self.winfo_screenheight())
+
+
+    def _initial_size(self):
+        """The recalled [ui] window_size, clamped into the usable box.
+        The first-line failure path: a garbage pair (0x0, an absurd
+        99999, a half-written list) is clamped (or defaults, when it
+        does not parse at all) AND confesses in the log - a window the
+        user cannot grab is a bug report, a clamped one is a Tuesday."""
+        raw = self.cfg["ui"].get("window_size") or []
+        d_w, d_h = config.DEFAULTS["ui"]["window_size"]
+        try:
+            w, h = int(raw[0]), int(raw[1])
+        except (TypeError, ValueError, IndexError):
+            if raw:
+                log.info("window size %r unreadable - stock default", raw)
+            w, h = d_w, d_h
+        hi_w, hi_h = self._workarea()
+        cw, ch = max(self.SIZE_LO[0], min(w, hi_w)), \
+            max(self.SIZE_LO[1], min(h, hi_h))
+        if (cw, ch) != (w, h):
+            log.info("window size %dx%d clamped to %dx%d", w, h, cw, ch)
+        return cw, ch
+
+
+    def _on_configure(self, event):
+        """resize-recall: the root's OWN w/h changing (not a move, not
+        an iconified/withdrawn reshape) re-arms one 750 ms timer; the
+        burst lands as a single write."""
+        if event.widget is not self or self.state() != "normal":
+            return
+        if (event.width, event.height) == self._size_pair:
+            return
+        self._size_pair = (event.width, event.height)
+        if self._size_job is not None:
+            self.after_cancel(self._size_job)
+        self._size_job = self.after(750, self._remember_size)
+
+
+    def _remember_size(self):
+        self._size_job = None
+        try:
+            if self.state() != "normal":       # trayd/zoomed mid-burst
+                return
+            w, h = self.winfo_width(), self.winfo_height()
+        except tk.TclError:
+            return
+        self.cfg["ui"]["window_size"] = [w, h]  # REPLACE, never mutate
+        self._save()                           # in place: the merge is
+                                               # shallow and a fresh cfg
+                                               # aliases DEFAULTS here
+
+
+    def _cancel_size_job(self):
+        if getattr(self, "_size_job", None) is not None:
+            try:
+                self.after_cancel(self._size_job)
+            except ValueError:
+                pass                           # already fired
+            self._size_job = None
+
+
     def _pause_toggle(self):
         self.monitor.events.put(("pause", not self.monitor.paused))
 
 
     def _quit(self):
-        self.monitor.events.put(("quit", True))
+        if self._size_job is not None:  # FLUSH the size recall first
+            self._remember_size()       # (gate finding 2): a quit
+        if self._save_job is not None:  # inside the 750 ms debounce
+            self._save_now()            # must not lose the last drag
+                                        # (quit lands inside the 400 ms
+                                        # window often; the old silent
+                                        # drop also left a Tcl note at
+                                        # teardown - lander concern 2)
+        self.monitor.events.put(("quit", True))  # race teardown
 
 
     KO_FI = "https://ko-fi.com/nocterrible"
@@ -423,6 +527,7 @@ class SettingsWindow(
 
     # ---------------------------------------------------------------- close --
     def _hide(self):
+        self._cancel_size_job()         # pending debounce vs teardown
         self.withdraw()                   # the app keeps running in the
         self.tips.kill()                  # tray; the lease dies
         self.monitor.events.put(("preview", 0))

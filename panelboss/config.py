@@ -197,6 +197,9 @@ DEFAULTS = {
         "start_minimized": False,  # true = boot straight to the tray
                                    # icon (left-click opens the window)
         "skin": "modern",       # "modern" (the unfun one) | "fun" (palette stub for now)
+        "window_size": [1200, 820],  # initial size; the window OVERWRITES
+                                     # it on resize-recall (750 ms
+                                     # debounced, clamped 600x420..workarea)
         "preview_width": 420,   # debug camera panel width in px
         "preview_poll_ms": 200,  # applies ONLY while a preview lease is
                                  # held; clamped 50..2000 at the read
