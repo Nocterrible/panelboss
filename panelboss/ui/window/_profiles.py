@@ -196,7 +196,14 @@ class _ProfilesMixin:
         row = self._row(opts, "hdr", TIPS["profile_hdr"])
         self.hdr_menu = SkewCombo(
             row, values=[HDR_ASK_LABELS[k] for k in HDR_MENU_ORDER],
-            width=230, command=self._prof_hdr,
+            width=310,        # measured (tkfont): the longest
+            #                              value, "restore as
+            #                              captured (per monitor)",
+            #                              is 253 px of text (268
+            #                              bold) + skew + arrow +
+            #                              padding; 230 clipped it
+            #                              (owner shot, Oct 12)
+            command=self._prof_hdr,
             **self.skin.menu_style())
         self._set_menu(self.hdr_menu,
                        HDR_ASK_LABELS.get(prof.get("hdr", "snap"),
