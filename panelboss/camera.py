@@ -45,6 +45,110 @@ OPEN_GRACE_SEC = 90
 _open_lock = threading.RLock()
 
 
+def _set_props(cap, width, height):
+    if width:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    if height:
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+
+def _delivers(cap, patience=2.0):
+    """Opened AND serving bright pixels. DSHOW grew a black-hole mode
+    on this machine's cam0 at 1280x720 (measured Oct 12): isOpened True
+    forever, frames black forever - the very silent-ignorance shape an
+    unproven open is made of. A door that opens but delivers nothing
+    is a dead door. The cost of the check is bounded: 4 frames inside
+    the patience window (a fast stream answers in ~0.1 s, the black
+    hole answers in ~one patience); a legitimately dark room trips the
+    same fallback and just lands on the auto door - today's behavior,
+    never worse."""
+    if not cap.isOpened():
+        return False
+    deadline = time.monotonic() + patience
+    for _ in range(4):
+        if time.monotonic() >= deadline:
+            break
+        try:
+            ok, frame = cap.read()
+        except Exception:               # this driver family raises C++
+            return False                # errors through cv2 (documented
+            # above); a cap whose read raises delivers nothing by
+            # definition - the verdict is the door's, not an exception
+            # for the tray menu to swallow
+        if ok and int(frame.max()) >= 16:
+            return True
+    return False
+
+
+_bad_doors = {}         # (index, w, h) -> monotonic of the last DSHOW
+                        # attempt that OPENED but served black: the
+                        # black-hole open poisons the following MF open
+                        # too (measured 18.7 s inside the app vs 6 s
+                        # alone), so re-paying it every poll would make
+                        # DSHOW-first a net loss on this box. A door
+                        # watched dying is not retried for a minute -
+                        # same cache philosophy (and same slow-tree
+                        # excuse) as _enum_cache below.
+
+
+def _open_door(index, width=None, height=None):
+    """(cap, door) for one index. DSHOW first; the auto door only as
+    the fallback. The auto backend tries Media Foundation FIRST and MF
+    is poisoned on this box by a zombie NVIDIA vcam plugin: it fails on
+    every device after ~6 s of interprocess mutex timeout (measured
+    Oct 12); DSHOW opens the same device in 0.6 s and never touches MF.
+    The auto door is therefore the ONLY place MSMF is ever tried, and
+    the fallback is per-index: an MSMF-only device on a mixed desk
+    still opens, paying MF's slowness - that's the device, not the
+    app. width/height, when given, are set on EVERY door tried before
+    the live-frame verdict, so a mode that only one backend survives
+    (the black hole above) still routes to the door that delivers.
+    May return a not-opened cap (same shape as VideoCapture's);
+    callers must already hold _open_lock."""
+    key = (index, width, height)
+    dead = _bad_doors.get(key)
+    if dead is None or time.monotonic() - dead >= 60:
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        _set_props(cap, width, height)
+        if _delivers(cap):
+            return cap, "dshow"
+        black = cap.isOpened()          # the opened-and-dark verdict
+        if black and width:
+            # the black hole has a classic cause: UVC streams HD in
+            # MJPEG, and DSHOW's uncompressed default at that size
+            # opens-and-lies. FOURCC AFTER open is too late for the
+            # DSHOW graph (measured: the set is accepted, the hole
+            # stays); the codec must ride the OPEN parameters, like
+            # the Windows Camera app's graph does.
+            cap.release()
+            cap = cv2.VideoCapture(
+                index, cv2.CAP_DSHOW,
+                [cv2.CAP_PROP_FOURCC,
+                 cv2.VideoWriter.fourcc(*"MJPG"),
+                 cv2.CAP_PROP_FRAME_WIDTH, int(width),
+                 cv2.CAP_PROP_FRAME_HEIGHT, int(height)])
+            if _delivers(cap):
+                return cap, "dshow/mjpg"
+        if black or cap.isOpened():     # tombstone the VERDICT, not
+            # the last object: the first cap's opened-dark counts even
+            # when the MJPG retry could not open (driver busy) - the
+            # poison it inflates (measured MF 6 -> 18 s) is the reason
+            # the tombstone exists at all (gate finding 1).
+            _bad_doors[key] = time.monotonic()
+            log.info("camera %d@%sx%s: DSHOW opened but served black;"
+                     " auto door for a minute", index,
+                     width or "default", height or "")
+        cap.release()
+    started = time.perf_counter()
+    cap = cv2.VideoCapture(index)          # the auto door: MSMF et al.
+    _set_props(cap, width, height)
+    if cap.isOpened():
+        log.info("camera %d: the DSHOW door did not deliver, fell back"
+                 " to the auto door (%.1f s)", index,
+                 time.perf_counter() - started)
+    return cap, "auto"
+
+
 def camera_names():
     """Friendly names via PnP. Enum order does not necessarily match the
     OpenCV indexes; it is used for reporting and the optional name_contains
@@ -70,14 +174,27 @@ def camera_names():
 
 
 def enumerate_cameras(start=0, stop=8):
-    """Which indexes can be opened at all."""
+    """Which indexes can be opened at all. Probed through the same
+    DSHOW-first door the real opens use, so a picker index always means
+    the device the opener will open: the DSHOW tree is the source of
+    truth, and an index only the auto door opens keeps its auto-door
+    meaning because Camera falls back to auto FOR THAT INDEX ONLY.
+    Such an index is logged ("MSMF-only; slow door") and still pays
+    MF's slowness - the device's cost, not the app's."""
     found = []
     for index in range(start, stop):
         with _open_lock:                 # one open at a time, always
-            cap = cv2.VideoCapture(index)
+            cap, door = _open_door(index)
             opened = cap.isOpened()
             width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
             cap.release()
+        if opened and door == "auto":
+            # honest confession: could be a true MSMF-only device OR
+            # one the default-size DSHOW probe could not serve (the
+            # HD-MJPG-only case); the open at the real configured
+            # size will retry the codec door anyway
+            log.info("index %d opened through the auto door only;"
+                     " slow door", index)
         found.append((index, opened, width))
     return found
 
@@ -99,7 +216,7 @@ def find_camera(index=-1, name_contains=None, fallback=0):
     indexes.append(fallback)       # and we always fall back to something
     for idx in indexes:
         with _open_lock:                 # one open at a time, always
-            cap = cv2.VideoCapture(idx)
+            cap, _door = _open_door(idx)
             if cap.isOpened():
                 cap.release()
                 log.debug(f"camera {idx} opens cleanly")
@@ -241,9 +358,8 @@ class Camera:
         self.warmup = warmup
         self.started = time.perf_counter()
         with _open_lock:                 # the driver hates concurrent
-            self.cap = cv2.VideoCapture(index)   # opens: lock the whole
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)   # device tree
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            self.cap, _door = _open_door(index, width,   # opens: lock
+                                          height)        # the device tree
             self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         elapsed = time.perf_counter() - self.started
