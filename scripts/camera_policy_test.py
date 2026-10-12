@@ -70,7 +70,10 @@ class FakeCam:
             self.read(timeout=2)
         return 1
 
-    def read(self, timeout=3):
+    def read(self, timeout=3, screen=None):
+        # screen kwarg (Oct 12): the real Camera.read grew black-frame
+        # screening and the preview seam passes screen=0; this fake
+        # accepts and ignores it (no screening under test here)
         if not self.opened:
             return None
         # Oct 12 (absent-evidence doctrine): a frame under camera's

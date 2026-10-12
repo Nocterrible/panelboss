@@ -11,6 +11,12 @@ blind/seeing edges exactly once each; B (the headline) a permanently
 black eye can no longer cap a live sibling's presence streak - the
 shape that slept the owner's screens on an occupied desk; C an
 all-blind desk confirms NOTHING (no absence clock ever starts).
+F/G/H (Oct 12 screening): F a stream that lights up inside the 2 s
+budget is no longer ignored at the start; G a screened-out black eye
+abstains and confesses but never joins the round; H the preview's
+screen=0 opt-out keeps the mosaic's cadence. SIZE LAW: ~450 lines
+justified - one FakeCam/queue-cap scaffold shared by every scenario;
+splitting the blocks buys N files that each re-declare it.
 """
 import logging
 import os
@@ -332,6 +338,139 @@ try:
         cam_mod.Camera = FakeCam
     print("door-to-vote OK (a black-serving auto cap is adopted, its "
           "frame reaches _poll and abstains: finding 1 answered)")
+
+    # ---- F/G/H) the Oct 12 screening (owner: "take a 2 second sample
+    # ... feed anything bright to the model"): a stream that lights up
+    # inside the window is NOT a blind eye. The scaffolding below is a
+    # queue fake under the REAL Camera methods; the scenarios share it.
+    import time as wall
+    _cam_recs = []
+
+    class CamGrab(logging.Handler):
+        def emit(self, record):
+            _cam_recs.append(record.getMessage())
+
+    logging.getLogger("camera").addHandler(CamGrab())
+
+    _BLACK8 = np.zeros((8, 8, 3), np.uint8)
+    SEQ = {}           # index -> ([queued frames], tail kind), read by
+                       # _ScreenCam's cap - the dict idiom the BLACK/
+                       # PRESENCE maps above already speak
+
+    class _SeqCap:
+        """cv2-cap shaped queue: serves the queued frames, then the
+        tail (bright gray encoding the index, or the black hole)."""
+
+        def __init__(self, frames, tail):
+            self.frames = list(frames)
+            self.tail = tail
+
+        def read(self):
+            if self.frames:
+                return True, self.frames.pop(0)
+            return True, self.tail
+
+        def isOpened(self):
+            return True
+
+        def set(self, *a):
+            pass
+
+        def get(self, prop):
+            return {3: 1280, 4: 720}.get(prop, 0)
+
+        def release(self):
+            pass
+
+    class _ScreenCam(_real_camera):
+        """The REAL warm_up/read screening over a queue cap; __init__
+        replaces the door (scenario E already proved the door), so the
+        blacks reach the screening untouched by _delivers' consumption."""
+
+        def __init__(self, index=0, warmup=4, width=1280, height=720,
+                     verbose=False):
+            self.index = index
+            self.warmup = warmup
+            self.started = wall.perf_counter()
+            frames, kind = SEQ.get(index, ([], "bright"))
+            tail = (_BLACK8 if kind == "black"
+                    else np.full((8, 8, 3), 128 + index, np.uint8))
+            self.cap = _SeqCap(frames, tail)
+
+    cam_mod.Camera = _ScreenCam
+
+    # ---- F) STARTUP BLACK, the fix's headline: the same device that
+    # served black on one open and bright minutes later (the owner's
+    # intermittent-cam measurement). black, black, bright -> warm_up
+    # eats the blacks, the handle confesses the intermittence EXACTLY
+    # once, and the next _poll votes PRESENT with a score - the eye is
+    # no longer ignored at the start.
+    SEQ[8] = ([_BLACK8, _BLACK8], "bright")
+    PRESENCE[8] = True
+    cam = _ScreenCam(index=8)
+    assert cam.warm_up() > 0, "the blacks are consumed INSIDE warm_up"
+    assert sum("intermittently black: 2 black frames" in r
+               for r in _cam_recs) == 1, _cam_recs
+    m = fresh_monitor(scratch_cfg('index = 8\nmode_on = "always_on"\n'))
+    m.state = "counting"
+    _cam_recs.clear()                  # the monitor's handle confesses
+    p, s = m._poll()                   # its own once; watch that one
+    assert (p, s) == (None, 0.0)       # tick 1: the eye opens
+    drain_vote(m)                      # warm_up screens the blacks
+    p, s = m._poll()                   # the vote AFTER screening
+    assert p is True and s == 0.9, (p, s)
+    assert sum("intermittently black" in r for r in _cam_recs) == 1, \
+        _cam_recs                      # once per handle, not per frame
+    print("startup screening OK (black, black, bright: warm_up ate the "
+          "blacks, INFO once, the first vote PRESENT - no longer "
+          "ignored at the start)")
+
+    # ---- G) screened-out black: an eye that stays blind loses the
+    # argument, not the doctrine - read returns the black frame when
+    # the window closes, _poll abstains (None, 0.0), _note_vote still
+    # confesses it, and the abstaining eye still never joins the round
+    # (gate-fix-2).
+    SEQ[6] = ([], "black")
+    cam = _ScreenCam(index=6)
+    t0 = wall.perf_counter()
+    frame = cam.read(timeout=3, screen=0.2)
+    dt = wall.perf_counter() - t0
+    assert frame is not None and int(frame.max()) < cam_mod.BLACK_CEIL, \
+        "budget exhausted on all-black returns the black frame anyway"
+    assert 0.15 <= dt <= 1.5, dt       # the window closed, it did not
+                                       # run the old 3 s deadline
+    _ss = cam_mod.SCREEN_SEC
+    cam_mod.SCREEN_SEC = 0.2           # the scenario's screen knob
+    try:
+        m = fresh_monitor(scratch_cfg('index = 6\n'
+                                      'mode_on = "boot_per_poll"\n'))
+        m.state = "counting"
+        m._poll()
+        drain_vote(m)                  # the worker's warm_up screens
+        blind0 = n_blind()             # out on black first
+        p, s = m._poll()               # the blind vote, post-screening
+        assert (p, s) == (None, 0.0), (p, s)
+        assert n_blind() == blind0 + 1, \
+            "the screened-out eye still confesses through _note_vote"
+        assert m.absent_since is None, \
+            "the abstaining eye still never joins the round"
+    finally:
+        cam_mod.SCREEN_SEC = _ss
+    print("screened-out black OK (black frame returned after the "
+          "window, abstain + confession intact, no round, no absence "
+          "clock)")
+
+    # ---- H) the preview opt-out: screen=0 is the mosaic's cadence
+    # promise - a lying (black) stream must not stall the wall tick.
+    cam = _ScreenCam(index=6)          # SEQ[6] still serves black only
+    t0 = wall.perf_counter()
+    frame = cam.read(timeout=3, screen=0)
+    dt = wall.perf_counter() - t0
+    assert frame is not None and int(frame.max()) < cam_mod.BLACK_CEIL
+    assert dt < 0.05, dt               # the budget was never touched
+    print("preview opt-out OK (screen=0 on a black stream returns in "
+          "%.0f ms: the mosaic keeps its cadence even when the stream "
+          "lies)" % (dt * 1000,))
 
     print("BLACK VOTE TEST OK")
 finally:

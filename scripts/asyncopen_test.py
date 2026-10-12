@@ -72,7 +72,10 @@ class FakeCam:
     def warm_up(self, frames=None):
         return self.warmup_frames if hasattr(self, "warmup_frames") else 1
 
-    def read(self, timeout=3):
+    def read(self, timeout=3, screen=None):
+        # screen kwarg (Oct 12): the real Camera.read grew black-frame
+        # screening and the preview seam passes screen=0; this fake
+        # accepts and ignores it (no screening under test here)
         return GRAY.copy()
 
     def release(self):
