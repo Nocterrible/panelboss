@@ -1,7 +1,9 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
 
-SIZE LAW: ~315. The _repaint/_section double-buffer pair (_section
+SIZE LAW: ~340, grandfathered skeleton; the Oct-12 two-column
+restructure stayed net-neutral by retiring the single-column flow
+notes below. The _repaint/_section double-buffer pair (_section
 lives in _widgets.py) is the pane's whole paint pipeline and reads as
 one story here; splitting the fills further would scatter a mechanism
 that is debugged by reading top to bottom. No cover on repaints
@@ -22,8 +24,17 @@ from ._widgets import SkewCombo, _fresh_pin_edit
 class _ProfilesMixin:
     # ---------------------------------------------------- monitor profiles --
     def _build_profiles(self, page):
-        col = ctk.CTkFrame(page, width=640, fg_color="transparent")
+        # owner sketch (Oct 12): LEFT column = whole-desktop profiles
+        # + the restore-at-start lever, RIGHT column = the pin half
+        # (pick an app, the editor, the pinned seats). 620/520: the
+        # page is ~1200 wide at the owner's window size and the
+        # ScrollHost scrolls the rest.
+        col = ctk.CTkFrame(page, width=620, fg_color="transparent")
         col.pack(side="left", fill="y")
+        self._prof_left = col
+        right = ctk.CTkFrame(page, width=520, fg_color="transparent")
+        right.pack(side="left", fill="y")
+        self._prof_right = right
         box = self._card(col, "whole-desktop profiles",
                          "one profile is the desk spelled out: the "
                          "panels by hardware identity, their places, "
@@ -55,7 +66,15 @@ class _ProfilesMixin:
         # touched, so the swap cannot disturb anything around the pane
         self._prof_anchor = ctk.CTkFrame(box, fg_color="transparent")
         self._prof_anchor.pack(fill="x", pady=(theme.S_FIELD, 0))
+        # the right column's anchor mirrors the left's: the pin
+        # sections double-buffer into a body of their own - pack's
+        # before= is PARENT-relative, so the fresh buffers must be
+        # constructed with the right column's anchor as parent
+        self._prof_anchor_right = ctk.CTkFrame(right,
+                                               fg_color="transparent")
+        self._prof_anchor_right.pack(fill="x")
         self._prof_body = None
+        self._prof_pins_body = None
         self._profiles_render()
 
 
@@ -69,11 +88,16 @@ class _ProfilesMixin:
         place painted every half-built stage (the whole-window redraw
         storm on every click, user-reported). Built UNPACKED, those
         intermediate paints hit an invisible frame; the destroy-old
-        pack-new swap is one redraw."""
+        pack-new swap is one redraw. BOTH bodies swap in lockstep:
+        the left body carries the profile halves, the right body the
+        pin halves - one render, one redraw, no half-mixed pane."""
         old = self._prof_body
+        old_r = self._prof_pins_body
         self._prof_body = ctk.CTkFrame(self._prof_anchor,
                                        fg_color="transparent")
         self._prof_detail = self._prof_body
+        self._prof_pins_body = ctk.CTkFrame(self._prof_anchor_right,
+                                           fg_color="transparent")
         self._psec = {}
         self._psec_pady = {}           #   _repaint's in-place swaps
         self._psec_old = {}            #   buffers awaiting the swap
@@ -81,12 +105,17 @@ class _ProfilesMixin:
         self._pin_rows = {}            #   rebuild on this fresh body,
         self._pins_inner = None        #   never configure a widget
         self._pins_empty = None        #   the destroyed body held
+        self._pins_cols = None         #   (the pins list's sub-columns)
         try:
             self._profiles_fill()
         finally:
-            if old is not None:
-                old.destroy()
+            for f in (old, old_r):
+                if f is not None:
+                    # BOTH bodies die together: the pin sections
+                    # live on the right body now, not under the left
+                    f.destroy()
             self._prof_body.pack(fill="x")
+            self._prof_pins_body.pack(fill="x")
             self._page_region()   # same rule as _repaint: the whole
             #                   body just swapped - re-measure (see
             #                   scroll_probe, Oct 12)
@@ -110,8 +139,14 @@ class _ProfilesMixin:
         against the ~27 ms one paint a detached build + swap costs).
         An idempotent fill (status) builds no buffer and swaps
         nothing."""
-        for name in names:
-            getattr(self, "_fill_%s" % name)()
+        try:
+            for name in names:
+                getattr(self, "_fill_%s" % name)()
+        finally:
+            # the pin fills re-point the builder parent at the right
+            # buffer (see _profiles_fill): pin it back even if a
+            # fill raised, or the next LEFT fill would build there
+            self._prof_detail = self._prof_body
         for name in names:
             olds = self._psec_old.get(name)
             if not olds:
@@ -151,7 +186,8 @@ class _ProfilesMixin:
 
     def _profiles_fill(self):
         """The pane's content, built into the (still unpacked) fresh
-        body; every self._prof_detail below is that body."""
+        bodies; self._prof_detail starts as the left body and the
+        pin fills re-point it at the right one (see their heads)."""
         prof = self._prof_data["profiles"].get(self._prof_sel)
         if prof is None:                          # the create-new pane
             line = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
@@ -221,20 +257,20 @@ class _ProfilesMixin:
                           **self.skin.secondary()).pack(side="left",
                                                         padx=(theme.S_FIELD, 0))
 
-        # ---- pin an app: pick a window, set conditions, pin it ---------
-        # the editor sits directly under the list it edits, and the
-        # pinned seats come AFTER it: clicking a seat then loads the
-        # editor just above the row clicked. with the seat list on
-        # top, an edited pin loaded its editor below the fold, off
-        # the bottom of the window (user-reported trap). each block is
-        # a SECTION (_fill_live/_fill_editor/_fill_pins/...): the
-        # handlers repaint only what their click changed - rebuilding
-        # all forty widgets per click was the lag the user felt
+        # ---- the pin half lives on its own column (owner sketch,
+        # Oct 12): _fill_live/_fill_editor/_fill_pins each re-point
+        # self._prof_detail at the right-hand buffer before their
+        # _section call - the swap discipline is untouched because
+        # _section parents to wherever the detail points and
+        # _repaint's before= anchor is parent-relative. The editor
+        # still sits above the seat list it edits, seats below
+        # (the reorder note that single-column-era pack order kept).
+        self._restore_section(self._prof_detail)
+        self._fill_status()
         self._fill_live()
         self._fill_editor()
         self._fill_pins()
-        self._restore_section(self._prof_detail)
-        self._fill_status()
+        self._prof_detail = self._prof_body
 
 
     def _fill_monitors(self, mons):

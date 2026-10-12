@@ -1,4 +1,5 @@
-"""Pin editor verbs: select, browse, wait, commit, forget.
+"""Pin editor verbs: select, browse, wait, commit, forget - and
+the flow helper the pin lists share.
 Oct 12 (owner ruling): single pins and unpins update the pins
 section SURGICALLY - one row appended, reconfigured or destroyed -
 and the bulk verb (pin-all) alone earns a section swap."""
@@ -6,6 +7,8 @@ and the bulk verb (pin-all) alone earns a section swap."""
 from __future__ import annotations
 
 import logging
+
+import customtkinter as ctk
 
 from ... import profiles
 from .. import theme
@@ -15,6 +18,25 @@ log = logging.getLogger("ui")
 
 
 class _PinMixin:
+    def _pin_cols(self, parent, count):
+        """The flow both pin lists obey (owner sketch, Oct 12: break
+        the sections to make them taller and narrower): up to four
+        rows flow in ONE column - a two-row twin-column list looks
+        broken - past four they flow ROW-MAJOR (left, right, left)
+        across two side-by-side sub-columns. The caller packs entry
+        i into cols[i % len(cols)]."""
+        if count <= 4:
+            f = ctk.CTkFrame(parent, fg_color="transparent")
+            f.pack(anchor="w")
+            return [f]
+        cols = []
+        for _ in range(2):
+            f = ctk.CTkFrame(parent, fg_color="transparent")
+            f.pack(side="left", anchor="n")
+            cols.append(f)
+        return cols
+
+
     def _pin_select(self, key):
         """a click in the open-windows list makes it the editor's
         subject; clicking the same one again lets go of it. the pane
@@ -207,7 +229,11 @@ class _PinMixin:
         e = getattr(self, "_pins_empty", None)
         if e is not None and e.winfo_exists():
             e.pack_forget()
-        self._pin_row(inner, w, live)
+        # the sub-columns _fill_pins laid out (one until the list
+        # outgrows four rows): append keeps the row-major balance
+        # by cycling on the CURRENT row count
+        cols = getattr(self, "_pins_cols", None) or [inner]
+        self._pin_row(cols[len(self._pin_rows) % len(cols)], w, live)
 
 
     def _prof_pin_all(self):

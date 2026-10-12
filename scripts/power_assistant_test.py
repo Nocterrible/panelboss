@@ -466,7 +466,10 @@ def check():
         assert prof["displays"][0]["short"] == "T"
         assert prof["displays"][0]["hdr_cap"] is True, prof["displays"][0]
         def _ptexts():
-            got, stack = [""], [app._prof_detail]
+            # Oct 12 two-column restructure: the pane's text lives on
+            # TWO bodies now - the profile halves on the left, the
+            # pin halves (editor fine print included) on the right
+            got, stack = [""], [app._prof_detail, app._prof_pins_body]
             while stack:                   # every label/menu text
                 w = stack.pop()            # the pane shows
                 stack += w.winfo_children()

@@ -249,6 +249,57 @@ def check():
             store["profiles"]["profile-1"]
         print("[PASS] remove drops the row (last row, empty profile)")
 
+        # 9) owner sketch (Oct 12): the tab is TWO columns side by
+        #    side - whole-desktop profiles + restore on the left,
+        #    the pin half on the right. The check runs from an
+        #    after() callback INSIDE mainloop, so the window is
+        #    mapped; one full event pass makes that certain anyway.
+        app.update()
+        assert app._prof_left.winfo_manager() == "pack", \
+            app._prof_left.winfo_manager()
+        assert app._prof_right.winfo_manager() == "pack", \
+            app._prof_right.winfo_manager()
+        # rootx, not winfo_x: inside canvas-hosted widgets (the page
+        # and both pin lists ARE ScrollHosts) Tk reports x relative
+        # to the nearest canvas (measured Oct 12: every row read 0
+        # while its sub-column read 312) - rootx survives the nesting
+        assert app._prof_left.winfo_rootx() != \
+            app._prof_right.winfo_rootx(), \
+            (app._prof_left.winfo_rootx(), app._prof_right.winfo_rootx())
+        print("[PASS] profile columns managed side by side")
+
+        # 10) pin rows (owner sketch): a PROCESS-matched pin reads as
+        #     the exe basename, a title-matched pin keeps its title,
+        #     and past four seats the list flows across TWO
+        #     sub-columns. Pin through the real PF.pin primitive so
+        #     the row dicts carry the real schema.
+        for i, proc in enumerate(("chrome.exe", "discord.exe",
+                                  "steam.exe", "code.exe",
+                                  "explorer.exe")):
+            PF.pin(app._prof_data, "profile-1",
+                   {"proc": proc, "title": "win%d" % i,
+                    "rect": [0, 0, 10, 10], "zoomed": False,
+                    "monitor": "T1", "exe": r"C:\apps\%s" % proc},
+                   match="process")
+        PF.pin(app._prof_data, "profile-1",
+               {"proc": "notepad.exe", "title": "Untitled - Notepad",
+                "rect": [0, 0, 10, 10], "zoomed": False,
+                "monitor": "T1", "exe": r"C:\Windows\notepad.exe"},
+               match="title")
+        app._profiles_render()
+        app.update()
+        _row, _btn = app._pin_rows[("chrome.exe", "win0")]
+        assert str(_btn.cget("text")).startswith("chrome.exe"), \
+            _btn.cget("text")
+        _trow, _tbtn = app._pin_rows[("notepad.exe",
+                                      "Untitled - Notepad")]
+        assert str(_tbtn.cget("text")).startswith("Untitled - Notepad"), \
+            _tbtn.cget("text")
+        xs = sorted({f.winfo_rootx() for f, _ in app._pin_rows.values()})
+        assert len(xs) >= 2, xs
+        print("[PASS] process pins read as exe basenames; 6 seats "
+              "span two sub-columns")
+
         try:
             app.after_cancel(wd)         # the desk is done watching
         except Exception:

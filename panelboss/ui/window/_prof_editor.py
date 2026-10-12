@@ -1,11 +1,13 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
 
-SIZE LAW: ~336. These are the pane's five section fills plus the
+SIZE LAW: ~360. These are the pane's five section fills plus the
 row builder - one story (what a section looks like when painted),
-split from the VERBS (_prof_pins.py) that mutate them in place. The
-fills must stay together for _repaint's readers; splitting the row
-builder off would strand _pin_row_text from its only caller's view.
+split from the VERBS (_prof_pins.py) that mutate them in place, and
+from the row-flow helper (_PinMixin._pin_cols) the two pin lists
+share. The fills must stay together for _repaint's readers;
+splitting the row builder off would strand _pin_row_text from its
+only caller's view.
 """
 
 from __future__ import annotations
@@ -23,7 +25,13 @@ class _EditorMixin:
     def _fill_live(self):
         """The pick-list section: every open window, the chosen one
         highlighted. The row buttons are remembered, so selecting a
-        window can re-highlight WITHOUT rebuilding the list at all."""
+        window can re-highlight WITHOUT rebuilding the list at all.
+        Oct 12: lives on the right column; past four windows the
+        rows flow across two sub-columns (taller, narrower - owner
+        sketch) via _pin_cols."""
+        self._prof_detail = self._prof_pins_body  # _section's parent
+        #                    (each pin fill re-points it, so a solo
+        #                    _repaint("live") builds in the right col)
         sec = self._section("live", pady=(theme.S_ROW, 0))
         ed = self._pin_edit
         cell = ctk.CTkFrame(sec, fg_color="transparent")
@@ -35,15 +43,17 @@ class _EditorMixin:
                      font=self.skin.font(13, "bold"),
                      **self.skin.text_style()).pack(side="left")
         self._hint(cell, TIPS["profile_match"])
-        lif = ScrollHost(sec, bg=self.skin.panel, width=590, height=132)
+        lif = ScrollHost(sec, bg=self.skin.panel, width=490, height=132)
         lif.pack(fill="x")
         self._live_rows = {}
         live = profiles.windows_now()
-        for l in live:
+        cols = self._pin_cols(lif.inner, len(live))
+        bw = 230 if len(cols) > 1 else 460
+        for i, l in enumerate(live):
             key = (l["proc"], l["title"])
             picked = ed["pick"] == key
             b = ctk.CTkButton(
-                lif.inner, width=540, anchor="w",
+                cols[i % len(cols)], width=bw, anchor="w",
                 text="%s   %s %dx%d at %d,%d on %s" % (
                     (l["title"] or "(untitled)")[:40],
                     l["proc"][:14], l["rect"][2], l["rect"][3],
@@ -85,6 +95,7 @@ class _EditorMixin:
         or remembered. The section carries its own 'editing:' title -
         it is what changes when a seat is clicked, and the title is
         the proof the click landed."""
+        self._prof_detail = self._prof_pins_body  # _section's parent
         sec = self._section("editor", pady=(theme.S_FIELD, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel) \
             or {"wins": []}
@@ -187,7 +198,7 @@ class _EditorMixin:
                          % (exe, ed["wait"]))
         for t in notes:
             ctk.CTkLabel(sec, text=t,
-                         font=self.skin.font(10), wraplength=580,
+                         font=self.skin.font(10), wraplength=460,
                          justify="left", anchor="w",
                          **self.skin.text_style("sub")).pack(
                 anchor="w", pady=(theme.S_FIELD, 0))
@@ -210,7 +221,11 @@ class _EditorMixin:
         screenshot): the heading, the two buttons and the list own
         ONE ROW EACH - the old pack mixed side="left" head/buttons
         with a top-pack ScrollHost, so the buttons crowded into the
-        heading's band and the ScrollHost landed squished right."""
+        heading's band and the ScrollHost landed squished right.
+        Oct 12 (owner sketch): the section lives on the right
+        column; past four seats the rows flow across two
+        sub-columns."""
+        self._prof_detail = self._prof_pins_body  # _section's parent
         sec = self._section("pins", pady=(theme.S_ROW, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel) \
             or {"wins": []}
@@ -238,7 +253,7 @@ class _EditorMixin:
                                                     padx=(theme.S_FIELD, 0))
         # _hint is the hover-era no-op; kept so every old call site compiles
         self._hint(sec, TIPS["profile_pins"])
-        pinf = ScrollHost(sec, bg=self.skin.panel, width=590, height=112)
+        pinf = ScrollHost(sec, bg=self.skin.panel, width=490, height=112)
         pinf.pack(fill="x", pady=(theme.S_FIELD, 0))
         # the in-place-update trackers (owner ruling, Oct 12): a pin
         # click appends or reconfigures ONE row, an unpin destroys its
@@ -255,8 +270,15 @@ class _EditorMixin:
             **self.skin.text_style("sub"))
         live_key = {(w["proc"], w["title"]): w
                     for w in profiles.windows_now()}
-        for w in prof["wins"]:
-            self._pin_row(pinf.inner, w, live_key.get((w["proc"], w["title"])))
+        # taller-not-wider flow (owner sketch): _pin_cols returns one
+        # sub-column up to four rows, two past that; _pin_btn_w rides
+        # along so _pin_row_upsert's appends match the layout
+        self._pins_cols = cols = self._pin_cols(pinf.inner,
+                                                len(prof["wins"]))
+        self._pin_btn_w = 150 if len(cols) > 1 else 400
+        for i, w in enumerate(prof["wins"]):
+            self._pin_row(cols[i % len(cols)], w,
+                          live_key.get((w["proc"], w["title"])))
         if not prof["wins"]:
             self._pins_empty.pack(anchor="w", pady=theme.S_FIELD,
                                   padx=theme.S_FIELD)
@@ -280,11 +302,17 @@ class _EditorMixin:
         self._status_lbl.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
 
-    def _pin_row_text(self, w, live):
+    def _pin_row_text(self, w, live, full=False):
         """The row's whole label, one builder: used at fill time and
         when an update-pin reconfigures the row in place (Oct 12).
         Badges tell the truth the plain text cannot: closed,
-        'open it', a non-default match."""
+        'open it', a non-default match. Oct 12 (owner): a pin whose
+        EFFECTIVE match (the row's, else the profile's, else
+        process - the same chain the runtime applies) is PROCESS
+        reads shortened: the exe basename leads, the proc echo
+        drops. The full title-led label survives in the row's hover
+        bubble - the caller passes full=True for it. Title-matched
+        pins keep their title label."""
         badges = ""
         if w.get("open"):
             try:
@@ -298,11 +326,26 @@ class _EditorMixin:
                 badges += "  [via %s]" % ex[:18]
         if (w.get("match") or "process") != "process":
             badges += "  [%s]" % w.get("match")
-        return "%s  %s  %dx%d at %d,%d on %s%s%s" % (
-            (w["title"] or w["proc"])[:36], w["proc"][:14],
+        seat = "%dx%d at %d,%d on %s%s%s" % (
             w["rect"][2], w["rect"][3], w["rect"][0], w["rect"][1],
             w.get("monitor") or "?",
             "" if live else "  (closed)", badges)
+        whole = "%s  %s  %s" % ((w["title"] or w["proc"])[:36],
+                                w["proc"][:14], seat)
+        if full:
+            return whole
+        prof = (self._prof_data.get("profiles") or {}).get(
+            self._prof_sel) or {}
+        if (w.get("match") or prof.get("match") or "process") \
+                .lower() == "process":
+            # basename of the exe (or of the proc when no exe was
+            # captured) - the house idiom is the split, not pathlib
+            for src in (w.get("exe"), w.get("proc")):
+                base = (src or "").replace("/", "\\") \
+                    .split("\\")[-1].strip()[:36]
+                if base:
+                    return "%s  %s" % (base, seat)
+        return whole
 
 
     def _pin_row(self, parent, w, live):
@@ -312,11 +355,14 @@ class _EditorMixin:
         seat - and hands the row's OWN frame to the removal, so the
         unpin destroys just this widget (Oct 12). Registers into
         _pin_rows under the pin's (proc, title) identity so a later
-        commit can find and reconfigure it without a section swap."""
+        commit can find and reconfigure it without a section swap.
+        The button width follows the section's flow (_pin_btn_w:
+        narrow inside a sub-column); a shortened row keeps the full
+        label on its hover bubble."""
         row = ctk.CTkFrame(parent, fg_color="transparent")
         row.pack(anchor="w", fill="x", pady=theme.S_FIELD)
         btn = ctk.CTkButton(
-            row, width=470, anchor="w",
+            row, width=getattr(self, "_pin_btn_w", 400), anchor="w",
             text=self._pin_row_text(w, live),
             font=self.skin.font(11),
             command=lambda r=w: self._pin_load(r),
@@ -324,6 +370,14 @@ class _EditorMixin:
             text_color=self.skin.text,
             corner_radius=self.skin.radius)
         btn.pack(side="left")
+        if self._pin_row_text(w, live, full=True) != btn.cget("text"):
+            # the row reads shortened - the whole label rides the hover
+            btn.bind("<Enter>",
+                     lambda e=None, b=btn: self.tips._schedule(
+                         self._pin_row_text(w, live, full=True), b),
+                     add="+")
+            btn.bind("<Leave>", lambda e=None: self.tips._hide_soon(),
+                     add="+")
         ctk.CTkButton(row, text="edit", width=48,
                       command=lambda r=w: self._pin_load(r),
                       **self.skin.secondary()).pack(side="left",
