@@ -1,5 +1,11 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
+
+SIZE LAW: ~330. These are the pane's five section fills plus the
+row builder - one story (what a section looks like when painted),
+split from the VERBS (_prof_pins.py) that mutate them in place. The
+fills must stay together for _repaint's readers; splitting the row
+builder off would strand _pin_row_text from its only caller's view.
 """
 
 from __future__ import annotations
@@ -227,35 +233,51 @@ class _EditorMixin:
         self._hint(sec, TIPS["profile_pins"])
         pinf = ScrollHost(sec, bg=self.skin.panel, width=590, height=112)
         pinf.pack(fill="x")
+        # the in-place-update trackers (owner ruling, Oct 12): a pin
+        # click appends or reconfigures ONE row, an unpin destroys its
+        # own row - the section itself only rebuilds on a full render
+        # or the bulk verb
+        self._pin_rows = {}
+        self._pins_inner = pinf.inner
+        # placeholder BEFORE the rows loop (gate finding 2): a row's
+        # x-button emptied mid-fill must find it built, not None
+        self._pins_empty = ctk.CTkLabel(
+            pinf.inner,
+            text="nothing pinned yet - seat an app above",
+            font=self.skin.font(11),
+            **self.skin.text_style("sub"))
         live_key = {(w["proc"], w["title"]): w
                     for w in profiles.windows_now()}
         for w in prof["wins"]:
             self._pin_row(pinf.inner, w, live_key.get((w["proc"], w["title"])))
         if not prof["wins"]:
-            ctk.CTkLabel(pinf.inner,
-                         text="nothing pinned yet - seat an app above",
-                         font=self.skin.font(11),
-                         **self.skin.text_style("sub")).pack(
-                anchor="w", pady=theme.S_FIELD, padx=theme.S_FIELD)
+            self._pins_empty.pack(anchor="w", pady=theme.S_FIELD,
+                                  padx=theme.S_FIELD)
 
 
     def _fill_status(self):
+        """ONE label, idempotent (owner ruling, Oct 12): the first
+        fill builds it inside the status section; every later fill -
+        every _repaint("status") there is - just configures its text,
+        so a status change repaints ZERO structure."""
+        lbl = getattr(self, "_status_lbl", None)
+        if lbl is not None and lbl.winfo_exists():
+            lbl.configure(text=self._prof_msg,
+                          **self.skin.text_style("sub"))
+            return
         sec = self._section("status")
-        self._prof_status = ctk.CTkLabel(
+        self._status_lbl = ctk.CTkLabel(
             sec, text=self._prof_msg,
             font=self.skin.font(11), wraplength=560, justify="left",
             anchor="w", **self.skin.text_style("sub"))
-        self._prof_status.pack(anchor="w", pady=(theme.S_FIELD, 0))
+        self._status_lbl.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
 
-    def _pin_row(self, parent, w, live):
-        """One pinned seat. The row itself is the button that lifts
-        the pin back into the editor ('click it and it pops back
-        up'), the pencil says the same out loud, the x forgets the
-        seat. Badges tell the truth the plain text cannot: closed,
+    def _pin_row_text(self, w, live):
+        """The row's whole label, one builder: used at fill time and
+        when an update-pin reconfigures the row in place (Oct 12).
+        Badges tell the truth the plain text cannot: closed,
         'open it', a non-default match."""
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(anchor="w", fill="x", pady=theme.S_FIELD)
         badges = ""
         if w.get("open"):
             try:
@@ -265,28 +287,43 @@ class _EditorMixin:
             badges += "  [open it%s]" % (
                 "" if wt == 30 else " in %ds" % wt)
             ex = (w.get("exe") or "").split("\\")[-1].lower()
-            if ex and ex != (w.get("proc") or "").lower():
+            if ex and ex != (w["proc"] or "").lower():
                 badges += "  [via %s]" % ex[:18]
         if (w.get("match") or "process") != "process":
             badges += "  [%s]" % w.get("match")
-        ctk.CTkButton(
+        return "%s  %s  %dx%d at %d,%d on %s%s%s" % (
+            (w["title"] or w["proc"])[:36], w["proc"][:14],
+            w["rect"][2], w["rect"][3], w["rect"][0], w["rect"][1],
+            w.get("monitor") or "?",
+            "" if live else "  (closed)", badges)
+
+
+    def _pin_row(self, parent, w, live):
+        """One pinned seat. The row itself is the button that lifts
+        the pin back into the editor ('click it and it pops back
+        up'), the pencil says the same out loud, the x forgets the
+        seat - and hands the row's OWN frame to the removal, so the
+        unpin destroys just this widget (Oct 12). Registers into
+        _pin_rows under the pin's (proc, title) identity so a later
+        commit can find and reconfigure it without a section swap."""
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(anchor="w", fill="x", pady=theme.S_FIELD)
+        btn = ctk.CTkButton(
             row, width=470, anchor="w",
-            text="%s  %s  %dx%d at %d,%d on %s%s%s" % (
-                (w["title"] or w["proc"])[:36], w["proc"][:14],
-                w["rect"][2], w["rect"][3], w["rect"][0],
-                w["rect"][1], w.get("monitor") or "?",
-                "" if live else "  (closed)", badges),
+            text=self._pin_row_text(w, live),
             font=self.skin.font(11),
             command=lambda r=w: self._pin_load(r),
             fg_color="transparent", hover_color=self.skin.panel,
             text_color=self.skin.text,
-            corner_radius=self.skin.radius).pack(side="left")
+            corner_radius=self.skin.radius)
+        btn.pack(side="left")
         ctk.CTkButton(row, text="edit", width=48,
                       command=lambda r=w: self._pin_load(r),
                       **self.skin.secondary()).pack(side="left",
                                                     padx=(theme.S_FIELD, 0))
         ctk.CTkButton(row, text="x", width=30,
-                      command=lambda r=w: self._pin_remove(r),
+                      command=lambda r=w, f=row: self._pin_remove(r, f),
                       **self.skin.secondary()).pack(side="left",
                                                     padx=(theme.S_FIELD, 0))
+        self._pin_rows[(w["proc"], w["title"])] = (row, btn)
 

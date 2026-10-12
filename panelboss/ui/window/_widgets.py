@@ -1,7 +1,13 @@
 """Shared card/row/section widgets, the sleep prompt, the pin
 editor's blank slate, and SkewCombo - the tk.Menubutton drop-in
 that replaced all 18 CTkOptionMenus. The UI-1b2 measurement that
-earns this file's length is documented on the class."""
+earns this file's length is documented on the class.
+
+SIZE LAW: just over 300. _section (the profiles pane's double-buffer
+paint seam) stays here with its _repaint counterpart in _profiles.py:
+one cohesive mechanism, and a second mixin split costs more MRO and
+attention tax than a header note. The optional real split is lifting
+SkewCombo + _fresh_pin_edit (~90 lines) into _combo.py."""
 
 from __future__ import annotations
 
@@ -285,15 +291,23 @@ class _WidgetsMixin:
         return row
 
     def _section(self, name, pady=(0, 0)):
-        """A rebuildable slice of the pane. The first call (during a
-        full fill) makes the frame; a later call just empties it, so a
-        click repaints ONE section, not all forty widgets."""
+        """A rebuildable slice of the pane: DOUBLE BUFFERED exactly
+        like _profiles_render's body. First call (full fill, body
+        unpacked) makes and packs the frame. A later call (a click
+        repaint) builds a FRESH unpacked frame - the OLD one stays
+        visible and undestroyed until _repaint swaps: emptying the
+        visible frame first dirties the region, and every CTk
+        constructor's update_idletasks then repaints the WHOLE mapped
+        pane (measured: 688 ms for 12 rows; a detached build with the
+        old row still shown is the 27 ms the tab switch pays)."""
         f = self._psec.get(name)
         if f is None:
-            f = self._psec[name] = ctk.CTkFrame(self._prof_detail,
-                                                fg_color="transparent")
+            f = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
             f.pack(fill="x", pady=pady)
         else:
-            for w in f.winfo_children():
-                w.destroy()
+            self._psec_old.setdefault(name, []).append(f)  # outlives the
+            f = ctk.CTkFrame(self._prof_detail,            # rebuild only
+                             fg_color="transparent")       # until the swap
+        self._psec[name] = f
+        self._psec_pady[name] = pady
         return f

@@ -359,8 +359,13 @@ def pin(data, name, win, match="process", open_if_missing=False,
     right binary when the auto-captured one starts nothing. `wait`
     is how long to trust the wish before calling it a miss. The exe
     path is captured while the window is alive, because afterwards
-    nobody knows where it was installed."""
-    prof = data["profiles"][name]
+    nobody knows where it was installed. Returns (ok, note) like the
+    other profile primitives: a dead selection (create-new, or a name
+    the store no longer holds) is confessed, never a silent KeyError
+    the event loop would swallow behind a button click."""
+    prof = (data.get("profiles") or {}).get(name)
+    if prof is None:
+        return False, "no profile '%s'" % name
     prof["wins"] = [w for w in prof["wins"]
                     if (w["proc"], w["title"]) != (win["proc"],
                                                    win["title"])]
@@ -378,13 +383,19 @@ def pin(data, name, win, match="process", open_if_missing=False,
                          "open": bool(open_if_missing),
                          "wait": max(5, min(600, seconds))})
     save(data, dir)
+    return True, ""
 
 
 def unpin(data, name, proc, title, dir=None):
-    prof = data["profiles"][name]
+    """Forget a seat. Returns (ok, note) like pin: a dead selection
+    confesses instead of KeyError-ing out of the button's callback."""
+    prof = (data.get("profiles") or {}).get(name)
+    if prof is None:
+        return False, "no profile '%s'" % name
     prof["wins"] = [w for w in prof["wins"]
                     if (w["proc"], w["title"]) != (proc, title)]
     save(data, dir)
+    return True, ""
 
 
 # ------------------------------------------------------------- picker ---

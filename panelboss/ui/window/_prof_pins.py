@@ -1,11 +1,14 @@
-"""Pin editor verbs: select, browse, wait, commit.
-"""
+"""Pin editor verbs: select, browse, wait, commit, forget.
+Oct 12 (owner ruling): single pins and unpins update the pins
+section SURGICALLY - one row appended, reconfigured or destroyed -
+and the bulk verb (pin-all) alone earns a section swap."""
 
 from __future__ import annotations
 
 import logging
 
 from ... import profiles
+from .. import theme
 from ._widgets import _fresh_pin_edit
 
 log = logging.getLogger("ui")
@@ -28,7 +31,17 @@ class _PinMixin:
 
     def _pin_load(self, w):
         """the pinned row clicked: the pin pops back up into the
-        editor, conditions as saved, ready to change and update"""
+        editor, conditions as saved, ready to change and update.
+        The row's captured dict can be stale after an in-place
+        update-pin (the row was not rebuilt), so the CURRENT saved
+        row is re-resolved from the store by its (proc, title) key;
+        the captured dict is the fallback for a row a re-scan just
+        removed."""
+        prof = (self._prof_data.get("profiles") or {}).get(
+            self._prof_sel) or {}
+        w = next((r for r in prof.get("wins") or []
+                  if (r["proc"], r["title"]) == (w["proc"], w["title"])),
+                 w)
         try:
             wait = max(5, min(600, int(w.get("wait") or 30)))
         except (TypeError, ValueError):
@@ -46,13 +59,33 @@ class _PinMixin:
         self._repaint("editor")
 
 
-    def _pin_remove(self, w):
-        profiles.unpin(self._prof_data, self._prof_sel, w["proc"],
-                       w["title"])
-        if self._pin_edit["key"] == (w["proc"], w["title"]):
+    def _pin_remove(self, w, row):
+        """UNPIN: destroys the clicked row's OWN frame in place (the
+        x's lambda handed it over - Oct 12: no _repaint("pins") per
+        click), shows the placeholder back when the section emptied,
+        and tells the status line through the idempotent fill. Only
+        the paths where in-place removal cannot speak the truth (a
+        dead selection, or a row whose section was rebuilt under it)
+        still repaint the pins section."""
+        ok, note = profiles.unpin(self._prof_data, self._prof_sel,
+                                  w["proc"], w["title"])
+        key = (w["proc"], w["title"])
+        if self._pin_edit["key"] == key:
             self._pin_edit = _fresh_pin_edit()
-        self._prof_msg = "forgot: %s" % (w["title"] or w["proc"])[:60]
-        self._repaint("pins", "editor", "status")
+        self._prof_msg = ("forgot: %s" % (w["title"] or w["proc"])[:60]
+                          if ok else
+                          note or "save or pick a profile first")
+        in_place = ok and row is not None and row.winfo_exists()
+        if in_place:
+            row.destroy()
+            self._pin_rows.pop(key, None)
+            if not self._pin_rows:              # section emptied:
+                e = self._pins_empty            # the placeholder is
+                if e is not None and e.winfo_exists():   # honest again
+                    e.pack(anchor="w", pady=theme.S_FIELD,
+                           padx=theme.S_FIELD)
+        self._repaint(*(("editor", "status") if in_place
+                        else ("pins", "editor", "status")))
 
 
     def _pin_match(self, mode):
@@ -110,26 +143,71 @@ class _PinMixin:
             self._prof_msg = "pick one of the open windows first"
             self._repaint("status")
             return
-        win = next((w for w in profiles.windows_now()
-                    if (w["proc"], w["title"]) == key), None)
-        if win is None:                # the window closed since the
-            win = next((w for w in     # scan: a pin being edited
-                self._prof_data["profiles"][self._prof_sel]["wins"]
-                if (w["proc"], w["title"]) == key), None)
+        prof = (self._prof_data.get("profiles") or {}).get(
+            self._prof_sel)
+        if prof is None:
+            # create-new, or a name the store no longer holds: the
+            # pin has nowhere to live - confess, never a happy "pinned:"
+            self._prof_msg = "save or pick a profile first"
+            self._repaint("status")
+            return
+        live_row = next((w for w in profiles.windows_now()
+                         if (w["proc"], w["title"]) == key), None)
+        win = live_row               # the window closed since the
+        if win is None:              # scan: a pin being edited
+            win = next((w for w in
+                        prof["wins"]
+                        if (w["proc"], w["title"]) == key), None)
         if win is None:
             self._prof_msg = "that window is gone - pin something " \
                              "that exists"
             self._pin_cancel()
             self._repaint("status")
             return
-        profiles.pin(self._prof_data, self._prof_sel, win,
-                     match=ed["match"], open_if_missing=ed["open"],
-                     exe=ed["exe"], wait=ed["wait"])
+        ok, note = profiles.pin(self._prof_data, self._prof_sel, win,
+                                match=ed["match"],
+                                open_if_missing=ed["open"],
+                                exe=ed["exe"], wait=ed["wait"])
         self._prof_msg = "pinned: %s (seat: where it sits now)" % \
-            (key[1] or key[0])[:60]
+            (key[1] or key[0])[:60] if ok else \
+            note or "save or pick a profile first"
         self._pin_edit = _fresh_pin_edit()
         self._restyle_live()
-        self._repaint("pins", "editor", "status")
+        if ok:
+            # Oct 12 (owner ruling): the landed pin touches ONE row
+            # of the pins section, in place - no section swap, no
+            # cover; the editor repaints (its form changed) and the
+            # status fill is now a zero-structure configure.
+            # pin() stores a CLONE, not `win`: upsert the literal
+            # tail entry or the row loses its [open it]/[via] badges.
+            self._pin_row_upsert(prof["wins"][-1], live_row)
+            self._repaint("editor", "status")
+        else:
+            self._repaint("pins", "editor", "status")
+
+
+    def _pin_row_upsert(self, w, live):
+        """Land or refresh exactly ONE row in the on-screen pins
+        section (Oct 12). A row already present for this (proc,
+        title) identity configures its label in place - the store
+        moved the entry to the tail of wins, the visible row keeps
+        its slot until the next honest full render. A fresh key
+        appends its row into the live ScrollHost inner and hides the
+        'nothing pinned yet' placeholder. No live section (a pane
+        that has no pins block at all) is a silent no-op: nothing
+        visible lies, and the next render shows the pin."""
+        key = (w["proc"], w["title"])
+        got = getattr(self, "_pin_rows", {}).get(key)
+        if got is not None and got[0].winfo_exists():
+            got[1].configure(text=self._pin_row_text(w, live))
+            return
+        inner = getattr(self, "_pins_inner", None)
+        if inner is None or not inner.winfo_exists():
+            return
+        e = getattr(self, "_pins_empty", None)
+        if e is not None and e.winfo_exists():
+            e.pack_forget()
+        self._pin_row(inner, w, live)
 
 
     def _prof_pin_all(self):
@@ -144,10 +222,16 @@ class _PinMixin:
             if p not in best or w["rect"][2] * w["rect"][3] > \
                     best[p]["rect"][2] * best[p]["rect"][3]:
                 best[p] = w
-        for w in best.values():
-            profiles.pin(self._prof_data, self._prof_sel, w,
-                         match="process")
-        self._prof_msg = "pinned one seat per open app (%d)" % \
-            len(best)
+        if self._prof_data["profiles"].get(self._prof_sel) is None:
+            self._prof_msg = "save or pick a profile first"   # dead
+            self._repaint("status")                           # selection
+            return
+        done = sum(1 for w in best.values()
+                   if profiles.pin(self._prof_data, self._prof_sel, w,
+                                   match="process")[0])
+        # the count is what ACTUALLY landed; a live selection with an
+        # honest zero says zero, it does not confess a selection lie
+        # (gate finding 3: an empty scan is not a dead profile)
+        self._prof_msg = "pinned one seat per open app (%d)" % done
         self._repaint("pins", "status")
 

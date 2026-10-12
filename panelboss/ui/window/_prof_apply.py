@@ -98,7 +98,7 @@ class _ModeMixin:
         name = (self._prof_name.get() or "").strip()
         if not name:
             self._prof_msg = "give it a name first"
-            self._prof_status.configure(text=self._prof_msg)
+            self._status_lbl.configure(text=self._prof_msg)
             return
         profiles.create(self._prof_data, name)
         self.profile_menu.configure(values=[profiles.NEW] + sorted(
@@ -240,7 +240,7 @@ class _ModeMixin:
         # must not sit frozen through any of it
         name, data = self._prof_sel, self._prof_data
         self._prof_msg = "reshaping the desktop..."
-        self._prof_status.configure(text=self._prof_msg)
+        self._status_lbl.configure(text=self._prof_msg)
 
         def work():
             ok, text, info = profiles.apply(data, name,

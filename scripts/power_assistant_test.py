@@ -547,8 +547,10 @@ def check():
         assert app._pin_edit["pick"] is None and \
             app._pin_edit["key"] is None and app._pin_edit["wait"] == 30
         _FAKE_WINS.pop()                   # the second window closes
-        # and x forgets the seat
-        app._pin_remove(wins[0])
+        # and x forgets the seat (row=None: the verb takes its
+        # full-repaint honest path - Oct 12 made the x's lambda hand
+        # the clicked row's frame in for the surgical path)
+        app._pin_remove(wins[0], None)
         assert prof["wins"] == []
         app._prof_hdr("on")
         assert prof["hdr"] == "on"

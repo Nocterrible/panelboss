@@ -1,5 +1,12 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
+
+SIZE LAW: ~315. The _repaint/_section double-buffer pair (_section
+lives in _widgets.py) is the pane's whole paint pipeline and reads as
+one story here; splitting the fills further would scatter a mechanism
+that is debugged by reading top to bottom. No cover on repaints
+(owner ruling, Oct 12 - see _repaint): a click shows one atomic
+re-paint of its section, never a veil sweep.
 """
 
 from __future__ import annotations
@@ -68,6 +75,12 @@ class _ProfilesMixin:
                                        fg_color="transparent")
         self._prof_detail = self._prof_body
         self._psec = {}
+        self._psec_pady = {}           #   _repaint's in-place swaps
+        self._psec_old = {}            #   buffers awaiting the swap
+        self._status_lbl = None        # the idempotent fill must
+        self._pin_rows = {}            #   rebuild on this fresh body,
+        self._pins_inner = None        #   never configure a widget
+        self._pins_empty = None        #   the destroyed body held
         try:
             self._profiles_fill()
         finally:
@@ -77,10 +90,44 @@ class _ProfilesMixin:
 
 
     def _repaint(self, *names):
-        """Re-run just the named sections' builders after a handler
-        changed only that part of the world."""
+        """Re-run the named sections' builders (DETACHED, see
+        _section), then pack each fresh frame back into its ORIGINAL
+        slot - neighbours never move - and destroy what it replaced.
+        NO COVER (owner ruling, Oct 12: "why is every button press
+        drawing the whole ui... veiling works fine for the first
+        load, but I don't like it for every click"): the veil-on-
+        repaint had been HIDING a ~1 s section rebuild instead of
+        shrinking it; a click gets ONE clean atomic repaint of the
+        changed section, veils stay only on the heavy ops (tab
+        switch, profile-switch render, skin rebuild). The double
+        buffer is what makes that repaint a single paint instead of
+        a crawl: CTk constructors call update_idletasks(), so
+        building in place painted the whole mapped pane per
+        half-built widget (measured: 688 ms for 12 rows in place,
+        against the ~27 ms one paint a detached build + swap costs).
+        An idempotent fill (status) builds no buffer and swaps
+        nothing."""
         for name in names:
             getattr(self, "_fill_%s" % name)()
+        for name in names:
+            olds = self._psec_old.get(name)
+            if not olds:
+                continue            # nothing was rebuilt: the section
+                #                   updated in place (or first fill)
+            self._psec[name].pack(
+                fill="x", pady=self._psec_pady.get(name, (0, 0)),
+                # anchor on the frame being REPLACED (still packed
+                # until below): absolute slot, so untracked siblings
+                # - the _restore_section block! - never drift (gate
+                # finding; an after=chain reordered them)
+                before=olds[-1])    # the new buffer enters
+            # teardown SCOPED to this name (gate finding): a fill that
+            # raised mid-repaint stashes an old frame; destroying ALL
+            # stashes here would let the NEXT unrelated repaint kill
+            # that section's visible frame. A stale stash instead waits
+            # quietly until its own section repaints again.
+            for f in self._psec_old.pop(name, []):
+                f.destroy()
 
 
     def _profiles_fill(self):
@@ -101,11 +148,11 @@ class _ProfilesMixin:
                           command=self._profile_create,
                           **self.skin.secondary()).pack(side="left",
                                                         padx=(theme.S_FIELD, 0))
-            self._prof_status = ctk.CTkLabel(
+            self._status_lbl = ctk.CTkLabel(
                 self._prof_detail, text=self._prof_msg,
                 font=self.skin.font(11), wraplength=560, justify="left",
                 anchor="w", **self.skin.text_style("sub"))
-            self._prof_status.pack(anchor="w", pady=(theme.S_FIELD, 0))
+            self._status_lbl.pack(anchor="w", pady=(theme.S_FIELD, 0))
             return
 
         mons = wm.monitors()
