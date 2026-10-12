@@ -13,6 +13,7 @@ from PIL import Image
 
 from .. import theme
 from ._camedit import ADD_LABEL, duty_roster
+from ._camid import hidden_indices, open_identify
 from ._constants import TIPS
 from ._widgets import SkewCombo
 
@@ -62,6 +63,9 @@ class _CameraMixin:
                       command=self._scan_cameras,
                       **self.skin.secondary()).pack(
             side="left", padx=theme.S_FIELD)
+        ctk.CTkButton(controls, text="identify...", width=80,
+                      command=lambda: open_identify(self),
+                      **self.skin.secondary()).pack(side="left")
         # the label zone is a 320 px form, not the card's full width:
         # full width flings labels to one edge and menus to the other
         # and the eye has to cross a canyon to read the pair (the
@@ -168,7 +172,9 @@ class _CameraMixin:
         def worker():
             from ... import camera
             try:
-                names = camera.camera_names()
+                devs = camera.camera_devices()
+                self._devs = devs                # identities ride the
+                names = [d["name"] for d in devs]  # same scan report
                 found = [(index, opened, width,
                           names[index] if index < len(names) else "")
                          for index, opened, width
@@ -190,9 +196,17 @@ class _CameraMixin:
         # below, not menu lines (the old listing was the redundancy
         # the owner named); rostered entries vanish from the menu
         roster = set(duty_roster(self.cfg["camera"]))
+        hidden = self.cfg["camera"].get("hidden") or []
+        if hidden and getattr(self, "_devs", None) is None:
+            try:                                 # one lazy fetch: the
+                self._devs = camera.camera_devices()   # mapping needs
+            except Exception:                    # the PnP list
+                self._devs = []
+        hid = hidden_indices(getattr(self, "_devs", None) or [],
+                             found, hidden)
         labels = []
         for index, opened, width, name in found:
-            if index in roster and index >= 0:
+            if (index in roster and index >= 0) or index in hid:
                 continue
             label = "index %s (%s px)" % (index, int(width))
             if name:

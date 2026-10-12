@@ -19,6 +19,7 @@ from __future__ import annotations
 import customtkinter as ctk
 
 from .. import theme
+from . import _camid
 from ._constants import TIPS
 from ._widgets import SkewCombo
 
@@ -83,17 +84,22 @@ class _CamEditMixin:
             widget.destroy()
         self._cam_rows = {}
         roster = set(duty_roster(self.cfg["camera"]))
+        hidden = self.cfg["camera"].get("hidden") or []
+        hid = _camid.hidden_indices(getattr(self, "_devs", None) or [],
+                                    found, hidden)
         for entry in found:
             index, name = entry[0], entry[3]
             if isinstance(index, int) and index in roster:
-                self._cam_row(index, name)
+                # a hidden device ON duty keeps its row (the engine
+                # still honors the roster) wearing an honest badge
+                self._cam_row(index, name, index in hid)
         if not self._cam_rows:
             ctk.CTkLabel(self._cam_rows_frame,
                          text="no cameras on duty - add one above",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(anchor="w")
 
-    def _cam_row(self, index, name):
+    def _cam_row(self, index, name, hidden=False):
         """Camera header at tier 1, then the two policy lines at hint
         tier (the card is ~350 px: two combos sharing one line do not
         fit, so each policy owns a line, mirroring the global pair's
@@ -104,6 +110,8 @@ class _CamEditMixin:
         title = "cam %s" % index
         if name:
             title += " · %s" % str(name)[:NAME_CLIP]
+        if hidden:
+            title += " · (hidden from menus)"
         head = ctk.CTkLabel(row, text=title, font=self.skin.font(12),
                             **self.skin.text_style())
         head.grid(row=0, column=0, sticky="w")

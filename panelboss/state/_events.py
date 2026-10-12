@@ -232,6 +232,28 @@ class _EventsMixin:
                 from .. import config
                 config.write_config(self.cfg)
                 log.info("camera roster now %s", self.camera_cfg["index"])
+            elif action == "camera_identity":
+                # the wizard's hand-off: {"instance": str, "label": str
+                # (empty clears), "hide": bool}. Keyed on the PnP
+                # InstanceId because indexes drift on replugs; state
+                # owns the toml write, the UI never edits it behind
+                # the loop's back
+                inst = str(value.get("instance") or "")
+                if inst:
+                    if value.get("label") is not None:
+                        labels = self.camera_cfg.setdefault("labels", {})
+                        text = str(value["label"]).strip()
+                        if text:
+                            labels[inst] = text
+                        else:
+                            labels.pop(inst, None)
+                    if value.get("hide"):
+                        hidden = self.camera_cfg.setdefault("hidden", [])
+                        if inst not in hidden:
+                            hidden.append(inst)
+                    from .. import config
+                    config.write_config(self.cfg)
+                    log.info("camera identity stored for %s", inst)
             elif action == "device":
                 self.inference_cfg["device"] = value
                 self._rebuild_detector()        # cpu<->gpu swap
