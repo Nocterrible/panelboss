@@ -5,10 +5,11 @@ inner frame, and a full item re-map on every show/hide).
 
 The host is pure tk (one Canvas, one Scrollbar, one Frame): the page's
 children are built on ``host.inner`` and pack() lands them in the
-scroll region; the host itself takes the same pack()/pack_forget()/
-destroy() calls the tab machinery already makes. CTk widgets accept a
-plain tk.Frame master (measured; CTkScrollableFrame's own inner frame
-takes CTk children the same way).
+scroll region; the tab machinery place()s the host into the body once
+and raises it to reveal - never remaps (Oct 12, layer-raise switch;
+destroy() is still the host's to take, as any widget's). CTk widgets
+accept a plain tk.Frame master (measured; CTkScrollableFrame's own
+inner frame takes CTk children the same way).
 
 Oct 12 (scroll_probe, owner report "page scroll no longer works"):
 the wheel moved from the Enter/Leave bind_all dance to ONE global

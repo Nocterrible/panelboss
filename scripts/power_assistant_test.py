@@ -423,10 +423,12 @@ def check():
         # tabs: the layer law (Oct 12 re-cut) - every page is placed
         # for life and exclusivity moved from MANAGER to STACK: the
         # visible tab is the TOP of the body's children (bottom-first
-        # list, measured in veil_test). The probe is still the
-        # managed frame: customtkinter's page object delegates pack()
-        # down to _parent_frame, and its own winfo_manager forever
-        # answers "canvas" (measured) - a probe there measures nothing
+        # list, measured in veil_test). The probe rides
+        # _parent_frame.winfo_manager() for shape-agnosticism: the
+        # plain-tk host has NO delegation (_parent_frame IS the
+        # host), but a probe that asks the placement object through
+        # the compat attribute keeps measuring the placed layer even
+        # if the host's class ever changes.
         managed = lambda k: app.pages[k]._parent_frame.winfo_manager()
         top = lambda: app._body.winfo_children()[-1]
         app._show_tab("power plan")

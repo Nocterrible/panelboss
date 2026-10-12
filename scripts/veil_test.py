@@ -127,6 +127,9 @@ check(app._veil_lbl is None, "a switch takes no cover any more")
 check(app.pages[first].winfo_ismapped()
       and kids.index(app.pages[first]) == len(kids) - 1,
       "switch raises the layer to the top of the body (enter)")
+check(app.pages[first].winfo_width() == body.winfo_width()
+      and app.pages[first].winfo_height() == body.winfo_height(),
+      "the placed layer covers the body whole (the hidden pages stay HIDDEN)")
 app._show_tab(away)                     # away
 app.update()
 app._show_tab(first)                    # and BACK: the second entry

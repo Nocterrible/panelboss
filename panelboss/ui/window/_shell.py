@@ -263,8 +263,10 @@ class SettingsWindow(
         the watchdog below. `absolute` pins the veil to the WINDOW at
         the body's current box: for rebuild_for_skin the body itself
         is about to die, and a child veil would cremate with it
-        exactly mid-sweep. Normal callers want the plain relative
-        veil, which tracks the body's resizes for free."""
+        exactly mid-sweep. The plain RELATIVE form rode the tab
+        switch and was retired with it (Oct 12: switching raises a
+        pre-painted layer now - no burst to cover); callers today
+        pass full or absolute."""
         if getattr(self, "_veil_lbl", None) is not None:
             # already veiled: never stack, but a caller may have just
             # changed the skin - re-dress the color, not the geometry
