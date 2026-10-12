@@ -51,8 +51,18 @@ class _PowerMixin:
         self._restore_layout()
 
     def _wake(self, now, score):
-        log.info("waking after %.0f s of absence (score %.2f)",
-                 now - self.last_present if self.last_present else -1, score)
+        if score is None:
+            # input wake: the mouse spoke, no camera verdict exists -
+            # printing 0.00 here read like "the cameras saw nobody" for
+            # a wake the user's own hand caused (implication lie, fixed
+            # at the owner's desk Oct 12)
+            log.info("waking after %.0f s of absence (input: the user "
+                     "is right here)",
+                     now - self.last_present if self.last_present else -1)
+        else:
+            log.info("waking after %.0f s of absence (score %.2f)",
+                     now - self.last_present if self.last_present else -1,
+                     score)
         self._release_camera()                   # the device is exclusive;
                                                  # release before the screens
         display.wake()                           # come back up

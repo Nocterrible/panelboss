@@ -106,7 +106,7 @@ class _PhaseMixin:
     # ------------------------------------------------------ screens are off
     def _off_phase(self, now, idle):
         if idle < 1.0:                           # typing wakes the screens;
-            self._wake(now, 0.0)                 # the user is right here
+            self._wake(now, None)                # the user is right here
             return
         if now >= self.next_poll:
             # a door camera voting at night wakes the desk (the owner
