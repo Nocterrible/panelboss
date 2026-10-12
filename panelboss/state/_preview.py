@@ -123,6 +123,19 @@ class _PreviewMixin:
             frames[index] = Image.fromarray(
                 cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             labels[index] = label
+        # an open in flight PINS the lease, one renewal at a time: the
+        # UI heartbeat is gated on the live switch and the window being
+        # normal, so a 1.5 s lease can expire mid-open, its release()
+        # bumps gen, and the worker releases the handle it just paid
+        # for - an eye slower than the lease would never publish (the
+        # c97dae5 regression). When the workers land or the rotor's
+        # grace dies, the pin stops and the lease expires on its own.
+        if rot.inflight_live(time.monotonic()):
+            self.preview_until = max(self.preview_until,
+                                     time.monotonic() + 1.0)
+            if not self._pin_logged:
+                self._pin_logged = True
+                log.info("preview lease pinned by an open in flight")
         # every tick composes: an all-"opening" wall beats freezing the
         # last pre-lease frame for 38 s and letting a stale picture read
         # as live (gate finding; preview_grid paints the labeled holes)

@@ -50,6 +50,9 @@ class _BootMixin:
         self.last_present = 0.0
         self.preview_until = 0.0              # debug window lease
         self.previewing = False
+        self._pin_logged = False              # the pinned-by-an-open
+                                              # confession runs once
+                                              # per lease, not per tick
         self.wake_times = []                  # unexpected wakes, recent
         self.re_off_paused = False            # burst tripped; stays lit
         self.notifier = None                  # cli wires icon.notify
@@ -119,6 +122,8 @@ class _BootMixin:
             return pps
         if self.previewing:
             self.previewing = False
+            self._pin_logged = False            # the next lease gets its
+                                                # own confession
             self._release_camera()             # back to the scheduled modes
             self.next_poll = now               # the phase machine re-arms
                                                # its own cadence next tick

@@ -163,6 +163,12 @@ class _EventsMixin:
                         # next_poll, or the first preview frame is late
                         self.next_poll = time.monotonic()
                         log.info("preview lease began; polling now")
+                    # NOTE: a heartbeat arriving after an expiry does NOT
+                    # re-pin from here - the lease-branch pin in
+                    # _preview_mosaic covers the whole window that matters
+                    # (begin -> ticks -> opens land), and re-pinning over
+                    # RELEASED (gen-stale) workers would revive a lease
+                    # whose opens are doomed to self-release
             elif action == "confidence":
                 self.inference_cfg["confidence"] = float(value)
                 if self.detector is not None:

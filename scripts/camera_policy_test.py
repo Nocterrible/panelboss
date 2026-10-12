@@ -113,8 +113,8 @@ def drain_open(m):
     rot = m.camera
     while True:
         with rot._async_lock:            # lock-free reads can see a
-            th = [t for t in list(rot._inflight.values())   # popped
-                  if t is not None and t.is_alive()]        # pre-publish
+            th = [j.thread for j in list(rot._inflight.values())   # popped
+                  if j is not None and j.thread.is_alive()]        # pre-publish
         if not th:
             return
         th[0].join(10)
