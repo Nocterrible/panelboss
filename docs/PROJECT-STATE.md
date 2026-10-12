@@ -106,6 +106,12 @@ Renamed from "ICU Presence Detector" at 0.1.0.
    onedir output becomes the installer payload; `update.bat` graduates
    from git-pull to "fetch + run the new setup". Stretch: winget
    manifest once the first signed release ships.
+    ICON ART DECISION (owner, Oct 11): a proper icon will be generated
+    with ComfyUI on the 5090 - deferred because that evicts Infernix
+    (review gate runs same-family on lane 1 while ComfyUI is up;
+    re-seat START-infernix-27b-2seq.bat afterwards). The green-circle
+    tray art is the placeholder; all other installer work is
+    icon-agnostic and proceeds.
 3. **Real PyPI 0.1.x/0.2.x**: `pip install panelboss && python -m
    panelboss` as the script path alongside the installer; needs a
    `pyproject.toml` (none exists yet - packaging is created, not
