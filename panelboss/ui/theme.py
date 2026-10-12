@@ -175,5 +175,16 @@ SKINS = {"modern": MODERN, "fun": FUN}
 DEFAULT_SKIN = "modern"
 
 
+def apply_ctk_font(skin):
+    """Re-point CTk's OWN default font (the ThemeManager's CTkFont
+    entry every button/switch/entry falls back to when the call site
+    passes no font) at the skin's family. Without this, button labels
+    keep rendering the bundled Roboto - GDI-unhinted and old-school -
+    while only our explicit CTkLabels got the skin font."""
+    import customtkinter as ctk
+    fam = skin.font_family or "Segoe UI"
+    ctk.ThemeManager.theme.setdefault("CTkFont", {})["family"] = fam
+
+
 def get_skin(name):
     return SKINS.get(name, MODERN)

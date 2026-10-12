@@ -84,6 +84,7 @@ class SettingsWindow(
         self.monitor = monitor
         self.ui_events = ui_events
         self.skin = theme.get_skin(cfg["ui"]["skin"])
+        theme.apply_ctk_font(self.skin)
         self.title("PanelBoss")
         self.geometry("920x640")
         self.minsize(760, 520)
@@ -172,6 +173,19 @@ class SettingsWindow(
             return                     # the page is already up: a tab
             # button on the visible tab must not unmap-and-remap the
             # whole widget tree (repaint profile: the remap IS the cost)
+        real_switch = self._tab != key
+        if real_switch and self.winfo_viewable():
+            # A real tab change unmaps a whole built page and remaps
+            # another: every CTk canvas re-renders event by event on
+            # the VISIBLE window - the crawl the owner sees. The body
+            # veil rides the swap (relative mode: it tracks the body,
+            # and the body never dies here); the redraw burst lands
+            # under it inside the forced update, and the lift is
+            # ordered AFTER the redraws by the event queue itself.
+            # Timed short (120 ms cap via the tick watchdog's rules):
+            # a tab switch that flashes a cover longer than it crawls
+            # is worse than the crawl.
+            self._veil()
         self.tips.kill()                 # a tooltip anchored to a row
         self._tab = key                  # would float over the new page
         for other in self.pages.values():
@@ -180,6 +194,12 @@ class SettingsWindow(
         for k, b in self.tab_buttons.items():
             b.configure(**(self.skin.primary() if k == key
                           else self.skin.secondary()))
+        if real_switch and self.winfo_viewable():
+            try:
+                self.update()            # draw the new page UNDER cover
+            except Exception:
+                pass
+            self.after(120, self._unveil)
 
 
     def rebuild_for_skin(self):
@@ -194,6 +214,7 @@ class SettingsWindow(
                        self._body):
             widget.destroy()
         self.skin = theme.get_skin(self.cfg["ui"]["skin"])
+        theme.apply_ctk_font(self.skin)
         ctk.set_appearance_mode(self.skin.mode)
         self.configure(fg_color=self.skin.bg)
         self._shown_ts = None                # repaint the preview fresh
