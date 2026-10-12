@@ -39,7 +39,8 @@ import ctypes
 import subprocess
 
 # --- environment (measured, see docs/vrr-findings.md) -------------------------
-VENV_PY = r"F:\Projects\ICU-PresenceDetector\.venv\Scripts\python.exe"
+VENV_PY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       ".venv", "Scripts", "python.exe")
 NVAPI_DLL = "nvapi64.dll"
 NVAPI_SYSTEM32 = r"C:\Windows\System32\nvapi64.dll"
 

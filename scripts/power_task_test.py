@@ -3,9 +3,10 @@
 EXISTS (verified by query even when every exit code is a liar); tick
 OFF => the task is GONE. Regression: the original revert-bug was
 trusting rc over reality."""
+import os
 import sys
 
-sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from panelboss import power
 
 

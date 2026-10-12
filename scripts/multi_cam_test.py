@@ -19,7 +19,7 @@ try:
 except ImportError:
     import tomli as _t
 
-sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 

@@ -5,11 +5,12 @@ message, never an exception; the tray toggle flips whatever the
 registry holds and the window resyncs from the same truth."""
 import logging
 import queue
+import os
 import sys
 
 logging.disable()             # the refusal branches log by design
 
-sys.path.insert(0, r"F:\Projects\ICU-PresenceDetector")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from panelboss import startup, tray
 
 real_exe = sys.executable
