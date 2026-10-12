@@ -106,3 +106,36 @@ class _PolicyMixin:
             elif was and not blind:
                 log.info("eye %d frames came back", index)
             self._blind[index] = blind
+            # a BLACK frame abstains in _poll, so its slot must not leak
+            # a round credit to an eye that never gave a verdict
+            self._vote_index = index if not blind else None
+
+    def _round_tally(self, present):
+        """Presence is an OR: any eye that sees somebody counts and ends
+        the round. Absence is an AND: the streak resets only when EVERY
+        eye on duty this table state has had its turn since the last
+        positive and none of them saw anybody (owner door-cam doctrine,
+        Oct 12 - an empty door must never veto a warm desk). Blind eyes
+        abstained before reaching here; policy-off eyes never entered
+        the round at all; the round can only close on verdicts."""
+        if getattr(self, "_vote_index", None) is None:
+            if not present:              # fail-closed ABSENT (stall/died
+                self.hits = 0            # verdict, no recorded eye):
+                self._round = None       # the shipped AND behavior
+            return
+        idx = self._vote_index
+        self._vote_index = None
+        if present:
+            self.hits += 1
+            self._round = None           # a positive ENDS the round
+            return
+        table = "off" if self.state == "off" else "on"
+        want = {i for i in self._indexes()
+                if self._table_mode(i, table) != "off"}
+        if self._round is None:
+            self._round = {idx}
+        else:
+            self._round.add(idx)
+        if want and want <= self._round:
+            self.hits = 0                # the full rotation came back
+            self._round = None           # empty: THAT is absence

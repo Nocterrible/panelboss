@@ -93,4 +93,67 @@ mon._drain_tray()
 assert not mon.re_off_paused, "policy change must re-arm"
 assert cfg["recovery"]["wake_policy"] == "leave_on"
 
+# ---- OR/AND presence tally (owner door-cam doctrine, Oct 12) -----------
+# Presence is an OR, absence an AND: the door camera must never veto
+# the desk camera. A streak resets only when EVERY eye on duty has had
+# its turn since the last sighting and all of them saw nobody. (The old
+# code reds the headline below: hits went 1,0,1,0 and never woke.)
+mon2 = PresenceMonitor(cfg, StubDetector())
+mon2._indexes = lambda: [0, 1]           # two eyes on duty...
+mon2._table_mode = lambda i, t: "watch"  # ...in every table
+wakes = []
+mon2._wake = lambda now, score: wakes.append(now)
+verdicts = iter([(0, (True, 0.9)),      # door: somebody (hit 1, round ends)
+                 (1, (False, 0.0)),     # desk: empty (verdict only, round {1})
+                 (0, (True, 0.9))])     # door again: hit 2 == min_hits -> WAKE
+def fake_poll():
+    idx, verdict = next(verdicts)
+    mon2._vote_index = idx               # what _note_vote does inside _poll
+    return verdict
+mon2._poll = fake_poll
+mon2.state = "off"
+mon2.hits = 0
+mon2.next_poll = 0.0                     # recheck due every call
+mon2._off_phase(30000.0, 10.0)
+assert mon2.hits == 1 and not wakes, "door positive counts immediately"
+mon2._off_phase(30010.0, 10.0)
+assert mon2.hits == 1, "one empty eye must NOT veto the seen door"
+mon2._off_phase(30020.0, 10.0)
+assert len(wakes) == 1, "the second door sighting must wake at min_hits"
+print("OR wake OK (empty desk cannot veto a seen door)")
+
+# mirror: the full rotation comes back empty -> that IS absence; the
+# streak resets and the desk stays asleep (sleep must stay possible)
+mon2.hits = 1                            # one stale sighting to erase
+mon2._round = None
+empty = iter([(0, (False, 0.0)), (1, (False, 0.0))])
+def fake_poll2():
+    idx, verdict = next(empty)
+    mon2._vote_index = idx
+    return verdict
+mon2._poll = fake_poll2
+n_wakes = len(wakes)                     # the OR scenario already woke once
+mon2._off_phase(30100.0, 10.0)
+assert mon2.hits == 1, "half a round does not reset"
+mon2._off_phase(30110.0, 10.0)
+assert mon2.hits == 0 and len(wakes) == n_wakes, \
+    "full empty round resets, no wake"
+print("AND sleep OK (full empty round resets)")
+
+# hygiene: an on-phase positive wipes stale off-phase round bookkeeping
+mon2.state = "counting"
+mon2._round = {1}
+mon2._schedule_on_poll(31000.0, True, 0.9)
+assert mon2._round is None, "round state must not cross the wake boundary"
+
+# fail-closed ABSENT (gate finding 1): a stall/dead verdict carries no
+# recorded eye (no _note_vote frame); it resets at once, as the shipped
+# AND did - a camera that cannot answer must never buy stale hits shelter
+mon2.hits = 1
+mon2._round = {0}
+mon2._vote_index = None
+mon2._round_tally(False)
+assert mon2.hits == 0 and mon2._round is None, "index-less ABSENT resets"
+print("fail-closed ABSENT OK (stalled eye shelters no streak)")
+
 print("BURST TEST OK")

@@ -88,6 +88,8 @@ class _PhaseMixin:
                     and self.hits >= self.inference_cfg["min_hits"]):
                 self._resume_re_off("the camera saw somebody again")
             self.next_poll = now + self.timers["present_recheck_sec"]
+            self._round = None      # stale off-phase round bookkeeping
+                                    # does not cross the wake boundary
             return
         if self.absent_since is None:
             self.absent_since = now
@@ -114,13 +116,11 @@ class _PhaseMixin:
             # the desk wants); nothing here changes that
             present, score = self._poll()
             if present is None:
-                # dead camera: no verdict, no reset of the presence
-                # hits, and no reschedule (the off phase re-polls
-                # every tick once the deadline is due, as today)
+                # dead camera: no verdict, no round progress, no reset
+                # (and no reschedule - the off phase re-polls every
+                # tick once the deadline is due, as today)
                 pass
-            elif present:
-                self.hits += 1
-                if self.hits >= self.cfg["inference"]["min_hits"]:
-                    self._wake(now, score)
             else:
-                self.hits = 0
+                self._round_tally(present)
+                if present and self.hits >= self.cfg["inference"]["min_hits"]:
+                    self._wake(now, score)

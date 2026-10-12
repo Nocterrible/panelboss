@@ -55,6 +55,11 @@ class _BootMixin:
         self.hits = 0                         # consecutive positive frames
         self._blind = {}              # index -> bool: served-black state
                                       # (transition-confessions only)
+        self._round = None                # eyes that voted absent since
+                                          # the last positive (OR/AND
+                                          # tally, owner doctrine)
+        self._vote_index = None           # eye whose verdict is in
+                                          # flight (set by _note_vote)
         self.snooze_until = 0.0
         self.grace_until = 0.0                # leave_on budget
         self.re_off_deadline = math.inf       # counting-after-wake budget
