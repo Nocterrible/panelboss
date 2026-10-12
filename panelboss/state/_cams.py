@@ -224,6 +224,23 @@ class _CamsMixin:
             self._release_camera()
 
     def _release_camera(self):
+        self.preview_cool = 0.0          # a wall that just died cannot
+                                         # be warm (gate finding 3: any
+                                         # release path clears the flag)
+        if self._single_opener is not None:
+            self._single_opener.invalidate()   # the rotor carries its own
+            # invalidation inside release(); the single-eye seam lives on
+            # the monitor, so the gen bump that makes an in-flight open
+            # release its own fresh handle has to happen here
+            for held in list(self._single_opener.held.values()):
+                held.release()           # gate finding 1 (HIGH): a
+            self._single_opener.held.clear()   # publish that landed
+                                             # after the last leased
+                                             # tick would otherwise sit
+                                             # LED-on with no owner -
+                                             # the rotor seam survives
+                                             # ONLY because release()
+                                             # sweeps its store
         if self.camera is not None:
             self.camera.release()
             self.camera = None

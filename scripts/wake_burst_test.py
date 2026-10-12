@@ -15,6 +15,9 @@ cfg["power"]["assistant_task"] = False       # never consult the real
 cfg["recovery"]["wake_policy"] = "re_off"     # task store in a test
 cfg["recovery"]["wake_burst_count"] = 2
 cfg["recovery"]["wake_burst_window_sec"] = 120
+cfg["inference"]["min_hits"] = 2             # the two-hit resume below
+# is the test's own shape; the LIVE config on this box says 4 and this
+# test reads the live file (Oct 12: pre-cooloff suite failure, pinned)
 
 
 class StubDetector:

@@ -34,11 +34,15 @@ class _PreviewMixin:
     def _preview(self, now):
         """Debug frames while the lease is live: the camera is held,
         detection runs, and the gate and timers are on holiday; the
-        phase machine resumes untouched when the lease runs out. One
-        camera previews exactly as it always did; several cameras
-        push the composed mosaic (preview_grid) into the SAME frame
-        slot, so the window's single draw path never learns the
-        difference."""
+        phase machine resumes untouched when the lease runs out. The
+        tick NEVER blocks on an open - neither the multi-camera wall
+        (labeled holes, progressive fill) nor the single-eye desk (the
+        SAME AsyncOpener discipline the mosaic's rotor uses: the worker
+        opens and warms in the background and the tick re-reads it each
+        poll, so the first leased tick is milliseconds and the tile -
+        or the previous wall - simply survives until the frame lands).
+        Both paths feed the SAME one slot framebox, so the window's
+        single draw path never learns the difference."""
         if self.detector is None:
             return              # no model yet (warm-up) or ever (the
                                 # fail-open build failure): abstain
@@ -55,20 +59,72 @@ class _PreviewMixin:
                 # the is_open() gate below would starve the wall
                 self._preview_mosaic(rot)
                 return
+        op = self._single_opener
+        if op is None:
+            from .. import camera as camera_mod
+            op = self._single_opener = camera_mod.AsyncOpener(
+                self._preview_open)      # its own held dict: the tick
+                                         # re-reads it every poll
         if self.camera is None or not self.camera.is_open():
-            # SYNC on purpose: a single-eye desk boots the one eye it
-            # will poll anyway, so this wait is the same one the normal
-            # poll already pays. If a single-eye desk ever complains,
-            # the mosaic path below is the model (rotor.open_async,
-            # labeled holes, progressive fill).
-            self._hold_camera()
-            if self.camera is None or not self.camera.is_open():
-                return                                 # still booting
+            if self.camera is not None:
+                self._release_camera()   # a present-but-dead handle:
+                # the honest release + detector reset before replacing
+                # it (also bumps the opener's gen, so a racing worker
+                # releases its own fresh handle instead of orphaning)
+            indexes = self._indexes()
+            self.camera = op.open_async(indexes[0] if indexes else 0)
+            if self.camera is None:
+                # OPENING, not waiting: the sync hold here was the
+                # owner's spiral (a 20-27 s open blocking this very
+                # tick: no pin, no lease renewal landing, the next poke
+                # killed the open mid-flight and the retry never ended).
+                # The background open pins the lease while it lives and
+                # publishes under the same grace + tombstone discipline
+                # the mosaic's rotor has always used.
+                if op.inflight_live(now):
+                    self._pin_lease()
+                return
         frame = self.camera.read()
         if frame is None:
             return
         boxes, scores = self.detector.detect(frame)
         self.framebox.put(frame, boxes, scores)
+
+    def _preview_open(self, index):
+        """The single-eye desk's AsyncOpener factory: build the one
+        camera the current config names (the same _new_camera the old
+        sync hold called) and never hand out a corpse - cv2 builds
+        silent dead handles rather than raising, so the open is proven
+        with is_open() and the corpse released on the spot; the rotor's
+        _open does the same for its eyes."""
+        try:
+            cam = self._new_camera()
+        except Exception as err:
+            log.info("camera %s will not open (%s); the preview retries "
+                     "next tick", index, err)
+            return None
+        if not cam.is_open():
+            cam.release()
+            log.info("camera %s will not open; the preview retries next"
+                     " tick", index)
+            return None
+        return cam
+
+    def _pin_lease(self):
+        """An open in flight PINS the lease, one renewal at a time: the
+        UI heartbeat is gated on the live switch and the window being
+        normal, so a 1.5 s lease can expire mid-open and the pre-cooloff
+        release would bump the gen - the worker then releases the handle
+        it just paid for, an eye slower than the lease never publishes
+        (the c97dae5 regression) and the next toggle restarts the driver
+        tax (the owner's live spiral). When the workers land or the open
+        dies by its grace, the pin stops and the lease expires on its
+        own - into the warm window now, not into a reopen."""
+        self.preview_until = max(self.preview_until,
+                                 time.monotonic() + 1.0)
+        if not self._pin_logged:
+            self._pin_logged = True
+            log.info("preview lease pinned by an open in flight")
 
     def _preview_mosaic(self, rot):
         """The wall under a live lease: open EVERY index the lease may
@@ -82,9 +138,12 @@ class _PreviewMixin:
         its own thread (rotor.open_async) and carries "opening" until
         it lands, so the wall appears with the fast eye and fills in -
         the tick never blocks on a slow driver. Release of all of it is
-        the lease-end _release_camera the single path already uses (the
-        rotor lets go of every sub-cam it holds, and _invalidate makes
-        an open that was still in flight release its own fresh handle)."""
+        still the lease-end _release_camera the single path already
+        uses - but a NATURAL lease end now defers it by the cooloff
+        window (_boot.PREVIEW_COOLOFF_SEC) so the next toggle attaches
+        instead of reopening; a real release still lets go of every
+        sub-cam the rotor holds, and _invalidate makes an open that
+        outran the window release its own fresh handle."""
         import cv2
         import numpy as np
         from PIL import Image
@@ -103,11 +162,14 @@ class _PreviewMixin:
                 # its own thread and this tick shows a labeled hole.
                 # The fast eye lands on the wall at once, the slow one
                 # fills in when its driver lets go (38 s was measured)
-                # - the tile says "opening" until then, labeled, not
-                # faked.
+                # - and the label CARRIES THE AGE ("opening 12s"): a
+                # 20 s-old hole reads as dead next to a 1 s-old one,
+                # and the owner deserves to tell patience from a hang.
                 rot.open_async(index)
                 frames[index] = None
-                labels[index] = "opening"
+                age = rot.inflight_age().get(index)
+                labels[index] = ("opening" if age is None
+                                 else "opening %ds" % min(int(age), 999))
                 continue
             frame = cam.read()
             if frame is None:
@@ -123,19 +185,13 @@ class _PreviewMixin:
             frames[index] = Image.fromarray(
                 cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             labels[index] = label
-        # an open in flight PINS the lease, one renewal at a time: the
-        # UI heartbeat is gated on the live switch and the window being
-        # normal, so a 1.5 s lease can expire mid-open, its release()
-        # bumps gen, and the worker releases the handle it just paid
-        # for - an eye slower than the lease would never publish (the
-        # c97dae5 regression). When the workers land or the rotor's
-        # grace dies, the pin stops and the lease expires on its own.
+        # an open in flight PINS the lease (see _pin_lease): without it
+        # a 1.5 s heartbeat lapse kills a slow eye's 20+ s open mid-
+        # flight and the spiral begins. When the workers land or the
+        # rotor's grace dies, the pin stops and the lease expires on its
+        # own.
         if rot.inflight_live(time.monotonic()):
-            self.preview_until = max(self.preview_until,
-                                     time.monotonic() + 1.0)
-            if not self._pin_logged:
-                self._pin_logged = True
-                log.info("preview lease pinned by an open in flight")
+            self._pin_lease()
         # every tick composes: an all-"opening" wall beats freezing the
         # last pre-lease frame for 38 s and letting a stale picture read
         # as live (gate finding; preview_grid paints the labeled holes)

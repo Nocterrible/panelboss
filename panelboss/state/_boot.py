@@ -11,6 +11,18 @@ from ._preview import FrameBox
 
 log = logging.getLogger("state")
 
+# One dial: when a preview lease dies its OWN death (expiry, or the
+# value<=0 cancel that lands the same way), the cameras do NOT release
+# immediately - the wall stays warm this many seconds and an open still
+# in flight COMPLETES AND PUBLISHES into it. The live desk proved the
+# alternative a spiral: a 20-27 s driver open, released mid-flight by
+# the next toggle's lease-end, restarted from zero and died to the next
+# poke - forever. Inside the window a fresh lease ATTACHES (zero driver
+# cost, wall live this tick); past it the release lands and the LED
+# goes honestly off. Pause/snooze/quit still release instantly: those
+# are not user flicker.
+PREVIEW_COOLOFF_SEC = 5.0
+
 
 class _BootMixin:
 
@@ -50,6 +62,11 @@ class _BootMixin:
         self.last_present = 0.0
         self.preview_until = 0.0              # debug window lease
         self.previewing = False
+        self.preview_cool = 0.0               # warm-wall deadline after a
+                                              # natural lease end (see
+                                              # PREVIEW_COOLOFF_SEC)
+        self._single_opener = None            # single-eye async-open
+                                              # seam, built on first use
         self._pin_logged = False              # the pinned-by-an-open
                                               # confession runs once
                                               # per lease, not per tick
@@ -91,7 +108,9 @@ class _BootMixin:
                 d = self._tick()
             except Exception:              # a driver hiccup (the virtual
                 log.exception("tick failed; the loop goes on")   # camera
-                self._release_camera()     # has killed threads before)
+                self.preview_cool = 0.0    # has killed threads before):
+                self._release_camera()     # the honest word is a
+                                           # release NOW, cooloff or not
             time.sleep(0.2 if d is None else d)
 
     def _tick(self):
@@ -121,14 +140,29 @@ class _BootMixin:
             self._preview(now)
             return pps
         if self.previewing:
+            # a natural lease end (expiry, or the value<=0 cancel that
+            # lands right here): do NOT release. The wall goes WARM -
+            # cameras and rotor stay exactly as they are, an open still
+            # in flight completes and publishes into them (no
+            # _invalidate: that is what made the owner's 27 s of driver
+            # work restart from zero on every toggle), and a begin
+            # inside PREVIEW_COOLOFF_SEC attaches to this wall for free
             self.previewing = False
             self._pin_logged = False            # the next lease gets its
                                                 # own confession
-            self._release_camera()             # back to the scheduled modes
+            self.preview_cool = now + PREVIEW_COOLOFF_SEC
             self.next_poll = now               # the phase machine re-arms
-                                               # its own cadence next tick
+                                               # its own cadence against
+                                               # the warm camera
+        elif self.preview_cool and now > self.preview_cool:
+            self.preview_cool = 0.0
+            self._release_camera()             # the warm window closed:
+                                               # gen-bump + release, the
+                                               # LED honestly off by now
+            self.next_poll = now
         if self.paused or now < self.snooze_until:
-            self._release_camera()
+            self.preview_cool = 0.0            # pause and snooze are not
+            self._release_camera()             # user flicker: release NOW
             self.next_poll = math.inf
             return
         idle = display.get_idle_time()     # the input gate always comes first

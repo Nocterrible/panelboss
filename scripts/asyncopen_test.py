@@ -10,10 +10,20 @@ and cameras[index] stays None; (4) an open in flight PINS the preview
 lease (one renewal, and no pin once the inflight set is empty); (5) a
 grace deadline (absolute-arg and monkeypatched-const forms) makes the
 worker abandon and self-release, leaving cameras[index] None; (6) that
-drop stales its own eye ONLY - a sibling mid-open still publishes."""
+drop stales its own eye ONLY - a sibling mid-open still publishes;
+(7) the lease COOLOFF: a natural lease end keeps the wall warm, an
+in-flight open completes and publishes anyway, a re-begin inside the
+window ATTACHES with zero respawns (the owner's reopen spiral), and the
+cool expiry releases with the gen bump; (8) the single-camera desk is
+async too: the leased tick returns in milliseconds against a 1 s fake
+open, the worker publishes through the opener, and the same cooloff +
+attach contract covers it.
+(1)-(6) exercise the rotor; (7)-(8) drive real monitors through _tick.)
+"""
 import logging
 import os
 import sys
+import tempfile
 import threading
 import time
 
@@ -89,6 +99,7 @@ class Shim:
     def __init__(self):
         from panelboss.state._preview import _PreviewMixin, FrameBox
         self._preview_mosaic = _PreviewMixin._preview_mosaic.__get__(self)
+        self._pin_lease = _PreviewMixin._pin_lease.__get__(self)
         self.detector = FakeDetector()
         self.framebox = FrameBox()
         self.preview_until = 0.0       # the lease end the pin pushes out
@@ -242,5 +253,135 @@ cams7 = [c for c in FakeCam.instances if c.index == 7]
 assert cams7 and all(c.released for c in cams7), \
     "the dropped eye leaked its handle past the drop"
 print("PROBE 6 OK  grace drop staled its own eye, the sibling published")
+
+# ======================= monitor level: cooloff + single async ==========
+# (the camera_policy fixture pattern: stub the display verbs, scratch
+# config, fake cameras already patched in; _tick is driven BY HAND)
+import panelboss.state._boot as state_boot
+from panelboss import config, display
+from panelboss.state import PresenceMonitor
+
+display.wake = lambda *a, **k: None
+display.turn_off = lambda *a, **k: None
+display.set_hold = lambda *a, **k: None
+display.foreground_is_fullscreen = lambda: False
+
+
+def scratch_cfg(camera_toml):
+    d = tempfile.mkdtemp(prefix="panelboss_async_")
+    with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
+        fh.write("[camera]\n" + camera_toml)
+    cfg = config.get_config(dir=d, verbose=False)
+    cfg["power"]["skip_camera_when_blocked"] = False   # never consult
+    cfg["power"]["assistant_task"] = False             # the real
+    cfg["power"]["restore_windows"] = False            # powercfg / wm
+    return cfg
+
+
+def fresh_monitor(camera_toml):
+    mon = PresenceMonitor(scratch_cfg(camera_toml), FakeDetector())
+    mon.state = "counting"
+    mon._poll = lambda: (None, 0.0)   # the phase machine is not under
+                                      # test; only the lease path is
+    return mon
+
+
+# ---- 7. the cooloff: a natural lease end keeps the warm wall -----------
+FakeCam.builds = 0
+FakeCam.instances = []
+FakeCam.sleeps = {4: 1.0}
+mon7 = fresh_monitor('index = [4, 9]\nmode_on = "always_on"\n'
+                     'mode_off = "always_on"\n'
+                     '[camera.on]\n9 = "off"\n[camera.off]\n9 = "off"\n')
+mon7.events.put(("preview", 10.0))
+_t = time.perf_counter()
+mon7._tick()
+assert (time.perf_counter() - _t) * 1000 < 100, "spawn tick blocked"
+b0 = FakeCam.builds
+assert b0 == 1, "expected exactly the one slow eye spawned, got %d" % b0
+time.sleep(0.25)                          # still INSIDE the 1.0 s open
+mon7.events.put(("preview", 0))           # the lease dies (cancel lands
+mon7._tick()                              # on the natural-expiry arm)
+rot7 = mon7.camera
+assert rot7 is not None and mon7.preview_cool > time.monotonic(), \
+    "the natural lease end released instead of going warm"
+wait_inflight(rot7, timeout=8)            # THE POINT: the slow open's
+c4 = rot7.cameras.get(4)                  # driver work COMPLETES and
+assert c4 is not None and c4.is_open(), "the warm window lost the open"
+assert not c4.released, "a lease end released an in-flight handle again"
+mon7.events.put(("preview", 10.0))        # re-toggle inside the window
+_t = time.perf_counter()
+mon7._tick()
+assert (time.perf_counter() - _t) * 1000 < 100, "the attach tick blocked"
+assert FakeCam.builds == b0, "ATTACH SPAWNED A REOPEN - the spiral lives"
+assert saw("preview lease re-attached a warm wall - no reopen")
+assert mon7.framebox.get() is not None, "the warm wall did not compose NOW"
+state_boot.PREVIEW_COOLOFF_SEC = 0.3      # one dial; the probe turns it
+gen7 = rot7._gen
+mon7.events.put(("preview", 0))
+mon7._tick()                              # warm once more...
+time.sleep(0.35)
+mon7._tick()                              # ...and the window closes
+assert mon7.camera is None and c4.released, "the cooloff outstayed its end"
+assert rot7._gen == gen7 + 1, "the cool expiry skipped the gen bump"
+mon7.events.put(("preview", 10.0))        # a begin AFTER the window:
+mon7._tick()                              # fresh rotor, fresh spawn
+assert FakeCam.builds == b0 + 1 and mon7.camera is not rot7, \
+    "no fresh open after the cool window closed"
+state_boot.PREVIEW_COOLOFF_SEC = 5.0
+print("PROBE 7 OK  cooloff kept the in-flight open; ATTACH AT builds==%d, "
+      "ZERO RESPAWNS - the owner's spiral is dead" % b0)
+
+# ---- 8. the single-camera desk is async too ----------------------------
+FakeCam.builds = 0
+FakeCam.instances = []
+mon8 = fresh_monitor('index = 4\nmode_on = "always_on"\n'
+                     'mode_off = "always_on"\n')
+b8 = FakeCam.builds
+mon8.events.put(("preview", 0.3))         # a lease SHORTER than the open
+_t = time.perf_counter()
+d8 = mon8._tick()
+first8 = (time.perf_counter() - _t) * 1000
+assert first8 < 100, "the single-camera open blocked the tick: %.0f ms" % first8
+assert d8 <= 0.2, "the lease returned a delay over its own cadence"
+assert mon8.camera is None and mon8._single_opener is not None
+assert saw("camera 4 opening in background")
+assert saw("preview lease began; polling now")
+assert saw("preview lease pinned by an open in flight")
+assert mon8.preview_until >= time.monotonic() + 0.9, \
+    "the in-flight single open did not pin the lease"
+time.sleep(0.6)
+mon8._tick()                              # still opening, pinned again
+time.sleep(0.6)                           # (~1.0 s) the worker lands
+mon8._tick()
+assert FakeCam.builds == b8 + 1
+cam8 = mon8.camera
+assert cam8 is not None and cam8.is_open(), "the published eye never surfaced"
+slot8 = mon8.framebox.get()
+assert slot8 is not None and slot8[0].shape == GRAY.shape, \
+    "no frame in the box after the publish"
+assert saw("camera 4 open published after")
+mon8.events.put(("preview", 0))           # the single desk gets the
+mon8._tick()                              # SAME cooloff...
+assert mon8.preview_cool > time.monotonic() and not cam8.released, \
+    "a single-eye lease end released instead of warming"
+mon8.events.put(("preview", 5.0))         # ...and the same attach
+mon8._tick()
+assert FakeCam.builds == b8 + 1, "the single-camera attach reopened"
+assert saw("preview lease re-attached a warm wall - no reopen")
+state_boot.PREVIEW_COOLOFF_SEC = 0.3
+mon8.events.put(("preview", 0))
+mon8._tick()
+time.sleep(0.35)
+gen8 = mon8._single_opener.gen
+mon8._tick()
+assert cam8.released and mon8.camera is None, "the single cooloff never ended"
+assert mon8._single_opener.gen == gen8 + 1, "no gen bump through the seam"
+mon8.events.put(("preview", 5.0))         # after the window: fresh open
+mon8._tick()
+assert FakeCam.builds == b8 + 2, "the post-window begin did not respawn"
+state_boot.PREVIEW_COOLOFF_SEC = 5.0
+print("PROBE 8 OK  single-camera leased tick %.0f ms against a 1.0 s open;"
+      " publish, cooloff, attach, respawn all honest" % first8)
 
 print("ASYNC OPEN PROBE OK")

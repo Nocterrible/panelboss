@@ -162,13 +162,33 @@ class _EventsMixin:
                         # one): poll now, do not wait out the old table's
                         # next_poll, or the first preview frame is late
                         self.next_poll = time.monotonic()
-                        log.info("preview lease began; polling now")
-                    # NOTE: a heartbeat arriving after an expiry does NOT
-                    # re-pin from here - the lease-branch pin in
-                    # _preview_mosaic covers the whole window that matters
-                    # (begin -> ticks -> opens land), and re-pinning over
-                    # RELEASED (gen-stale) workers would revive a lease
-                    # whose opens are doomed to self-release
+                        if self.preview_cool:
+                            # ATTACH: the lease died inside
+                            # PREVIEW_COOLOFF_SEC and the wall (plus any
+                            # open still in flight) is still warm - the
+                            # first tick composes instead of paying the
+                            # driver's 20+ s again. This is the exact
+                            # toggle pattern the cooloff exists to kill
+                            # the spiral of.
+                            self.preview_cool = 0.0
+                            for seam in (self.camera, self._single_opener):
+                                rearm = getattr(seam, "rearm", None)
+                                if rearm is not None:
+                                    rearm()    # gate finding 2: an
+                                    #                   attached lease must not
+                                    #                   inherit this lease's
+                                    #                   grace tombstones
+                            log.info("preview lease re-attached a warm "
+                                     "wall - no reopen")
+                        else:
+                            log.info("preview lease began; polling now")
+                    # NOTE: a heartbeat arriving AFTER the cool window
+                    # (camera already released) does NOT re-pin from
+                    # here - the lease-branch pin (_pin_lease) covers
+                    # the whole window that matters (begin -> ticks ->
+                    # opens land), and re-pinning over RELEASED
+                    # (gen-stale) workers would revive a lease whose
+                    # opens are doomed to self-release
             elif action == "confidence":
                 self.inference_cfg["confidence"] = float(value)
                 if self.detector is not None:

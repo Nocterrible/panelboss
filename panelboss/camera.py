@@ -11,10 +11,13 @@
   back open-yet-frozen forever (measured), so we never close across it,
   and any handle that stops delivering frames is released and reopened
 
-SIZE LAW: ~550 lines, grandfathered - Camera (device+warmup) and the
+SIZE LAW: ~730 lines, grandfathered - Camera (device+warmup) and the
 Rotor (rotation+async opens) share the module-level _open_lock and the
 enumeration cache; splitting now buys two files that must re-declare
-that shared state. The seam is known: Rotor+helpers out first.
+that shared state. The known seam paid its first dividend Oct 12: the
+async-open lifecycle came out of the Rotor into AsyncOpener, shared
+with the single-camera preview lease (the owner's reopen spiral hit both
+seams). Rotor+camera basics remain the split candidates.
 """
 
 from __future__ import annotations
@@ -326,19 +329,193 @@ def _extend_by_name(indexes, substrings):
 
 
 class _OpenJob:
-    """One row of RotatingCamera._inflight: the worker, its grace
-    deadline (time.monotonic, absolute), the window it was granted (for
-    an honest confession line whatever the deadline came from), and
-    whether that deadline's confession was already logged. Mutable so
-    inflight_live() can flip logged_stale under the very lock the
-    worker publishes under."""
-    __slots__ = ("thread", "deadline", "grace", "logged_stale")
+    """One row of AsyncOpener.inflight: the worker, its grace deadline
+    (time.monotonic, absolute), the window it was granted (for an
+    honest confession line whatever the deadline came from), the
+    monotonic it was registered at (so an "opening" tile can age: 20 s
+    into a slow open reads differently than 1 s in), and whether that
+    deadline's confession was already logged. Mutable so inflight_live()
+    can flip logged_stale under the very lock the worker publishes
+    under."""
+    __slots__ = ("thread", "deadline", "grace", "logged_stale",
+                 "registered")
 
-    def __init__(self, thread, deadline, grace):
+    def __init__(self, thread, deadline, grace, registered):
         self.thread = thread
         self.deadline = deadline
         self.grace = grace
         self.logged_stale = False
+        self.registered = registered
+
+
+class AsyncOpener:
+    """The background-open lifecycle, factored out of RotatingCamera so
+    the two preview-lease seams share ONE async discipline: the rotor's
+    per-index registry (publishing into the caller's cameras dict via
+    lookup/store) and the single-camera desk's registry (publishing into
+    this object's own held dict, which the tick re-reads every poll).
+    The owner's live spiral proved the block-on-open design wrong for
+    BOTH seams: a 20-27 s driver open, released mid-flight by the next
+    toggle, restarted from zero and died again - forever.
+
+    One worker thread per index. The registration carries a grace
+    deadline (OPEN_GRACE_SEC, or the caller's absolute monotonic
+    override - the probes lean on it) and a generation stamp. The
+    worker runs the factory, warms the result, and publishes under the
+    very lock invalidate() uses, so a concurrent release can neither
+    miss a handle about to be published nor be missed: a lease that
+    ended mid-open makes this thread release the handle it just paid
+    for - no orphan LED. Three ways to be stale: the gen moved, the
+    deadline passed, or the row is no longer mine - dropping a row (not
+    bumping gen) is how the engine abandons ONE open without invalidating
+    its siblings'. A deadline-dropped eye is tombstoned until
+    invalidate(): the respawn would re-pin the lease forever (gate
+    finding 1). A failed open records nothing: the next tick retries,
+    exactly as the old synchronous block retried, and the factory
+    already logged the abstain."""
+
+    def __init__(self, factory, lookup=None, store=None):
+        # factory(index) -> opened camera or None (None = declined; the
+        # factory logs its own honest abstain)
+        self._factory = factory
+        self.held = {}                 # index -> published camera: the
+                                       # default store, what the
+                                       # single-camera seam reads back
+        if lookup is None:
+            lookup = self.held.get
+        if store is None:
+            store = self.held.__setitem__
+        self._lookup = lookup          # the rotor passes its cameras
+        self._store = store            # dict, so votes see the publishes
+        self.inflight = {}             # index -> _OpenJob
+        self.dropped = set()           # indices past grace: no respawn
+                                       # until the next invalidate()
+        self.gen = 0                   # invalidate() bumps it: every
+                                       # open still in flight goes STALE
+        self.lock = threading.Lock()
+
+    def open_async(self, index, deadline=None):
+        """A live handle now, or a background open and None for this
+        tick. The tick must never block on a slow driver (a 38 s
+        enumeration was measured), so the eye that is not open yet opens
+        on its own thread and the caller labels it "opening" until it
+        lands."""
+        cam = self._lookup(index)
+        if cam is not None and cam.is_open():
+            return cam
+        if deadline is None:
+            deadline = time.monotonic() + OPEN_GRACE_SEC
+        with self.lock:
+            cam = self._lookup(index)
+            if cam is not None and cam.is_open():
+                return cam
+            if index in self.dropped:
+                return None            # grace already ran THIS lease:
+                                       # no respawn, no fresh pin
+            if self.inflight.get(index) is not None:
+                return None            # an open for this eye is running
+            gen = self.gen
+            now = time.monotonic()
+            th = threading.Thread(target=self._bg,
+                                  args=(index, gen, deadline),
+                                  daemon=True, name="cam-open-%s" % index)
+            self.inflight[index] = _OpenJob(th, deadline,
+                                            deadline - now, now)
+        log.info("camera %d opening in background", index)
+        try:
+            th.start()
+        except Exception:              # thread exhaustion (or a policy
+            with self.lock:            # refusal): the registration must
+                self.inflight.pop(index, None)   # not strand the eye
+            raise                      # "opening" with no worker
+        return None
+
+    def _bg(self, index, gen, deadline):
+        """open_async's worker: factory, warm up, and only THEN decide
+        whether the handle is still wanted (the stale checks share the
+        publish lock; see the class docstring)."""
+        t0 = time.monotonic()
+        try:
+            cam = self._factory(index)
+            if cam is not None:
+                try:
+                    cam.warm_up()      # settled frames or an honest
+                except Exception:      # hole: an unwarmed eye reads
+                    pass               # dark and lies (gate finding 3)
+        except Exception:
+            cam = None
+        me = threading.current_thread()
+        with self.lock:
+            job = self.inflight.get(index)
+            mine = job is not None and job.thread is me
+            if mine:
+                self.inflight.pop(index, None)   # my row ends with me
+            stale = (not mine or self.gen != gen
+                     or time.monotonic() >= deadline)
+            if cam is not None and not stale:
+                self._store(index, cam)
+        if cam is None:
+            return                     # the factory logged the abstain
+        if stale:
+            cam.release()
+            log.info("camera %d open went stale; released its own handle",
+                     index)
+        else:
+            log.info("camera %d open published after %.1f s",
+                     index, time.monotonic() - t0)
+
+    def inflight_live(self, now=None):
+        """True while any registered worker is still alive AND inside
+        its grace deadline - the preview lease's pinning question. A row
+        whose deadline passed is dropped with exactly ONE confession per
+        index; the thread may linger in the driver, but its publish will
+        find itself de-registered and release its own handle. A row
+        whose thread died without publishing is cleaned silently."""
+        if now is None:
+            now = time.monotonic()
+        live = False
+        with self.lock:
+            for index, job in list(self.inflight.items()):
+                if job.thread.is_alive() and now < job.deadline:
+                    live = True
+                    continue
+                self.inflight.pop(index, None)
+                if now >= job.deadline and not job.logged_stale:
+                    job.logged_stale = True
+                    self.dropped.add(index)  # the drop is final THIS
+                    log.info("camera %d open exceeded %.1f s grace; "
+                             "dropping", index, job.grace)  # lease: the
+        return live                           # respawn would re-pin
+                                              # forever (gate finding 1)
+
+    def inflight_age(self, now=None):
+        """Seconds since registration, per still-living row: the mosaic
+        puts the elapsed into the label - an "opening" tile that is 20 s
+        old reads as dead next to one that is 1 s old."""
+        if now is None:
+            now = time.monotonic()
+        with self.lock:
+            return {index: max(0.0, now - job.registered)
+                    for index, job in self.inflight.items()
+                    if job.thread.is_alive()}
+
+    def invalidate(self):
+        """Make every open still in flight stale: whoever finishes from
+        here on releases its own fresh handle and drops it. Clears the
+        grace tombstones too - a new lease gets a fresh chance at an
+        eye this lease gave up on."""
+        with self.lock:
+            self.gen += 1
+            self.dropped.clear()
+
+    def rearm(self):
+        """Attach-time amnesty: clear the grace tombstones WITHOUT the
+        gen bump, so in-flight opens survive the warm window's re-attach
+        (gate finding 2: attach preserved the tombstones, blinding the
+        attached lease - an eye dropped at grace could never retry until
+        a real release landed)."""
+        with self.lock:
+            self.dropped.clear()
 
 
 class RotatingCamera:
@@ -376,13 +553,11 @@ class RotatingCamera:
         self.last_opened = False         # True only when that vote came
                                          # with a frame
         self.started = time.perf_counter()
-        self._inflight = {}              # index -> _OpenJob (the preview
-                                         # lease's private seam)
-        self._dropped = set()            # indices whose open exceeded
-                                         # grace: no respawn THIS lease
-        self._gen = 0                    # release() bumps it: every open
-                                         # still in flight goes STALE
-        self._async_lock = threading.Lock()
+        # the preview lease's async-open seam: ONE shared lifecycle (see
+        # AsyncOpener) drives this rotor's per-index registry, publishing
+        # into the same cameras dict the vote reads
+        self._opener = AsyncOpener(self._open, lookup=self.cameras.get,
+                                   store=self.cameras.__setitem__)
 
     def _mode_for(self, index, mode):
         """This index's vote mode right now. No policy: the single mode
@@ -419,6 +594,27 @@ class RotatingCamera:
             return None
         return cam
 
+    # The async-open machinery lives in AsyncOpener (shared with the
+    # single-camera preview lease - the owner's spiral hit both seams).
+    # These delegates keep the rotor's call sites unchanged; the
+    # properties keep the internals under the names the probes have
+    # always poked.
+    @property
+    def _inflight(self):
+        return self._opener.inflight
+
+    @property
+    def _dropped(self):
+        return self._opener.dropped
+
+    @property
+    def _gen(self):
+        return self._opener.gen
+
+    @property
+    def _async_lock(self):
+        return self._opener.lock
+
     def open_async(self, index, deadline=None):
         """The preview lease's seam: a live handle now, or a background
         open and None for this tick. The tick must never block on a
@@ -426,121 +622,31 @@ class RotatingCamera:
         is not open yet opens on its own thread and the mosaic labels
         it "opening" until it lands. The open itself is the SAME _open
         the vote calls, so the driver sees the same serialised opens -
-        only the tick's wait is gone. A failed open records nothing:
-        the next tick retries, exactly as the old synchronous block
-        retried, and _open already logged the abstain. The registration
-        carries a grace deadline (OPEN_GRACE_SEC, or the caller's
-        absolute monotonic override - the probes lean on it): the
-        preview lease pins itself while a row is live, so a slow eye
+        only the tick's wait is gone. The registration's grace deadline
+        lets the lease pin itself while a row is live, so a slow eye
         must not pin the LED forever through its own zombie open."""
-        cam = self.cameras.get(index)
-        if cam is not None and cam.is_open():
-            return cam
-        if deadline is None:
-            deadline = time.monotonic() + OPEN_GRACE_SEC
-        with self._async_lock:
-            cam = self.cameras.get(index)
-            if cam is not None and cam.is_open():
-                return cam
-            if index in self._dropped:
-                return None             # grace already ran THIS lease:
-                                        # no respawn, no fresh pin
-            if self._inflight.get(index) is not None:
-                return None             # an open for this eye is running
-            gen = self._gen
-            th = threading.Thread(target=self._open_bg,
-                                  args=(index, gen, deadline), daemon=True,
-                                  name="cam-open-%s" % index)
-            self._inflight[index] = _OpenJob(th, deadline,
-                                             deadline - time.monotonic())
-        log.info("camera %d opening in background", index)
-        try:
-            th.start()
-        except Exception:                # thread exhaustion (or a policy
-            with self._async_lock:       # refusal): the registration must
-                self._inflight.pop(index, None)   # not strand the eye
-            raise                        # "opening" with no worker
-        return None
-
-    def _open_bg(self, index, gen, deadline):
-        """open_async's worker: _open, warm up, and only THEN decide
-        whether the handle is still wanted. The publish and the stale
-        check share one lock with _invalidate, so a concurrent
-        release() can neither miss a handle this thread publishes nor
-        be missed: a lease that ended mid-open makes this thread
-        release the handle it just paid for - the LED never keeps an
-        orphan. Three ways to be stale: the gen is gone (a release()
-        happened), MY DEADLINE passed (an open longer than the grace
-        abandons, monotonic clock), or the registry row is no longer
-        mine - inflight_live() dropped it so open_async can respawn
-        this eye, and dropping the row instead of bumping gen is how
-        the engine abandons one eye WITHOUT invalidating the siblings'
-        opens. A worker that loses its row must not pop the successor's
-        registration either: pop only your own."""
-        t0 = time.monotonic()
-        try:
-            cam = self._open(index)
-            if cam is not None:
-                try:
-                    cam.warm_up()       # settled frames or an honest
-                except Exception:       # hole: an unwarmed eye reads
-                    pass                # dark and lies (gate finding 3)
-        except Exception:
-            cam = None
-        me = threading.current_thread()
-        with self._async_lock:
-            job = self._inflight.get(index)
-            mine = job is not None and job.thread is me
-            if mine:
-                self._inflight.pop(index, None)   # my row ends with me
-            stale = (not mine or self._gen != gen
-                     or time.monotonic() >= deadline)
-            if cam is not None and not stale:
-                self.cameras[index] = cam
-        if cam is None:
-            return                        # _open logged the abstain
-        if stale:
-            cam.release()
-            log.info("camera %d open went stale; released its own handle",
-                     index)
-        else:
-            log.info("camera %d open published after %.1f s",
-                     index, time.monotonic() - t0)
+        return self._opener.open_async(index, deadline)
 
     def inflight_live(self, now=None):
-        """True while any registered worker is still alive AND inside
-        its grace deadline - the preview lease's pinning question. A
-        row whose deadline passed is dropped with exactly ONE
-        confession per index; the thread may linger in the driver, but
-        its publish will find itself de-registered and release its own
-        handle (the gen path cannot carry this: bumping gen would
-        invalidate every sibling's fresh open too). A row whose thread
-        died without publishing is cleaned silently."""
-        if now is None:
-            now = time.monotonic()
-        live = False
-        with self._async_lock:
-            for index, job in list(self._inflight.items()):
-                if job.thread.is_alive() and now < job.deadline:
-                    live = True
-                    continue
-                self._inflight.pop(index, None)
-                if now >= job.deadline and not job.logged_stale:
-                    job.logged_stale = True
-                    self._dropped.add(index)  # the drop is final THIS
-                    log.info("camera %d open exceeded %.1f s grace; "
-                             "dropping", index, job.grace)  # lease: the
-        return live                           # respawn would re-pin
-                                              # forever (gate finding 1)
+        """True while any registered worker is alive and inside its
+        grace deadline - the preview lease's pinning question."""
+        return self._opener.inflight_live(now)
+
+    def inflight_age(self, now=None):
+        """index -> seconds since registration, for the "opening Ns"
+        tile label."""
+        return self._opener.inflight_age(now)
 
     def _invalidate(self):
-        """Make every open still in flight stale: whoever finishes from
-        here on releases its own fresh handle and drops it. Clears the
-        grace tombstones too - a new lease gets a fresh chance at an
-        eye this lease gave up on."""
-        with self._async_lock:
-            self._gen += 1
-            self._dropped.clear()
+        self._opener.invalidate()
+
+    def rearm(self):
+        self._opener.rearm()             # attach-time tombstone amnesty
+
+    # the _inflight/_dropped/_gen/_async_lock shims below are READ-ONLY
+    # properties (gate nit): pokes may MUTATE the returned objects but
+    # cannot REBIND them - by design, so no probe can fork the identity
+    # of the lock or the dict the worker publishes under.
 
     def warm_up(self, frames=None):
         """Settle the auto-exposure of ONE camera only: the one whose
