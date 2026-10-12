@@ -73,7 +73,11 @@ class FakeCam:
     def read(self, timeout=3):
         if not self.opened:
             return None
-        return np.full((8, 8, 3), self.index + 1, np.uint8)
+        # Oct 12 (absent-evidence doctrine): a frame under camera's
+        # BLACK_CEIL is now a BLINDED eye and abstains, so the fake
+        # serves bright gray and keeps encoding its index in the
+        # pixels: 128 + index
+        return np.full((8, 8, 3), 128 + self.index, np.uint8)
 
     def release(self):
         self.opened = False
@@ -89,7 +93,7 @@ class Det:
     conf = 0.45
 
     def detect(self, frame, conf=None):
-        index = int(frame[0, 0, 0]) - 1
+        index = int(frame[0, 0, 0]) - 128
         if PRESENCE.get(index, False):
             return [[0, 0, 8, 8]], np.array([0.9])
         return np.empty((0, 4)), np.empty((0,))

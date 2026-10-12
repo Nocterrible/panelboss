@@ -5,6 +5,8 @@ needs no rotor rebuild. Formerly state.py lines 431-508."""
 import logging
 import time
 
+from .. import camera
+
 log = logging.getLogger("state")
 
 
@@ -88,3 +90,19 @@ class _PolicyMixin:
         is genuinely due."""
         if index is not None and frame is not None:
             self.last_vote[index] = time.monotonic()
+            # the wear clock counts a BLACK delivered frame as
+            # delivered on purpose: it IS a frame (the sensor answered);
+            # the fallback-cadence question is unrelated to verdict
+            # casting, and the abstain itself lives in the vote path
+            # (_cams._poll). The lines below only confess the
+            # blind/seeing transitions (INFO once per edge: per-poll
+            # cadence would spam).
+            blind = int(frame.max()) < camera.BLACK_CEIL
+            was = self._blind.get(index, False)
+            if blind and not was:
+                log.info("eye %d serving black; abstaining until it "
+                         "sees something (Broadcast has it, or the room "
+                         "is dark)", index)
+            elif was and not blind:
+                log.info("eye %d frames came back", index)
+            self._blind[index] = blind

@@ -44,6 +44,12 @@ OPEN_GRACE_SEC = 90
 # this lock, so at most one thread touches the device tree
 _open_lock = threading.RLock()
 
+BLACK_CEIL = 16      # a frame whose brightest pixel is below this is
+                     # evidence of "cannot see", never of "empty desk"
+                     # (owner doctrine Oct 12; _delivers and the vote
+                     # path share the number so the two verdicts can
+                     # never drift apart)
+
 
 def _set_props(cap, width, height):
     if width:
@@ -75,7 +81,7 @@ def _delivers(cap, patience=2.0):
             # above); a cap whose read raises delivers nothing by
             # definition - the verdict is the door's, not an exception
             # for the tray menu to swallow
-        if ok and int(frame.max()) >= 16:
+        if ok and int(frame.max()) >= BLACK_CEIL:
             return True
     return False
 

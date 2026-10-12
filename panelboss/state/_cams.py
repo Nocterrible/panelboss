@@ -5,7 +5,7 @@ that is opening abstains, a known-dead single open keeps its
 fail-closed ABSENT through the opener's failed record (and camera's
 new evict keeps the boot blink off the loop thread), and no driver's
 17 s tax is ever paid on the loop thread again.
-SIZE LAW: ~320 lines: the two single-desk vote arms grew, but they
+SIZE LAW: ~335 lines: the two single-desk vote arms grew, but they
 ARE one contract (the (frame, opened) abstain/fail-closed split) and
 splitting them from _grab would put the vote's truth two files away
 from the code that casts it."""
@@ -30,6 +30,20 @@ class _CamsMixin:
                 # never resets the presence hits
                 return None, 0.0
             return False, 0.0                    # device busy or died
+        # the lazy imports match the file's habit (the arm at _new_camera
+        # does the same): the condition needs the number, so they ride
+        # ahead of the branch
+        from .. import camera
+        import numpy as np
+        if int(frame.max()) < camera.BLACK_CEIL:
+            # blinded eye (another app owns the sensor - the owner's
+            # NVIDIA Broadcast does this during work calls - or the
+            # room is genuinely dark): the frame carries LIGHT, and no
+            # light carries no verdict. Voting absent here is what
+            # slept the owner's screens on an occupied desk (Oct 12).
+            self.framebox.put(frame, np.zeros((0, 4)), np.zeros(0))
+            log.debug("vote: eye serving black; abstain")
+            return None, 0.0
         # two-tier, letterboxed: a clear hit is present, a borderline one
         # counts only if it moved; motion mode has no detect_lively, so
         # it takes the plain detect path

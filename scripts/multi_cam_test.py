@@ -68,7 +68,11 @@ class FakeCam:
         if not self.opened:
             return None
         self.frames += 1
-        return np.full((8, 8, 3), self.index + 1, np.uint8)
+        # Oct 12 (absent-evidence doctrine): a frame under camera's
+        # BLACK_CEIL is now a BLINDED eye and abstains, so the fake
+        # serves bright gray (the asyncopen_test GRAY pattern) and
+        # keeps encoding its index in the pixels: 128 + index
+        return np.full((8, 8, 3), 128 + self.index, np.uint8)
 
     def release(self):
         self.opened = False
@@ -108,7 +112,7 @@ class CamDetector:
     conf = 0.45
 
     def detect(self, frame, conf=None):
-        index = int(frame[0, 0, 0]) - 1
+        index = int(frame[0, 0, 0]) - 128
         if PRESENCE.get(index, False):
             return [[0, 0, 8, 8]], np.array([0.9])
         return np.empty((0, 4)), np.empty((0,))
@@ -203,7 +207,7 @@ try:
             if frame is None:
                 drain(rot)                    # an eye still opening
                 continue                                    # abstains
-            turns.append(int(frame[0, 0, 0]) - 1)
+            turns.append(int(frame[0, 0, 0]) - 128)
         assert turns == [0, 1, 2, 0, 1, 2, 0, 1, 2], (mode, turns)
         rot.release()
         assert not rot.is_open(), (mode, rot.cameras)
@@ -225,7 +229,7 @@ try:
         frame = rot.read(mode="always_on")
         pattern.append((rot.last_index, rot.last_opened,
                         None if frame is None
-                        else int(frame[0, 0, 0]) - 1))
+                        else int(frame[0, 0, 0]) - 128))
         drain(rot)
     rot.release()
     assert [p[0] for p in pattern] == [0, 1, 2] * 3, pattern
@@ -569,7 +573,7 @@ try:
         if frame is None:
             drain(rot)                    # the opening cycle abstains
             continue
-        turns.append(int(frame[0, 0, 0]) - 1)
+        turns.append(int(frame[0, 0, 0]) - 128)
     assert set(turns) == {0, 2}, turns
     # one more vote to let the boot eye spend the handle its last
     # spawn published: the rotation ends where the old one ended - the

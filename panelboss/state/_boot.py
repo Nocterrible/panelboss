@@ -53,6 +53,8 @@ class _BootMixin:
                                              # gate opens
         self.absent_since = None              # when the absence started
         self.hits = 0                         # consecutive positive frames
+        self._blind = {}              # index -> bool: served-black state
+                                      # (transition-confessions only)
         self.snooze_until = 0.0
         self.grace_until = 0.0                # leave_on budget
         self.re_off_deadline = math.inf       # counting-after-wake budget
