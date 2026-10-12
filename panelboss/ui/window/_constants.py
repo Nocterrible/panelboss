@@ -50,8 +50,10 @@ TIPS = {
     "min_hits": "consecutive positive frames before the screens wake - "
                 "any eye on duty may vote. The rotor never resets the "
                 "streak when cameras rotate (two votes may come from "
-                "different eyes); an unreadable camera abstains - adds "
-                "nothing, resets nothing.",
+                "different eyes); an unreadable or BLINDED camera "
+                "(another app holds it - a work call through NVIDIA "
+                "Broadcast - or the room is dark) abstains: no verdict, "
+                "adds nothing, resets nothing.",
     "frame changes": "share of the (downscaled) frame that must move "
                       "before a poll counts as motion. Applies "
                       "immediately.",
