@@ -44,8 +44,17 @@ def main(argv=None):
     config.get_log_level()            # logging always comes first
     # os, not sys: this box's 3.10 build ships a trimmed sys module
     # without getpid (the tray app has been on os.getpid all along)
-    logging.getLogger("cli").info("panelboss 0.1.0 boot (pid %s)",
-                                  os.getpid())
+    # The tree + cli.py mtime ride along: a hard-killed icon lingers as
+    # a ghost until Explorer's next notification refresh, so a stale
+    # instance is otherwise provenance-less -- and a relaunch that
+    # quietly loses the mutex lets the old one impersonate the new.
+    # This line names where the running app was ACTUALLY loaded from.
+    _here = os.path.dirname(os.path.abspath(__file__))
+    logging.getLogger("cli").info(
+        "panelboss 0.1.0 boot (pid %s, tree %s, code from %s)",
+        os.getpid(), _here,
+        time.strftime("%H:%M", time.localtime(
+            os.path.getmtime(os.path.join(_here, "cli.py"))))),
     config.migrate_once()             # the one-time pre-rename migration,
                                       # before any config read; fail-open
     cfg = config.get_config()

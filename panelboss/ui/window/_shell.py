@@ -86,7 +86,7 @@ class SettingsWindow(
         # screen - the first pixels a user may ever see come from
         # _show_first (veil included), never from a build sweep
         self.withdraw()
-        self._ever_mapped = False
+        self._manual_open_done = False
         self.cfg = cfg
         self.monitor = monitor
         self.ui_events = ui_events
@@ -125,21 +125,30 @@ class SettingsWindow(
         self.after(90, self._tick_ui)
 
 
-    def _show_first(self):
-        """The ONE first map, veiled. deiconify marks the window for
-        mapping; the veil is placed before the first update() so the
-        first COMPOSITE carries the veil, not the half-drawn UI. The
-        real widgets paint behind it clipped-cheap; the timed lift
-        (300 ms) lands after the burst - tk cannot pre-paint a
-        withdrawn window (documented trap), so the veil covers the
-        burst itself instead. After this, every reopen is a plain
-        deiconify: DWM still holds the drawn surface, Electron's
-        actual trick, available free."""
+    def _show_first(self, manual=False):
+        """Every map up to the first MANUAL open is veiled; later maps
+        are plain deiconifies: DWM still holds the drawn surface,
+        Electron's actual trick, available free. The veil rides each
+        of those maps, not just one: the budget belongs to the owner,
+        not the process. A launch that shows its window at boot
+        mapped (and swept) without being asked; the ceremony the
+        owner sees is THEIR first tray-open, and yesterday's
+        one-map-evers rule let the unasked boot map eat it (owner:
+        "both skip the veil" - they opened a window that had already
+        been shown at boot by someone else's relaunch ritual). deiconify
+        marks the window for mapping; the veil is placed before the
+        first update() so the first COMPOSITE carries the veil, not
+        the half-drawn UI. The real widgets paint behind it
+        clipped-cheap; the timed lift (300 ms) lands after the burst -
+        tk cannot pre-paint a withdrawn window (documented trap), so
+        the veil covers the burst itself instead. The veil watchdog
+        in _tick_inner caps any stuck veil at 3 s."""
         self.deiconify()
-        if not self._ever_mapped:
-            self._ever_mapped = True
+        if not self._manual_open_done:
             self._veil("PanelBoss", full=True)
             self.after(300, self._unveil)
+            if manual:
+                self._manual_open_done = True
         else:
             self.lift()
 

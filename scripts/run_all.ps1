@@ -17,7 +17,8 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
     'visible_test.py', 'layout_test.py', 'profiles_test.py', 'hdr_away_test.py',
     'gaming_test.py', 'gaming_watch_test.py', 'power_plan_test.py',
     'tweaks_test.py', 'config_writer_test.py', 'gaming_ui_test.py',
-    'mode_edit_test.py', 'taskbar_test.py', 'profiles_ui_test.py'
+    'mode_edit_test.py', 'taskbar_test.py', 'profiles_ui_test.py',
+    'asyncopen_test.py', 'blackvote_test.py', 'veil_test.py'
 $dir = Join-Path $root "scripts"
 $fail = 0
 foreach ($s in $suites) {

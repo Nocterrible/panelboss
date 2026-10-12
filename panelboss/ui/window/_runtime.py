@@ -78,8 +78,12 @@ class _RuntimeMixin:
                 # start-minimized app maps a window that has never
                 # painted (Tk draws no pixels while withdrawn), and a
                 # raw map replays the whole build sweep on screen -
-                # _show_first owns the one veiled map, every flavor
-                self._show_first()
+                # _show_first owns every veiled map. manual=True:
+                # this request came from the tray, the owner asked
+                # for this window, and it is the map the veil budget
+                # is for (an unasked boot map may veil, but may not
+                # spend the owner's one ceremony)
+                self._show_first(manual=True)
                 self.focus_force()
             if message == "assistant_truth":
                 self._assistant_truth(_value)
