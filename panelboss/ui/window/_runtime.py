@@ -44,6 +44,14 @@ class _RuntimeMixin:
 
     def _tick_inner(self):
         now = time.monotonic()
+        # veil watchdog: a veil that outlives its rebuild is a bricked
+        # UI, and every failure path between veil() and unveil() would
+        # otherwise be allowed to leave one up. The tick lifts it after
+        # 3 s and confesses in the log - loud stop, not silent stuck.
+        if getattr(self, "_veil_lbl", None) is not None \
+                and time.time() - self._veil_since > 3.0:
+            log.warning("ui: veil stuck past its rebuild window; lifting")
+            self._unveil()
         self._drain_ui_events()
         slot = self.monitor.framebox.get()
         if slot is not None and slot[3] != self._shown_ts:

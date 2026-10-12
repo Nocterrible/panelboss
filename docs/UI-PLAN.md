@@ -136,3 +136,14 @@ page: _detection, _power (+_gaming), _profiles (+_prof_editor/
 _prof_apply/_prof_pins/_restore), _general, _preview, _runtime,
 _widgets. Each de-CTk step is one background coder packet scoped to
 one or two parts; the suites are the contract.
+- UI-1d veil (this branch): Electron-style first-paint cover on the
+  ONLY mapped rebuild (skin switch); absolute-pinned over a dying
+  body, 3 s watchdog lifts stuck veils. veilprobe green.
+- Vcam incident (Oct 11, evening): gaming_ui/power suites went red
+  machine-wide mid-session - NVIDIA virtual-camera daemon died
+  (VCAMDS mutex "owner died without unlocking"), poisoning worker-
+  thread -> after() delivery (RuntimeError 'main thread is not in
+  main loop'). NOT app code: reproduced on master identically;
+  bare tk and bare CTk fine; passed again once the container
+  cycled the camera. A Display Container restart was the planned
+  fix and turned out unnecessary - note it as the escalation path.

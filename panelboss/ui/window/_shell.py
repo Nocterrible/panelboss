@@ -26,6 +26,8 @@ Skins come from theme.py; nothing here hardcodes a color.
 from __future__ import annotations
 
 import logging
+import time
+import tkinter as tk
 
 import customtkinter as ctk
 
@@ -84,6 +86,8 @@ class SettingsWindow(
         self._shown_ts = None
         self._ctkimg = None
         self._save_job = None
+        self._veil_lbl = None
+        self._veil_since = 0.0
         self._lease_ticks = 0
         self._tab = TABS[0]
         ctk.set_appearance_mode(self.skin.mode)
@@ -152,6 +156,12 @@ class SettingsWindow(
 
     def rebuild_for_skin(self):
         self.tips.kill()
+        self._veil("rebuilding the panel...", absolute=True)  # the one
+        # mapped full rebuild we do: without the veil this is exactly
+        # the tk widget-by-widget build sweep (CTk #40), half a second
+        # of the UI erasing itself in front of the user. The veil is
+        # pinned to the WINDOW (absolute): the body it covers is the
+        # very thing about to be destroyed.
         for widget in (self._top, self._actions, self._tabs_bar,
                        self._body):
             widget.destroy()
@@ -160,9 +170,75 @@ class SettingsWindow(
         self.configure(fg_color=self.skin.bg)
         self._shown_ts = None                # repaint the preview fresh
         build_all = self.build_all()
+        self._unveil()
 
 
     # ------------------------------------------------------------ top bar --
+    # ------------------------------------------------------------- veil --
+    def _veil(self, note="PanelBoss", absolute=False):
+        """The Electron ready-to-show trick, tkinter edition: an
+        OPAQUE frame at the page tier covering the body, painted
+        BEFORE whatever rebuild happens, destroyed after. CTk's own
+        advice against the known Windows build-sweep (issue #40) and
+        the maintainer-endorsed cover-frame recipe; translucent veils
+        are dither-lies in tk, so this one is solid. Callers MUST
+        call _unveil (even on failure paths): a window that never
+        lifts its veil is a bricked UI, which is why _tick_ui carries
+        the watchdog below. `absolute` pins the veil to the WINDOW at
+        the body's current box: for rebuild_for_skin the body itself
+        is about to die, and a child veil would cremate with it
+        exactly mid-sweep. Normal callers want the plain relative
+        veil, which tracks the body's resizes for free."""
+        if getattr(self, "_veil_lbl", None) is not None:
+            # already veiled: never stack, but a caller may have just
+            # changed the skin - re-dress the color, not the geometry
+            try:
+                self._veil_lbl.configure(bg=self.skin.panel)
+                self._veil_lbl.winfo_children()[0].configure(
+                    bg=self.skin.panel, fg=self.skin.subtext)
+            except Exception:
+                pass
+            return
+        # PLAIN tk widgets: the veil is one solid rectangle plus one
+        # label - CTk buys nothing here, and CTkFrame refuses
+        # width/height on place() (its own sizing API), which the
+        # absolute mode needs. Colors ride the skin (panel tier +
+        # subtext ink), so the veil belongs to whichever skin is live.
+        self._veil_lbl = tk.Frame(self, bg=self.skin.panel)
+        tk.Label(self._veil_lbl, text=note, bg=self.skin.panel,
+                 fg=self.skin.subtext,
+                 font=("Segoe UI", 13, "bold")).pack(expand=True)
+        if absolute:
+            self._veil_lbl.place(x=self._body.winfo_x(),
+                                 y=self._body.winfo_y(),
+                                 width=self._body.winfo_width(),
+                                 height=self._body.winfo_height())
+        else:
+            self._veil_lbl.place(in_=self._body, relwidth=1, relheight=1)
+        self._veil_lbl.tkraise()
+        # re-entrant calls (rebuild_for_skin sets a NEW skin while the
+        # veil is up) keep the veil dressed in whatever tier is live
+        self._veil_lbl.configure(bg=self.skin.panel)
+        self._veil_lbl.winfo_children()[0].configure(
+            bg=self.skin.panel, fg=self.skin.subtext)
+        self._veil_since = time.time()
+        try:
+            self.update()                # paint NOW (idle tasks alone
+                                         # leave it blank - documented
+                                         # tk trap; veil has no handlers
+                                         # so the re-entry is safe)
+        except Exception:
+            pass
+
+    def _unveil(self):
+        v = getattr(self, "_veil_lbl", None)
+        self._veil_lbl = None
+        if v is not None:
+            try:
+                v.destroy()
+            except Exception:
+                pass                     # gone already: the point stands
+
     def _build_top(self):
         ctk.CTkLabel(self._top, text="PanelBoss",
                      font=self.skin.font(18, "bold"),
