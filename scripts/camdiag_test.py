@@ -1,12 +1,17 @@
 """Camera diagnostic, offline: the config record, the state round-trip,
 and the picker's pure pieces. No real camera, no window: the state side
 rides camera_policy_test's FakeCam fixture the way camid_test does, and
-the wizard-side tests drive the importable helpers directly.
+the wizard-side tests drive the importable helpers directly. Section 6
+drives the REAL scan worker on live threads against faked driver doors.
+SIZE LAW: ~330 - one scenario chain per section, the fleet's test idiom
+(camera_policy_test is the precedent); the chain is the reader.
 """
 import os
 import sys
 import tempfile
+import threading
 import time
+import types
 import queue
 
 try:
@@ -137,9 +142,191 @@ try:
     diag = cfg["camera"].get("diag") or {}
     assert "indices" not in diag and "noimg" not in diag, diag
     assert diag.get("at", 0) > 0, diag
+    # (b) amendment 2: the show verb - the per-device door. Un-hide
+    # AND mark shown, through the loop-owned toml; idempotent on a
+    # double click (the shown list is a set, not a counter)
+    m.events.put(("camera_identity", {"instance": "USB\\BACK",
+                                      "hide": True}))
+    m._drain_tray()
+    assert cfg["camera"]["hidden"] == ["USB\\BACK"]
+    m.events.put(("camera_identity", {"instance": "USB\\BACK",
+                                      "show": True}))
+    m._drain_tray()
+    assert cfg["camera"]["hidden"] == []            # the door opened
+    assert cfg["camera"]["shown"] == ["USB\\BACK"]  # the decision stuck
+    m.events.put(("camera_identity", {"instance": "USB\\BACK",
+                                      "show": True}))
+    m._drain_tray()
+    assert cfg["camera"]["shown"] == ["USB\\BACK"]  # idempotent
+    assert tomllib.load(open(os.path.join(SCRATCH, "config.toml"),
+                             "rb"))["camera"]["shown"] == ["USB\\BACK"]
+    assert config.get_config(dir=SCRATCH,            # sticky through
+                             verbose=False)["camera"]["shown"] \
+        == ["USB\\BACK"]                             # the disk
 finally:
     cam_mod.Camera = _real_camera
 print("identity event OK (diag stored as ints, toml round-trips, junk"
-      " record degrades to {}-plus-at)")
+      " record degrades to {}-plus-at, the show verb un-hides and"
+      " sticks, idempotent)")
+
+# 3) the wizard's pure pieces: the pre-mark (feature law 3), the
+#    stickiness law (amendment 2: a human touch - label, bind, or
+#    shown - outranks the sweep forever, and the sweep can only
+#    INFORM such a row through the suffix), and the suffix itself
+#    (one static, both panes). A bound device row keeps its namespace
+#    verdict either way. Offline: no window, no camera, the dshow
+#    oracle answers {} on this box (and the import-error arm covers
+#    the boxes where it answers nothing at all).
+DEV_BOUND = [{"name": "Bound Cam", "instance": "USB\\BOUND",
+              "status": "OK", "virtual": False}]
+FOUND_BOUND = [(2, True, 640, "Bound Cam")]
+DIAG = {"at": 1.0, "indices": [2], "noimg": [2]}
+rows = _camid.all_rows(DEV_BOUND, FOUND_BOUND,
+                       {"labels": {}, "bindings": {}, "hidden": [],
+                        "shown": [], "diag": DIAG})
+bound = [r for r in rows if r["instance"] == "USB\\BOUND"][0]
+assert bound["idx"] == 2 and bound["virtual"] is False, rows
+rows = _camid.all_rows([], FOUND_BOUND, {"diag": DIAG})
+assert str(rows[0]["instance"]) == "idx:2", rows      # unnamed feed:
+assert rows[0]["virtual"] is True, rows               # the sweep's word
+                                                      # marks it back
+# (a) all three touch-kinds block the pre-mark
+for touched in ({"labels": {"idx:2": "x"}},
+                {"bindings": {"idx:2": 2}},
+                {"shown": ["idx:2"]}):
+    cfg2 = {"diag": DIAG}
+    cfg2.update(touched)
+    rows2 = _camid.all_rows([], FOUND_BOUND, cfg2)
+    assert rows2[0]["virtual"] is False, touched
+# (c) shown survives an UNRELATED scan: the record re-measured a
+#     wider set and still calls the index dark - the touched row
+#     stays visible (its dark verdict rides the suffix, not the hide)
+rows = _camid.all_rows([], FOUND_BOUND,
+                       {"diag": {"at": 2.0, "indices": [0, 2],
+                                 "noimg": [2]}, "shown": ["idx:2"]})
+assert rows[0]["virtual"] is False, rows
+# 4) the suffix: the set's dark index wears it, the bright one never
+#    does, and a window without a record never grows one
+assert _camid.diag_suffix({"diag": DIAG}, 2) == \
+    " (no image during diagnostic)"
+assert _camid.diag_suffix({"diag": DIAG}, 1) == ""
+assert _camid.diag_suffix({}, 2) == ""
+assert _camid.diag_suffix(None, 2) == ""
+print("pre-mark + stickiness OK (dark synthetic marked, bound keeps the"
+      " namespace verdict, label/bind/show each veto the sweep, the"
+      " suffix tells the touched rows what the hide may not)")
+
+# 5) the sweep trigger, pure (feature law 2 + amendment 3): first
+#    launch sweeps, the same set does not, a changed set does - and
+#    the rescan button's force ORs at the worker's own decision point
+#    (split from the thread exactly for this test), so the deliberate
+#    re-measure verb outranks a matching record
+from panelboss.ui.window import _preview
+_Scan = _preview._CameraMixin
+F02 = [(0, True, 640, ""), (2, True, 640, "")]
+
+
+def _win(camera_cfg):
+    # the bare namespace carries ONLY what the worker calls through
+    # self for: the cfg, and the real decision method rebound onto the
+    # fake window (the probe seam exists exactly for this handoff)
+    w = types.SimpleNamespace(cfg={"camera": camera_cfg})
+    w._diag_needed = lambda found: _Scan._diag_needed(w, found)
+    return w
+
+
+assert _Scan._scan_probe(_win({}), F02) is True                 # launch
+assert _Scan._scan_probe(_win({"diag": {"at": 1.0,               # same
+                                        "indices": [2, 0],       # set:
+                                        "noimg": [0]}}),         # no
+                              F02) is False                      # re-
+                                                                 # sweep
+assert _Scan._scan_probe(_win({"diag": {"at": 1.0,               # set
+                                        "indices": [0, 1],       # moved
+                                        "noimg": [1]}}),
+                         F02) is True
+assert _Scan._scan_probe(_win({"diag": {"at": 1.0,               # force
+                                        "indices": [2, 0],       # beats
+                                        "noimg": []}}),          # the
+                              F02, force=True) is True           # record
+print("sweep trigger OK (first launch and reindex sweep, a matching"
+      " record does not, and force sweeps whatever the record says)")
+
+# 6) the real scan worker, end to end offline (the amendment-1 shape
+#    on live threads): fakes answer the PnP door and the camera opens,
+#    index 1 stalls past its 15 s budget (the FakeDead below is the
+#    only feed that has NO frame to serve), and the sweep must deliver
+#    the veil, per-index progress, and the record - all through
+#    ui_events, the widget thread touching nothing
+_real_cd, _real_ec, _real_cam = (cam_mod.camera_devices,
+                                 cam_mod.enumerate_cameras,
+                                 cam_mod.Camera)
+calls = {"opened": []}
+
+
+class SpyCam(FakeCam):
+    # records the opens (the sweep's "every index once" claim) and
+    # answers index 1's read with NOTHING: opens, but serves no frame
+    # (the FakeCam base serves for index 0 - a bright feed, the pair
+    # the sweep must tell apart without touching a real driver)
+    def __init__(self, index=0, **kw):
+        calls["opened"].append(index)
+        FakeCam.__init__(self, index=index)
+
+    def read(self, timeout=3, screen=None):
+        if self.index == 1:
+            return None
+        return FakeCam.read(self, timeout, screen)
+
+
+cam_mod.camera_devices = lambda: list(DEV_BOUND)
+cam_mod.enumerate_cameras = lambda *a, **k: [(0, True, 1280.0),
+                                             (1, True, 1280.0)]
+cam_mod.Camera = SpyCam
+wins = types.SimpleNamespace(
+    cfg=config.get_config(dir=SCRATCH, verbose=False),
+    ui_events=queue.Queue())
+# the worker calls its decision through self (a real window carries
+# the methods on the class); the bare namespace carries the seam by
+# hand - exactly the handoff the probe method was split for
+wins._diag_needed = lambda found: _Scan._diag_needed(wins, found)
+wins._scan_probe = lambda found, force=False: _Scan._scan_probe(wins,
+                                                                found,
+                                                                force)
+deadline = time.time() + 60
+try:
+    _Scan._scan_cameras(wins)            # the real unbound method,
+                                         # fakes for the whole driver
+                                         # side: the window's binding
+                                         # is a bound-method alias of
+                                         # exactly this
+    seen = []
+    diag_msg = None
+    while time.time() < deadline:
+        try:
+            message, value = wins.ui_events.get(timeout=1.0)
+        except queue.Empty:
+            continue
+        if message == "cameras":
+            break                        # the report is the tail
+        seen.append((message, value))
+        if message == "camera_diag":
+            diag_msg = value
+    assert diag_msg is not None, ("the sweep never reported: %r" % seen)
+    assert sorted(calls["opened"]) == [0, 1]   # every openable probed,
+                                               # once each
+    assert diag_msg["noimg"] == [1], diag_msg  # the stall confessed,
+                                               # the feed did not
+    assert diag_msg["indices"] == [0, 1], diag_msg
+    veils = [v for m, v in seen if m == "cameras_veil"]
+    assert veils and veils[0] == "testing cameras, please wait"
+    assert any("(1 of 2 done)" in v for v in veils), veils   # truthful
+    assert any("(2 of 2 done)" in v for v in veils), veils   # counter
+finally:
+    cam_mod.camera_devices, cam_mod.enumerate_cameras = _real_cd, _real_ec
+    cam_mod.Camera = _real_cam
+print("scan worker OK (threaded sweep on live threads: every index"
+      " probed once, the stall confessed, progress re-posts truthful,"
+      " the record lands before the report)")
 
 print("ALL CAMDIAG TESTS OK")

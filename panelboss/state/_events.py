@@ -281,6 +281,21 @@ class _EventsMixin:
                             labels[inst] = text
                         else:
                             labels.pop(inst, None)
+                    if value.get("show"):
+                        # the one-at-a-time way back (owner amendment
+                        # 2): the door per device - the blanket
+                        # unhide-all stays as-is, a wipe is not a
+                        # decision. Un-hide AND mark shown: future
+                        # diagnostic sweeps must not re-hide what a
+                        # human raised (all_rows's touched set reads
+                        # this list - the stickiness is on the
+                        # identity key, permanent, human-written)
+                        hidden = self.camera_cfg.setdefault("hidden", [])
+                        if inst in hidden:
+                            hidden.remove(inst)
+                        shown = self.camera_cfg.setdefault("shown", [])
+                        if inst not in shown:
+                            shown.append(inst)
                     if value.get("hide"):
                         hidden = self.camera_cfg.setdefault("hidden", [])
                         if inst not in hidden:

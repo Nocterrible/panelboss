@@ -84,6 +84,13 @@ DEFAULTS = {
         # no longer exists maps nothing, like a hidden one
         "labels": {},
         "hidden": [],
+        # instances the owner explicitly brought back at the hidden
+        # list's per-device "show" (amendment 2): un-hidden AND
+        # sticky - the diagnostic pre-mark never applies to a shown
+        # identity, forever, because a sometimes-plugged camera the
+        # human chose to see must survive every later sweep. A wipe
+        # (unhide all) does not write this; a decision does
+        "shown": [],
         "bindings": {},
         # the scan's diagnostic verdict, written by the state loop when
         # a sweep ran (camera_diag event - the UI never writes the toml
@@ -267,6 +274,7 @@ NORMALIZE_RULES = (
     ("ui", "preview_poll_ms", "int", 200),
     ("camera", "labels", "dicttype", {}),
     ("camera", "hidden", "listtype", []),
+    ("camera", "shown", "listtype", []),
     ("camera", "bindings", "dicttype", {}),
     ("camera", "diag", "dicttype", {}),
 )
