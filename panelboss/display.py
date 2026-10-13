@@ -100,6 +100,12 @@ u32.RegisterPowerSettingNotification.argtypes = [ctypes.c_void_p,
 # no-arg call, so a restype pin only: the default c_int restype would
 # truncate a 64-bit HWND before the caller sees it
 u32.GetForegroundWindow.restype = ctypes.c_void_p
+# the twin of the Register pin above (gate LOW): the 64-bit sink handle
+# must survive the way IN (default c_int truncates it to a corpse), and
+# an unregister raising must not skip the DestroyWindow sharing its
+# cleanup try-block
+u32.UnregisterPowerSettingNotification.argtypes = [ctypes.c_void_p]
+u32.UnregisterPowerSettingNotification.restype = ctypes.c_long   # BOOL
 
 
 class _GUID(ctypes.Structure):

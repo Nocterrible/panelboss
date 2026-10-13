@@ -69,6 +69,11 @@ DISPLAY_WORDS = ("display", "monitor", "console")
 _DISPLAY_GUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}",
                            re.IGNORECASE)
 _DISPLAY_GUIDS = {"7516b95f-f776-4464-8c53-06167f40cc99"}
+import logging
+
+log = logging.getLogger("power")
+_LOCALE_CONFESSED = False             # one confession per process;
+                                      # the flag, not the silence
 
 
 def _is_display_section(sec):
@@ -169,7 +174,9 @@ def _parse(text):
     other = []
     entries = []
     section = "unknown"
-    mine = _own_tokens()
+    saw_section = False               # locale-honesty confession state
+    saw_guid = False                  # (gate MED: an unrecognized
+    mine = _own_tokens()              # header must at least confess)
     pending = None                  # entry awaiting its reason line
     pending_mine = False
     pending_caller = "other"
@@ -201,6 +208,9 @@ def _parse(text):
         if not line[0].isspace() and stripped.endswith(":"):
             flush()
             section = stripped[:-1]
+            saw_section = True
+            if _DISPLAY_GUID.search(stripped):
+                saw_guid = True
             continue
         if low.startswith(("[process]", "[driver]", "[service]")):
             flush()
@@ -224,6 +234,17 @@ def _parse(text):
             continue
         put(stripped)
     flush()
+    global _LOCALE_CONFESSED
+    if (saw_section and other and not display and not saw_guid
+            and not _LOCALE_CONFESSED):
+        # gate MED honesty: this build recognized NO section as the
+        # Display subgroup (no words, no GUID) yet requests ARE being
+        # held - on a localized box that means a display request may
+        # be sitting in `other`, invisible to the gate. Confess once;
+        # the behavior (assume gateable) is then at least investigable.
+        _LOCALE_CONFESSED = True
+        log.info("display-gate: no header recognized in this locale's "
+                 "powercfg output - assuming display state is gateable")
     return {"error": None, "display": display, "other": other,
             "overridden": [], "requests": entries,
             "override_entries": []}

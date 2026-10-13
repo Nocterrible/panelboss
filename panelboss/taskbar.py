@@ -87,31 +87,27 @@ u32.PostMessageW.restype = wintypes.BOOL
 u32.GetCursorPos.argtypes = [ctypes.POINTER(POINTL)]
 u32.GetCursorPos.restype = wintypes.BOOL
 # the hwnd slots are c_void_p: a 64-bit HWND through a c_int default
-# truncates on the round-trip (the handle-trap class, audit sweep);
-# argtypes are pinned full - the C3a lesson: a partial pin rejects
-# the real call arity
+# truncates on the round-trip (the handle-trap class, audit sweep).
+# EVERY shape below is the ONE _winapi._TYPED canon (second final-gate:
+# this block's first pass re-pinned EnumWindows with a stricter slot 1
+# and a wider slot 2 than the canon - no ArgumentError today because
+# the callback class is one re-export, but import-order-dependent
+# typing, the shared-singleton disease in milder form): taskbar pins
+# canon shapes only, so whichever import lands first types identically.
 u32.IsWindowVisible.argtypes = [ctypes.c_void_p]
 u32.IsWindowVisible.restype = wintypes.BOOL
 u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-                                              # slot 2 byref-c_void_p, NOT
-                                              # POINTER(wm.RECT): that
-                                              # re-types the SHARED user32
-                                              # singleton and display.py's
-                                              # byref(wintypes.RECT) would
-                                              # raise - the measured poison
-                                              # _winapi.py documents, and
-                                              # the gate caught the relapse
 u32.GetWindowRect.restype = wintypes.BOOL
 u32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p,
-                              wintypes.DWORD]
-u32.GetClassNameW.restype = wintypes.DWORD
+                              ctypes.c_int]
+u32.GetClassNameW.restype = ctypes.c_int
 u32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p,
                                          ctypes.POINTER(wintypes.DWORD)]
 u32.GetWindowThreadProcessId.restype = wintypes.DWORD
-u32.EnumWindows.argtypes = [wm.WNDENUMPROC, ctypes.c_void_p]
+u32.EnumWindows.argtypes = [ctypes.c_void_p, ctypes.c_longlong]
 u32.EnumWindows.restype = wintypes.BOOL
-k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL,
-                             wintypes.DWORD]
+k32.OpenProcess.argtypes = [wintypes.DWORD, ctypes.c_bool,
+                            wintypes.DWORD]
 k32.OpenProcess.restype = ctypes.c_void_p
 k32.CloseHandle.argtypes = [ctypes.c_void_p]
 k32.CloseHandle.restype = wintypes.BOOL

@@ -312,7 +312,7 @@ class _ModeMixin:
                         self._noshows_ask(misses)
             try:
                 self.after(0, done)
-            except tk.TclError:                  # the window closed while
+            except (tk.TclError, RuntimeError):   # +RuntimeError: measured, dead-root class
                                                  # the apply ran - the worker
                                                  # still confesses
                 log.exception("profile apply done() lost the marshal "

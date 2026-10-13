@@ -109,6 +109,11 @@ class _RestoreMixin:
         label = value
         if value == "last":
             label = self._armed_restore_name() or RESTORE_LAST[1]
+            if label in self._restorep_names():
+                # gate LOW (honesty): an auto-resolved "last" wearing
+                # a bare profile name is indistinguishable from a
+                # hand-pinned one - the suffix says which arm chose
+                return label + " (last)"
         if label not in self._restorep_names():
             label = label + " (gone)"
         return label
@@ -116,8 +121,9 @@ class _RestoreMixin:
     def _restorep_value(self, label):
         if label in (RESTORE_LAST[1],
                      (self._armed_restore_name() or RESTORE_LAST[1])
-                     + " (gone)"):
-            return "last"
+                     + " (last)"):        # the honesty suffix belongs
+            return "last"                 # to display only - never
+                                          # persisted
         return label.rsplit(" (gone)", 1)[0]
 
 

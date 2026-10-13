@@ -335,7 +335,7 @@ class OverridesWindow(ctk.CTkToplevel):
                     self.cfg["power"]["assistant_task"]))
                 try:
                     self.after(0, lambda: self._merged(rep))
-                except tk.TclError:          # the window closed while
+                except (tk.TclError, RuntimeError):   # +RuntimeError: measured, dead-root class
                     log.exception(          # the read ran: confess, do
                         "overrides refresh lost the marshal")  # not evaporate
             except Exception:
@@ -376,7 +376,7 @@ class OverridesWindow(ctk.CTkToplevel):
                     assistant=bool(self.cfg["power"]["assistant_task"]))
                 try:
                     self.after(0, lambda: self._applied(ok, msg, fresh))
-                except tk.TclError:          # the window closed while
+                except (tk.TclError, RuntimeError):   # +RuntimeError: measured, dead-root class
                     log.exception(          # the apply ran: confess, do
                         "overrides apply lost the marshal")    # not evaporate
             except Exception:

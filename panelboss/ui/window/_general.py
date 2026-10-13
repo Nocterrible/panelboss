@@ -229,7 +229,7 @@ class _GeneralMixin:
                 try:
                     self.after(0,
                                lambda: self._startup_done(ok, msg, stored))
-                except tk.TclError:              # the window closed
+                except (tk.TclError, RuntimeError):   # +RuntimeError: measured, dead-root class
                     log.exception(               # mid-write: confess,
                         "autostart round trip lost the marshal")  # the
             except Exception:                    # registry already holds
@@ -242,7 +242,7 @@ class _GeneralMixin:
                 try:
                     self.after(0, lambda: self.startup_switch.configure(
                         state="normal"))
-                except tk.TclError:
+                except (tk.TclError, RuntimeError):
                     pass
         threading.Thread(target=work, daemon=True).start()
 
