@@ -97,23 +97,39 @@ probe is the only final court.
   first-tile aspect in mosaic (documented).
 - DISMISSED — npz reserved-keyword names: probed clean on 2.2.6.
 
-## Fix wave status (Oct 13)
-LANDED+GATED: config 9563190 SHIP; state 51f8253 SHIP; camid f3061c8+13e5465
-SHIP; display 1481889 + tray/cli bf668f4 SHIP; profiles d7ef04f+cd16772 SHIP
-(cd16772 = architect fix: login.took is the REAL per-app dict - validation may
-reject rot, never the writer's shape; the dictated float-both rule would have
-dropped live data daily); ui-workers 1f1320c SHIP-WITH-FIXES - gate finding 1
-(_general dead-worker never re-enabled the switch) FIXED in the tree, commit
-waiting on the C6b lane (it holds the same file set; no split-file commits).
-Gate notes parked for next touch: _prof_apply flag-up ordering one statement
-optimistic (wedge needs an already-dying pane - acceptable as disclosed);
-_power except-path can transiently show overrides-button state ahead of the
-queued truth (cosmetic, self-heals on truth land).
-C6a (wm/taskbar/display pinning + apply_layout rc truth) and C6b (twelve tab-
-lifecycle nits incl. C5b's button-ref closure) in flight. Lane tax for the
-record: 7 emit-deaths (all cured by poke), 2 C5 zero-write deaths (cured by
-SPLIT per the three dials), 1 amend entanglement (self-inflicted, self-
-forensicked) - zero lost findings, zero re-designs.
+## Fix wave status (Oct 13, final-gate BLOCK absorbed and being closed)
+LANDED+GATED+PUSHED (45fcc38..91fc722): config 9563190; state 51f8253; camid
+f3061c8+13e5465; display 1481889; tray/cli bf668f4; profiles d7ef04f+cd16772;
+ui-workers 1f1320c+37bc169; nits d6162e2; wm pinning f8a74f8; gate-2 fixup
+e8ab8ff (taskbar RECT poison + profiles_test honest fake). Consolidated
+gauntlet rc=0 ALL GREEN (complete), app stopped, window sections real.
+FINAL GATE #1 VERDICT: BLOCK, both blockers accepted and CLOSED:
+- B1 dead-tray quit bypassed the loop (window+lock would outlive the icon):
+  FIXED 615c1c4 (events.put quit; the shutdown-note false-confession path
+  closes on the same handler because monitor.quit is now always set before
+  tray.stop).
+- B2 claim-vs-diff gap -> WAVE 2 LANDED AND GATED:
+  W2A companions c9b6642+e8415e8 (letterbox 2-D, 0-size abstain before
+  inference, onnx head validated at get_session - sole production path,
+  ratio=0 abstain + gray copy, faces atomic+locked save + enroll-write
+  lock fix, all-faces match, tile floor, preview finally);
+  W2B camera core 1ea8c53 (30 s open-lock deadline with per-tick abstain,
+  BaseException row reap, one handle one release, skipped release DROPS
+  the handle - 4399a5d closed the orphan twin; rotor leases via mosaic);
+  W2C 27856ad (boot containment, merge_seen exact-first, plan-ownership
+  marker + boot reconcile, GUID-preferred powercfg decode, insightface
+  honest box). Architect-inline: enroll imports + tmp sweep 615c1c4.
+  Wave-2 gate: no BLOCK, three dictated micro-fixes -> 4399a5d.
+RESCOPED (gate B2 demanded honest dispositions): the "InstanceId pairing"
+line's true state - labels/hides ARE InstanceId-keyed (shipped pre-wave),
+label-lying-by-position closed by C4 (unique-name attach or withhold);
+what REMAINS is the acknowledged v1 limit (owner decision, Oct 12):
+non-unique friendly names cannot be mapped to an OpenCV index by name;
+the wizard confesses this in-text and the roster stays index-keyed by
+design. Recorded here so the re-tagged package says what is true.
+Punch-list hygiene: item dispositions below are updated to
+FIXED(<sha>) / WAVE2 / BACKLOG as the lines land; the "In flight/queued"
+audit-scan section is retired.
 ## /fix wave status
 
 ## tray shell (tray/taskbar/display — deep, VERDICT FAIL, both HIGHs = silent
@@ -407,7 +423,6 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   hygiene; PANELBOSS_CONFIG_DIR corrected.
 
 ## In flight / queued
-- profiles.py monolith (deep, in flight).
-- tray shell: tray/taskbar/display (deep, in flight, brief-thoughts clause).
-- UI trio last: shell/runtime/scroll/widgets/text/constants/camid; aux tabs;
-  profiles+power tabs (pre-split ≤4-5 files each).
+RETIRED (Oct 13): the audit queue drained; the fix wave (two rounds) landed;
+the closing loop is: gauntlet #4 -> this sheet's final dispositions -> tag
+rc-2026-10-13b -> final-gate resubmission.

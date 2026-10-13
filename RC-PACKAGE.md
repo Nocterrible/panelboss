@@ -1,108 +1,100 @@
-# RC package: PanelBoss ui-1c-reskin fix wave (45fcc38..e8ab8ff)
+# RC package v2: PanelBoss ui-1c-reskin fix wave (45fcc38..4399a5d)
 
 ## Intent
-Pre-release audit of 13 batches (two-channel: deep pass + fallback/collation
-where applicable) produced ~42 findings, all patch-scale, consolidated to
-six themed commits. This RC closes every HIGH and every MED from the audit
-punch list; BACKLOG items are listed and consciously deferred. The app is an
-offline Windows tray presence-monitor: no network surface, HKCU-only registry,
-no shell interpolation of user data. The threat model is the user's own
-hand-edits and driver misbehavior, which is what the config-boundary and
-daemon-confession themes serve.
+Pre-release audit (13 batches, two-channel + probes) produced ~42 findings,
+all patch-scale. Wave 1 (9 themed commits) closed the state/config/tray/
+profiles/UI-lifecycle clusters. The FIRST FINAL GATE returned BLOCK with
+two accepted blockers; wave 2 (5 commits) closes the remaining camera-engine
+and notice/plan clusters named by that blocker, plus the wave-2 gate's three
+dictated micro-fixes. This document's rule: every claim has a named file
+below that proves it.
 
-## Commits (11, chronological)
-- 9563190  config boundary: Path.home(), deepcopy merge (kills 6 confirmed
-           DEFAULTS-alias mutation sites), non-dict-section guard,
-           NORMALIZE_RULES table (12 rules; every failure -> stock + ONE
-           named warning), write_config single-writer (RLock + snapshot +
-           pid-unique tmp). Verdict SHIP (Infernix gate).
-- 51f8253  state re-arm pair (the two 2-channel-confirmed HIGHs): gate
-           release re-arms next_poll (unpause/snooze-freeze); released
-           eyes cast no verdicts (stale _vote_index + _round cleared at
-           _release_camera head - all release paths funnel there);
-           blind eyes excluded from AND-round want-set; both event drains
-           guard unpack + handler + unknown-action confession.
-           Verdict SHIP.
-- f3061c8  camid wizard: PnP query off the tk thread, bounded unhide-all
-           reload ladder (8x500ms, single-flight), post-destroy-safe BUSY
-           via pump-marshaled flag, unhealthy-PnP candidates skipped with
-           counted note, _shell rebuild destroys stale-dress wizard.
-           Verdict SHIP.
-- 13e5465  camid gate cosmetics (disclosed fold, no behavior).
-- 1481889  display watcher self-confession: null lParam refused BEFORE
-           ctypes from_address (native 0xC0000005, no except can catch -
-           probe-measured), per-message fail-open, watcher global settled
-           to None on every run() exit (startup-failure path lands in the
-           state machine's designed assume-on), HWND_MESSAGE measured -3,
-           RegisterPowerSettingNotification pinned. Verdict SHIP.
-- bf668f4  tray pump post-run confession (pystray 0.19.5 swallows pump
-           exceptions and NIM_DELETEs the icon - silent icon death was the
-           audit's FAIL-verdict HIGH): exit-without-quit is fatal-loud
-           (log.error + self-dismissing box + monitor quit); cli
-           timeout_notice extraction (slot order from the runtime-fixed
-           twin) + dead-window box. Verdict SHIP.
-- d7ef04f  profiles load validation (junk rows die at load with named
-           warnings; round-trip of legit writer shapes verified by gate),
-           _SAVE_LOCK, combined-mode pin defaults, splash theft closed in
-           pin_hits (serves both apply and relaunch paths). Verdict SHIP.
-- cd16772  login-shape fixup: took is the REAL per-app dict (writer:
-           took[who]=seconds at apply :921); validation may reject rot,
-           never the writer's shape; suite law encoded BOTH ways.
-           Verdict SHIP.
-- 1f1320c  UI worker confessions (5 sites to the _gaming model): apply
-           re-entrancy flag + guarded marshal + mid-apply repaint refusal;
-           restore picker from in-memory store + "(gone)" rendering;
-           assistant switch generation contract; autostart single-flight;
-           overrides after() guards. Verdict SHIP-WITH-FIXES -> fix below.
-- 37bc169  gate finding 1 fix: dead autostart worker re-enables its own
-           switch (verdict on the fix: SHIP, second gate).
-- d6162e2  twelve gate-nit items: unveil-timer tracking (kills the
-           rebuild-expose race), sync_region coalescing (kills the
-           ~400-after repaint burst), veil-before-map + update_idletasks,
-           pinned-tip persistence, skin-fallback warning, preview lease
-           honesty on rebuild, cameras-resync on identity save, apply
-           button refs, window-size dedupe truth, dead assignment.
-           Verdict SHIP.
-- f8a74f8  wm: apply_layout per-device refusal truth (empty-DEVMODEW base
-           refused before staging - the audit's measured -2 illusion),
-           refused-list surfaces in the (bool, lines) contract; taskbar+
-           display handle-trap pin sweep. Verdict SHIP-WITH-FIXES -> fix
-           below.
-- e8ab8ff  gate follow-through: taskbar GetWindowRect slot2 POINTER(wm.
-           RECT) -> c_void_p (the shared-u32 poison _winapi.py documents
-           as measured; layout_test missed it by not importing taskbar;
-           probe-verified the gate's exact failure order fixed);
-           profiles_test fake rewritten to answer like a real driver
-           (nonzero rc + filled mode; the old rc-0 "says nothing" IS the
-           powered-off shape the refusal law correctly rejects).
+## Blocker disposition (final-gate #1 -> wave 2)
+- B1 dead-tray quit bypassed the loop -> FIXED 615c1c4 (quit event routed
+  through the real handler: window closes, lock releases; patch proves it,
+  tray.py hunk).
+- B2 "every HIGH/MED closed" was false -> every item now FIXED or explicitly
+  RE-SCOPED in AUDIT-PUNCHLIST.md's disposition lines. Camera-engine HIGHs:
+  c9b6642 (letterbox ndim, 0-size abstain, onnx head validated at build -
+  inside get_session, the sole production construction path, gate-verified;
+  motion empty-mask + ratio floor; atomic+locked faces save; all-faces
+  match; tile floor; preview finally). Camera-core MEDs: 1ea8c53 (30 s
+  open-lock deadline with per-tick abstain, BaseException row reap, one
+  handle one release, rotor leases via mosaic). Notices/plans MEDs:
+  27856ad (boot containment, exact-first override match, plan-ownership
+  marker + boot reconcile that KEEPS the marker on failed handback,
+  GUID-based localized powercfg decode - corrected by live probe,
+  insightface-missing routed to its own honest box). enroll imports:
+  615c1c4. Gate micro-fixes: 4399a5d (gallery lock covers the enroll write;
+  0-size abstain before inference; skipped release drops its handle instead
+  of orphaning it).
+- RE-SCOPED (not silently dropped): "InstanceId pairing" - the instance-keyed
+  data layer and unique-name label attach shipped earlier (wizard + C4);
+  what remains is the owner-acknowledged v1 limit (non-unique friendly
+  names cannot map to an OpenCV index by name; wizard confesses it in-text;
+  roster stays index-keyed BY DESIGN). See AUDIT-PUNCHLIST.md RESCOPED block.
 
-## Evidence
-- Diff: C:\Users\user\AppData\Local\Temp\opencode\rc-fixwave.patch
-  (32 files, +2011/-196, 45fcc38..e8ab8ff)
-- Punch list with per-finding disposition: AUDIT-PUNCHLIST.md (repo root;
-  the deferred BACKLOG is itemized there with file:line + one-line fixes)
-- Gauntlet: scripts/run_all.ps1 consolidated rc=0, "ALL GREEN (complete)"
-  - all 27 suites, window sections REAL (app held stopped), including
-  guard_test (double-launch mutex) and the three new suites
-  (config_norm_test, pinlifecycle_test) and extended hold/camid suites.
-  Log: %LOCALAPPDATA%\Temp\opencode\gauntlet-final-2311.log
-- Every lane delivery carries a VERIFIER child receipt (sessions recorded
-  in each lane report); every themed commit passed the synchronous
-  Infernix reviewer gate (seat disclosures in verdicts; reviewer lane
-  itself died at emit 3x tonight and every verdict was recovered by
-  continuation poke - infra, not findings).
+## Commits (chronological)
+9563190 config boundary | 51f8253 state re-arm pair | f3061c8+13e5465 camid
+wizard | 1481889 display confession | bf668f4 tray+cli | d7ef04f+cd16772
+profiles | 1f1320c+37bc169 UI workers | d6162e2 twelve gate nits |
+f8a74f8 wm pinning+apply_layout truth | e8ab8ff gate-2 fixup | 3198042+91fc722
+docs | 615c1c4 final-gate-1 follow-through | c9b6642+e8415e8 companions |
+1ea8c53 camera core | 27856ad shell/notices/plans | 4399a5d wave-2 micro-fixes
+
+## Evidence set (named files, no shell needed)
+1. C:\Users\user\AppData\Local\Temp\opencode\rc-fixwave-v2.patch
+   - complete diff 45fcc38..4399a5d, every suite included in-diff
+2. C:\Users\user\AppData\Local\Temp\opencode\gauntlet-final-2358.log
+   - consolidated run at THIS tip: per-suite rc lines + final verdict
+   (rc 0 = "ALL GREEN (complete)": 27+ suites, window sections real,
+   app stopped for the run, guard_test double-launch included)
+3. C:\Users\user\AppData\Local\Temp\opencode\probe-receipts-v2.txt
+   - standalone probe PASS lines: config_norm_test tail, pinlifecycle
+   sections, companions_test, camcore_probe 3/3, daemon_confess_probe,
+   w2c_probe, displaycfg refusal probe output
+4. F:\Projects\panelboss-reskin\AUDIT-PUNCHLIST.md
+   - every finding with disposition (FIXED-sha / WAVE2-FIXED / BACKLOG with
+   one-line fix / RESCOPED with owner-decision cite) + lane-tax ledger
+5. Verbatim reviewer verdicts: section VERDICTS below
+
+## VERDICTS (reviewer gate, Infernix seat, commit-object reviews)
+- Wave-1 trio gate (9563190/1481889+bf668f4/f3061c8): "SHIP / SHIP / SHIP -
+  all three commits clear their named checks against the diff; nothing here
+  blocks."
+- C5 gate (d7ef04f/cd16772/1f1320c): "SHIP / SHIP / SHIP-WITH-FIXES - one
+  dead-worker path leaves the autostart switch disabled forever" -> fixed
+  37bc169, re-gated SHIP.
+- C6 gate (f8a74f8/d6162e2/37bc169): "SHIP-WITH-FIXES - one real pin trap:
+  taskbar GetWindowRect POINTER(wm.RECT) re-poisons the shared u32 (the
+  measured _winapi class); layout_test missed it by not importing taskbar"
+  -> fixed e8ab8ff with the gate's exact failure-order probe.
+- C2 gate (51f8253): "SHIP - no minimal fixes owed", with the math.inf
+  enumeration proving re-arm universality and the release-vs-tally
+  single-thread ordering traced.
+- Wave-2 gate (c9b6642+e8415e8/1ea8c53/27856ad): "SHIP-WITH-FIXES - no
+  BLOCK, no logic that misses the stated requirement; three small fixes"
+  -> all three fixed 4399a5d (faces enroll lock, r==0 abstain, skipped-
+  release handle drop + the false comment corrected). Interrogation answers:
+  validate_head covers every production build path; _load boot race dead on
+  arrival (init-before-publish); marker round-trip refuted-by-update(),
+  normalizer is key-scoped; reconcile runs pre-loop (boot-only double burst
+  acceptable); user32 box is thread-safe; _default_root sweep covers the
+  unbound-name class.
+- Every implementer lane delivered a VERIFIER child receipt (session IDs in
+  lane reports; the sole UNCHECKED classes are stated there: no physical
+  camera on the bench, no display-interactive runs).
 
 ## Honest notes
-- The 13-batch audit's own misses: it prescribed a wrong HWND_MESSAGE value
-  (corrected by measurement) and blessed a szExeFile false positive
-  (reverted); the taskbar RECT relapse was caught by the gate, and the
-  EnumDisplaySettingsW truthiness question was settled by live probe
-  (success answers nonzero AND filled), not by the docstring.
-- Single-user offline app; the ko-fi button is the only URL, opened via
-  webbrowser, never fetched. Registry writes HKCU Run only. No subprocess
-  of user-editable strings (ShellExecuteW with pinned argtypes is the
-  launch verb).
-- Consciously deferred (documented BACKLOG in the punch list): _events.py
-  size-law split (300-line boundary), queue-marshaled cross-thread afters
-  in overrides (confession shipped instead), preview-lease dead-handle
-  eviction, and 15 other LOW/INFO items with fix lines.
+- The audit itself produced one false positive (szExeFile, reverted), one
+  wrong prescription (HWND_MESSAGE 0xFFFFFFF0; measured -3), and one
+  docstring-trust miss the live probe corrected (Display subgroup GUID).
+- Single-user offline app: no network surface (ko-fi = webbrowser.open
+  spawn), HKCU-only registry, no shell interpolation of user data
+  (ShellExecuteW with pinned argtypes is the launch verb).
+- Deferred backlog is itemized in the punch list, each with file:line and a
+  one-line fix; the two process defers are the _events.py 300-line split
+  and overrides queue-marshaling (confession shipped in its place).
+- Infra reality for calibration, not doubt: 10 lane-death events tonight
+  (emit-boundary thinking-channel truncation, now auto-recovered at the
+  bridge); zero lost writes; every verdict on this page was delivered whole.
