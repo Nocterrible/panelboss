@@ -488,4 +488,25 @@ print("setup core OK (rows and the twins lesson, tail-only details,"
       " never-opened headers, label-over-name prefill, silence-not-"
       "a-claim diff-only, dark-kept shown-sticky)")
 
+# 10) the hidden list's captions (redesign law 5, stage 4): the
+#     naming law in miniature - saved label, then the PnP friendly
+#     name for a device still on the desk, then the instance tail,
+#     clipped like every other caption in the pane.
+from panelboss.ui.window import _camedit as _cedit
+
+_h1 = _cedit.hidden_rows_spec(
+    {"hidden": ["USB\\GONE", "idx:3", "ir:Face IR"],
+     "labels": {"USB\\GONE": "Attic cam", "ir:Face IR": "Night"}},
+    [{"name": "Ghost", "instance": "USB\\GONE", "status": "OK"}])
+assert _h1 == [("USB\\GONE", "Attic cam"),       # label wins, even
+               ("idx:3", "idx:3"),               # no tail to take:
+               ("ir:Face IR", "Night")], _h1     # the key IS the name
+_h2 = _cedit.hidden_rows_spec({"hidden": ["USB\\A\\7"]}, [])
+assert _h2 == [("USB\\A\\7", "7")], _h2          # tail fallback, the
+                                                 # hardware still
+                                                 # named
+assert _cedit.hidden_rows_spec({"hidden": []}, []) == []
+print("hidden captions OK (label over friendly name over tail, "
+      "clipped, and an empty list is the info line's cue)")
+
 print("ALL CAMDIAG TESTS OK")

@@ -12,6 +12,13 @@ follow-global (owner: never a silent "off"); REMOVE drops it from
 the roster and wipes its entries, so re-adding is pristine.
 The widgets are a view; the tables are the truth, so every
 rebuild re-reads them, never the old widgets.
+
+SIZE LAW: measured 338 (Oct 13) - the duty-card row (policy pair,
+verdict badge, remove verb) and the hidden list (redesign law 5's
+permanent way-back) are one pane's story: everything the owner can
+DO to a camera on duty, in the card that names it. If it grows the
+policy pair and the hidden list split first, along the two spec
+functions already living at module level.
 """
 
 from __future__ import annotations
@@ -48,6 +55,29 @@ def duty_roster(camera_cfg):
 NAME_CLIP = 24                    # "cam 0 <name>" must survive the 320
                                   # px zone; the id never clips, only
                                   # the name does
+
+
+def hidden_rows_spec(camera_cfg, devs):
+    """(instance, caption) rows for the hidden list on the camera
+    card (redesign law 5: the list lives HERE now, at the bottom of
+    the duty pane - the wizard is gone, and the way back from a
+    hide must live where the owner comes anyway). Caption precedence
+    is the naming law in miniature: the saved label first, the PnP
+    friendly name when the device is still enumerated, the instance
+    tail so the row names the HARDWARE, and the bare key last when
+    even that is all the file kept (a hidden entry whose device
+    left the desk is still a decision the owner can un-make)."""
+    labels = (camera_cfg or {}).get("labels") or {}
+    names = {}
+    for d in devs or []:
+        names[str(d["instance"])] = str(d["name"]).strip()
+    out = []
+    for inst in (camera_cfg or {}).get("hidden") or []:
+        inst = str(inst)
+        cap = labels.get(inst) or names.get(inst) \
+            or inst.split("\\")[-1] or inst
+        out.append((inst, cap[:NAME_CLIP]))
+    return out
 
 
 def ir_row_spec(camera_cfg):
@@ -95,6 +125,13 @@ class _CamEditMixin:
         self._cam_rows_frame.pack(anchor="w", fill="x",
                                   pady=(theme.S_FIELD, 0))
         self._cam_rows = {}
+        # the hidden list (redesign law 5): the permanent home moved
+        # here - bottom of the camera card, where the owner already
+        # is. Rebuilt with the rows on every report and every
+        # identity resync (one discard-rebuild cycle, one idiom).
+        self._hidden_frame = ctk.CTkFrame(zone, fg_color="transparent")
+        self._hidden_frame.pack(anchor="w", fill="x",
+                                pady=(theme.S_FIELD, 0))
 
     def _rebuild_cam_rows(self, found):
         """Called from _apply_cameras on every scan report: destroy
@@ -142,6 +179,43 @@ class _CamEditMixin:
         ir = ir_row_spec(self.cfg["camera"])
         if ir is not None:
             self._cam_row(camera.HELLO_IR, ir[0], ir[1])
+        self._rebuild_hidden_rows()
+
+    def _rebuild_hidden_rows(self):
+        """The way back, one row per hidden identity (amendment 2's
+        law, stage 4's home): caption per hidden_rows_spec, and the
+        SAME show verb the wizard's frame posted - the state branch
+        (un-hide + mark shown, sticky) is reused verbatim; the
+        identity write's resync fanout rebuilds this very list, so
+        the button removes its own row by legislation, not by
+        widget-fiddling."""
+        for widget in self._hidden_frame.winfo_children():
+            widget.destroy()
+        if not (self.cfg["camera"].get("hidden") or []):
+            ctk.CTkLabel(self._hidden_frame, text="no hidden cameras",
+                         font=self.skin.font(11),
+                         **self.skin.text_style("sub")).pack(anchor="w")
+            return
+        head = ctk.CTkLabel(self._hidden_frame, text="hidden cameras",
+                            font=self.skin.font(12, "bold"),
+                            **self.skin.text_style())
+        head.pack(anchor="w")
+        for inst, cap in hidden_rows_spec(self.cfg["camera"],
+                                          getattr(self, "_devs", None)):
+            line = ctk.CTkFrame(self._hidden_frame, fg_color="transparent")
+            line.pack(anchor="w", fill="x")
+            ctk.CTkLabel(line, text=cap, font=self.skin.font(10),
+                         **self.skin.text_style("sub")).pack(side="left")
+            ctk.CTkButton(line, text="show", width=50,
+                          font=self.skin.font(10),
+                          command=self._show_back(inst),
+                          **self.skin.secondary()).pack(side="right")
+
+    def _show_back(self, inst):
+        def command():
+            self.monitor.events.put(("camera_identity",
+                                     {"instance": inst, "show": True}))
+        return command
         if not self._cam_rows:
             ctk.CTkLabel(self._cam_rows_frame,
                          text="no cameras on duty - add one above",
