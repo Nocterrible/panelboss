@@ -551,6 +551,32 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   rc=4 + guard_test (888857c); TclError flags, NIM_ADD anti-vacuous, scratch
   hygiene; PANELBOSS_CONFIG_DIR corrected.
 
+## Redesign (owner law, Oct 13 afternoon): "blow it away"
+The curation UX collapses into ONE flow: the detection tab is gated
+behind a big consent switch (OFF on first boot - no camera opens until
+the user says so, and a broken camera world can never lock the app out);
+toggling or the rescan button opens the setup screen - progress veil at
+the bottom, camera CARDS spawning as each reports (index + device
+detail header, snapshot, optional rename, hide checkbox; timed-out
+cameras get a card that says so; IR cameras included); the Identify
+window and its button are DELETED; the hidden list lives at the bottom
+of the camera card. Packet: redesign-packet.md (scratch dir).
+STATUS: stage 0 (crash re-land, 61d9137) + stage 1 (consent gate,
+980d55a) committed; gate SHIP-WITH-FIXES, owed accepts folded into
+stage 2: five unguarded dialog X's (same crash law - the gate's worse-
+sibling), migration predicate extended to hidden/shown/non-stock index,
+live-preview switch honors consent (verified by hand:
+enumerate_cameras opens every index 0..7 - the TRAY MENU was lighting
+the LED on a right-click; now an info row when off), _close re-
+entrancy, camera_enabled resync post. Stages 2-5 in flight.
+Push awaits the full-runner receipt at the final tip (app down, ALL
+GREEN complete) - the s1b log vanished with the swept wave; no
+honor-system pushes.
+LAW (learned the lost-work way): STAGE every in-progress edit at each
+red->green milestone; unstaged changes are a rumor - one worktree sweep
+during review ate an entire crash-fix wave between two porcelain checks
+and it was re-landed from the commit message alone.
+
 ## In flight / queued
 RETIRED (Oct 13): audit queue drained; fix waves 1-3 landed; second-gate
 dispositions closed in wave 3 + this ledger's third-gate fixes. Loop
