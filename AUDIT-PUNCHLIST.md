@@ -607,7 +607,11 @@ state: third submission returned BLOCK-ON-PROCESS (wave-3 range carried
 no independent gate) - the reviewer pass is dispatched as part of this
 resubmission cycle; on RELEASE: merge word to master.
 
-## CAMERA-SETUP REDESIGN (owner: "blow it away") - CODE-COMPLETE, first
+## CAMERA-SETUP REDESIGN - CLOSING STATUS (complements the architect's
+## Redesign section above - intent is theirs, this is the per-stage
+## ledger; the duplicate-heading look is two authors one night, not
+## two plans)
+## (owner: "blow it away") - CODE-COMPLETE, first
 ## launch pending owner's witness (Oct 13)
 - CONSENT (laws 1+2): [camera] enabled=false stock; the load migration
   reads the file (labels/bindings/hidden/shown/diag record or a

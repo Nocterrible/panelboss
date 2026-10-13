@@ -392,3 +392,5 @@ print("idx-key label OK (an inst-less identity persists by its scan "
       "index, the int guard eats junk, and the bind migration adopts "
       "the orphan)")
 
+
+print("ALL CAMID TESTS OK")
