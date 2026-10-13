@@ -165,6 +165,22 @@ section labels; where they disagree, the legend wins.
    five-repeat claim lives in the lane receipt it belongs to.
 ## /third-gate ledger
 
+## EPILOGUE - VERDICT: RELEASE (rc-2026-10-13d @ 93c9cc3, pushed)
+Fourth submission returned RELEASE, no blockers. Ledger 7 closed in
+court: the morning desk's live blocker (ms-teams.exe - Screen lock
+block, named by the boot log itself) was the exact display-held state
+that made the stale unknown_state fixture red at 07:21 - the suite
+was testing the desk, and the desk filed testimony. The first
+hundred milliseconds of the released build ran the night's fixes live:
+assistant adoption confessed its mismatch, the flag self-healed to
+disk, and the blocker line appeared through the new decoder.
+OPEN FOR THE OWNER (no code risk): the motion-mode confidence-row
+visibility call (parked in RC-PACKAGE honest notes); the merge word
+to master; watch items per the gate's RISK line: camera release +
+30 s open deadline on the multi-cam desk at first quit/reboot - late
+presence decisions, not crashes, would be the symptom.
+## /epilogue
+
 ## RESCOPE, camera-core (second gate blocker 2): the deadlined RELEASE
 was reverted within the wave - release takes ownership (null-first swap,
 lock-free), queue-behind-open deleted along with the stall, the None-
