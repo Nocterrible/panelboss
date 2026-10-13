@@ -36,7 +36,10 @@ class MotionDetector:
 
     def __init__(self, cfg=None):
         cfg = cfg or {}
-        self.ratio = float(cfg.get("ratio", 0.003))
+        # the config normalizer clamps [detection].ratio on the real
+        # load path; this floor keeps a hand-built cfg at ratio 0 from
+        # reading "any change" as motion (frac >= 0 is always true)
+        self.ratio = max(1e-9, float(cfg.get("ratio", 0.003)))
         self.diff_level = int(cfg.get("diff_level", 22))
         self.hold_sec = float(cfg.get("hold_sec", 180))
         self.conf = self.ratio         # the confidence slider writes here;
@@ -51,7 +54,7 @@ class MotionDetector:
         self._prev = None
 
     def detect(self, frame, conf=None):
-        gray = (frame if frame.ndim == 2
+        gray = (frame.copy() if frame.ndim == 2
                 else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
         small = cv2.resize(gray, SIZE)
         small = cv2.GaussianBlur(small, (21, 21), 0)
@@ -77,9 +80,13 @@ class MotionDetector:
                 np.array([score], dtype=np.float32))
 
     def _region(self, mask, shape):
-        """Bounding box of the changed pixels, mask space -> frame space."""
+        """Bounding box of the changed pixels, mask space -> frame space.
+        An all-zero mask has no region: ABSTAIN, never let an empty
+        xs.min() raise (a zero ratio would otherwise hit this path)."""
         h, w = shape
         ys, xs = np.nonzero(mask)
+        if not len(xs):
+            return (0.0, 0.0, float(w), float(h))
         sx = w / float(mask.shape[1])
         sy = h / float(mask.shape[0])
         return (xs.min() * sx, ys.min() * sy,

@@ -143,8 +143,18 @@ def _letterbox(frame, size):
     borderline hit can reach)."""
     h, w = frame.shape[:2]
     sh, sw = size
+    if h < 1 or w < 1:
+        # a 0-height / 0-width frame can not be fit into the canvas:
+        # ABSTAIN, like a black frame - no scale exists, so say "no
+        # detections" instead of dividing by zero. (The ndim == 2 guard
+        # in detect_lively used to be dead: detect() died here first.)
+        return (np.full((sh, sw, 3), 114, np.uint8), 0, 0, 0.0)
     r = min(sh / h, sw / w)
     nw, nh = int(round(w * r)), int(round(h * r))
+    if frame.ndim == 2:
+        # grayscale poll: the canvas is 3-channel, so the paste needs a
+        # color frame (cv2's cvtColor copies, no caller-buffer aliasing)
+        frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
     img = cv2.resize(frame, (nw, nh))
     canvas = np.full((sh, sw, 3), 114, np.uint8)
     top = (sh - nh) // 2

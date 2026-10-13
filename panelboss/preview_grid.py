@@ -62,6 +62,9 @@ def compose(frames, labels, tile_w, cols=2):
     if not indexes:
         return None
     cols = max(1, int(cols))
+    # a non-positive tile_w is an API misuse: floor the draw instead of
+    # letting PIL raise "negative width" (a ValueError class) mid-wall
+    tile_w = max(1, int(tile_w))
     tile_h = _tile_h(frames, indexes, tile_w)
     rows = (len(indexes) + cols - 1) // cols
     grid = Image.new("RGB", (cols * tile_w, rows * (HEADER_H + tile_h)), BG)

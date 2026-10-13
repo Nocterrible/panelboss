@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 
 import numpy as np
 
@@ -21,6 +22,10 @@ log = logging.getLogger("faces")
 class FaceGate:
 
     def __init__(self, providers=("CPUExecutionProvider",)):
+        # one lock per gate around the stored-embedding dict: a savez
+        # writes it while the voting thread is mid np.stack, and a torn
+        # read (or a mid-iteration rehash) must not race the disk write
+        self._lock = threading.RLock()
         try:
             from insightface.app import FaceAnalysis
         except ImportError as e:
@@ -40,21 +45,46 @@ class FaceGate:
         return {}
 
     def _save(self):
-        np.savez(self.db, **self.stored, allow_pickle=True)
+        # the saved file is read back by the next boot: write tmp then
+        # os.replace, the config.write_config shape (a crash between
+        # truncate and finish used to leave a half file), litter swept
+        # on any failure
+        with self._lock:
+            # np.savez appends ".npz" to a path that does not END in
+            # .npz (it would land at tmp + ".npz" and the replace would
+            # miss), so the pid sits before the extension
+            tmp = self.db + (".tmp.%d.npz" % os.getpid())
+            try:
+                np.savez(tmp, **dict(self.stored), allow_pickle=True)
+                os.replace(tmp, self.db)
+            except Exception:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise
 
     def known(self, frame):
         """True when a frame contains at least one registered face."""
         faces = self.app.get(frame)
         if not len(faces):
             return False
-        embed = np.array(faces[0].embedding, dtype=np.float32)
-        embed = embed / np.linalg.norm(embed)
-        return self._match(embed)
+        # every detected face votes: a KNOWN face behind an unknown
+        # one used to fail the gate (only faces[0] was read)
+        for face in faces:
+            embed = np.array(face.embedding, dtype=np.float32)
+            embed = embed / np.linalg.norm(embed)
+            if self._match(embed):
+                return True
+        return False
 
     def _match(self, embed):
         if not self.stored:
             return False
-        gallery = np.stack(list(self.stored.values()))
+        # under the lock: a save() in another thread may be mid np.savez
+        # over this same dict
+        with self._lock:
+            gallery = np.stack(list(self.stored.values()))
         gallery = gallery / np.linalg.norm(gallery, axis=1)[:, None]
         sims = gallery @ embed
         return bool(np.max(sims) >= 0.4)     # the threshold always comes

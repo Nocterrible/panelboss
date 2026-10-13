@@ -133,29 +133,51 @@ def get_session(path, device="auto", device_id=0, verbose=False):
     import onnxruntime
     avail = onnxruntime.get_available_providers()
     providers = ["CPUExecutionProvider"]
-    if device in ("auto", "cuda"):
-        gpu = []
-        if "CUDAExecutionProvider" in avail:
-            gpu.append(("CUDAExecutionProvider",
-                        {"device_id": str(int(device_id))}))
-        if "DmlExecutionProvider" in avail:
-            gpu.append(("DmlExecutionProvider",
-                        {"device_id": str(int(device_id))}))
-        if not gpu:
-            log.warning("device is %r but this onnxruntime wheel has no "
-                        "gpu provider (available: %s); CPU only",
-                        device, ", ".join(avail))
-        providers = gpu + providers
-    if device == "cpu":
-        providers = ["CPUExecutionProvider"]
     if verbose:
         log.debug("providers: %s", providers)
     try:
+        # the device_id coercion lives INSIDE the build try: a junk
+        # config value dies as the friendly build-failure shape below,
+        # not as a raw ValueError outside the try ("cpu" skips the
+        # branch, so it never needs the coercion at all)
+        if device in ("auto", "cuda"):
+            gpu = []
+            if "CUDAExecutionProvider" in avail:
+                gpu.append(("CUDAExecutionProvider",
+                            {"device_id": str(int(device_id))}))
+            if "DmlExecutionProvider" in avail:
+                gpu.append(("DmlExecutionProvider",
+                            {"device_id": str(int(device_id))}))
+            if not gpu:
+                log.warning("device is %r but this onnxruntime wheel has "
+                            "no gpu provider (available: %s); CPU only",
+                            device, ", ".join(avail))
+            providers = gpu + providers
         session = onnxruntime.InferenceSession(path, providers=providers)
     except Exception as e:
-        log.warning("GPU unavailable (%s); falling back to CPU", e)
-        session = onnxruntime.InferenceSession(
-            path, providers=["CPUExecutionProvider"])
+        log.warning("session build failed (%s); falling back to CPU", e)
+        try:
+            session = onnxruntime.InferenceSession(
+                path, providers=["CPUExecutionProvider"])
+        except Exception as e2:
+            raise RuntimeError(
+                "inference session failed to build for %s "
+                "(%s; cpu fallback: %s)"
+                % (path, e, e2)) from e2
+    validate_head(session)
     log.info("session running on %s (device %s)",
              session.get_providers(), device_id)
     return session
+
+
+def validate_head(session):
+    """The classifier must confess at BUILD, not crash per vote:
+    find_model admits ANY *.onnx, and a different head shape (a
+    segmentation's (1, 85, 8400)) would decode into boxes of the wrong
+    class forever. Expect the detection head (N, 84, 8400): ndim 3 and
+    the 84-count STRICT - 4 box columns plus the 80 COCO classes."""
+    head = session.get_outputs()[0]
+    shape = tuple(head.shape)
+    if len(shape) != 3 or shape[1] not in (84,):
+        raise ValueError(
+            "expected detection head (N, 84, 8400), found %s" % (shape,))

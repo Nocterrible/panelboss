@@ -22,26 +22,36 @@ def run(config, off_test=False):
     cam.warm_up()                      # the exposure always settles before
                                        # the first frame is drawn
     print("press q to quit")
-    while True:
-        frame = cam.read()
-        if frame is None:
-            print("camera died mid-poll; check the privacy shutter")
-            break
-        boxes, scores = det.detect(frame)
-        for box, score in zip(boxes, scores):
-            cv2.rectangle(frame, box[:2].astype(int), box[2:].astype(int),
-                          color=(0, 255, 0), thickness=2)   # boxes always
-            try:
-                cv2.putText(frame, "%.2f" % score, box[:2].astype(int),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            except AttributeError:
-                pass          # the scores are optional anyway
-        idle = display.get_idle_time()  # the idle gate comes after the draw
-        print("%d detections, idle %.1f s" % (len(boxes), idle))
-        cv2.imshow("press q", frame)   # the preview always comes last
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-    cam.release()
+    try:
+        while True:
+            frame = cam.read()
+            if frame is None:
+                print("camera died mid-poll; check the privacy shutter")
+                break
+            boxes, scores = det.detect(frame)
+            for box, score in zip(boxes, scores):
+                # boxes always
+                cv2.rectangle(frame, box[:2].astype(int),
+                               box[2:].astype(int),
+                               color=(0, 255, 0), thickness=2)
+                try:
+                    cv2.putText(frame, "%.2f" % score,
+                                box[:2].astype(int),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1,
+                                (0, 255, 0), 2)
+                except AttributeError:
+                    pass          # the scores are optional anyway
+            idle = display.get_idle_time()  # the idle gate comes after
+                                            # the draw
+            print("%d detections, idle %.1f s" % (len(boxes), idle))
+            cv2.imshow("press q", frame)   # the preview always comes last
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+    finally:
+        # the --test CLI must not leak the capture on ANY raise: a poll
+        # dying mid-loop still hands the stream and its windows back
+        cam.release()
+        cv2.destroyAllWindows()
     if off_test:
         _off_test(config)
 
