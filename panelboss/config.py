@@ -606,6 +606,27 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
                 log.info("[camera] enabled absent and section reads "
                          "configured (%s) - consent honored from file",
                          ", ".join(hits))
+            # the DEFAULT-OFF law (amendment 2, owner): every feature
+            # that can surprise on a boot defaults off and never
+            # self-enables. The same absent key that lets camera
+            # CONSENT be honored (a human set this app up - keep the
+            # names, the roster, the whole identity world) does NOT
+            # vouch for the power-side flags: gaming/restore/taskbar
+            # were the OLD app's doing, or a resurrected file's (the
+            # debugger's collateral: no code auto-enabler ever
+            # existed; the file was the writer). They reset to stock
+            # false on this load and stay behind their switches. One-
+            # shot by construction like the consent: the key lands in
+            # the file on the first loop-owned save (every toggle
+            # writes the WHOLE merged cfg), after which this block
+            # cannot fire and the owner's flips stick.
+            for _sec in ("gaming", "restore", "taskbar"):
+                _fsec = config.get(_sec)
+                if isinstance(_fsec, dict) and _fsec.get("enabled"):
+                    merged[_sec]["enabled"] = False
+                    log.info("[%s] enabled arrived with a pre-consent "
+                             "file; the default-off law resets it (the "
+                             "switch owns it from now on)", _sec)
     normalize_sections(merged)
     return merged
 

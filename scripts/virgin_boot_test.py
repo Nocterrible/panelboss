@@ -118,6 +118,10 @@ check(not os.path.isdir(ICU)
 cfg2 = config.get_config(dir=new_dir, verbose=False)
 check(cfg2["camera"]["enabled"] is True,
       "trap: consent honored from the stranger's non-stock file")
+check(cfg2["gaming"]["enabled"] is False
+      and cfg2["restore"]["enabled"] is False,
+      "trap: the default-off law strips the stranger's POWER behaviors "
+      "(amendment 2: an upgrade keeps names and the roster, not modes)")
 check(any("enabled absent" in r and "consent honored from file" in r
           for r in _rec.records),
       "trap: the consent migration NAMES its evidence (the silence "

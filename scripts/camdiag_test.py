@@ -3,7 +3,7 @@ and the picker's pure pieces. No real camera, no window: the state side
 rides camera_policy_test's FakeCam fixture the way camid_test does, and
 the wizard-side tests drive the importable helpers directly. Section 6
 drives the REAL scan worker on live threads against faked driver doors.
-SIZE LAW: measured 512 (Oct 13) - one scenario chain per section,
+SIZE LAW: measured 537 (Oct 13) - one scenario chain per section,
 the fleet's test idiom (camera_policy_test is the precedent); the
 chain is the reader, and each section opens with the law it pins.
 """
@@ -392,8 +392,33 @@ assert _gate("[camera]\nindex = [0]\n") is False            # [0] is stock
 assert _gate('[camera]\nindex = 6\nenabled = false\nlabels = '
              '{ "USB\\\\A" = "desk" }\n') is False           # explicit sticks
 assert _gate("[camera]\nindex = 6\nenabled = true\n") is True
+# the DEFAULT-OFF law (amendment 2): the same absent key that honors
+# camera consent RESETS the power side - an upgrade keeps names and
+# the roster, not the old app's (or a resurrected file's) behaviors.
+_up = tempfile.mkdtemp(prefix="panelboss_camdiag_law_")
+with open(os.path.join(_up, "config.toml"), "w", encoding="utf8") as fh:
+    fh.write('[camera]\nindex = 2\nlabels = { "USB\\\\A" = "desk" }\n\n'
+             '[gaming]\nenabled = true\n\n[restore]\nenabled = true\n\n'
+             '[taskbar]\nenabled = true\n')
+_law = config.get_config(dir=_up, verbose=False)
+assert _law["camera"]["enabled"] is True, _law["camera"]     # consent lives
+assert _law["camera"]["labels"] == {"USB\\A": "desk"}        # names live
+assert _law["camera"]["index"] == [2]                        # roster lives
+for _s in ("gaming", "restore", "taskbar"):
+    assert _law[_s]["enabled"] is False, _law[_s]            # power resets
+# and it is a MIGRATION, not a law of nature: once the enabled key
+# rides the file (the first loop-owned save writes it), the owner's
+# own gaming=true survives - the switch owns the flag, not the boot
+_kept = tempfile.mkdtemp(prefix="panelboss_camdiag_kept_")
+with open(os.path.join(_kept, "config.toml"), "w", encoding="utf8") as fh:
+    fh.write('[camera]\nindex = 2\nenabled = true\n\n'
+             '[gaming]\nenabled = true\n')
+assert config.get_config(dir=_kept, verbose=False)["gaming"]["enabled"] \
+    is True
 print("consent migration OK (absent+virgin false, set-up upgrades"
-      " true, explicit either way always wins)")
+      " true, explicit either way always wins; the default-off law"
+      " resets the power side on upgrade and a migrated file answers"
+      " for itself)")
 
 _real_camera8 = cam_mod.Camera
 opened8 = []
