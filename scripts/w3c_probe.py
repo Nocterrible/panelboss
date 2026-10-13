@@ -2,9 +2,10 @@
 zero writes): the shared-u32 pin coexistence the second gate demanded,
 and the plan-picker truth table the Ultimate fix settled."""
 import ctypes
+import os
 import sys
 
-sys.path.insert(0, r"F:\Projects\panelboss-reskin")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # (a) cross-module u32 coexistence AFTER the taskbar pin pass: import
 # order taskbar-first (the gate's failure order), then call through
@@ -60,5 +61,41 @@ assert any("Bildschirm" in d for d in out["display"]), out
 assert len(out["other"]) == 1, out
 print("[PASS] c: localized header WITH its GUID buckets as display "
       "(the locale-independent invariant, live-measured GUID)")
+
+# (d) the production marker chain (third-gate ledger 7: every probe so
+# far drove _reconcile_plan with an in-memory cfg that has no _path -
+# proving the write->disk->reload->reconcile round trip was skipped):
+# temp state dir, marker written through the REAL writer, reloaded,
+# reconciled, the cleared state persisted again and re-read.
+import os
+import tempfile
+
+tmp = tempfile.mkdtemp(prefix="pb_w3cd_")
+from panelboss import config, gaming, gaming_watch
+
+cfg = config.get_config(tmp)                       # fresh store in tmp
+gsec = cfg.setdefault("gaming", {})
+gsec["power_plan_owned"] = True
+gsec["power_plan_prev"] = "381b4222-f694-41f0-9685-ff5bb260df2e"
+# write_config's single-arg form means CONFIG_DIR, NOT cfg["_path"]
+# (the reason _persist_plan_state guards on _path at all) - the probe
+# passes the tmp path explicitly or it litters the owner's real store
+config.write_config(cfg, tmp)
+back = config.get_config(tmp)
+assert gaming.plan_owned(back["gaming"]) and \
+    gaming.plan_prev(back["gaming"]) == \
+    "381b4222-f694-41f0-9685-ff5bb260df2e", back["gaming"]
+said = gaming_watch._reconcile_plan(
+    back["gaming"],
+    active=lambda: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    pick=lambda s: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    set_plan=lambda g: g == "381b4222-f694-41f0-9685-ff5bb260df2e")
+assert "handed back" in said, said
+gaming_watch._persist_plan_state(back)             # full cfg: has _path
+again = config.get_config(tmp)
+assert not gaming.plan_owned(again["gaming"]), again["gaming"]
+print("[PASS] d: marker round-trips the REAL writer and the reconcile "
+      "clear reaches the disk - the crash-claim chain is proven, not "
+      "asserted against fakes only")
 
 print("w3c absorb probe OK")

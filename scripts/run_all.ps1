@@ -33,8 +33,15 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
     'asyncopen_test.py', 'blackvote_test.py', 'veil_test.py',
     'camid_test.py', 'guard_test.py', 'config_norm_test.py',
     'pinlifecycle_test.py', 'companions_test.py', 'camcore_probe.py',
-    'w2c_probe.py'
+    'w2c_probe.py', 'w3b_probe.py', 'w3c_probe.py',
+    'daemon_confess_probe.py'          # third-gate ledger 16: the three
+                                       # orphans are wired; a probe that
+                                       # runs only when remembered is a
+                                       # rumor of a regression net
 $dir = Join-Path $root "scripts"
+# ledger 16: the log must be attributable - tip stamp at the head
+Write-Output ("runner @ " + (Get-Date -Format o) + " tip " +
+    (& git -C $root rev-parse --short HEAD 2>$null))
 $fail = 0
 $miss = 0
 $hard = 0

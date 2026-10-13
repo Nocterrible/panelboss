@@ -631,12 +631,14 @@ def write_config(config, path=None):
             data = copy.deepcopy(
                 {k: v for k, v in config.items()
                  if not k.startswith("_")})
-        except RuntimeError:
+        except (RuntimeError, TypeError) as exc:
             # a mutator not yet on _CFG_LOCK can still resize a nested
-            # dict mid-copy ("dict changed size during iteration"):
-            # retry once after a short beat; a second failure raises
-            # (the callers already log)
-            log.warning("config mutated mid-save; retrying")
+            # dict mid-copy ("dict changed size during iteration"),
+            # and an un-deep-copyable value raises TypeError (gate
+            # ledger 12): both get the same one retry after a short
+            # beat; a second failure raises as today - callers log
+            log.warning("config snapshot failed (%s: %s); retrying",
+                        type(exc).__name__, exc)
             time.sleep(0.05)
             data = copy.deepcopy(
                 {k: v for k, v in config.items()

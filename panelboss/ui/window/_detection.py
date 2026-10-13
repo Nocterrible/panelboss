@@ -213,22 +213,25 @@ class _DetectionMixin:
         self.cfg["inference"]["confidence"] = round(float(value), 2)
         self.conf_label.configure(text="%.2f" % value)
         self.monitor.events.put(("confidence", round(float(value), 2)))
-        # gate MED (misses list): the confidence slider writes
-        # detector.conf, but MotionDetector ignores conf - its knob is
-        # ratio. In motion mode the SAME slider therefore also drives
-        # the motion ratio: cfg first (a rebuild reads it back), then
-        # the hot-write to the live instance - the exact seam the
-        # ("confidence", v) event uses for detector.conf in
-        # _events.py, mirrored for the knob this mode actually gates
-        # on. The frame-changes readout follows the number it shares.
+        # gate MED (misses list) + third-gate ledger 5 (the copy was
+        # the wrong transform: conf domain is 0.05..0.95, ratio domain
+        # is 0.0005..0.02 - a raw copy could push the motion knob to
+        # ~47x its legal top and the screens would sleep on a present
+        # user). Linear domain map, same direction (more confidence
+        # required == bigger change required); cfg first (a rebuild
+        # reads it back), then the hot-write - the exact seam the
+        # ("confidence", v) event uses for detector.conf, mirrored for
+        # the knob this mode actually gates on.
         if (self.cfg.get("detection") or {}).get("mode") == "motion":
-            self.cfg["detection"]["ratio"] = round(float(value), 2)
+            frac = (min(0.95, max(0.05, float(value))) - 0.05) / 0.9
+            ratio = 0.0005 + frac * (0.02 - 0.0005)
+            self.cfg["detection"]["ratio"] = ratio
             det = self.monitor.detector
             if hasattr(det, "ratio"):
-                det.ratio = round(float(value), 2)
+                det.ratio = ratio
             shown = getattr(self, "motion_labels", {}).get("ratio")
             if shown is not None:
-                shown.configure(text="%.4f" % round(float(value), 2))
+                shown.configure(text="%.4f" % ratio)
         self._save()
 
 

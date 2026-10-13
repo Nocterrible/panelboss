@@ -631,10 +631,16 @@ def run(cfg, monitor, ui_events):
     except Exception:
         try:
             window.destroy()
-        except NameError:               # the raise came from inside
+        except (NameError, tk.TclError):  # the raise came from inside
             if tk._default_root is not None:   # __init__: the name was
                 tk._default_root.destroy()     # never bound, the born
-                                       # root is this process's default
+                                       # root is this process's default;
+                                       # a TclError here means the root
+                                       # is already half-gone - the
+                                       # fallback sweep covers it (and
+                                       # a raw destroy raise must not
+                                       # MASK the boot failure: gate
+                                       # ledger 11)
         log.exception("boot: settings window died; the half-dressed "
                       "root is destroyed and the failure re-raised")
         raise

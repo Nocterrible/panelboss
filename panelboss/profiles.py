@@ -508,11 +508,11 @@ def pin_hits(row, live, taken, fallback="process"):
         # loss is never reported. Prefer a window that is not splash
         # sized (< 200x150) whenever one exists for this pin; when
         # only small windows exist, the old behavior stands.
-        if out and any(len(l.get("rect") or []) >= 2 and
+        if out and any(len(l.get("rect") or []) == 4 and   # writer shape
                        l["rect"][2] < 200 and l["rect"][3] < 150
-                       for l in out):
-            big = [l for l in out
-                   if not (len(l.get("rect") or []) >= 2
+                       for l in out):                      # is (x,y,w,h):
+            big = [l for l in out                           # slots 2/3
+                   if not (len(l.get("rect") or []) == 4    # ARE w and h
                            and l["rect"][2] < 200 and
                            l["rect"][3] < 150)]
             if big:

@@ -176,6 +176,14 @@ def _parse(text):
     section = "unknown"
     saw_section = False               # locale-honesty confession state
     saw_guid = False                  # (gate MED: an unrecognized
+    saw_nonascii = False              # header must at least confess,
+                                      # and only on EVIDENCE: a header
+                                      # with non-ASCII characters is
+                                      # proof of a localized build;
+                                      # plain absence of English words
+                                      # proves nothing - an English
+                                      # box with no display request
+                                      # must NOT confess)
     mine = _own_tokens()              # header must at least confess)
     pending = None                  # entry awaiting its reason line
     pending_mine = False
@@ -209,6 +217,9 @@ def _parse(text):
             flush()
             section = stripped[:-1]
             saw_section = True
+            if any(ord(c) > 127 for c in stripped):
+                saw_nonascii = True     # POSITIVE evidence of a
+                                        # localized powercfg build
             if _DISPLAY_GUID.search(stripped):
                 saw_guid = True
             continue
@@ -235,16 +246,21 @@ def _parse(text):
         put(stripped)
     flush()
     global _LOCALE_CONFESSED
-    if (saw_section and other and not display and not saw_guid
-            and not _LOCALE_CONFESSED):
-        # gate MED honesty: this build recognized NO section as the
-        # Display subgroup (no words, no GUID) yet requests ARE being
-        # held - on a localized box that means a display request may
-        # be sitting in `other`, invisible to the gate. Confess once;
-        # the behavior (assume gateable) is then at least investigable.
+    if (saw_section and other and not display
+            and (saw_nonascii or saw_guid) and not _LOCALE_CONFESSED):
+        # third-gate ledger 6: confess only on EVIDENCE the box is
+        # localized (a header with non-ASCII text, or a header
+        # carrying its subgroup GUID) - the earlier trigger (any
+        # unrecognized header) fired on every English box holding a
+        # non-display request, which made the confession noise.
+        # RESIDUAL, named: an ASCII-lettered localized header
+        # ("Affichage:") stays blind in silence - the wordless GUID
+        # arm of _is_display_section is the durable fix path when a
+        # real localized /requests dump can be measured.
         _LOCALE_CONFESSED = True
-        log.info("display-gate: no header recognized in this locale's "
-                 "powercfg output - assuming display state is gateable")
+        log.info("display-gate: header seen that this locale's words "
+                 "do not cover - a display request may sit unbucketed; "
+                 "assuming display state is gateable")
     return {"error": None, "display": display, "other": other,
             "overridden": [], "requests": entries,
             "override_entries": []}

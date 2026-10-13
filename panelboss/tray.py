@@ -254,6 +254,12 @@ class Tray(threading.Thread):
         except Exception:
             log.exception("the tray always runs last and pythonw has no "
                           "console; the failure would otherwise vanish")
+            if self.monitor is not None and not self.monitor.quit:
+                # third-gate ledger 10: a RAISED death is the B1 class
+                # too - icon never lived, the loop would run ownerless
+                # behind a held mutex; queue the real quit, no box
+                # (the log line above is the confession here)
+                self.monitor.events.put(("quit", True))
 
     def _ready(self, icon):
         icon.visible = True       # pystray starts hidden; our setup

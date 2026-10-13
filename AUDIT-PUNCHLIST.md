@@ -111,9 +111,59 @@ e8ab8ff + canon alignment 49dc14e; gaming/notice clusters 27856ad +
 EXCEPTIONS demoted out of FIX-NOW here, not silently: (1) motion-mode
 confidence row VISIBILITY (does the UI show the row in motion mode?) -
 owner UX question parked in RC-PACKAGE honest notes, the write-side
-mirror shipped 4d26424; (2) the _events.py size-law split and overrides
-queue-marshaling stay the two documented process defers.
+mirror shipped 4d26424 (rescaled 13-03: the first mirror copied a
+0.05..0.95 confidence onto a 0.0005..0.02 ratio domain - third-gate
+ledger 5, up to 47x the legal top; now a linear domain map); (2) the
+_events.py size-law split and overrides queue-marshaling stay the two
+documented process defers.
+LABEL ARCHAEOLOGY (third-gate ledger 15): the per-section FIX-NOW/BACKLOG
+labels below predate waves 2-3; some BACKLOG lines are in fact closed
+(HWND_MESSAGE CLOSED by measurement in 1481889 - the audit's prescribed
+0xFFFFFFF0 was itself wrong, the real value is -3) and two FIX-NOW lines
+were re-scoped by design (camera release: lock-free ownership contract,
+see the RESCOPE block; login-gone balloon: symmetric notify shipped in
+this ledger's third-gate pass). THIS legend is authoritative over the
+section labels; where they disagree, the legend wins.
 ## /disposition legend
+
+## Third-gate ledger disposition (item -> closure, same night)
+1 false-funeral box at shutdown -> cli latches monitor.quit before
+   icon.stop (this commit); 2 _MENU_READY modal gate -> the lane's
+   docstring analysis holds (swap lands after TrackPopupMenuEx returns;
+   re-show tracks the FULL menu deliberately) - ledger DISMISSED with
+   the reasoning quoted at the handler; 3 release-lock legend wording ->
+   legend LABEL ARCHAEOLOGY clause: the release line is CLOSED BY DESIGN
+   CHANGE (single-thread loop ownership contract + null-first swap),
+   not "back to pre-audit"; the GIL claim downgraded to "atomic by
+   documented single-owner contract, hammer-proven"; 4 _open_timed
+   comment honesty -> comment now names the 30 s wait the open side can
+   pay (the tick-stall LOW was accepted knowingly: the loop thread never
+   calls enumerate on its hot path - tray-thread action only; corrected
+   in this pass); 5 ratio mirror scale -> LINEAR DOMAIN MAP
+   (0.05..0.95 -> 0.0005..0.02, same direction), comment rewritten;
+   6 locale confession -> triggers only on EVIDENCE (non-ASCII header or
+   header GUID), residual named: ASCII-lettered localized headers stay
+   blind until a real localized dump can be measured; 7 marker chain ->
+   w3c_probe section (d): REAL writer, temp store, reconcile, re-read -
+   plus write-back now routes to cfg["_path"], not module CONFIG_DIR
+   (_persist_plan_state fix; a test's redirected store can no longer
+   litter the owner's desk - it already had, once, tonight); 8 stale-
+   claim vs deliberate-choice -> accepted BACKLOG (one boot revert,
+   documented); 9 rect len guard -> == 4 exact (writer shape (x,y,w,h),
+   slots 2/3 ARE w/h - the second-gate's LTRB worry was conditional and
+   the condition is false); 10 tray raise-path funeral -> except arm
+   queues the real quit (no box: the log line is the confession when
+   there is no icon to own one); 11 destroy-mask -> except widened to
+   (NameError, tk.TclError), re-raise preserves the original; 12 config
+   snapshot belt -> TypeError joins RuntimeError in the retry catch,
+   message names the class; 13 login-restore no-profile -> symmetric
+   icon.notify added; 14 rationed suspicions: HelloIr None-tolerance
+   and Register-argtypes live-degradation are BACKLOG-named;
+   worker-is-daemon verified True at construction; 15 label archaeology
+   -> legend clause; 16 evidence plumbing -> run_all wires the three
+   orphan probes and stamps its own log with tip SHA + timestamp; the
+   five-repeat claim lives in the lane receipt it belongs to.
+## /third-gate ledger
 
 ## RESCOPE, camera-core (second gate blocker 2): the deadlined RELEASE
 was reverted within the wave - release takes ownership (null-first swap,
@@ -447,6 +497,8 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   hygiene; PANELBOSS_CONFIG_DIR corrected.
 
 ## In flight / queued
-RETIRED (Oct 13): the audit queue drained; the fix wave (two rounds) landed;
-the closing loop is: gauntlet #4 -> this sheet's final dispositions -> tag
-rc-2026-10-13b -> final-gate resubmission.
+RETIRED (Oct 13): audit queue drained; fix waves 1-3 landed; second-gate
+dispositions closed in wave 3 + this ledger's third-gate fixes. Loop
+state: third submission returned BLOCK-ON-PROCESS (wave-3 range carried
+no independent gate) - the reviewer pass is dispatched as part of this
+resubmission cycle; on RELEASE: merge word to master.

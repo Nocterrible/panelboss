@@ -47,8 +47,14 @@ OPEN_GRACE_SEC = 90
 # still lands, but a hung holder (a dead driver that grabs the lock and
 # never lets go) stops blocking every other poll forever. Every
 # acquisition of _open_lock now runs through _open_timed and ABSTAINS
-# (returns the caller's None/busy shape, never raises, never blocks the
-# loop) when the deadline passes instead of queuing behind the hang.
+# (returns the caller's None/busy shape, never raises) when the deadline
+# passes instead of queuing behind the hang. HONEST WORDING (third-gate
+# ledger 4): "never blocks" is the ABSTAIN that bounds the wait, not an
+# absence of one - an acquisition can still pay up to 30 s behind a
+# healthy-but-slow open, and enumerate_cameras on the tray thread may
+# pay it per index (8 x 30 s worst, hung driver). The LOOP thread's hot
+# paths do not call enumerate; opens on the loop are the async
+# worker's, so the tick stall this admits is bounded and rare.
 OPEN_LOCK_TIMEOUT = 30.0
 
 # the NVIDIA virtual camera driver dies when two threads open devices

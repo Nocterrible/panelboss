@@ -332,6 +332,14 @@ def _run(cfg, autostart=False):
         stop_gaming.set()
         stop_taskbar.set()
         monitor.events.put(("stop", True))
+        monitor.quit = True        # latch NOW, before icon.stop: the
+                                   # pump-exit check reads this flag and
+                                   # a loop stuck in a 16-27 s driver
+                                   # open drains "stop" only after the
+                                   # tray is gone - the shutdown would
+                                   # wear the dead-pump funeral costume
+                                   # (third-gate ledger 1) on exactly
+                                   # the desk it targets
         worker.join(3)
         if worker.is_alive():
             # the release is a HANDOFF, not a cross-thread grab
@@ -456,7 +464,13 @@ def _restore(cfg, autostart, icon):
         if name == "last":
             name = profiles.name_for_desk(data, profiles.wm.monitors())
             if name is None:
+                # third-gate ledger 13: symmetry with the named-gone
+                # path below - a login restore that found nothing to
+                # restore is at least as surprising as a gone profile,
+                # and a log line under pythonw is no notice at all
                 log.info("restore: no profile answers this desk yet")
+                icon.notify("profile restore: this desk has no "
+                            "profile yet - nothing restored at login")
                 return
         if name not in data.get("profiles", {}):
             log.info("restore: profile '%s' is gone", name)

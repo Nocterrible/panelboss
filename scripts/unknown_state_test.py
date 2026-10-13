@@ -95,6 +95,23 @@ config.write_config = (
 # real display right now, and the asserts would be testing the desk,
 # not the code
 cfg["power"]["assistant_task"] = False
+# same doctrine, second door (unknown_state red, Oct 13 07:21): with
+# skip_camera_when_blocked true, _on_phase consults the REAL powercfg
+# /requests - on a morning desk someone's display blocker answers, the
+# absence round correctly defers, and the off-assert fails on the
+# DESK, not the code. The scratch_cfg above already pins this off;
+# the shared cfg here must too, or the suite tests whatever apps
+# happen to be holding the display at run time.
+cfg["power"]["skip_camera_when_blocked"] = False
+# and the same for the leave-on budget: scenario 3's intent is the
+# PURE absence deadline (absent_since + absent_confirm_sec = 160), but
+# the recovery dict rides the live cfg (leave_on_grace_sec 180 today)
+# and _on_phase's re_off arm hands out credit at the first tick - the
+# loop tops out at 159 and off then depends on WHICH TICK the credit
+# lands, i.e. on the owner's recovery setting, not on the code. Pin
+# the budget to zero: the deadline is the law under test, nothing else.
+cfg["recovery"]["wake_policy"] = "off"
+cfg["recovery"]["leave_on_grace_sec"] = 0
 sent = []
 display.wake = lambda *a, **k: sent.append("wake")
 display.turn_off = lambda *a, **k: sent.append("off")
@@ -132,8 +149,14 @@ m3._hold_camera = lambda: None
 m3._drain_tray = lambda: None
 m3._poll = lambda: (False, 0.1)
 m3._on_phase(100.0, idle=90.0)
-for t in range(101, 160):
-    m3._on_phase(float(t), idle=90.0)
+for t in range(101, 166):    # past the 100+absent_confirm_sec deadline -
+    m3._on_phase(float(t), idle=90.0)   # the old 160 bound ended at 159,
+                                        # exactly one tick short of the
+                                        # deadline the store computes, so
+                                        # the suite only passed when some
+                                        # credit path happened to expire
+                                        # early: testing the arithmetic,
+                                        # not by luck (Oct 13 red)
 assert m3.state == "off" and sent[-1] == "off", (m3.state, sent)
 print("boot-dark-nobody OK: absence ends in a normal off (%s)" % sent)
 

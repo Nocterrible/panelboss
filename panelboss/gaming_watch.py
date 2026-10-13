@@ -378,12 +378,13 @@ def _persist_plan_state(cfg):
     desk), so there is nothing to write back to - skip it fail-open
     rather than invent a location; a real failure to write costs the
     marker for one boot, not the desk."""
-    if "_path" not in cfg:
-        return
-    try:
-        from . import config
-        config.write_config(cfg)
-    except Exception:
+    target = cfg.get("_path")           # write back to WHERE THIS cfg
+    if not target:                      # was loaded from, not wherever
+        return                          # CONFIG_DIR points today - the
+    try:                                # offline fake's temp store and
+        from . import config            # a test's redirected store
+        config.write_config(cfg, target)  # must not touch the owner's
+    except Exception:                   # real desk
         log.warning("gaming: the plan marker could not be persisted",
                     exc_info=True)
 
