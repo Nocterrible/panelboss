@@ -81,6 +81,9 @@ class IdentifyWindow(ctk.CTkToplevel):
         self._devs, self._cands, self._pos = [], [], 0
         self._busy = False                       # worker -> pump, the
         # ONLY marshaling path (no naked self.after from workers):
+        self._busy_note = None                   # the step text BUSY
+                                                 # displaced, restored
+                                                 # by the first frame
         self._ladder_busy = False                # the unhide recheck
         self._ladder_left, self._ladder_prev = 0, None   # ladder state
         self._fetched = False                    # a fresh count to beat
@@ -175,12 +178,28 @@ class IdentifyWindow(ctk.CTkToplevel):
                 self._build()
             frame, self._frame = self._frame, None
             if frame is not None:
+                if self._busy_note is not None:
+                    # the first real frame retires the BUSY line -
+                    # the note goes back to whatever the step said
+                    self.note.configure(text=self._busy_note)
+                    self._busy_note = None
+                self._busy = False
                 self._show(frame)
-            elif self._busy:
+            elif self._busy and self._busy_note is None:
                 # the BUSY line, marshaled: the worker only flips the
                 # flag; this tick is the main-thread render (no naked
-                # self.after from a worker anywhere in this file)
-                self.preview.configure(image=None, text=BUSY)
+                # self.after from a worker anywhere in this file).
+                # RENDERED IN THE NOTE LINE, not the preview label:
+                # CTkLabel's image=None branch leaves the inner label
+                # holding a dangling pyimage NAME after dropping the
+                # reference (measured, Oct 13: frame -> BUSY -> frame
+                # dies in the text-before-image configure order of
+                # ctk_label.py:238-253), and the UAT found the wizard
+                # preview frozen exactly that way. A configured label
+                # never goes back to image=None here; the note is the
+                # state channel this wizard already owns.
+                self._busy_note = self.note.cget("text")
+                self.note.configure(text=BUSY)
         except Exception:
             log.exception("camid pump failed; the loop goes on")
         try:
@@ -235,7 +254,13 @@ class IdentifyWindow(ctk.CTkToplevel):
                 % self._skipped
         self.note.configure(text=note)
         if idx is None:
-            return self.preview.configure(image=None, text="no live view")
+            # (the same CTkLabel image=None landmine as the pump's
+            # BUSY branch: after ANY frame has shown, dropping to
+            # image=None leaves the inner label holding a dead
+            # pyimage name that the next text-set validates - the
+            # no-index state rides the note channel, preview keeps
+            # the last frame as a harmless still)
+            return self.note.configure(text=note + "  ·  no live view")
         threading.Thread(target=self._work, daemon=True,
                          args=(self._gen, idx), name="camid-view").start()
 

@@ -34,10 +34,11 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
     'camid_test.py', 'guard_test.py', 'config_norm_test.py',
     'pinlifecycle_test.py', 'companions_test.py', 'camcore_probe.py',
     'w2c_probe.py', 'w3b_probe.py', 'w3c_probe.py',
-    'daemon_confess_probe.py'          # third-gate ledger 16: the three
-                                       # orphans are wired; a probe that
-                                       # runs only when remembered is a
-                                       # rumor of a regression net
+    'daemon_confess_probe.py',
+    'ctkimg_probe.py'                 # the wizard-preview freeze's
+                                      # net (UAT find, Oct 13): a
+                                      # probe that runs only when
+                                      # remembered is a rumor
 $dir = Join-Path $root "scripts"
 # ledger 16: the log must be attributable - tip stamp at the head,
 # and DIRTY when the tested worktree differs from it (a stamp that
