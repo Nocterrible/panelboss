@@ -3,7 +3,7 @@ and the picker's pure pieces. No real camera, no window: the state side
 rides camera_policy_test's FakeCam fixture the way camid_test does, and
 the wizard-side tests drive the importable helpers directly. Section 6
 drives the REAL scan worker on live threads against faked driver doors.
-SIZE LAW: measured 537 (Oct 13) - one scenario chain per section,
+SIZE LAW: measured 570 (Oct 13) - one scenario chain per section,
 the fleet's test idiom (camera_policy_test is the precedent); the
 chain is the reader, and each section opens with the law it pins.
 """
@@ -493,6 +493,9 @@ assert spir["header"] == "hello IR  ·  bridge group Face IR"
 assert spir["prefill"] == "Night"                     # the wizard key
                                                       # feeds the card
 assert _assign.rows_from([], [], [], None)[1] == 0    # cfg None safe
+assert _assign.card_spec(r0, False, None)["add"] is True   # no index
+                                                          # key = stock
+                                                          # cam 0 duty
 
 # ok_verbs: silence is not a claim; every emitted verb is an act
 V = _assign.ok_verbs
@@ -509,9 +512,39 @@ assert V([("k", "pre", "pre", False, True)]) == [                   #  dark
 both = V([("k", "pre", "X", True, False)])[0][1]                    # label +
 assert both == {"instance": "k", "label": "X", "hide": True}, both  # hide in
                                                                      # one verb
+# amendment 6: the ADD dimension. The roster seeds the box (an
+# on-duty feed arrives CHECKED - omission must not remove it), the
+# IR seat rides the sentinel, and the ceiling grays ONLY unchecked
+# boxes at 4 (the checked ones stay live: the way out is to give a
+# seat up first). The roster verb is the EXISTING ("camera", list)
+# channel, posted only on a SET change (silence is not a claim),
+# sorted; an all-unchecked board honestly posts [].
+assert _assign.card_spec(r0, False, {"index": [3]})["add"] is False
+assert _assign.card_spec(r0, False, {"index": [0, 3]})["add"] is True
+assert _assign.card_spec(r0, False, {"index": 0})["add"] is True   # bare int
+assert _assign.card_spec(spir and by_key["ir:Face IR"], False,
+                         {"index": [-2]})["add"] is True           # sentinel
+assert _assign.add_ceilings([True, True, True, True, False]) == \
+    [False, False, False, False, True]                             # gray the 5th
+assert _assign.add_ceilings([True, True, True, False, False]) == \
+    [False] * 5                                                   # under: all live
+assert _assign.add_ceilings([True, True, True, True, True]) == \
+    [False] * 5                                                   # never checked-boxes
+assert V([("k", "pre", "pre", False, False, True, 4)], [4]) == []  # same set:
+                                                                    # silence
+assert V([("k", "pre", "pre", False, False, True, 4)], []) == \
+    [("camera", [4])]                                              # add
+assert V([("a", "pre", "pre", False, False, False, 5),
+          ("b", "pre", "pre", False, False, False, 1)], [1, 5]) == \
+    [("camera", [])]                                               # all off: honest []
+assert V([("a", "pre", "pre", False, False, True, 5),
+          ("b", "pre", "pre", False, False, True, 1)], [9]) == \
+    [("camera", [1, 5])]                                           # sorted write
 print("setup core OK (rows and the twins lesson, tail-only details,"
       " never-opened headers, label-over-name prefill, silence-not-"
-      "a-claim diff-only, dark-kept shown-sticky)")
+      "a-claim diff-only, dark-kept shown-sticky; the add seed, the"
+      " ceiling grays only the unchecked, the roster verb rides the"
+      " set-diff sorted)")
 
 # 10) the hidden list's captions (redesign law 5, stage 4): the
 #     naming law in miniature - saved label, then the PnP friendly

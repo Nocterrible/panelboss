@@ -25,13 +25,22 @@ are the EXISTING identity events (label/hide/show, instance or
 "idx:N" keys) plus ("camera_enabled", True) - the state loop still
 owns every toml byte.
 
-SIZE LAW: measured 405 (Oct 13) - the split seam is
+Amendment 6 (owner's one-screen law) grew the card: beside the rename
+entry a second checkbox, "add to selection", seeds CHECKED from the
+duty roster (an on-duty feed cannot be dropped by omission) and OK
+posts the checked set as the ONE existing ("camera", list) roster
+verb, on a set-diff only. The four-feed ceiling lives in the widget:
+at four checked every unchecked add-box grays (checked boxes never
+do - the exit is to give a seat up), the reason rides the count line.
+The state-side first-four truncation at load stays as the net.
+
+SIZE LAW: measured 518 (Oct 13) - the split seam is
 named: everything
-above the class line (rows_from, card_spec, ok_verbs) is the pure
-data contract - importable, testable without a display (camdiag
-section 9); the SetupWindow class is the widget shell. If the shell
-grows dialog-section machinery, it splits by section the way
-_camedit did from _preview, not by helper archaeology.
+above the class line (rows_from, card_spec, ok_verbs, add_ceilings)
+is the pure data contract - importable, testable without a display
+(camdiag section 9); the SetupWindow class is the widget shell. If
+the shell grows dialog-section machinery, it splits by section the
+way _camedit did from _preview, not by helper archaeology.
 """
 
 import logging
@@ -138,6 +147,16 @@ def card_spec(row, timed_out, cfg_camera=None):
         checked = True                          # (c)
     else:
         checked = False                         # (d)
+    # the ADD seed (amendment 6): a camera already on the duty roster
+    # arrives CHECKED - the owner must not lose it by omission, the
+    # same seeding law as hide. The seat is the scan index, or the
+    # IR sentinel for a bridge row; the roster reads verbatim (an
+    # int is the one-camera shape, a list the rotation - the state
+    # branch accepts both since forever)
+    duty = cfg_camera.get("index", 0)
+    duty = set(duty) if isinstance(duty, (list, tuple)) else {duty}
+    seat = (camera.HELLO_IR if row.get("group") is not None
+            else row["idx"])
     head = "index %s" % row["idx"] if row["idx"] is not None \
         else "hello IR"
     if row["detail"]:
@@ -145,10 +164,26 @@ def card_spec(row, timed_out, cfg_camera=None):
     elif row["idx"] is not None and not row.get("opened", True):
         head += "  ·  never opened"
     return {"key": key, "prefill": row["name"],
-            "checked": checked, "header": head}
+            "checked": checked, "header": head,
+            "add": seat in duty, "seat": seat}
 
 
-def ok_verbs(cards):
+CEILING = 4           # the driver-safe live-feed cap (state-side
+                      # first-four truncation stays the NET; the
+                      # dialog stops producing the overflow)
+CEILING_NOTE = "four live feeds is the driver-safe ceiling"
+
+
+def add_ceilings(add_flags, ceiling=CEILING):
+    """The widget law in pure form (amendment 6): one gray flag per
+    add box. At the ceiling every UNCHECKED box grays - the checked
+    ones never do, the way out of the ceiling is to give a seat up
+    first - and an uncheck re-lights through the same function."""
+    at = sum(1 for f in add_flags if f) >= ceiling
+    return [at and not f for f in add_flags]
+
+
+def ok_verbs(cards, current_roster=None):
     """The events OK posts, as a pure function over the card states
     [(key, prefill, text, checked, started_checked)] - the diff-only
     law and the hide/show asymmetry, importable and testable. An
@@ -157,9 +192,20 @@ def ok_verbs(cards):
     label; hide True is a hide, and hide False on a card that STARTED
     checked (a dark feed the owner kept anyway) is the shown verb -
     stickiness per amendment 2. A card that started unchecked and
-    stayed so is the owner's silence, which is not a claim."""
+    stayed so is the owner's silence, which is not a claim.
+
+    Amendment 6 rides the SAME function, same law: when the caller
+    passes 7-fields cards (add_checked, seat) AND the current roster,
+    the checked set goes out as ONE ("camera", sorted list) roster
+    write - the existing state verb, no new channel - but ONLY when
+    the SET differs (silence is not a roster claim either). An all-
+    unchecked board posts [] (honest no-duty; the load boundary's
+    empty-means-stock rule is the engine's own law, not this
+    dialog's)."""
     out = []
-    for key, prefill, text, checked, started_checked in cards:
+    seats = None
+    for c in cards:
+        key, prefill, text, checked, started_checked = c[:5]
         verb = {"instance": key}
         if text != prefill:
             verb["label"] = text
@@ -169,6 +215,18 @@ def ok_verbs(cards):
             verb["show"] = True
         if len(verb) > 1:
             out.append(("camera_identity", verb))
+        if len(c) >= 7:
+            add_checked, seat = c[5], c[6]
+            if seats is None:
+                seats = []
+            if add_checked:
+                seats.append(seat)
+    if current_roster is not None and seats is not None:
+        cur = (set(current_roster) if isinstance(current_roster,
+                                                (list, tuple))
+               else {current_roster})
+        if set(seats) != cur:
+            out.append(("camera", sorted(seats)))
     return out
 
 
@@ -194,6 +252,12 @@ class SetupWindow(ctk.CTkToplevel):
         ctk.CTkLabel(head, text="camera setup",
                      font=self.skin.font(15, "bold"),
                      **self.skin.text_style()).pack(side="left")
+        # the duty-count line (amendment 6): the count the ceiling
+        # rule reads against, and the one place the reason can ride
+        self._count = ctk.CTkLabel(head, text="",
+                                   font=self.skin.font(10),
+                                   **self.skin.text_style("sub"))
+        self._count.pack(side="right")
         # the finish row stays PACKED the whole life and toggles its
         # CHILDREN's visibility: a conditional pack() here would land
         # at the BOTTOM of the pack order, below the veil - the wrong
@@ -350,16 +414,65 @@ class SetupWindow(ctk.CTkToplevel):
                         text_color=self.skin.text,
                         text_color_disabled=self.skin.txt3).pack(
             side="right", padx=(theme.S_FIELD, 0))
+        # the ADD box (amendment 6, the owner's one-screen law):
+        # beside the rename entry, seeded from the duty roster (an
+        # on-duty feed starts CHECKED - omission must not silently
+        # remove it). The trace - not the command - drives the
+        # recount, so a programmatic set (the tests, someday a
+        # button) re-lights the board just like a click.
+        add_var = ctk.BooleanVar(value=spec["add"])
+        add_box = ctk.CTkCheckBox(line, text="add to selection",
+                                  variable=add_var,
+                                  font=self.skin.font(11),
+                                  checkbox_width=14, checkbox_height=14,
+                                  fg_color=self.skin.accent,
+                                  hover_color=self.skin.accent_hover,
+                                  border_color=self.skin.border_raised,
+                                  text_color=self.skin.text,
+                                  text_color_disabled=self.skin.txt3)
+        add_box.pack(side="right", padx=(theme.S_FIELD, 0))
+        add_var.trace_add("write", self._recount)
         self._cards.append({"key": spec["key"], "prefill": spec["prefill"],
                             "entry": entry, "var": var,
-                            "started": spec["checked"]})
+                            "started": spec["checked"],
+                            "add": add_var, "add_box": add_box,
+                            "add_started": spec["add"],
+                            "seat": spec["seat"]})
+        self._recount()
+
+    def _recount(self, *_args):
+        """The four-feed ceiling enforced where the choices happen:
+        at the cap every unchecked add-box grays (the state-side
+        first-four truncation stays as the net, but the dialog can
+        no longer produce the overflow), and the reason rides the
+        count line. Checked boxes never gray - the way out of the
+        ceiling is to give a seat up first."""
+        try:
+            flags = [bool(c["add"].get()) for c in self._cards]
+        except Exception:
+            return
+        for card, gray in zip(self._cards, add_ceilings(flags)):
+            try:
+                card["add_box"].configure(state="disabled" if gray
+                                          else "normal")
+            except Exception:
+                pass                          # dying window, no podium
+        n = sum(flags)
+        try:
+            self._count.configure(
+                text="%d to add%s" % (n, "  ·  " + CEILING_NOTE
+                                      if n >= CEILING else ""))
+        except Exception:
+            pass
 
     # ---------------------------------------------------------- buttons --
     def _ok(self):
         states = [(c["key"], c["prefill"], str(c["entry"].get()),
-                   bool(c["var"].get()), c["started"])
+                   bool(c["var"].get()), c["started"],
+                   bool(c["add"].get()), c["seat"])
                   for c in self._cards]
-        for action, payload in ok_verbs(states):
+        for action, payload in ok_verbs(
+                states, self.app.cfg["camera"].get("index", 0)):
             self.app.monitor.events.put((action, payload))
         # setup completed IS consent: the enable rides the same loop-
         # owned queue (the ui never writes the toml)

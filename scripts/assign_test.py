@@ -2,9 +2,11 @@
 retire law on the pane that replaced the wizard, the source ban over
 the whole UI package, and - where a display exists - a real
 SetupWindow on faked doors: cards spawn per settle, the veil counts
-truthfully to done, OK posts the identity verbs plus the consent
-enable, and the close retires by schedule. The pure data contract
-(rows_from / card_spec / ok_verbs) is truth-tabled in camdiag_test
+truthfully to done, OK posts the identity verbs, the duty-roster
+write (amendment 6's add boxes: seeded from the roster, grayed at
+the four-feed ceiling, re-lit on uncheck) and the consent enable,
+and the close retires by schedule. The pure data contract (rows_from
+/ card_spec / ok_verbs / add_ceilings) is truth-tabled in camdiag_test
 section 9; this file owns the window's behavior."""
 import os
 import sys
@@ -20,6 +22,7 @@ import numpy as np
 from panelboss import camera as cam_mod
 from panelboss import config
 from panelboss.ui.window import _assign
+from panelboss.ui.window._assign import CEILING_NOTE as _CEILING_TXT
 
 fails = []
 
@@ -170,6 +173,10 @@ try:
 
     cfg = config.get_config(dir=SCRATCH, verbose=False)
     cfg["camera"]["enabled"] = True
+    cfg["camera"]["index"] = [0, 1, -2]          # the duty seed the
+                                                 # add boxes must read
+                                                 # (amendment 6): two
+                                                 # cams + the IR seat
 
     class Host(ctk.CTk):
         def __init__(self):
@@ -191,10 +198,13 @@ try:
         {"name": "Glass", "instance": "USB\\G", "status": "OK"}]
     cam_mod.enumerate_cameras = lambda *a, **k: [(0, True, 1280.0,
                                                   "Glass"),
+                                                 (1, True, 1280.0,
+                                                  "Second"),
+                                                 (3, False, 0.0, ""),
                                                  (4, False, 0.0, "")]
     cam_mod.hello_ir_names = lambda: ["Face IR"]
-    cam_mod.Camera = lambda index=0, **kw: FakeEye(index,
-                                                   alive=(index != 4))
+    cam_mod.Camera = lambda index=0, **kw: FakeEye(
+        index, alive=(index in (0, 1)))
     cam_mod.HelloIrCamera = lambda group=None, **kw: FakeEye(group=group)
     _h = Host()
     _w = _assign.SetupWindow(_h)
@@ -203,13 +213,35 @@ try:
         import time as _t
         _t.sleep(0.03)                         # and the real clock
     cards = {c["key"]: c for c in _w._cards}
-    check(set(cards) == {"USB\\G", "idx:4", "ir:Face IR"},
-          "cards spawn per settle: named, dead index, IR group: %s"
+    check(set(cards) == {"USB\\G", "idx:1", "idx:3", "idx:4",
+                         "ir:Face IR"},
+          "cards spawn per settle: named, dead indexes, IR group: %s"
           % sorted(cards))
     check(_w.veil.cget("text") == "done", "the veil settles to done")
     check(cards["idx:4"]["started"] is True and
           cards["USB\\G"]["started"] is False,
           "the dark seat arrives CHECKED, the bright one free")
+    # amendment 6, live board: the roster seeds the add boxes (an
+    # on-duty feed CANNOT be dropped by omission - the seat rides the
+    # sentinel for IR too), the ceiling grays ONLY at four checked and
+    # ONLY the unchecked, and the reason rides the count.
+    check(cards["USB\\G"]["add_started"] is True
+          and cards["ir:Face IR"]["add_started"] is True
+          and cards["idx:3"]["add_started"] is False,
+          "add boxes seed from the duty roster, sentinel included")
+    check(cards["idx:4"]["add_box"].cget("state") != "disabled",
+          "under the ceiling every box is live")
+    cards["idx:3"]["add"].set(True)            # owner claims a dead seat
+    check(cards["idx:4"]["add_box"].cget("state") == "disabled",
+          "at four checked the 5th add-box grays (and only it)")
+    check(cards["idx:3"]["add_box"].cget("state") != "disabled"
+          and cards["USB\\G"]["add_box"].cget("state") != "disabled",
+          "checked boxes never gray - the way out is to give one up")
+    check(_CEILING_TXT in _w._count.cget("text"),
+          "the one-line reason rides the count")
+    cards["ir:Face IR"]["add"].set(False)      # give the IR seat up
+    check(cards["idx:4"]["add_box"].cget("state") != "disabled",
+          "unchecking RE-LIGHTS the board")
     check(_w.ok_button.winfo_manager() == "pack", "OK appears at n of n")
     kept = [c for c in _w._cards if c["key"] == "idx:4"][0]
     kept["var"].set(False)                     # owner KEEPS the dark
@@ -222,6 +254,10 @@ try:
     kinds = [v[0] for v in verbs]
     check(("camera_enabled", True) in verbs,
           "OK completes the enable through the loop's queue")
+    check(("camera", [0, 1, 3]) in verbs,
+          "the roster write is the EXISTING verb, posted exactly as "
+          "checked (sorted set): %s" % [v for v in verbs
+                                        if v[0] == "camera"])
     keep = [v for v in verbs
             if v[0] == "camera_identity" and
             v[1].get("instance") == "idx:4"]
