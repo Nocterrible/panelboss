@@ -38,6 +38,29 @@ def timeout_notice(text, title="PanelBoss", ms=10000):
                                     # app; the log is the other channel
 
 
+def _newest_source_mtime(pkg_dir):
+    """Boot-stamp honesty (amendment 7): the NEWEST .py mtime under the
+    package tree, walked once at boot. The witnessed launch read
+    "code from 07:27" and the whole redesign was indicted as stale -
+    the number was cli.py's own untouched mtime, the one file the
+    wave never edited. A stamp that measures one file accuses the
+    wrong suspect; this one measures the tree the boot actually
+    serves. 0.0 on a wholly unreadable tree - the caller says so."""
+    newest = 0.0
+    try:
+        for _root, _dirs, files in os.walk(pkg_dir):
+            for name in files:
+                if name.endswith(".py"):
+                    try:
+                        newest = max(newest, os.path.getmtime(
+                            os.path.join(_root, name)))
+                    except OSError:
+                        pass        # vanished mid-walk: others answer
+    except OSError:
+        return 0.0
+    return newest
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="panelboss")
     parser.add_argument("command", nargs="?", default="run",
@@ -64,18 +87,22 @@ def main(argv=None):
     config.get_log_level()            # logging always comes first
     # os, not sys: this box's 3.10 build ships a trimmed sys module
     # without getpid (the tray app has been on os.getpid all along)
-    # The tree + cli.py mtime ride along: a hard-killed icon lingers as
-    # a ghost until Explorer's next notification refresh, so a stale
-    # instance is otherwise provenance-less -- and a relaunch that
-    # quietly loses the mutex lets the old one impersonate the new.
-    # This line names where the running app was ACTUALLY loaded from.
+    # The tree + the newest source mtime ride along: a hard-killed
+    # icon lingers as a ghost until Explorer's next notification
+    # refresh, so a stale instance is otherwise provenance-less -- and
+    # a relaunch that quietly loses the mutex lets the old one
+    # impersonate the new. This line names where the running app was
+    # ACTUALLY loaded from, and WHEN the newest byte of that code was
+    # written (the helper above: one file's mtime fooled a whole
+    # launch forensics by staying honest to itself).
     _here = os.path.dirname(os.path.abspath(__file__))
     from . import __version__         # the truth, not a copy: the 0.2.0
+    _src = _newest_source_mtime(_here)
     logging.getLogger("cli").info(    # bump changed one line and this
         "panelboss %s boot (pid %s, tree %s, code from %s)",  # banner kept
         __version__, os.getpid(), _here,                    # reciting 0.1.0
-        time.strftime("%H:%M", time.localtime(
-            os.path.getmtime(os.path.join(_here, "cli.py")))))
+        time.strftime("%H:%M", time.localtime(_src))        # newest .py
+        if _src else "UNKNOWN (tree unreadable)")           # now
     config.migrate_once()             # the one-time pre-rename migration,
                                       # before any config read; fail-open
     cfg = config.get_config()
