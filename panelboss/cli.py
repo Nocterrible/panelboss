@@ -236,13 +236,21 @@ def _run(cfg, autostart=False):
             # line above. Interactive launches get the box so a double
             # click explains itself.
             user32 = ctypes.windll.user32
+            user32.MessageBoxTimeoutW.restype = ctypes.c_int
+            user32.MessageBoxTimeoutW.argtypes = [
+                ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p,
+                ctypes.c_uint, ctypes.c_ushort, ctypes.c_uint]
+            # signature is (hwnd, text, caption, type, wLangID, dwTimeout):
+            # the FIRST cut passed 5000 in the language slot and a
+            # byref(c_uint) in the timeout slot (TaskDialog shape, not
+            # MessageBox) so the timeout read as a huge pointer value and
+            # the twin's box never self-dismissed (measured). Correct
+            # order now: default language 0, timeout 5000 ms.
             user32.MessageBoxTimeoutW(0,
                 "PanelBoss is already running (check the tray, "
                 "hidden icons live behind the chevron). One instance is "
                 "always started first.",
-                "PanelBoss", 0x40,                  # MB_ICONINFORMATION
-                5000,                                 # closes on its own
-                ctypes.byref(ctypes.c_uint()))
+                "PanelBoss", 0x40, 0, 5000)         # MB_ICONINFORMATION
         return 0
     logging.getLogger("cli").info(
         "instance guard: %s" % ("won" if _MUTEX_HANDLE

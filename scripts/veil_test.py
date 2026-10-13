@@ -17,7 +17,7 @@ import sys
 import time
 import tkinter as tk
 
-os.environ.setdefault("PANELBOSS_STATE", os.path.join(
+os.environ.setdefault("PANELBOSS_CONFIG_DIR", os.path.join(
     os.environ.get("TEMP", "/tmp"), "panelboss-veil-test"))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
