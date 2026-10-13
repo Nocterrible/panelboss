@@ -20,6 +20,12 @@
     reads it at call time, which is exactly what the patch proves.
     (The _cams adoption nulls the store row on the same principle;
     multi_cam/asyncopen already drive that seam.)
+(d) c0000374 repair (post-W3A): the DRIVER touch of a release rides
+    the device-tree lock again - busy lock defers (held by the queue,
+    never dropped, never awaited), and the next lock holder drains it
+    exactly once. The 09:13:20/09:27:42 APPCRASH class: an MSMF
+    teardown concurrent with a same-device open corrupts the heap and
+    ntdll fail-kills the process (opencv#10532).
 """
 import logging
 import os
@@ -184,10 +190,54 @@ def probe_one_release():
         cam_mod._open_door = saved_door
 
 
+def probe_defer():
+    """(d) the c0000374 repair: a release that finds the tree BUSY
+    returns AT ONCE (gate 2a: the loop never waits), touches NO driver
+    (the race fix: teardown may not run concurrent with an open), and
+    the cap is HELD by the deferred queue, not dropped to the destructor
+    (gate 2c). The next lock holder pumps the queue and the release
+    lands exactly once."""
+    shared = FakeCap()
+    saved_door = cam_mod._open_door
+    cam_mod._open_door = lambda *a, **k: (shared, "dshow")
+    held, go, drained = threading.Event(), threading.Event(), threading.Event()
+
+    def holder():                        # a live open owns the tree
+        with cam_mod._open_lock:
+            held.set()
+            go.wait(5.0)
+            cam_mod._drain_deferred()    # the next holder drains
+            drained.set()
+
+    try:
+        cam = cam_mod.Camera(index=0)    # built while the lock is free
+        th = threading.Thread(target=holder, daemon=True, name="holder")
+        th.start()
+        assert held.wait(2.0), "the holder never took the lock"
+        t0 = time.monotonic()
+        cam.release()
+        took = time.monotonic() - t0
+        assert took < 0.1, ("release WAITED on the busy lock (%.2f s)" % took)
+        assert shared.releases == 0, "driver touched under a foreign holder"
+        assert len(cam_mod._deferred_releases) == 1, "the cap was dropped, not held"
+        assert cam.cap is None and not cam.is_open(), "the swap stays first"
+        go.set()
+        assert drained.wait(3.0), "the holder never reached the drain"
+        th.join(3.0)
+        assert shared.releases == 1, "the drain miscounted: %d" % shared.releases
+        assert not cam_mod._deferred_releases, "the queue must end empty"
+    finally:
+        go.set()
+        cam_mod._deferred_releases.clear()
+        cam_mod._open_door = saved_door
+
+
 probe_one_release()
 print("probe| (a) two threads, one release, no AttributeError: OK")
 probe_reap()
 print("probe| (b) BaseException reaps the opening row: OK")
 probe_abstain()
 print("probe| (c) locked-past-deadline abstains: OK")
-print("camcore probe: 3/3 OK")
+probe_defer()
+print("probe| (d) busy lock defers, held not dropped, drain lands once: OK")
+print("camcore probe: 4/4 OK")

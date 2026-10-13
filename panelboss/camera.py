@@ -59,8 +59,12 @@ OPEN_LOCK_TIMEOUT = 30.0
 
 # the NVIDIA virtual camera driver dies when two threads open devices
 # at the same time (measured: interprocess mutex timeout, then OpenCV
-# raises a C++ exception); every open and every enumerate goes through
-# this lock, so at most one thread touches the device tree
+# raises a C++ exception); every open, every enumerate, and EVERY cv2
+# driver release goes through this lock, so at most one thread touches
+# the device tree (the release coverage is the 09:13:20/09:27:42
+# c0000374 repair - a cap's teardown is a device-tree touch too.
+# HelloIrCamera's whircam pump keeps its own lifecycle outside this
+# lock: a different stack, predating the cv2 crash class)
 _open_lock = threading.RLock()
 
 
@@ -83,7 +87,46 @@ def _open_timed():
         try:
             yield True
         finally:
+            _drain_deferred()          # flush releases parked while the
+            _open_lock.release()       # tree was busy: every lock
+                                       # holder pumps the queue
+
+
+_deferred_releases = []                # caps whose release found the tree busy
+
+
+def _drain_deferred():
+    """Call with _open_lock held: let go of every release we deferred."""
+    while _deferred_releases:
+        cap = _deferred_releases.pop()
+        try:
+            cap.release()
+        except Exception:
+            # never bare pass: an unreleased cap dying to the GC is
+            # exactly the unlocked-release shape gate 2c guards, and
+            # re-appending risks a retry loop on a raising release -
+            # so confess, don't swallow and don't spin
+            log.exception("deferred cap release raised; the destructor "
+                          "will have it unlocked")
+
+
+def _release_cap(cap):
+    """A cap's release is a DEVICE-TREE TOUCH (the doctrine above):
+    it happens with _open_lock held, or not yet at all. A busy lock
+    (someone's live open) defers rather than queues (gate 2a: the loop
+    never waits) and rather than drops (gate 2c: the cap is HELD by
+    this list, so the destructor can't release it unlocked under a
+    concurrent open). The next lock holder drains the queue. The LED
+    of a deferred cap stays lit until then - bounded by exactly the
+    case that made it defer: an open in flight."""
+    if _open_lock.acquire(timeout=0):
+        try:
+            cap.release()
+            _drain_deferred()
+        finally:
             _open_lock.release()
+    else:
+        _deferred_releases.append(cap)
 
 BLACK_CEIL = 16      # a frame whose brightest pixel is below this is
                      # evidence of "cannot see", never of "empty desk"
@@ -562,24 +605,23 @@ class Camera:
         return last
 
     def release(self):
-        """Lock-free ownership (W3A, gate 2a/2b/2c). WHY no lock:
-        every release CALLER lives on the monitor loop thread
-        (state._cams._release_camera is loop-owned; the quit-path
-        exception is fixed by the cli handoff), and concurrent-open
-        protection is the OPEN's job - the opener already self-releases
-        corpses via gen-bump invalidation, one layer down. The old
-        shape queued release() behind the AsyncOpener's 16-27 s open on
-        the same deadlined lock (stalling the exact windows the opener
-        exists to avoid) and, on a skipped lock, DROPPED the handle:
-        the "next release() retries" was a lie - CPython's destructor
-        runs cv2's release unlocked anyway.
+        """Lock-free ownership, LOCKED driver touch (the 09:13:20.702
+        and 09:27:42 APPCRASHes: c0000374 heap corruption, an MSMF
+        teardown racing a concurrent same-device open after W3A exempted
+        release from the device-tree lock - the module's own measured
+        invariant, restored). The null-first swap (gate 2b, one-owner
+        law) STAYS - that part of W3A was right; the driver let-go goes
+        back through _release_cap, which defers rather than waits or
+        drops. The false premise W3A rode: "every release caller lives
+        on the monitor loop thread" - worker-thread callers AsyncOpener.
+        _bg ("open went stale"), _open's corpse arm, and
+        state._preview's corpse arm are the ones it missed; and the lock
+        needs the TOUCH, not the thread.
         """
         cap, self.cap = self.cap, None   # TAKE ownership first: one owner
         if cap is not None:              # releases - the null-first swap
-            cap.release()                # is the race fix (gate 2b) and
-                                         # the one-owner law (F3), no lock
-                                         # needed: the attribute swap is
-                                         # atomic under the GIL
+            _release_cap(cap)            # is the ownership fix (gate 2b);
+                                         # _release_cap is the lifetime fix
 
     def is_open(self):
         return self.cap is not None and self.cap.isOpened()
