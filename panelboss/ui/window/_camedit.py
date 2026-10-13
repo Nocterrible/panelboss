@@ -20,6 +20,7 @@ import customtkinter as ctk
 
 from .. import theme
 from . import _camid
+from ... import camera
 from ._constants import TIPS
 from ._widgets import SkewCombo
 
@@ -47,6 +48,27 @@ def duty_roster(camera_cfg):
 NAME_CLIP = 24                    # "cam 0 <name>" must survive the 320
                                   # px zone; the id never clips, only
                                   # the name does
+
+
+def ir_row_spec(camera_cfg):
+    """(display name, hidden?) for an IR seat ON DUTY, None when the
+    HELLO_IR sentinel is not rostered (owner amendment 5: an on-duty
+    camera with no card is an unremovable camera, and the cv2 scan
+    can never carry -2 into _rebuild_cam_rows - the seat needs its
+    own line into the duty editor). The name rides the SAME key the
+    wizard's IR rows use ("ir:<group>"), so a label written in the
+    wizard surfaces here; the first bridge group names an unlabeled
+    seat, and a missing bridge says so honestly (hello_ir_names
+    returns [] when whircam is absent, never raises - the same oracle
+    the picker's IR lines read)."""
+    if camera.HELLO_IR not in duty_roster(camera_cfg):
+        return None
+    names = camera.hello_ir_names()
+    base = names[0] if names else None
+    label = ((camera_cfg.get("labels") or {}).get("ir:" + base)
+             if base else "")
+    hidden = ("ir:" + (base or "")) in (camera_cfg.get("hidden") or [])
+    return (label or base or "hello IR (bridge missing)"), hidden
 
 
 class _CamEditMixin:
@@ -77,9 +99,16 @@ class _CamEditMixin:
     def _rebuild_cam_rows(self, found):
         """Called from _apply_cameras on every scan report: destroy
         the old row widgets wholesale, then build one row per scanned
-        camera. Sentinels (-1/-2) get no row - a single-eyed device
-        never takes a table entry (the config guard makes that noise-
-        free), so an editor line for it could only lie."""
+        camera. Sentinels (-1/-2) get no row from the scan loop - a
+        single-eyed device never takes a table entry (the config guard
+        makes that noise-free), so an editor line for it could only
+        lie. The IR seat is the honest exception (owner amendment 5):
+        rostered duty WITHOUT a cv2 index, invisible to the loop
+        above, and duty with no card is duty with no remove button -
+        ir_row_spec gives it the line the roster says it earned.
+        Cards survive the discard-rebuild like the scanned ones, and
+        identity writes resync the pane, so a wizard label or a hide
+        reaches the IR card on the same turn it reaches the others."""
         for widget in self._cam_rows_frame.winfo_children():
             widget.destroy()
         self._cam_rows = {}
@@ -106,6 +135,13 @@ class _CamEditMixin:
                               (_camid.diag_suffix(self.cfg["camera"],
                                                   entry[0])
                                if covers else ""))
+        # the IR seat's card (amendment 5): duty the cv2 loop cannot
+        # see gets its line from the roster itself - name, hidden
+        # badge, policy pair, and the remove button the owner was
+        # missing on the live pane
+        ir = ir_row_spec(self.cfg["camera"])
+        if ir is not None:
+            self._cam_row(camera.HELLO_IR, ir[0], ir[1])
         if not self._cam_rows:
             ctk.CTkLabel(self._cam_rows_frame,
                          text="no cameras on duty - add one above",

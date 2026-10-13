@@ -1,5 +1,11 @@
 """Camera card and its preview panel: the framebox debug
 view is the exact frame the detector judged.
+
+SIZE LAW: measured 472 (Oct 13) - the camera card, its picker, the
+scan worker and the diagnostic sweep are one story (how the pane
+learns what the desk holds and says so honestly); the sweep's probe
+phase is the next seam to cut out (one pure function over
+cfg/found) if this grows again.
 """
 
 from __future__ import annotations

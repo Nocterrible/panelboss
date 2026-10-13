@@ -3,7 +3,7 @@ and the picker's pure pieces. No real camera, no window: the state side
 rides camera_policy_test's FakeCam fixture the way camid_test does, and
 the wizard-side tests drive the importable helpers directly. Section 6
 drives the REAL scan worker on live threads against faked driver doors.
-SIZE LAW: ~330 - one scenario chain per section, the fleet's test idiom
+SIZE LAW: ~366 - one scenario chain per section, the fleet's test idiom
 (camera_policy_test is the precedent); the chain is the reader.
 """
 import os
@@ -330,5 +330,37 @@ finally:
 print("scan worker OK (threaded sweep on live threads: every index"
       " probed once, the stall confessed, progress re-posts truthful,"
       " the record lands before the report)")
+
+# 7) the IR seat's duty card (owner amendment 5: an on-duty camera
+#    with no card is an unremovable camera). Pure spec, no widgets:
+#    the bridge oracle is stubbed the way camid_test section 7 drives
+#    it, and duty_roster reads the cfg shapes verbatim (list AND the
+#    bare-int sentinel history).
+from panelboss.ui.window import _camedit
+
+
+def _ir_spec(index, names, extra=None):
+    cfgc = {"index": index, "labels": {}, "hidden": [],
+            "on": {}, "off": {}}
+    cfgc.update(extra or {})
+    cam_mod.hello_ir_names = lambda: list(names)
+    return _camedit.ir_row_spec(cfgc)
+
+
+_real_ir = cam_mod.hello_ir_names            # the section-top stub
+try:
+    assert _ir_spec([0, 2], ["Face IR"]) is None          # not rostered
+    assert _ir_spec([-2, 0, 2], ["Face IR"]) == ("Face IR", False)
+    assert _ir_spec([-2], ["Face IR"],
+                    {"labels": {"ir:Face IR": "Night eye"}}) \
+        == ("Night eye", False)                            # the wizard
+                                                           # label lands
+    assert _ir_spec([-2], ["Face IR"],
+                    {"hidden": ["ir:Face IR"]}) == ("Face IR", True)
+    assert _ir_spec(-2, []) == ("hello IR (bridge missing)", False)
+finally:
+    cam_mod.hello_ir_names = _real_ir
+print("IR seat spec OK (duty-gated, label over group name, hidden"
+      " honest, missing bridge confesses itself)")
 
 print("ALL CAMDIAG TESTS OK")

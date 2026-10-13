@@ -21,12 +21,12 @@ Rules this file lives by:
 
 Skins come from theme.py; nothing here hardcodes a color.
 
-SIZE LAW: grandfathered, measured 677 (Oct 13, after the per-veil
-hold and the diagnostic veil state) - window lifecycle, size recall,
-and the reveal-veil machinery are one story (how the window appears
-and remembers itself); the scroll hosts already live in _scroll.py
-and the next seam to split out is the size-recall trio if this grows
-again.
+SIZE LAW: grandfathered, measured 686 (Oct 13, after the per-veil
+hold, the heartbeat re-lease, and the diagnostic veil state) -
+window lifecycle, size recall, and
+the reveal-veil machinery are one story (how the window appears and
+remembers itself); the scroll hosts already live in _scroll.py and the
+next seam to split out is the size-recall trio if this grows again.
 """
 
 
