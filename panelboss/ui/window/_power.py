@@ -1,8 +1,10 @@
 """Power-plan tab: Windows timer hold-overrides, the powercfg
 assistant, the Game DVR card, overrides viewer, hdr-while-away.
 The gaming rate section lives in _gaming.py beside it: it shares
-this tab's column but trades monitor rates, not powercfg flags.
-Size law (~350, 2026-10): this is ONE page's paint-and-refresh
+this tab's SECOND column (Oct 12, owner: the gaming cards moved
+right) but trades monitor rates, not powercfg flags.
+Size law (~370, measured Oct 12 after the two-column split): this
+is ONE page's paint-and-refresh
 routine; splitting the cards across files would scatter the tab's
 ordering lessons for zero readability the window/ split already
 took its share - this one stays whole.
@@ -31,6 +33,14 @@ class _PowerMixin:
     def _build_power(self, page):
         col = ctk.CTkFrame(page, width=560, fg_color="transparent")
         col.pack(side="left", fill="y")
+        # the profiles tab's two-column law, extended here on the
+        # owner's word (Oct 12): the gaming refresh-rates card and
+        # the Game DVR card move to column two - they are the
+        # page's rare-visit knobs, not its timer story, and the
+        # single-column page had grown into the owner's "too long"
+        # complaint by exactly the distance their cards add
+        col2 = ctk.CTkFrame(page, width=520, fg_color="transparent")
+        col2.pack(side="left", fill="y")
         box = self._card(col, "override Windows' own timers",
                          "nothing in the power plan changes: the "
                          "timers are only held from firing while the app "
@@ -181,8 +191,8 @@ class _PowerMixin:
         self.hdr_away_switch.grid(row=0, column=1, sticky="e")
         if bool(self.cfg["power"].get("hdr_off_when_away")):
             self.hdr_away_switch.select()
-        self._gaming_section(col)
-        self._dvr_section(col)
+        self._gaming_section(col2)      # column two (owner request)
+        self._dvr_section(col2)
 
 
     def _dvr_section(self, col):

@@ -1,4 +1,11 @@
 """Gaming refresh-rate section of the power plan tab.
+Size law (measured ~310, Oct 12 - the claim includes its own
+lines): the card, its commits and the
+exe browse are one story read top-to-bottom when a rate or a list
+misbehaves; the pure list/commit helpers could split, but the
+pair has been the debug surface for every gaming bug this month
+(vrr lies, the front-of-me miss, the dead-box fill) - it stays
+whole one file below the justify line, not two above it.
 """
 
 from __future__ import annotations
@@ -7,6 +14,7 @@ import logging
 import threading
 
 import customtkinter as ctk
+import tkinter as tk
 
 from .. import theme
 from ... import wm
@@ -106,11 +114,20 @@ class _GamingMixin:
         # foreground() can block for seconds (anti-cheat pids), so the
         # button only starts the probe: the answer comes back on the
         # main thread, and a miss just leaves the list alone
+        btns = ctk.CTkFrame(row, fg_color="transparent")
+        btns.grid(row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
         self.add_fg_button = ctk.CTkButton(
-            row, text="add what's in front of me", width=170,
+            btns, text="add what's in front of me", width=170,
             command=self._gaming_add_foreground, **self.skin.secondary())
-        self.add_fg_button.grid(row=0, column=2, sticky="e",
-                                padx=(theme.S_FIELD, 0))
+        self.add_fg_button.pack(anchor="e")
+        # browse beats typing (owner, Oct 12): the exe picker appends
+        # the BASE name to the box and commits at once - the same
+        # form the free-text list stores, so the watcher's matching
+        # never learns the difference
+        ctk.CTkButton(btns, text="browse to exe...", width=170,
+                      command=lambda: self._gaming_browse(self.games_box),
+                      **self.skin.secondary()).pack(anchor="e",
+                                                    pady=(4, 0))
         row = self._row(box, "never games (one exe per line)",
                         TIPS["gaming_ignore"])
         self.ignore_box = SkewText(
@@ -121,6 +138,11 @@ class _GamingMixin:
         self.ignore_box.grid(row=0, column=1, sticky="e")
         self.ignore_box.insert("1.0", "\n".join(g.get("ignore") or []))
         self.ignore_box.bind("<<FocusOut>>", self._gaming_ignore_commit)
+        ctk.CTkButton(row, text="browse to exe...", width=170,
+                      command=lambda: self._gaming_browse(self.ignore_box),
+                      **self.skin.secondary()).grid(row=0, column=2,
+                                                    sticky="e",
+                                                    padx=(theme.S_FIELD, 0))
         # the plan a game earns: a name fragment or a guid; '' leaves
         # the plan alone entirely
         row = self._row(box, "power plan while gaming",
@@ -203,10 +225,52 @@ class _GamingMixin:
         self._save()
 
 
+    def _gaming_browse(self, box):
+        """The exe picker (owner: browse beats free-edit): the file
+        dialog returns a path, the BOX stores the base name - the
+        form every other entry takes and the matcher already speaks -
+        appended once (duplicates are a no-op, not a shrug) and
+        committed immediately. The dialog runs on the UI thread like
+        every modal; the monitor loop is a different thread and never
+        notices the pause."""
+        from tkinter import filedialog
+        from pathlib import Path
+        import os
+        start = os.environ.get("PROGRAMFILES") or "C:\\"
+        path = filedialog.askopenfilename(
+            parent=self, title="pick the game executable",
+            initialdir=start, filetypes=[("Executables", "*.exe"),
+                                         ("All files", "*.*")])
+        if not path:
+            return
+        name = Path(path).name.lower()
+        have = [line.strip().lower() for line in box.get("1.0", "end")
+                .splitlines() if line.strip()]
+        if name not in have:
+            box.insert("end", ("\n" if have else "") + name)
+        # commit through the SAME seam a typed line takes (the commit
+        # functions themselves, not a queued virtual event - an
+        # event_generate would land on the next loop turn and the box
+        # would look uncommitted to anything reading right now)
+        if box is self.games_box:
+            self._gaming_games_commit()
+        else:
+            self._gaming_ignore_commit()
+
+
     def _gaming_fill_list(self, key):
         box = self.games_box if key == "games" else self.ignore_box
-        box.delete("1.0", "end")
-        box.insert("1.0", "\n".join(self.cfg["gaming"].get(key) or []))
+        try:
+            box.delete("1.0", "end")
+            box.insert("1.0", "\n".join(self.cfg["gaming"].get(key)
+                                        or []))
+        except tk.TclError:
+            # a dead box must not eat the answer: the cfg append and
+            # the save are the truth, the widget is a view - and
+            # views die (observed: a second in-process CTk root's
+            # teardown destroying this window's SkewText, taking the
+            # deferred front-of-me callback with it)
+            pass
 
 
     def _gaming_plan_commit(self, event=None):
