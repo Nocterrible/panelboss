@@ -79,16 +79,69 @@ check(en.scans == 1, "an X on an enabled desk still refreshes captions")
 
 # 2) the source ban, app-wide this time: no command= may point a
 #    button straight at destroy() anywhere in the UI package - the
-#    crash law is not one window's property anymore
+#    crash law is not one window's property anymore. The lambda form
+#    rides the same law (gate finding 4), so the ban takes a regex
+#    for it on top of the literal
 import pathlib
+import re as _re
 bad = []
-for p in sorted(pathlib.Path(_assign.__file__).parent.glob("*.py")):
-    if "command=self.destroy" in p.read_text(encoding="utf8"):
+_ui = pathlib.Path(_assign.__file__).parent.parent   # the ui package
+for p in sorted(_ui.rglob("*.py")):
+    text = p.read_text(encoding="utf8")
+    if "command=self.destroy" in text or _re.search(
+            r"command\s*=\s*lambda[^)]*\.destroy\(", text):
         bad.append(p.name)
 check(not bad, "no UI file destroys its own toplevel from a callback: %s"
       % (bad,))
 check("WM_DELETE_WINDOW" in pathlib.Path(_assign.__file__).read_text(
     encoding="utf8"), "the setup's X is routed, not default")
+
+# 2b) the card SEED law (gate finding 2 - the second-run trap): a
+#     rerun must not undo the desk it is showing. Offline on the
+#     core, no widgets - a truth table over the four arms
+_row_bright = {"key": "USB\\G", "name": "Glass", "idx": 0, "detail": ""}
+_row_dark = {"key": "idx:4", "name": "", "idx": 4, "detail": ""}
+spec = _assign.card_spec
+check(spec(_row_bright, False)["checked"] is False,
+      "(d) bright, untouched -> UNCHECKED (silence is not a claim)")
+check(spec(_row_dark, True)["checked"] is True,
+      "(c) plain dark, untouched -> CHECKED (the dark default)")
+check(spec(_row_bright, False, {"hidden": ["USB\\G"]})["checked"] is True,
+      "(a) a hidden bright camera renders CHECKED")
+check(_assign.ok_verbs([("USB\\G", "Glass", "Glass", False, True)])
+      == [("camera_identity", {"instance": "USB\\G", "show": True})],
+      "(a) unchecking it posts the show verb - the card cannot strand "
+      "a hidden bright camera")
+check(spec(_row_dark, True, {"shown": ["idx:4"]})["checked"] is False,
+      "(b) a dark feed the owner SHOWN arrives UNCHECKED (sticky)")
+check(spec(_row_dark, True, {"labels": {"idx:4": "N"}})["checked"]
+      is False,
+      "(b) a dark feed with a saved label arrives UNCHECKED (touched)")
+check(_assign.ok_verbs([("idx:4", "", "", False, False)]) == [],
+      "(b) OK-on-silence over an untouched desk posts NOTHING - no "
+      "re-hide of the immune camera")
+
+# 2c) the empty-pane hint lives at the rebuild cycle's TAIL (gate
+#     finding 1: stage 4's insertion had orphaned it below a return,
+#     where it could never paint). Offline and source-level: the
+#     constant must sit in _rebuild_cam_rows, not in _show_back -
+#     an empty roster says so in the row zone, whatever the hidden
+#     list below it shows
+import panelboss.ui.window._camedit as _ce
+_src = pathlib.Path(_ce.__file__).read_text(encoding="utf8")
+_block = {}
+for _m in _re.finditer(r"^    def (\w+)", _src, _re.M):
+    _name = _m.group(1)
+    _start = _m.start()
+    _next = _re.search(r"^    (?:def |class )", _src[_m.end():], _re.M)
+    _block[_name] = _src[_start:_start + _next.end()] if _next \
+        else _src[_start:]
+check(_ce.EMPTY_HINT == "no cameras on duty - add one above",
+      "the dead desk's cue survives as a spec-level constant")
+check("EMPTY_HINT" in _block["_rebuild_cam_rows"],
+      "the empty hint paints from _rebuild_cam_rows' tail")
+check("EMPTY_HINT" not in _block["_show_back"],
+      "the empty hint is not orphaned inside _show_back (dead code)")
 
 # 3) the window, for real, on faked doors (headless boxes skip it
 #    loud-and-quiet like camid's smoke always did)

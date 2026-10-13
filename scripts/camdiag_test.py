@@ -3,7 +3,7 @@ and the picker's pure pieces. No real camera, no window: the state side
 rides camera_policy_test's FakeCam fixture the way camid_test does, and
 the wizard-side tests drive the importable helpers directly. Section 6
 drives the REAL scan worker on live threads against faked driver doors.
-SIZE LAW: measured 490 (Oct 13) - one scenario chain per section,
+SIZE LAW: measured 512 (Oct 13) - one scenario chain per section,
 the fleet's test idiom (camera_policy_test is the precedent); the
 chain is the reader, and each section opens with the law it pins.
 """

@@ -25,7 +25,7 @@ are the EXISTING identity events (label/hide/show, instance or
 "idx:N" keys) plus ("camera_enabled", True) - the state loop still
 owns every toml byte.
 
-SIZE LAW: measured 380 (Oct 13) at birth, and the split seam is
+SIZE LAW: measured 405 (Oct 13) - the split seam is
 named: everything
 above the class line (rows_from, card_spec, ok_verbs) is the pure
 data contract - importable, testable without a display (camdiag
@@ -105,22 +105,47 @@ def rows_from(devs, enumerated, ir_names, cfg_camera):
     return rows, len(rows)
 
 
-def card_spec(row, timed_out):
+def card_spec(row, timed_out, cfg_camera=None):
     """The pure verdict behind every card (tested offline): key the
     identity verbs ride, the entry prefill (a saved label wins over
     the display name - the diff-only rule then sends only what the
-    owner re-typed), the hide checkbox (a timed-out feed arrives
-    CHECKED: the box was dark, the dark default is hidden, and
-    unchecking it is the owner OVERRIDING with a shown-sticky verb),
-    and the header line."""
+    owner re-typed), the header line, and the hide checkbox SEED -
+    the second-run rule (gate finding 2): a rerun must not undo the
+    desk it is showing. Priority:
+
+    (a) the key sits in camera.hidden -> CHECKED. A hidden bright
+        camera renders checked (and is un-hideable right from the
+        card: unchecking posts the show verb, the sticky path);
+    (b) a DARK feed the human touched (label, bind, or above all
+        camera.shown) -> UNCHECKED. Amending amendment 2 in its
+        literal place: a timeout-seeded check that survives the
+        owner's SHOW would re-hide the immune camera the moment OK
+        rides silence - the trap the second run walked into;
+    (c) plain dark/timeout, untouched -> CHECKED (the dark default);
+    (d) bright, untouched -> UNCHECKED (silence is not a claim).
+    """
+    cfg_camera = cfg_camera or {}
+    key = row["key"]
+    hidden = set(str(k) for k in (cfg_camera.get("hidden") or []))
+    touched = (set(cfg_camera.get("labels") or {})
+               | set(cfg_camera.get("bindings") or {})
+               | set(str(k) for k in (cfg_camera.get("shown") or [])))
+    if key in hidden:
+        checked = True                          # (a)
+    elif timed_out and key in touched:
+        checked = False                         # (b)
+    elif timed_out:
+        checked = True                          # (c)
+    else:
+        checked = False                         # (d)
     head = "index %s" % row["idx"] if row["idx"] is not None \
         else "hello IR"
     if row["detail"]:
         head += "  ·  %s" % row["detail"]
     elif row["idx"] is not None and not row.get("opened", True):
         head += "  ·  never opened"
-    return {"key": row["key"], "prefill": row["name"],
-            "checked": bool(timed_out), "header": head}
+    return {"key": key, "prefill": row["name"],
+            "checked": checked, "header": head}
 
 
 def ok_verbs(cards):
@@ -285,7 +310,7 @@ class SetupWindow(ctk.CTkToplevel):
             pass
 
     def _add_card(self, row, error, frame):
-        spec = card_spec(row, frame is None)
+        spec = card_spec(row, frame is None, self.app.cfg["camera"])
         card = ctk.CTkFrame(self._host, **self.skin.panel_style())
         card.pack(fill="x", pady=(0, theme.S_ROW))
         head = spec["header"]

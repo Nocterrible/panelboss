@@ -13,7 +13,7 @@ the roster and wipes its entries, so re-adding is pristine.
 The widgets are a view; the tables are the truth, so every
 rebuild re-reads them, never the old widgets.
 
-SIZE LAW: measured 338 (Oct 13) - the duty-card row (policy pair,
+SIZE LAW: measured 349 (Oct 13) - the duty-card row (policy pair,
 verdict badge, remove verb) and the hidden list (redesign law 5's
 permanent way-back) are one pane's story: everything the owner can
 DO to a camera on duty, in the card that names it. If it grows the
@@ -40,6 +40,7 @@ TO_MODE = {"boot per poll": "boot_per_poll", "always on": "always_on",
 TO_LABEL = {mode: label for label, mode in TO_MODE.items()}
 FOLLOW = POLICY_LABELS[0]
 ADD_LABEL = "add a camera..."       # the picker's face and no-op verb
+EMPTY_HINT = "no cameras on duty - add one above"  # the dead desk's cue
 
 
 def duty_roster(camera_cfg):
@@ -180,6 +181,14 @@ class _CamEditMixin:
         if ir is not None:
             self._cam_row(camera.HELLO_IR, ir[0], ir[1])
         self._rebuild_hidden_rows()
+        # the empty-pane cue rides the cycle's TAIL (gate finding 1:
+        # stage 4's insertion had orphaned it below a return, where
+        # the dead hint could never paint again): a duty-less desk
+        # says so in the row zone, whatever the hidden list shows
+        if not self._cam_rows:
+            ctk.CTkLabel(self._cam_rows_frame, text=EMPTY_HINT,
+                         font=self.skin.font(11),
+                         **self.skin.text_style("sub")).pack(anchor="w")
 
     def _rebuild_hidden_rows(self):
         """The way back, one row per hidden identity (amendment 2's
@@ -216,11 +225,6 @@ class _CamEditMixin:
             self.monitor.events.put(("camera_identity",
                                      {"instance": inst, "show": True}))
         return command
-        if not self._cam_rows:
-            ctk.CTkLabel(self._cam_rows_frame,
-                         text="no cameras on duty - add one above",
-                         font=self.skin.font(11),
-                         **self.skin.text_style("sub")).pack(anchor="w")
 
     def _cam_row(self, index, name, hidden=False, verdict=""):
         """Camera header at tier 1, then the two policy lines at hint

@@ -21,7 +21,7 @@ Rules this file lives by:
 
 Skins come from theme.py; nothing here hardcodes a color.
 
-SIZE LAW: grandfathered, measured 701 (Oct 13, after the per-veil
+SIZE LAW: grandfathered, measured 713 (Oct 13, after the per-veil
 hold, the heartbeat re-lease, the _unveil leak-reset, and the
 consent-gated boot scan) -
 window lifecycle, size recall, and
@@ -291,13 +291,24 @@ class SettingsWindow(
         for widget in (self._top, self._actions, self._tabs_bar,
                        self._body):
             widget.destroy()
-        win = getattr(self, "_camid_win", None)    # the wizard carries
-        if win is not None:                        # build-time colors:
-            try:                                   # rebuild re-dresses
-                win.destroy()                      # it from the next
-            except Exception:                      # open
-                pass
-            self._camid_win = None
+        win = getattr(self, "_setup_win", None)     # the setup screen
+        # carries build-time colors (the punch-list's resurrected find,
+        # gate finding 3: this slot was named for the dead wizard - the
+        # live resident is the setup window, and a stale name let it
+        # survive rebuilds dressed in the old skin): rebuild re-dresses
+        # it by re-opening, so destroy the real resident and clear the
+        # real slot
+        if win is not None:
+            try:
+                win._close()                       # the scheduled
+                # retire, not a raw destroy: the window guards its own
+                # dying and its pump stops clean
+            except Exception:
+                try:
+                    win.destroy()
+                except Exception:
+                    pass
+            self._setup_win = None
         self.skin = theme.get_skin(self.cfg["ui"]["skin"])
         theme.apply_ctk_font(self.skin)
         ctk.set_appearance_mode(self.skin.mode)
