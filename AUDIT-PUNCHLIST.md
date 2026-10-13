@@ -574,6 +574,25 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   rc=4 + guard_test (888857c); TclError flags, NIM_ADD anti-vacuous, scratch
   hygiene; PANELBOSS_CONFIG_DIR corrected.
 
+## Fix-wave findings accepted on the ledger (Oct 13, gate SHIP @ 36ba449)
+- EMPTY-ROSTER SPLIT (MED, engine): an all-unchecked setup board posts
+  index []; config.normalize_index maps empty -> [0], so the NEXT
+  restart puts index 0 on duty while the panes read [] as honest empty
+  - three readers, two meanings of one key (same split as
+  _cam_remove's last camera). Engine fix when touched: normalize_index
+  ([])->[] + fallback arms in _preview and the single-vote path.
+  Release note sentence owed to users: "unchecking every camera leaves
+  camera 0 on the next restart".
+- NO-CARD ROSTER SEATS (LOW): a rostered index with no card (>=8 or
+  -2 with no bridge) is dropped by OK's set-diff (omission removes).
+  Fix: union no-card seats into the posted roster verb.
+- ONE-SIDED CONSENT INFO (LOW): the evidence INFO speaks only when it
+  fires; the virgin branch lands enabled=False in silence - add the
+  else-line "section reads virgin - booting dark".
+- gaming_ui 60 s watchdog: 2 fail / 2 green today, pre-wave suite,
+  assertions all pass before the hang; third app-down failure ->
+  instrument the teardown position.
+
 ## Redesign (owner law, Oct 13 afternoon): "blow it away"
 The curation UX collapses into ONE flow: the detection tab is gated
 behind a big consent switch (OFF on first boot - no camera opens until
