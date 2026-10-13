@@ -353,6 +353,30 @@ boundary - template for the normalizer)
   hidden "idx:N" key also covers, drop the idx: key - the row now has a
   real instance to ride (stale idx: keys mis-hide the new owner of N
   until the wizard re-run clears them).
+ - BACKLOG LOW (gate d4000b1 wave, finding 2 accepted): a ghost "idx:N"
+   label lingers in the toml when the bind migration is skipped because
+   the instance already carries a label. Harmless (display precedence
+   ignores it once a real identity claims the index); an identity pass
+   may sweep: pop ghost when labels[inst] non-blank.
+ - BACKLOG MED (gate d4000b1 wave, finding 3): an IR seat ON DUTY gets
+   no policy card - _rebuild_cam_rows iterates the cv2 scan and the
+   HELLO_IR sentinel is never in it, so per-camera modes for the IR eye
+   are unreachable from the panel (the global table governs). Fix rides
+   next IR pass: append the sentinel row from cfg when roster lists it.
+ - IN FLIGHT (camdiag wave, owner laws, two amendments): first-launch /
+   reindex / manual-rescan diagnostic rides the existing scan under a
+   held veil ("testing cameras, please wait" + honest N-of-M progress);
+   probes are THREADED (opens serialize on the device-tree lock, the
+   15 s first-frame budgets overlap - not n x 15 s); no-image indexes
+   pre-mark virtual in the wizard and carry the picker suffix; the
+   MANUAL rescan button forces the sweep regardless of the index set
+   (the automatic path stays first-launch/reindex); the
+   stickiness law: a row the human touched (label, bind, or the new
+   shown list) is never re-hidden by the sweep; the wizard lists every
+   hidden row with a one-at-a-time SHOW button (unhide-all stays as
+   the blunt tool); preview resets to a placeholder IMAGE (never
+   None - CTk trap) on every step change and every list change, both
+   panes (framebox.clear on the cameras event).
 - BACKLOG LOW _camedit.py:77-100 — wizard hide/label saves never re-fire
   _apply_cameras: "(hidden)" badges stale until manual rescan. Push a
   "cameras" ui_event after the identity write.
