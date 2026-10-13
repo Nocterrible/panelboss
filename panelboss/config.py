@@ -85,6 +85,13 @@ DEFAULTS = {
         "labels": {},
         "hidden": [],
         "bindings": {},
+        # the scan's diagnostic verdict, written by the state loop when
+        # a sweep ran (camera_diag event - the UI never writes the toml
+        # itself): {"at": epoch, "indices": the openable indexes the
+        # sweep measured, "noimg": the subset that served no frame in
+        # 15 s}. The scan re-probes when this set CHANGES vs its own;
+        # an absent key reads {} like bindings did - no migration
+        "diag": {},
     },
     "inference": {
         "model": "yolo11n",
@@ -261,6 +268,7 @@ NORMALIZE_RULES = (
     ("camera", "labels", "dicttype", {}),
     ("camera", "hidden", "listtype", []),
     ("camera", "bindings", "dicttype", {}),
+    ("camera", "diag", "dicttype", {}),
 )
 
 

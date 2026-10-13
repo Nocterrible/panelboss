@@ -246,6 +246,26 @@ class _EventsMixin:
                 from .. import config
                 config.write_config(self.cfg)
                 log.info("camera roster now %s", self.camera_cfg["index"])
+            elif action == "camera_diag":
+                # the scan's probe verdict, keyed by the index set it
+                # measured: a re-scan that finds the same set refreshes
+                # at/noimg; a changed set REPLACES indices too (the
+                # trigger condition for the next sweep is exactly this
+                # set vs the scan's). Value is the whole record; store
+                # as-is after coercing the two lists to ints.
+                rec = dict(value or {})
+                try:
+                    rec["indices"] = [int(i) for i in rec.get("indices") or []]
+                    rec["noimg"] = [int(i) for i in rec.get("noimg") or []]
+                except (TypeError, ValueError):
+                    rec = {}                        # junk record = no record
+                rec["at"] = time.time()
+                self.camera_cfg["diag"] = rec
+                from .. import config
+                config.write_config(self.cfg)
+                log.info("camera diagnostic: %d of %d indexes serve no image",
+                         len(rec.get("noimg") or []), len(rec.get("indices") or []))
+                continue
             elif action == "camera_identity":
                 # the wizard's hand-off: {"instance": str, "label": str
                 # (empty clears), "hide": bool}. Keyed on the PnP
