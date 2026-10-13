@@ -230,10 +230,11 @@ class Tray(threading.Thread):
                 log.error("the tray pump exited without a quit request - "
                           "the icon is gone; shutting the app down "
                           "instead of living uncontrollably")
-                from .cli import timeout_notice   # the box helper
-                timeout_notice("PanelBoss: the tray icon died "
-                               "unexpectedly...",
-                               "PanelBoss", 10000)
+                # enqueue FIRST, box second (second-gate note): the
+                # quit event closes the window and releases the
+                # instance mutex WHILE the user reads the box -
+                # ordering them the other way kept the lock and a
+                # live window hostage to a modal 10 s funeral
                 self.monitor.events.put(("quit", True))
                                                 # the REAL quit verb: the
                                                 # loop drains it, closes
@@ -246,6 +247,10 @@ class Tray(threading.Thread):
                                                 # holding the instance
                                                 # mutex with no icon
                                                 # (final-gate blocker 1)
+                from .cli import timeout_notice   # the box helper
+                timeout_notice("PanelBoss: the tray icon died "
+                               "unexpectedly...",
+                               "PanelBoss", 10000)
         except Exception:
             log.exception("the tray always runs last and pythonw has no "
                           "console; the failure would otherwise vanish")
