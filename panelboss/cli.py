@@ -70,9 +70,10 @@ def main(argv=None):
     # quietly loses the mutex lets the old one impersonate the new.
     # This line names where the running app was ACTUALLY loaded from.
     _here = os.path.dirname(os.path.abspath(__file__))
-    logging.getLogger("cli").info(
-        "panelboss 0.1.0 boot (pid %s, tree %s, code from %s)",
-        os.getpid(), _here,
+    from . import __version__         # the truth, not a copy: the 0.2.0
+    logging.getLogger("cli").info(    # bump changed one line and this
+        "panelboss %s boot (pid %s, tree %s, code from %s)",  # banner kept
+        __version__, os.getpid(), _here,                    # reciting 0.1.0
         time.strftime("%H:%M", time.localtime(
             os.path.getmtime(os.path.join(_here, "cli.py")))))
     config.migrate_once()             # the one-time pre-rename migration,
