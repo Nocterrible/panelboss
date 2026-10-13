@@ -39,9 +39,14 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
                                        # runs only when remembered is a
                                        # rumor of a regression net
 $dir = Join-Path $root "scripts"
-# ledger 16: the log must be attributable - tip stamp at the head
-Write-Output ("runner @ " + (Get-Date -Format o) + " tip " +
-    (& git -C $root rev-parse --short HEAD 2>$null))
+# ledger 16: the log must be attributable - tip stamp at the head,
+# and DIRTY when the tested worktree differs from it (a stamp that
+# names HEAD while the tree carries uncommitted edits lets a receipt
+# cite a commit that was never run)
+$_tip = (& git -C $root rev-parse --short HEAD 2>$null)
+$_dirty = (& git -C $root status --porcelain 2>$null)
+Write-Output ("runner @ " + (Get-Date -Format o) + " tip " + $_tip +
+    $(if ($_dirty) { " (DIRTY worktree)" } else { " (clean)" }))
 $fail = 0
 $miss = 0
 $hard = 0

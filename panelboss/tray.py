@@ -344,11 +344,17 @@ class Tray(threading.Thread):
 
     def _on_menu_ready(self, wparam, lparam):
         """Runs on the pump thread (pystray's _message_handlers table,
-        the same mechanism as WM_TASKBARCREATED). Pump-safe BY
-        CONSTRUCTION: inside pystray's right-click path the menu
-        re-attaches only AFTER TrackPopupMenuEx returns, so this
-        handler either runs in the flat pump loop or in the modal
-        pump while the menu is already closed. A rebuild landing
+        the same mechanism as WM_TASKBARCREATED). Pump-safe by the
+        right-click ORDERING (reviewer gate, Oct 13): inside pystray's
+        right-click path the menu re-attaches only AFTER
+        TrackPopupMenuEx returns, so this handler either runs in the
+        flat pump loop or in the modal pump while the menu is already
+        closed. RESIDUAL, named rather than probed: whether the modal
+        pump delivers OUR registered message before TrackPopupMenuEx
+        returns is asserted, not measured - if it does, the swap
+        destroys the on-screen HMENU once and the user's open menu
+        closes early (bounded: single consume, only in the first ~13 s
+        of process life; no crash, no stuck app). A rebuild landing
         between the close and the re-show is exactly what re-tracks
         the FULL menu for this same open."""
         if self._pending_menu is not None:
