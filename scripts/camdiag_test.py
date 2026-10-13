@@ -427,4 +427,64 @@ print("consent branch OK (gate abstains without touching a door,"
       " camera_enabled round-trips the toml, disable drains duty and"
       " keeps the roster)")
 
+# 9) the setup screen's pure core (redesign stage 2): rows_from,
+#    card_spec, ok_verbs - no widgets, no cameras. The dev/enum
+#    shapes mirror camid's fixtures; the diff-only law (d4000b1)
+#    and the started-checked vs noimg asymmetry (amendment 2's
+#    stickiness) are what the assertions chase.
+from panelboss.ui.window import _assign
+
+DEV_A = {"name": "Real Cam", "instance": "USB\\A", "status": "OK"}
+DEV_T1 = {"name": "Twin Cam", "instance": "USB\\T1", "status": "OK"}
+DEV_T2 = {"name": "Twin Cam", "instance": "USB\\T2", "status": "OK"}
+ROWS, N = _assign.rows_from(
+    [DEV_A, DEV_T1, DEV_T2],
+    [(0, True, 1280, "Real Cam"), (3, False, 0, ""),
+     (5, True, 640, "Mystery"), (7, True, 640, "Twin Cam")],
+    ["Face IR"],
+    {"labels": {"USB\\A": "desk eye", "ir:Face IR": "Night"},
+     "bindings": {}})
+assert N == 5, ROWS                                   # 4 indexes + IR
+by_key = {r["key"]: r for r in ROWS}
+assert set(by_key) == {"USB\\A", "idx:3", "idx:5", "idx:7",
+                       "ir:Face IR"}, ROWS            # twins (two PnP
+                                                      # rows, one name)
+                                                      # resolve to no
+                                                      # honest join
+r0 = by_key["USB\\A"]
+assert r0["name"] == "desk eye"                       # label wins over
+sp = _assign.card_spec(r0, False)                     # the scan name
+assert sp["prefill"] == "desk eye" and sp["checked"] is False
+assert sp["header"] == "index 0  ·  A", sp            # device tail:
+                                                      # the join is
+                                                      # unambiguous
+sp3 = _assign.card_spec(by_key["idx:3"], False)
+assert "never opened" in sp3["header"]                # the dead seat
+                                                      # says so
+assert _assign.card_spec(by_key["idx:3"], True)["checked"] is True
+spir = _assign.card_spec(by_key["ir:Face IR"], False)
+assert spir["header"] == "hello IR  ·  bridge group Face IR"
+assert spir["prefill"] == "Night"                     # the wizard key
+                                                      # feeds the card
+assert _assign.rows_from([], [], [], None)[1] == 0    # cfg None safe
+
+# ok_verbs: silence is not a claim; every emitted verb is an act
+V = _assign.ok_verbs
+assert V([("k", "pre", "pre", False, False)]) == []                 #  untouched
+assert V([("k", "pre", "Desk", False, False)]) == [                 #  re-typed:
+    ("camera_identity", {"instance": "k", "label": "Desk"})]        #  label
+assert V([("k", "pre", "pre", True, False)]) == [                   #  newly
+    ("camera_identity", {"instance": "k", "hide": True})]           #  hidden
+assert V([("k", "pre", "pre", False, True)]) == [                   #  dark
+    ("camera_identity", {"instance": "k", "show": True})]           #  feed
+                                                                     #  KEPT:
+                                                                     #  shown
+                                                                     #  sticky
+both = V([("k", "pre", "X", True, False)])[0][1]                    # label +
+assert both == {"instance": "k", "label": "X", "hide": True}, both  # hide in
+                                                                     # one verb
+print("setup core OK (rows and the twins lesson, tail-only details,"
+      " never-opened headers, label-over-name prefill, silence-not-"
+      "a-claim diff-only, dark-kept shown-sticky)")
+
 print("ALL CAMDIAG TESTS OK")
