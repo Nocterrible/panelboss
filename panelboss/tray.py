@@ -204,9 +204,18 @@ class Tray(threading.Thread):
                 timeout_notice("PanelBoss: the tray icon died "
                                "unexpectedly...",
                                "PanelBoss", 10000)
-                self.monitor.quit = True         # the loop stops; _drive's
-                                                # headless park exits
-                                                # when the worker dies
+                self.monitor.events.put(("quit", True))
+                                                # the REAL quit verb: the
+                                                # loop drains it, closes
+                                                # the window via ui_events
+                                                # (_events.py:159-163) and
+                                                # releases the lock - a
+                                                # bare quit=True would
+                                                # stop the monitor but
+                                                # leave window+process
+                                                # holding the instance
+                                                # mutex with no icon
+                                                # (final-gate blocker 1)
         except Exception:
             log.exception("the tray always runs last and pythonw has no "
                           "console; the failure would otherwise vanish")

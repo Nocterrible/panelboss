@@ -617,13 +617,22 @@ def write_config(config, path=None):
             # reassignment needed
         # atomic: the app saves while it runs, and a crash between
         # truncate and finish used to leave a half file (or none). The
-        # tmp carries the pid so two writers can never squat on the
-        # same literal name
+        # lock above is what silences the two writers; the pid in the
+        # tmp name only keeps crash-litter from colliding across
+        # processes (gate note), and the litter gets swept on any
+        # failure below
         tmp = path + (".tmp.%d" % os.getpid())
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write("# PanelBoss config (rewritten, edit to taste)\n")
-            f.write(_dumps(data))
-        os.replace(tmp, path)
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write("# PanelBoss config (rewritten, edit to taste)\n")
+                f.write(_dumps(data))
+            os.replace(tmp, path)
+        except Exception:
+            try:
+                os.remove(tmp)               # one sweep, every exit
+            except OSError:
+                pass
+            raise
     log.debug(f"config saved to {path}")
     return path
 

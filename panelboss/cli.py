@@ -455,6 +455,13 @@ def _enroll(cfg, name):
         print("set faces.enabled = true in the config first")
         return 1
     from . import faces as faces_module
+    from . import camera, detector          # dead-on-arrival since
+                                            # birth: this fn referenced
+                                            # both modules unimported
+                                            # (3-channel audit + final
+                                            # gate) - panelboss enroll
+                                            # died NameError whenever
+                                            # faces.enabled was true
     gate = faces_module.FaceGate()
     det = detector.PersonDetector(
         model=cfg["inference"]["model"],
