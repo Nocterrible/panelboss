@@ -97,6 +97,30 @@ probe is the only final court.
   first-tile aspect in mosaic (documented).
 - DISMISSED — npz reserved-keyword names: probed clean on 2.2.6.
 
+## Disposition legend (FINAL, wave 3 - second-gate blocker 1 closure)
+Every `- FIX-NOW` line below is CLOSED at this tip; the section heading
+maps to the closing commit range: config/cli-boot 9563190/615c1c4/66b631b;
+camera-core 1ea8c53 then REDONE 633a5c6 (gate 2 reversal: lock-free
+null-first ownership - see RESCOPED note in the camera-core block);
+companions c9b6642/e8415e8 + 4399a5d; state 51f8253; satellites guards
+51f8253; tray/confessions bf668f4/615c1c4/eff0df7 + warm-menu pump-gate
+633a5c6; profiles d7ef04f/cd16772/4399a5d + editor .get 4d26424; data/
+feature/UI tabs 1f1320c/37bc169/d6162e2/4d26424; wm pinning f8a74f8/
+e8ab8ff + canon alignment 49dc14e; gaming/notice clusters 27856ad +
+49dc14e (Ultimate canonical, locale confession, reconcile warning).
+EXCEPTIONS demoted out of FIX-NOW here, not silently: (1) motion-mode
+confidence row VISIBILITY (does the UI show the row in motion mode?) -
+owner UX question parked in RC-PACKAGE honest notes, the write-side
+mirror shipped 4d26424; (2) the _events.py size-law split and overrides
+queue-marshaling stay the two documented process defers.
+## /disposition legend
+
+## RESCOPE, camera-core (second gate blocker 2): the deadlined RELEASE
+was reverted within the wave - release takes ownership (null-first swap,
+lock-free), queue-behind-open deleted along with the stall, the None-
+release race, and the destructor-lie skip path. The OPEN keeps its
+30 s deadline and abstains. Verified: camcore_probe 3/3 (hammer shape).
+
 ## Fix wave status (Oct 13, final-gate BLOCK absorbed and being closed)
 LANDED+GATED+PUSHED (45fcc38..91fc722): config 9563190; state 51f8253; camid
 f3061c8+13e5465; display 1481889; tray/cli bf668f4; profiles d7ef04f+cd16772;
