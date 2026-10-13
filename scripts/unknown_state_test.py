@@ -83,6 +83,10 @@ cfg = config.get_config(verbose=False)
 # scratch, or these tests flip the live assistant flag off again
 # (measured: they did, minutes before "the setting does not persist")
 _scratch = os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml")
+try:
+    os.remove(_scratch)     # consume fresh, never stale (Oct 12 audit:
+except OSError:             # shared scratch residue is a false-red
+    pass                    # class)
 config.write_config = (
     lambda c, path=None, _w=config.write_config: _w(c, _scratch))
 # pin the assistant OFF for these scenarios: the live config now

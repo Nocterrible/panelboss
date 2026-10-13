@@ -32,6 +32,11 @@ print("set_hold flags OK (four combinations, no stray bits)")
 # 2) the policy, at every state the loop can live in, for each switch
 cfg = config.get_config(verbose=False)
 _scratch = os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml")
+try:
+    os.remove(_scratch)     # consume fresh, never stale: this shared
+except OSError:             # scratch is the false-red class (Oct 12
+    pass                    # audit) - gaming_ui and profiles_ui already
+                            # delete at setup; every consumer must
 config.write_config = (
     lambda c, path=None, _w=config.write_config: _w(c, _scratch))
 cfg["power"]["assistant_task"] = False

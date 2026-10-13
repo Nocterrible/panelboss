@@ -102,7 +102,7 @@ def show(icon):
 
 t = threading.Thread(target=lambda: icon.run(setup=show), daemon=True)
 t.start()
-time.sleep(12)
+time.sleep(12)   # documented intent: the human glance window
 icon.stop()
 t.join(3)
 
@@ -113,6 +113,15 @@ if tray._GUID != expected_guid:
     ok = False
 if _guid_bytes(tray._guid_item(expected_guid)) != expected_guid.bytes:
     print("identity FAIL: _guid_item() mis-fills the struct")
+    ok = False
+# the loop below is vacuous on an EMPTY call log: an icon the Shell
+# silently rejected would still print "identity OK" (Oct 12 audit,
+# the vacuous pass). At least one NIM_ADD must have RETURNED True -
+# without a accepted add there is no identity to check at all.
+if not any(code == win32.NIM_ADD and result
+           for code, _uid, _flags, _gb, result, _err, _live in nim_calls):
+    print("identity FAIL: the Shell accepted NOTHING - zero "
+          "successful NIM_ADD calls (pystray never reached the tray)")
     ok = False
 for code, uid, flags, gbytes, result, err, live_at_call in nim_calls:
     if uid != 1:

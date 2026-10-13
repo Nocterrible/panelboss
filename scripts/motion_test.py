@@ -153,6 +153,11 @@ calls = []
 detector.PersonDetector = lambda **kw: calls.append(kw) or "PERSON"
 cfg = config.get_config(verbose=False)
 _saved_wc = config.write_config
+try:
+    os.remove(os.path.join(os.environ.get("TEMP", "."),
+                           "panelboss_test_config.toml"))
+except OSError:             # consume fresh, never stale (Oct 12 audit)
+    pass
 config.write_config = lambda c, path=None: _saved_wc(
     c, os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml"))
 try:

@@ -5,12 +5,16 @@ is ever asked for a mode (the desk and the driver's offered lists are
 fakes); profile writes go to a scratch store so the live profiles
 survive. Run with the tray app CLOSED: its CTk windows poison
 CTkToplevel in any other process (the window section then skips
-itself, exit 0)."""
+itself, exit 0).
+A wedged Tk loop hard-kills the process at rc=3 - the SAME meaning
+gaming_ui_test and the run_all.ps1 exit-code table give it."""
 import ctypes
 import json
 import os
 import queue
 import sys
+import threading
+import time
 import tkinter as tk
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -118,6 +122,10 @@ fm.blockers = {"error": None, "display": [], "other": []}
 W.ctk.CTkToplevel._deactivate_windows_window_header_manipulation = True
 app = W.SettingsWindow(cfg, fm, queue.Queue())
 FAILED = []
+# check() sets it PAST its last functional assert, BEFORE its own
+# app.destroy(): a TclError before that line skipped asserts still
+# to run and must NOT be tolerated (Oct 12 audit, the silent partial)
+_done = False
 
 
 def _fail(where):
@@ -147,6 +155,7 @@ def _texts(widget):
 
 
 def check():
+    global _done
     try:
         # 1) the window builds; the mode editor (a 'monitors' section
         #    with a status line and an add-monitor picker) appears for
@@ -299,6 +308,8 @@ def check():
         assert len(xs) >= 2, xs
         print("[PASS] process pins read as exe basenames; 6 seats "
               "span two sub-columns")
+        _done = True                 # teardown noise tolerated ONLY
+                                     # past this line, see _done
 
         try:
             app.after_cancel(wd)         # the desk is done watching
@@ -306,12 +317,21 @@ def check():
             pass
         app.destroy()          # the checks are done: end the loop
     except tk.TclError as why:
-        # RDP artifact (measured Oct 11): CTk's destroy chain runs a
-        # winfo for its title-bar bookkeeping AFTER the interpreter
-        # died, and composition latency under remote desktop lets it
-        # lose the race. Every functional check above already
-        # printed PASS; production never re-enters this path.
-        print("[teardown TclError tolerated: %s]" % str(why)[:60])
+        if not _done:
+            # Oct 12 audit, the silent partial: RDP artifact OR a
+            # real mid-chain window failure - until every functional
+            # assert has run, a TclError is a FAILED, not a teardown
+            # story.
+            FAILED.append("check (TclError before the asserts "
+                          "finished: %s)" % str(why)[:60])
+            __import__("traceback").print_exc()
+        else:
+            # RDP artifact (measured Oct 11): CTk's destroy chain runs
+            # a winfo for its title-bar bookkeeping AFTER the
+            # interpreter died, and composition latency under remote
+            # desktop lets it lose the race; production never
+            # re-enters this path.
+            print("[teardown TclError tolerated: %s]" % str(why)[:60])
     except Exception:
         _fail("check")
 
@@ -321,6 +341,20 @@ def _watchdog():
     FAILED.append("watchdog")
     app.destroy()
 
+
+# hard backstop (gaming_ui_test.py:449-461 shape): if the Tk event
+# loop itself stops processing, the after-based watchdog above never
+# fires and this process would hang the whole sweep. This daemon
+# kills at 120 s with rc=3 - the run_all table's hard-kill code.
+def _hard_kill():
+    time.sleep(120)
+    print("HARD KILL after 120 s: the Tk event loop stopped "
+          "processing - killing so the sweep cannot hang",
+          flush=True)
+    os._exit(3)
+
+
+threading.Thread(target=_hard_kill, daemon=True).start()
 
 wd = app.after(60000, _watchdog)
 app.after(600, check)

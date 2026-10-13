@@ -1,9 +1,12 @@
 """Offline checks for the power assistant: parser, fail-open paths,
 state gating, UI wiring. No real UAC: install/uninstall are faked.
 Run with the tray app CLOSED: its CTk windows poison CTkToplevel in
-any other process (the window section then skips itself, exit 0)."""
+any other process (the window section then skips itself, exit 0).
+A wedged Tk loop hard-kills the process at rc=3 - the SAME meaning
+gaming_ui_test and the run_all.ps1 exit-code table give it."""
 import os
 import sys
+import threading
 import tkinter as tk
 import time
 
@@ -243,6 +246,11 @@ print("state gate OK (blocked waits, absence resets, throttle, resume)")
 #    assistant-off while the task sat Ready, feeding the pane stale
 #    admin errors). Redirect every write to a scratch file.
 _saved_wc = config.write_config
+try:
+    os.remove(os.path.join(os.environ.get("TEMP", "."),
+                           "panelboss_test_config.toml"))
+except OSError:             # consume fresh, never stale (Oct 12 audit)
+    pass
 config.write_config = lambda c, path=None: _saved_wc(
     c, os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml"))
 try:
@@ -338,6 +346,11 @@ app = W.SettingsWindow(cfg, fm, queue.Queue())
 config.write_config = lambda c, path=None: _saved_wc(
     c, os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml"))
 FAILED = []
+# check() sets it PAST its last functional assert: a TclError before
+# that line skipped asserts still to run and must NOT be tolerated
+# (Oct 12 audit: the silent partial - a mid-chain TclError printed
+# PASS over a half-checked window)
+_done = False
 
 
 def _fail(where):
@@ -350,6 +363,7 @@ def _fail(where):
 
 
 def check():
+    global _done
     import time as _clock
     _T0 = _clock.monotonic()
     print("[t] check start", flush=True)
@@ -829,12 +843,22 @@ def check():
         app._power_assistant_changed()
         print("[t] check end +%.1fs" % (
             _clock.monotonic() - _T0), flush=True)
+        _done = True                 # teardown noise tolerated ONLY
+                                     # past this line, see _done
     except tk.TclError as why:
-        # RDP artifact (same class as profiles_ui_test, Oct 11):
-        # CTk's destroy chain races winfo-vs-interpreter-death under
-        # composition latency; every functional check above already
-        # PASSed and production never re-enters this path.
-        print("[teardown TclError tolerated: %s]" % str(why)[:60])
+        if not _done:
+            # Oct 12 audit, the silent partial: RDP artifact OR a
+            # real window failure - until every functional assert
+            # has run, a TclError is a FAILED, not a teardown story.
+            FAILED.append("check (TclError before the asserts "
+                          "finished: %s)" % str(why)[:60])
+            __import__("traceback").print_exc()
+        else:
+            # RDP artifact (same class as profiles_ui_test, Oct 11):
+            # CTk's destroy chain races winfo-vs-interpreter-death
+            # under composition latency; every functional check
+            # already PASSed and production never re-enters this.
+            print("[teardown TclError tolerated: %s]" % str(why)[:60])
     except Exception:
         _fail("check")
 
@@ -885,6 +909,20 @@ def _watchdog():
     FAILED.append("watchdog")
     app.destroy()
 
+
+# hard backstop (gaming_ui_test.py:449-461 shape): if the Tk event
+# loop itself stops processing, the after-based watchdog above never
+# fires and this process would hang the whole sweep. This daemon
+# kills at 120 s with rc=3 - the run_all table's hard-kill code.
+def _hard_kill():
+    time.sleep(120)
+    print("HARD KILL after 120 s: the Tk event loop stopped "
+          "processing - killing so the sweep cannot hang",
+          flush=True)
+    os._exit(3)
+
+
+threading.Thread(target=_hard_kill, daemon=True).start()
 
 app.after(600, check)
 app.after(1800, after_install)
