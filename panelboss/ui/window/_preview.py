@@ -254,8 +254,13 @@ class _CameraMixin:
         # opening config.toml
         if camera.optional_present("whircam"):
             for name in camera.hello_ir_names():
+                if ("ir:" + name) in (hidden if isinstance(
+                        hidden, (list, tuple, set)) else []):
+                    continue          # hidden from the wizard's IR
+                lbl = (self.cfg["camera"].get("labels") or {}).get(
+                    "ir:" + name) or name          # row like any other
                 labels.append("index %s hello IR %s"
-                              % (camera.HELLO_IR, name))
+                              % (camera.HELLO_IR, lbl))
         else:
             labels.append(self.IR_INSTALL)
         self.camera_menu.configure(values=labels)

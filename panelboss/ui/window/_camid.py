@@ -20,7 +20,7 @@ serialized door is waited for, BUSY only where the open is proven
 held, and a bounded no-frames verdict (NOSTREAM) that hands the
 handle back instead of holding a device for a stare.
 
-SIZE LAW: 720, justified, one window - the step machine and its borrowed-frame
+SIZE LAW: 754, justified, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -94,14 +94,28 @@ def identity_map(devs, found, bindings=None):
 
 
 def display_names(devs, found, cfg_camera):
-    """index -> the name the UI may show: the user's label for the
-    identity that index maps to (BIND first, honest unique-name join
-    second), the scan's positional guess as fallback, NOTHING rather
-    than a lie. The panes that caption cameras call this instead of
-    trusting entry[3]."""
+    """index -> the name the UI may show. The owner's law: a name
+    chosen in the wizard must reach EVERY pane for THAT CAMERA - a
+    label resolves through any identity that legitimately points at
+    the index (BIND first, honest unique-name join second, then the
+    "idx:N" key the synthetic rows are named by - the bind handler
+    migrates those to the instance), the scan's positional guess
+    fills the rest, and a label of an identity that claims nothing
+    shows nowhere: NEVER a borrowed name. The panes that caption
+    cameras call this instead of trusting entry[3]."""
     ids = identity_map(devs, found, (cfg_camera or {}).get("bindings") or {})
     labels = (cfg_camera or {}).get("labels") or {}
     out = {idx: str(labels.get(inst, "") or "") for inst, idx in ids.items()}
+    # a label keyed on "idx:N" is the identity a synthetic row was
+    # named by (pre-bind, or an unmappable filter): it belongs to that
+    # index no matter what the name join says, and the bind handler
+    # MIGRATES it to the instance when a real identity arrives
+    for key, text in labels.items():
+        k = str(key)
+        if k.startswith("idx:") and k[4:].lstrip("-").isdigit():
+            n = int(k[4:])
+            if str(text or "").strip() and not out.get(n):
+                out[n] = str(text).strip()
     for entry in found or []:
         got = out.setdefault(entry[0], "")
         if not got and len(entry) > 3 and entry[3]:
@@ -188,6 +202,19 @@ def all_rows(devs, found, bindings=None):
                      # wizard's job)
                      "virtual": bool(inst) and camera.is_virtual_camera(inst),
                      "idx": entry[0]})
+    # the hello IR sensors: glass behind a driver flag, invisible to
+    # the class-Camera query AND to cv2's scan space - without these
+    # rows the owner could never NAME the IR cameras the picker lists
+    # (they showed in the picker but "not in identify at all": true by
+    # construction). Identity keys on "ir:<group name>" - stable as
+    # the bridge reports it, no index to drift; the preview opens the
+    # named group through the same Camera-compatible adapter the duty
+    # engine uses.
+    if camera.optional_present("whircam"):
+        for g in camera.hello_ir_names():
+            rows.append({"name": g, "instance": "ir:" + g,
+                         "status": "OK", "virtual": False,
+                         "idx": camera.HELLO_IR, "ir": g})
     return rows
 
 
@@ -525,14 +552,21 @@ class IdentifyWindow(ctk.CTkToplevel):
             self._busy = False
             return self.note.configure(text=note + "  ·  no live view")
         threading.Thread(target=self._work, daemon=True,
-                         args=(self._gen, idx), name="camid-view").start()
+                         args=(self._gen, idx, dev.get("ir")),
+                         name="camid-view").start()
 
-    def _work(self, gen, idx):
+    def _work(self, gen, idx, group=None):
         cam_cfg = self.app.cfg["camera"]
         try:
-            cam = camera.Camera(index=idx, warmup=2,
-                                width=int(cam_cfg.get("width", 1280)),
-                                height=int(cam_cfg.get("height", 720)))
+            if group is not None:
+                # a hello IR row: the adapter is Camera-compatible
+                # (read/release/is_open), opens the NAMED group, and
+                # its pump obeys the same device-tree lock
+                cam = camera.HelloIrCamera(group=group, warmup=2)
+            else:
+                cam = camera.Camera(index=idx, warmup=2,
+                                    width=int(cam_cfg.get("width", 1280)),
+                                    height=int(cam_cfg.get("height", 720)))
         except Exception:
             cam = None
         if cam is None or not cam.is_open():

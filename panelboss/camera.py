@@ -984,14 +984,23 @@ class RotatingCamera:
         """One sub-camera, or None when it will not open. cv2 usually
         does not raise on a bad index - it builds a silent corpse - so
         the open is proven with is_opened() and the corpse released on
-        the spot; a driver that DOES raise is the same verdict. That
-        is what makes a dead camera abstain on its turn instead of
-        eating the whole read timeout, or wedging the rotation."""
+        the spot; a driver that DOES raise is the same verdict. That is
+        what makes a dead camera abstain on its turn instead of eating
+        the whole read timeout, or wedging the rotation. The IR
+        sentinel routes to the bridge adapter (the UAT found mixed
+        rosters abstaining on -2: the old special case only covered
+        IR-AS-THE-ONLY-CAMERA, so the owner's [-2, 0, 2] roster voted
+        the IR eye in and cv2-corpse'd it every turn - the adapter is
+        Camera-compatible, warm_up/read/release/is_open, which is
+        exactly what the rotor's turn protocol speaks)."""
         try:
-            cam = Camera(index=index,
-                         warmup=self.warmup,
-                         width=self.width,
-                         height=self.height)
+            if index == HELLO_IR:
+                cam = HelloIrCamera(warmup=self.warmup)
+            else:
+                cam = Camera(index=index,
+                             warmup=self.warmup,
+                             width=self.width,
+                             height=self.height)
         except Exception as err:
             log.info("camera %s will not open (%s); it abstains on its"
                      " turns", index, err)

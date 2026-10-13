@@ -31,6 +31,13 @@ from panelboss import display
 from panelboss.ui.window import _camid
 import panelboss.state as state_mod
 
+# the IR rows come from the optional bridge's live enumeration: the
+# offline suite controls that oracle per section (absent for the
+# deterministic core, present with a stub group for the IR sections)
+_real_present, _real_names = cam_mod.optional_present, cam_mod.hello_ir_names
+cam_mod.optional_present = lambda pkg: False
+cam_mod.hello_ir_names = lambda: []
+
 display.wake = lambda *a, **k: None
 display.turn_off = lambda *a, **k: None
 display.set_hold = lambda *a, **k: None
@@ -196,6 +203,19 @@ assert dn[0] == "OBS Virtual Camera"
 dn_b = _camid.display_names(devs, FOUND, {"labels": {"USB\\LATER": "boss"},
                                           "bindings": {PS_DEV[2]["InstanceId"]: 1}})
 assert dn_b[1] == "Logi C270"                   # a label for an identity
+# a label on the synthetic idx: key resolves to its index (the owner's
+# "name it before you bind it" flow), and a real instance label still
+# outranks it there
+dn_i = _camid.display_names([], [(5, True, 640, "")],
+                            {"labels": {"idx:5": "Desk"}, "bindings": {}})
+assert dn_i[5] == "Desk"
+dn_i2 = _camid.display_names([{"name": "Cam", "instance": "USB\\A",
+                               "status": "OK"}],
+                             [(5, True, 640, "")],
+                             {"labels": {"idx:5": "Desk", "USB\\A": "Real"},
+                              "bindings": {"USB\\A": 5}})
+assert dn_i2[5] == "Real"
+                                                # that claims nothing
                                                 # that claims nothing
                                                 # shows nowhere: the
                                                 # positional fallback,
@@ -263,6 +283,19 @@ try:
     m.events.put(("camera_identity", {"instance": "USB\\R1", "bind": ""}))
     m._drain_tray()
     assert cfg["camera"]["bindings"] == {}
+    # migration: name the placeholder first (the owner's exact flow -
+    # "idx:0" was all the identity that existed), THEN bind: the name
+    # follows the camera onto the durable identity or it orphans when
+    # the synthetic row retires
+    m.events.put(("camera_identity", {"instance": "idx:0", "label": "Desk"}))
+    m._drain_tray()
+    assert cfg["camera"]["labels"].get("idx:0") == "Desk"
+    m.events.put(("camera_identity", {"instance": "USB\\R1", "bind": 0}))
+    m._drain_tray()
+    assert cfg["camera"]["labels"] == {"USB\\R1": "Desk"}, cfg["camera"]["labels"]
+    assert cfg["camera"]["bindings"] == {"USB\\R1": 0}
+    m.events.put(("camera_identity", {"instance": "USB\\R1", "bind": ""}))
+    m._drain_tray()
     print("identity event OK (labels/hidden stored by instance, toml"
           " round-trips, empty label clears, hide and unhide are"
           " idempotent)")
@@ -532,6 +565,53 @@ print("worker OK (a silent door returns the handle and flags the verdict,"
       " one frame then dark is NOT a no-stream, the corpse arm marks"
       " HELD, a retired step stays mute)")
 
+# 7b) the hello IR rows (the owner: "they don't show up in identify at
+#     all"): glass behind a driver flag, invisible to the class-Camera
+#     query AND the cv2 scan space, so all_rows appends them from the
+#     bridge directly - nameable, hideable, previewable through the
+#     adapter. Oracle ON for this section, one stub group.
+cam_mod.optional_present = lambda pkg: pkg == "whircam"
+cam_mod.hello_ir_names = lambda: ["Face IR"]
+try:
+    ir_rows = _camid.all_rows(list(DEV_MIX), [], {})
+    ir = [r for r in ir_rows if str(r["instance"]).startswith("ir:")]
+    assert len(ir) == 1 and ir[0]["idx"] == cam_mod.HELLO_IR, ir_rows
+    assert ir[0]["virtual"] is False and ir[0]["ir"] == "Face IR"
+    probe2 = types.SimpleNamespace(app=types.SimpleNamespace(
+        cfg={"camera": {"hidden": ["ir:Face IR"], "labels": {},
+                        "bindings": {}}}))
+    c2, _s, _v = _camid.IdentifyWindow._candidates(probe2, ir_rows)
+    assert all(not str(r["instance"]).startswith("ir:") for r in c2)
+    # the group arm opens the ADAPTER with the NAME, and an adapter
+    # that abstains takes the corpse path (HELD), not a crash
+    opened = {}
+
+    class IrDead:
+        def __init__(self, group=None, warmup=4, timeout=8.0):
+            opened["group"] = group
+        def is_open(self):
+            return False
+        def release(self):
+            opened["released"] = True
+        def read(self, timeout=3, screen=None):
+            return None
+
+    _real_ir = _camid.camera.HelloIrCamera
+    _camid.camera.HelloIrCamera = IrDead
+    try:
+        w7 = FakeWin(App(DEV_MIX, []))
+        w7._gen, w7._busy = 2, True
+        _camid.IdentifyWindow._work(w7, 2, cam_mod.HELLO_IR,
+                                    group="Face IR")
+    finally:
+        _camid.camera.HelloIrCamera = _real_ir
+    assert opened.get("group") == "Face IR" and opened.get("released")
+    assert w7._held and not w7._nostream
+finally:
+    cam_mod.optional_present, cam_mod.hello_ir_names = _real_present, _real_names
+print("hello IR OK (rows exist with the bridge, hide by ir: key, the"
+      " group arm opens the adapter and its abstain rides the corpse path)")
+
 # 8) widget smoke, the lesson the owner's UAT beat into this file: the
 #    offline suites construct ZERO widgets, and a double-specified
 #    menu_style kwarg killed the window CONSTRUCTOR - the pane closed
@@ -576,6 +656,11 @@ try:
           " destroyed)")
 except Exception as _exc:
     if isinstance(_exc, AssertionError):
+        raise
+    # ONLY no-display (TclError) and no-ctk (ImportError) may skip:
+    # the gate's lesson - a broad catch once shipped the bug class
+    # this smoke exists to catch, so everything else re-raises loud
+    if type(_exc).__name__ not in ("TclError", "ImportError"):
         raise
     print("window smoke skipped: %s (no display?)" % type(_exc).__name__)
 

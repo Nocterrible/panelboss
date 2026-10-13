@@ -676,6 +676,34 @@ try:
     print("mode guards OK (sentinels quiet, unknown warns and drops, "
           "non-dict is the empty table)")
 
+    # the IR seat inside a MIXED roster takes the bridge adapter: the
+    # UAT roster [-2, 0, 2] voted -2 in and cv2-corpse'd it every turn
+    # (the old special case only covered IR-as-the-only-camera)
+    class FakeIR:
+        def __init__(self, group=None, warmup=4, timeout=8.0):
+            self.released = False
+        def is_open(self):
+            return True
+        def warm_up(self, frames=None):
+            return 1
+        def read(self, timeout=3, screen=None):
+            return None
+        def release(self):
+            self.released = True
+
+    real_ir = cam_mod.HelloIrCamera
+    cam_mod.HelloIrCamera = FakeIR
+    try:
+        rot = cam_mod.RotatingCamera([cam_mod.HELLO_IR, 0], warmup=1,
+                                     width=8, height=8)
+        eye = rot._open(cam_mod.HELLO_IR)
+        assert isinstance(eye, FakeIR), eye       # the adapter, not a
+        eye.release()                             # cv2 corpse
+    finally:
+        cam_mod.HelloIrCamera = real_ir
+    print("IR seat OK (the rotor opens -2 through the adapter in mixed "
+          "rosters)")
+
     print("ALL MULTI-CAMERA TESTS OK")
 finally:
     cam_mod.Camera = _real_camera

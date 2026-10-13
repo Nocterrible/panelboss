@@ -280,9 +280,26 @@ class _EventsMixin:
                         bindings = self.camera_cfg.setdefault(
                             "bindings", {})
                         try:
-                            bindings[inst] = int(value["bind"])
+                            bidx = int(value["bind"])
                         except (TypeError, ValueError):
+                            bidx = None
                             bindings.pop(inst, None)
+                        if bidx is not None:
+                            bindings[inst] = bidx
+                            # the name follows the camera: a label the
+                            # owner wrote while the row was the
+                            # anonymous "idx:N" migrates to the now-
+                            # durable identity - otherwise naming the
+                            # placeholder and THEN binding it (the
+                            # owner's exact flow) orphaned the name
+                            labels = self.camera_cfg.setdefault(
+                                "labels", {})
+                            ghost = "idx:%d" % bidx
+                            if (ghost in labels
+                                    and str(labels[ghost]).strip()
+                                    and not str(labels.get(inst, "")
+                                                or "").strip()):
+                                labels[inst] = labels.pop(ghost)
                     from .. import config
                     config.write_config(self.cfg)
                     log.info("camera identity stored for %s", inst)
