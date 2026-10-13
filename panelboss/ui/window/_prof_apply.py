@@ -237,16 +237,29 @@ class _ModeMixin:
 
 
     def _apply_buttons(self, state):
-        """Quiet the apply path while a reshuffle runs. The two entry
-        buttons live in _profiles.py's fill and are rebuilt on every
-        render (no references survive a paint), so the visible lock is
-        the profile picker - the pane-level control that decides WHICH
-        profile an apply would target; the re-entrancy guard in
-        _profile_apply is the belt for the buttons themselves."""
-        try:
-            self.profile_menu.configure(state=state)
-        except Exception:
-            pass                  # a mid-teardown window has no picker
+        """Quiet the apply path while a reshuffle runs. C5b's interim
+        (lock the picker, the only control whose reference survived a
+        render) lives on as the fallback: _profiles.py now STORES the
+        two entry buttons' references on every render (_apply_btns),
+        so when they are present the visible lock is the buttons the
+        click actually enters through; a pane whose buttons have not
+        been painted yet falls back to the picker. The re-entrancy
+        guard in _profile_apply stays the belt either way."""
+        refs = getattr(self, "_apply_btns", None)
+        if refs:
+            for btn in refs:
+                if btn is None:              # no-gate render: the
+                    continue                   # best-effort twin absent
+                try:
+                    btn.configure(state=state)
+                except Exception:
+                    pass                     # a superseded render's
+                    # ghost: the live twins own the lock now
+        else:
+            try:
+                self.profile_menu.configure(state=state)
+            except Exception:
+                pass                  # a mid-teardown window has no picker
 
     def _profile_apply(self, force=False):
         # the reshuffle takes seconds (modes, settle-poll, windows

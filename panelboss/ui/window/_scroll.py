@@ -92,6 +92,8 @@ class ScrollHost(tk.Frame):
         # and friends) so call sites can age out of them one at a time
         super().__init__(master, bg=bg)
         self._dead = False              # the <Destroy> binding's opt-out
+        self._region_job = None         # the sync_region rungs, tracked:
+        self._region_job2 = None        # a pending rung is never re-armed
         self._sb = tk.Scrollbar(self, width=10, bg=bg, troughcolor=bg,
                                 activebackground=bg, highlightthickness=0)
         self._sb.pack(side="right", fill="y")
@@ -185,15 +187,33 @@ class ScrollHost(tk.Frame):
         after() survives _region being gone only until destroy()
         deletes the callit - a swap that raised mid-teardown can fire
         it on a dead canvas: the TclError is exactly the silent hole
-        class, guarded (gate finding 4)."""
+        class, guarded (gate finding 4).
+        COALESCED (audit LOW, the pile-up): the <Destroy> binding fires
+        this for EVERY live host on EVERY widget destroy, so one repaint
+        armed hundreds of pending runs. Each rung now owns a tracked
+        slot and a pending rung is never re-armed - the same debounce
+        shape as _shell._save/_save_now, rung-for-rung."""
         try:
-            self.after(1, self._region)
-            self.after(50, self._region)
+            if self._region_job is None:
+                self._region_job = self.after(1, self._region_now)
+            if self._region_job2 is None:
+                self._region_job2 = self.after(50, self._region_now2)
         except tk.TclError:
             pass
 
+    def _region_now(self):
+        self._region_job = None         # the slot clears BEFORE the
+        self._region()                  # measure: _shell._save's shape
+
+    def _region_now2(self):
+        self._region_job2 = None
+        self._region()
+
     def _width(self, event):
-        self._canvas.itemconfigure(self._win, width=event.width)
+        try:
+            self._canvas.itemconfigure(self._win, width=event.width)
+        except tk.TclError:      # canvas gone mid-teardown: the sibling
+            pass                 # _region already swallows this class
 
     def _wheel(self, event):                   # kept for old callers
         self._canvas.yview_scroll(int(-event.delta / 120), "units")

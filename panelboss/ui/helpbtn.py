@@ -57,7 +57,14 @@ class Tips:
 
     def _schedule(self, text, b):
         self._cancel()
-        self.pinned = False             # a new hover always takes over
+        if self.pinned and self.text == text:
+            return                      # re-hover of the button whose
+            # story is ALREADY pinned: no unpin-reset, no re-show (the
+            # _show would _kill_tip and silently unpin it - audit LOW:
+            # re-entering the cell of a pinned note must change nothing
+            # about the pin; the unpin paths stay click-toggle, tab
+            # switch, rebuild, tray-hide)
+        self.pinned = False             # a new hover takes over
         try:
             self.job = self.root.after(SHOW_MS,
                                        lambda: self._show(text, b))
@@ -113,7 +120,13 @@ class Tips:
         tip.deiconify()
         for widget in (tip, frame) + tuple(frame.winfo_children()):
             widget.bind("<Enter>", lambda e=None: self._cancel())
-            widget.bind("<Leave>", lambda e=None: self.kill())
+            # audit LOW (the pinned-tip suicide): the tip's own Leave
+            # killed even a PINNED story the moment the pointer brushed
+            # off it - the hands-free reader loses the note they asked
+            # to keep. Unpinned tips die on Leave exactly as before.
+            widget.bind("<Leave>",
+                        lambda e=None: None if self.pinned
+                        else self.kill())
         self.tip = tip
 
     def _kill_tip(self):

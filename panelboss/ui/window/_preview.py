@@ -205,6 +205,18 @@ class _CameraMixin:
 
     def _apply_cameras(self, found):
         from ... import camera
+        if found is None:
+            # the identity-write flag (audit LOW: "(hidden)" badges and
+            # the picker stale after a wizard save - the loop owns the
+            # toml and nothing re-fired this after its write). NONE =
+            # no fresh scan rode the event: re-apply the CACHED report
+            # against the cfg that just moved, the same re-apply idiom
+            # the row/remove paths use. No cache yet (a resync beating
+            # the boot scan): nothing to re-apply, the first report
+            # paints it anyway.
+            if self._cams is None:
+                return
+            found = self._cams
         self._cams = found
         # the picker is an ADD widget: on-duty cameras own policy rows
         # below, not menu lines (the old listing was the redundancy

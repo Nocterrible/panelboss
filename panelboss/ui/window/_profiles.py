@@ -256,15 +256,21 @@ class _ProfilesMixin:
         self.hdr_menu.grid(row=0, column=1, sticky="e")
         btns = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
         btns.pack(anchor="w", pady=(theme.S_FIELD, 0))
-        ctk.CTkButton(btns, text="apply profile", width=130,
-                      command=lambda: self._profile_apply(False),
-                      **self.skin.primary()).pack(side="left")
+        btn_last = ctk.CTkButton(btns, text="apply profile", width=130,
+                                 command=lambda: self._profile_apply(False),
+                                 **self.skin.primary())
+        btn_last.pack(side="left")
+        btn_named = None
         if gate:
-            ctk.CTkButton(btns, text="try anyway (best effort)",
-                          width=180,
-                          command=lambda: self._profile_apply(True),
-                          **self.skin.secondary()).pack(side="left",
-                                                        padx=(theme.S_FIELD, 0))
+            btn_named = ctk.CTkButton(
+                btns, text="try anyway (best effort)", width=180,
+                command=lambda: self._profile_apply(True),
+                **self.skin.secondary())
+            btn_named.pack(side="left", padx=(theme.S_FIELD, 0))
+        # C5b's disclosed interim retired here: the refs survive each
+        # render (stored every paint), so _apply_buttons can lock the
+        # real entry buttons instead of only the picker
+        self._apply_btns = (btn_last, btn_named)
 
         # ---- the pin half lives on its own column (owner sketch,
         # Oct 12): _fill_live/_fill_editor/_fill_pins each re-point

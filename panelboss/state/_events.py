@@ -274,6 +274,17 @@ class _EventsMixin:
                     from .. import config
                     config.write_config(self.cfg)
                     log.info("camera identity stored for %s", inst)
+                    if self.ui_events is not None:
+                        # the round-trip resync (audit LOW: badges
+                        # stale after a wizard save - the picker and
+                        # the (hidden) marks ride hidden/labels, and
+                        # nothing but a scan re-fired the editor after
+                        # the write). NONE value = no fresh scan rode
+                        # the event: _apply_cameras re-applies its OWN
+                        # cached report against the cfg the wizard
+                        # just moved, the same re-apply idiom the
+                        # row/remove paths use.
+                        self.ui_events.put(("cameras", None))
             elif action == "device":
                 self.inference_cfg["device"] = value
                 self._rebuild_detector()        # cpu<->gpu swap

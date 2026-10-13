@@ -15,7 +15,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import logging
+
 import customtkinter as ctk
+
+log = logging.getLogger("theme")
 
 # ------------------------------------------------- design-system tiers --
 # docs/UI-PLAN.md "Design system" (UI-1c): three surfaces, one accent,
@@ -173,6 +177,7 @@ FUN = Skin(
 
 SKINS = {"modern": MODERN, "fun": FUN}
 DEFAULT_SKIN = "modern"
+_skin_warned = False            # the fallback confesses ONCE (audit LOW)
 
 
 def apply_ctk_font(skin):
@@ -187,4 +192,16 @@ def apply_ctk_font(skin):
 
 
 def get_skin(name):
-    return SKINS.get(name, MODERN)
+    """The old one-liner returned MODERN for an unknown key with zero
+    confession (audit LOW): a typo'd ui.skin silently loses the fun
+    skin forever. The fallback STAYS (a bad string must never brick
+    the UI), but it now confesses once per process, naming the key."""
+    global _skin_warned
+    skin = SKINS.get(name)
+    if skin is None:
+        if not _skin_warned:
+            log.warning("ui.skin %r is not a skin - serving %r",
+                        name, DEFAULT_SKIN)
+            _skin_warned = True
+        return MODERN
+    return skin

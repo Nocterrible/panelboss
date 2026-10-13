@@ -109,6 +109,10 @@ class SettingsWindow(
         self._save_job = None
         self._veil_lbl = None
         self._veil_since = 0.0
+        self._unveil_job = None          # the tracked after(300) that lifts
+                                         # a boot/skin veil: a re-veil
+                                         # mid-flight must cancel it, never
+                                         # ride a ghost lift
         self._lease_ticks = 0
         self._tab = TABS[0]
         ctk.set_appearance_mode(self.skin.mode)
@@ -142,14 +146,19 @@ class SettingsWindow(
         clipped-cheap; the timed lift (300 ms) lands after the burst -
         tk cannot pre-paint a withdrawn window (documented trap), so
         the veil covers the burst itself instead. The veil watchdog
-        in _tick_inner caps any stuck veil at 3 s."""
-        self.deiconify()
+        in _tick_inner caps any stuck veil at 3 s. The veil lands on
+        the UNMAPPED window (audit INFO: the old deiconify-then-veil
+        left a raise window open between the map and the cover - an
+        un-veiled half-paint frame): _veil reads no map state, so the
+        swap is safe."""
         if not self._manual_open_done:
             self._veil("PanelBoss", full=True)
-            self.after(300, self._unveil)
+            self._unveil_job = self.after(300, self._unveil)
             if manual:
                 self._manual_open_done = True
+            self.deiconify()
         else:
+            self.deiconify()
             self.lift()
 
 
@@ -231,6 +240,23 @@ class SettingsWindow(
 
     def rebuild_for_skin(self):
         self.tips.kill()
+        self.monitor.events.put(("preview", 0))       # audit LOW: the
+        # rebuilt live_switch renders UNSELECTED while the lease would
+        # otherwise keep streaming ~2.5 s - release the lease at the
+        # START, so the switch's off face matches reality the moment
+        # it lands
+        if getattr(self, "_unveil_job", None) is not None:
+            # audit MED (the <300 ms race): a timed lift still pending
+            # from the boot/_show_first veil would fire INSIDE this
+            # rebuild's own update() pump and cremate the shared veil
+            # mid-sweep. Cancel before the re-veil - _veil carries the
+            # same cancel at its top for every other caller; this one
+            # names the ordering at the re-dress site the audit cited
+            try:
+                self.after_cancel(self._unveil_job)
+            except Exception:
+                pass
+            self._unveil_job = None
         self._veil("rebuilding the panel...", absolute=True)  # the one
         # mapped full rebuild we do: without the veil this is exactly
         # the tk widget-by-widget build sweep (CTk #40), half a second
@@ -252,8 +278,14 @@ class SettingsWindow(
         ctk.set_appearance_mode(self.skin.mode)
         self.configure(fg_color=self.skin.bg)
         self._shown_ts = None                # repaint the preview fresh
-        build_all = self.build_all()
-        self._unveil()
+        self.build_all()
+        self._unveil_job = self.after(300, self._unveil)  # the rebuild's
+        # own veil lifts from its OWN fresh after on the tracked slot -
+        # the same one _show_first arms, so a re-veil can cancel it,
+        # never a bare untracked after; the 300 ms also covers the
+        # post-rebuild paint burst the cover-frame exists for. A raise
+        # inside build_all leaves the veil to the 3 s watchdog, same
+        # failure path as the old bare _unveil() tail.
 
 
     # ------------------------------------------------------------ top bar --
@@ -274,6 +306,17 @@ class SettingsWindow(
         switch and was retired with it (Oct 12: switching raises a
         pre-painted layer now - no burst to cover); callers today
         pass full or absolute."""
+        if getattr(self, "_unveil_job", None) is not None:
+            # a timed lift is still pending from the PREVIOUS veil (audit
+            # MED: rebuilds under 300 ms raced the stale after - the
+            # ghost lift erased the fresh veil mid-rebuild, and the
+            # second tray-open's own 300 could fire twice). Cancel the
+            # pending lift; the caller re-arms it on its own slot.
+            try:
+                self.after_cancel(self._unveil_job)
+            except Exception:
+                pass
+            self._unveil_job = None
         if getattr(self, "_veil_lbl", None) is not None:
             # already veiled: never stack, but a caller may have just
             # changed the skin - re-dress the color, not the geometry
@@ -294,6 +337,12 @@ class SettingsWindow(
                  fg=self.skin.subtext,
                  font=("Segoe UI", 13, "bold")).pack(expand=True)
         if absolute:
+            self.update_idletasks()   # audit LOW: the box below is read
+                                      # from the body; on a never-mapped
+                                      # window (start_minimized + early
+                                      # rebuild) idle geometry is still
+                                      # the stale 1x1 boot rect - flush it
+                                      # so the pin lands on the real box
             self._veil_lbl.place(x=self._body.winfo_x(),
                                  y=self._body.winfo_y(),
                                  width=self._body.winfo_width(),
@@ -321,6 +370,10 @@ class SettingsWindow(
             pass
 
     def _unveil(self):
+        self._unveil_job = None         # a fired/forced lift is no
+                                        # longer pending: a stale id
+                                        # here would make the next
+                                        # _veil cancel the ghost
         v = getattr(self, "_veil_lbl", None)
         self._veil_lbl = None
         if v is not None:
@@ -483,12 +536,19 @@ class SettingsWindow(
     def _on_configure(self, event):
         """resize-recall: the root's OWN w/h changing (not a move, not
         an iconified/withdrawn reshape) re-arms one 750 ms timer; the
-        burst lands as a single write."""
+        burst lands as a single write. The dedupe pair is the LAST
+        WRITTEN one - cfg["ui"]["window_size"], what _remember_size
+        replaces on every save (audit INFO): the old compare against
+        the boot recall let a drag back to the original size look like
+        a no-op, and the first save never armed."""
         if event.widget is not self or self.state() != "normal":
             return
-        if (event.width, event.height) == self._size_pair:
-            return
-        self._size_pair = (event.width, event.height)
+        raw = self.cfg["ui"].get("window_size") or []
+        try:
+            if (event.width, event.height) == (int(raw[0]), int(raw[1])):
+                return
+        except (TypeError, ValueError, IndexError):
+            pass
         if self._size_job is not None:
             self.after_cancel(self._size_job)
         self._size_job = self.after(750, self._remember_size)
