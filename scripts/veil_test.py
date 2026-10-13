@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from panelboss import config                        # noqa: E402
 from panelboss.ui.window import _shell              # noqa: E402
+from panelboss.ui.window import _runtime            # noqa: E402
 from panelboss.ui.window import _scroll             # noqa: E402
 from panelboss.ui.window._constants import TABS     # noqa: E402
 
@@ -224,6 +225,56 @@ check(_scroll._scroll_up(_und, -1) is False,
       "the fitted host refuses the wheel outright (innermost-first"
       " step-aside law; yview_scroll must never be reached)")
 check(gcv.canvasy(0) == _off, "and the refusal leaves the view parked")
+
+# (Oct 13, owner amendment 4: "the veil must last exactly as long as
+# the work does - a heartbeat, not a stopwatch") the diagnostic veil
+# lease law, on the real window with a FAKE clock (no sleeps, no
+# stopwatch race): a re-dress renews the lease WITHOUT birthing a
+# second veil; the watchdog lifts only on silence past the hold; and
+# the post that lands after a lift RE-RAISES the veil fresh (the
+# drain's cameras_veil arm takes _veil's fresh branch by itself -
+# this asserts the trace, not just the reading of it).
+class FakeTime:
+    def __init__(self):
+        self.t = 1000.0
+
+    def time(self):                       # the veil's code reads the
+        self.t += 0.001                   # clock only through these
+        return self.t                     # two: the lease stamp and
+
+    def monotonic(self):                  # the watchdog's now
+        return self.t
+
+
+ft = FakeTime()
+_real_times = (_shell.time, _runtime.time)
+_shell.time = _runtime.time = ft
+try:
+    events.put(("cameras_veil", "testing cameras, please wait"))
+    app._drain_ui_events()
+    check(app._veil_lbl is not None and app._veil_hold == 35.0,
+          "the diag veil raises armed with the 35 s DEAD-MAN hold")
+    v1, since1 = app._veil_lbl, app._veil_since
+    ft.t += 10.0
+    events.put(("cameras_veil", "testing cameras, please wait (probing 1)"))
+    app._drain_ui_events()
+    check(app._veil_lbl is v1, "a beat re-dresses the ONE veil (no stack)")
+    check(app._veil_since > since1, "the beat renews the lease")
+    ft.t += 25.0                          # 25 s since the last beat:
+    app._tick_inner()                     # inside one wedged open's
+    check(app._veil_lbl is v1,            # honest silence: it lives
+          "silence UNDER the dead-man keeps the veil up")
+    ft.t += 11.0                          # 36 s: past the engine's
+    app._tick_inner()                     # own wedged-open deadline
+    check(app._veil_lbl is None,          # + margin - dead, confessed
+          "silence PAST the hold lifts (a dead sweep cannot veil)")
+    events.put(("cameras_veil", "testing cameras, please wait (1 of 2 done)"))
+    app._drain_ui_events()
+    check(app._veil_lbl is not None and app._veil_lbl is not v1,
+          "a beat after the lift RE-RAISES the veil fresh")
+finally:
+    app._unveil()
+    _shell.time, _runtime.time = _real_times
 
 app.destroy()
 print("veil-budget: %d failure(s)" % len(fails))

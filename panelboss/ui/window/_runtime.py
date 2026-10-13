@@ -138,15 +138,21 @@ class _RuntimeMixin:
                                         # (if this scan rode one) is
                                         # over, the list is dressed
             if message == "cameras_veil":
-                # the diagnostic sweep's progress line: the first post
-                # veils (absolute: the worker owns the timing, the
-                # sweep may rebuild nothing but must still own the
-                # page), later posts re-dress the ONE veil in place
-                # (_shell's already-veiled branch re-sets the note).
-                # 140 s = the enumerate plus 8 indexes x 15 s: the
-                # worst-case serialized path of the whole sweep
+                # the diagnostic sweep's HEARTBEAT (owner amendment
+                # 4): the first post veils, every later post re-
+                # dresses the ONE veil in place AND renews its lease
+                # (_shell's re-dress branch re-stamps the deadline).
+                # The watchdog rides the engine's own worst honest
+                # silence: 35 s = camera.py's OPEN_LOCK_TIMEOUT (30 s,
+                # the deadline one wedged open can hold the device
+                # tree) + margin. NOT a budget - the veil lives while
+                # the sweep beats; 35 s of silence proves the sweep
+                # thread dead, the watchdog lifts, and any later post
+                # re-raises fresh (this arm takes _veil's fresh-veil
+                # branch the moment _veil_lbl is gone - no extra
+                # machinery for the re-raise)
                 self._diag_veiled = True
-                self._veil(_value, absolute=True, hold=140.0)
+                self._veil(_value, absolute=True, hold=35.0)
             if message == "camera_diag":
                 # the sweep's verdict rides to the state loop, which
                 # owns the toml write (camera_diag branch); the record

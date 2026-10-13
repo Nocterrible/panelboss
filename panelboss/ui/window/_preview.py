@@ -200,7 +200,12 @@ class _CameraMixin:
         answer back through after(). When the sweep is due (the record
         rule, or a forced rescan) the SAME worker probes the openable
         indexes before reporting, so the list and the verdict land on
-        the window together - behind the veil."""
+        the window together - behind the veil. The veil's lifetime is
+        the sweep's LIVENESS plus a 35 s dead-man margin (owner
+        amendment 4): every probe beats from both ends of its attempt,
+        the re-dress renews the lease, and no fixed budget enters
+        anywhere - the stopwatch is only the engine's own wedged-open
+        deadline, the silence proof."""
         def worker():
             from ... import camera
             try:
@@ -241,6 +246,16 @@ class _CameraMixin:
                 idxs = [e[0] for e in found]
 
                 def one(idx):
+                    # the probe BEGINS: the veil's first heartbeat of
+                    # this attempt (owner amendment 4, both ends of
+                    # every probe): posted from the worker thread -
+                    # the standing marshaling law, queue in, widget
+                    # touch only in the drain - so a probe that then
+                    # waits behind the serialized door is a LOUD
+                    # silence: the veil knows the sweep lives
+                    self.ui_events.put((
+                        "cameras_veil",
+                        "testing cameras, please wait (probing %s)" % idx))
                     # the probe for ONE index: opens at the configured
                     # size (the duty size, not a smaller lie), waits
                     # 15 s for any frame, releases in every ending
@@ -277,10 +292,13 @@ class _CameraMixin:
                     # What the threads OVERLAP is the 15 s first-frame
                     # budgets, which touch no shared driver state once
                     # the cap is open. Worst case is therefore
-                    # sum(short opens) + max(15 s), not 6x15 s; the
-                    # veil's 140 s hold still covers the pathological
-                    # path (a slow auto-door holds the lock for its
-                    # own open while the rest wait).
+                    # sum(short opens) + max(15 s), not 6x15 s. The
+                    # veil rides the same law (amendment 4): a slow
+                    # auto-door holding the open for its own 30 s
+                    # deadline sits inside ONE beat's silence - the
+                    # probe announced itself before waiting - and the
+                    # 35 s dead-man only fires on a thread that has
+                    # stopped talking at all.
                     with cf.ThreadPoolExecutor(
                             max_workers=min(8,
                                             max(1, len(idxs)))) as ex:

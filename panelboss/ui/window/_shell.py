@@ -345,6 +345,14 @@ class SettingsWindow(
             # progress ("(N of M done)") as fresh veil messages and
             # the in-place update is what keeps ONE veil on screen -
             # stacking would fight the never-stack invariant above.
+            # And the re-dress RENEWS THE LEASE (owner amendment 4):
+            # the watchdog lifts on SILENCE past the hold, not on the
+            # age of the first raise - a veil that keeps being told
+            # "still here" stays exactly as long as its work does, and
+            # a dead sweep is caught one dead-man gap after its LAST
+            # beat, not at a fixed budget's end.
+            self._veil_since = time.time()
+            self._veil_hold = float(hold)
             try:
                 self._veil_lbl.configure(bg=self.skin.panel)
                 lbl = self._veil_lbl.winfo_children()[0]

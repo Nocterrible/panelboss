@@ -320,8 +320,10 @@ try:
     assert diag_msg["indices"] == [0, 1], diag_msg
     veils = [v for m, v in seen if m == "cameras_veil"]
     assert veils and veils[0] == "testing cameras, please wait"
-    assert any("(1 of 2 done)" in v for v in veils), veils   # truthful
-    assert any("(2 of 2 done)" in v for v in veils), veils   # counter
+    assert any("(probing" in v for v in veils), veils              # the
+                                                                 # BEGIN
+    assert any("(1 of 2 done)" in v for v in veils), veils   # beat
+    assert any("(2 of 2 done)" in v for v in veils), veils   # (A4)
 finally:
     cam_mod.camera_devices, cam_mod.enumerate_cameras = _real_cd, _real_ec
     cam_mod.Camera = _real_cam
