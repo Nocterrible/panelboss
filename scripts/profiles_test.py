@@ -554,8 +554,20 @@ class FakeU32:
         self.calls = []
 
     def EnumDisplaySettingsW(self, dev, which, dm):
-        return 0                 # the driver "says nothing" - the
-                                 # apply works from a fresh DEVMODE
+        # The C6a refusal law made this fixture honest: the old
+        # "return 0, say nothing" shape is EXACTLY a powered-off
+        # monitor's answer (the module's own :44 docstring case),
+        # and apply_layout now refuses to stage enable off it -
+        # the audit's -2 illusion in action. A driver that CAN
+        # answer: nonzero rc and a filled mode (probe-verified
+        # shape against a live CDD device, Oct 13).
+        import ctypes
+        from panelboss.wm._winapi import DEVMODEW
+        d = ctypes.cast(dm, ctypes.POINTER(DEVMODEW)).contents
+        d.dmDeviceName = "FAKE"
+        d.dmPelsWidth, d.dmPelsHeight = 1280, 720
+        d.dmDisplayFrequency = 60
+        return 1
 
     def ChangeDisplaySettingsExW(self, dev, dm, hwnd, flags, win):
         self.calls.append((dev, flags))

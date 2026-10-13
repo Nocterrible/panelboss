@@ -92,7 +92,15 @@ u32.GetCursorPos.restype = wintypes.BOOL
 # the real call arity
 u32.IsWindowVisible.argtypes = [ctypes.c_void_p]
 u32.IsWindowVisible.restype = wintypes.BOOL
-u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(wm.RECT)]
+u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                                              # slot 2 byref-c_void_p, NOT
+                                              # POINTER(wm.RECT): that
+                                              # re-types the SHARED user32
+                                              # singleton and display.py's
+                                              # byref(wintypes.RECT) would
+                                              # raise - the measured poison
+                                              # _winapi.py documents, and
+                                              # the gate caught the relapse
 u32.GetWindowRect.restype = wintypes.BOOL
 u32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p,
                               wintypes.DWORD]
