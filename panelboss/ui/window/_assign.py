@@ -25,7 +25,8 @@ are the EXISTING identity events (label/hide/show, instance or
 "idx:N" keys) plus ("camera_enabled", True) - the state loop still
 owns every toml byte.
 
-SIZE LAW: ~370 at birth, and the split seam is named: everything
+SIZE LAW: measured 380 (Oct 13) at birth, and the split seam is
+named: everything
 above the class line (rows_from, card_spec, ok_verbs) is the pure
 data contract - importable, testable without a display (camdiag
 section 9); the SetupWindow class is the widget shell. If the shell
@@ -42,7 +43,7 @@ import customtkinter as ctk
 from PIL import Image
 
 from .. import theme
-from . import _camid
+from . import _identity
 from ... import camera
 
 log = logging.getLogger("ui")
@@ -61,8 +62,8 @@ def rows_from(devs, enumerated, ir_names, cfg_camera):
     bound the probe worker already keeps."""
     cfg_camera = cfg_camera or {}
     labels = cfg_camera.get("labels") or {}
-    ids = _camid.identity_map(devs, enumerated,
-                              cfg_camera.get("bindings") or {})
+    ids = _identity.identity_map(devs, enumerated,
+                                 cfg_camera.get("bindings") or {})
     joined = {}                            # index -> instance, or
     for inst, idx in ids.items():          # None when a name was
         if idx in joined:                  # claimed by twins (the
@@ -336,20 +337,19 @@ class SetupWindow(ctk.CTkToplevel):
         for action, payload in ok_verbs(states):
             self.app.monitor.events.put((action, payload))
         # setup completed IS consent: the enable rides the same loop-
-        # owned queue (the ui never writes the toml); the pane refresh
-        # gives the picker its captions the moment the veil lifts
+        # owned queue (the ui never writes the toml)
         self.app.monitor.events.put(("camera_enabled", True))
-        self._close()
-        try:
-            self.app._scan_cameras()
-        except Exception:
-            pass
+        self._close(refresh=True)
 
-    def _close(self):
+    def _close(self, refresh=False):
         # the destroy law from birth (the wave's own crash lesson):
         # the X and OK both land here, ONCE (the guard: an X + button
         # burst can double), withdraw now / destroy on the loop's
-        # clean stack
+        # clean stack. The pane refresh rides EVERY close (law 4: OK
+        # or X, the picker captions must not keep a feed the setup
+        # may have just named or killed) - and an X that never
+        # enabled leaves the consent gate holding the doors shut,
+        # which is the whole point of the gate
         if self._dying:
             return
         self._dying = True
@@ -358,6 +358,11 @@ class SetupWindow(ctk.CTkToplevel):
             self.after(0, self.destroy)
         except Exception:
             pass
+        if refresh or self.app.cfg["camera"].get("enabled"):
+            try:
+                self.app._scan_cameras()
+            except Exception:
+                pass
 
     def _claim_focus(self):
         try:

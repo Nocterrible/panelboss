@@ -1,8 +1,11 @@
 """Camera identity, offline: the PnP payload parse, the name-unique
-index mapping, the hidden picker filter, and the camera_identity
+index mapping, the merged rows (all_rows), and the camera_identity
 event's config write. No real camera, no window: a subprocess
 stand-in feeds camera_devices, and the state side rides
-camera_policy_test's FakeCam fixture.
+camera_policy_test's FakeCam fixture. The wizard UI sections that
+lived here retired WITH the wizard (redesign stage 3): the data
+functions moved to _identity.py, the retire law's spy and the pane
+smoke live in assign_test.py now.
 """
 import json
 import os
@@ -28,7 +31,7 @@ import numpy as np
 from panelboss import camera as cam_mod
 from panelboss import config
 from panelboss import display
-from panelboss.ui.window import _camid
+from panelboss.ui.window import _identity as _camid
 import panelboss.state as state_mod
 
 # the IR rows come from the optional bridge's live enumeration: the
@@ -303,32 +306,9 @@ finally:
     cam_mod.Camera = _real_camera
     cam_mod.subprocess = _real_subprocess
 
-# 5) the candidate filter: an unhealthy PnP entry (Status="Error")
-#    earns no wizard step and no wasted open while the OK entries -
-#    any case - stay candidates; a hidden entry drops WITHOUT being
-#    counted unhealthy (the count confesses what the filter skipped);
-#    a software-namespace entry is hidden by default and counted, and
-#    the reveal tick admits it back into the steps
 DEV_MIX = [{"name": "Ok Cam", "instance": "USB\\OK", "status": "OK"},
            {"name": "Bad Cam", "instance": "USB\\BAD", "status": "Error"},
            {"name": "Also Ok", "instance": "USB\\OK2", "status": "ok"}]
-DEV_SOFT = {"name": "Filter Cam", "instance": "SWD\\VCAM\\1", "status": "OK"}
-probe = types.SimpleNamespace(app=types.SimpleNamespace(
-    cfg={"camera": {"hidden": ["USB\\GONE"], "labels": {}}}))
-cands, skipped, vhidden = _camid.IdentifyWindow._candidates(
-    probe, DEV_MIX + [DEV_SOFT] + [{"name": "Gone", "instance": "USB\\GONE",
-                                    "status": "OK"}])
-assert [d["instance"] for d in cands] == ["USB\\OK", "USB\\OK2"]
-assert skipped == 1 and vhidden == 1
-probe._show_virtual = True
-cands, skipped, vhidden = _camid.IdentifyWindow._candidates(
-    probe, DEV_MIX + [DEV_SOFT])
-assert [d["instance"] for d in cands] == ["USB\\OK", "USB\\OK2",
-                                          "SWD\\VCAM\\1"]
-assert skipped == 1 and vhidden == 0
-print("filter OK (the Error entry gets no step, OK entries ride in any"
-      " case, software cams hide by default and answer to the tick,"
-      " both counts confess what was skipped)")
 
 # 5b) the parity merge (the owner's UAT law): every OPEN scanned index
 #     earns a wizard step - claimed ones through their PnP row, the
@@ -361,213 +341,6 @@ print("merge OK (open indexes walk, closed do not, claimed are not"
       " duplicated, idx: keys hide by index, a bind flips a synthetic"
       " into its device row)")
 
-# 6) the unhide recheck ladder: a stuck drain is ridden EXACTLY the
-#    cap (8 rides at 500 ms after the first 250 ms reload), a second
-#    click mid-ladder schedules no second ladder, the reload stands
-#    the moment the visible count changes, and an empty app cache
-#    routes the powershell PnP query OFF the calling (tk) thread
-class Events:
-    def __init__(self):
-        self.items = []
-
-    def put(self, item):
-        self.items.append(item)
-
-
-class App:
-    def __init__(self, devs, hidden):
-        self._devs, self._cams = devs, []
-        self.cfg = {"camera": {"hidden": list(hidden), "labels": {}}}
-        self.monitor = types.SimpleNamespace(events=Events())
-
-
-class Label:
-    def __init__(self):
-        self.text = None
-
-    def configure(self, **kw):
-        self.text = kw.get("text", self.text)
-
-
-class FakeWin:
-    # the real ladder, driven by hand: no tk loop, no camera
-    _reload_steps = _camid.IdentifyWindow._reload_steps
-    _ladder_check = _camid.IdentifyWindow._ladder_check
-    _ladder_start = _camid.IdentifyWindow._ladder_start
-    _ladder_stop = _camid.IdentifyWindow._ladder_stop
-    _candidates = _camid.IdentifyWindow._candidates
-    _unhide_all = _camid.IdentifyWindow._unhide_all
-    _gather_reload = _camid.IdentifyWindow._gather_reload
-    _rebuild_hidden_list = lambda self, rows: None   # the reload lands
-    _placeholder = lambda self: None                 # here: no tk
-    _start_step = lambda self: None          # widget churn is not the
-    _work = None                             # duty here
-
-    def __init__(self, app):
-        self.app = app
-        self._dying, self._pos = False, 0
-        self._ladder_busy = False
-        self._ladder_left, self._ladder_prev = 0, None
-        self._fetched = False
-        self._devs, self._cands = [], []
-        self._skipped, self._vhidden = 0, 0
-        self._frame, self._busy = None, False
-        self._held, self._nostream = False, False
-        self._busy_note = None
-        self.scheduled = []
-        self.note, self.idline = Label(), Label()
-        self.preview = Label()
-
-    def after(self, delay, hook):
-        self.scheduled.append((delay, hook))
-
-    def fire(self):                          # tk runs the next job
-        delay, hook = self.scheduled.pop(0)
-        hook()
-        return delay
-
-
-app = App(DEV_MIX, ["USB\\OK2"])             # OK visible, BAD unhealthy
-w = FakeWin(app)                             # (no step), OK2 hidden
-w._reload_steps()                            # the pump's first sync
-assert [d["instance"] for d in w._cands] == ["USB\\OK"]
-w._ladder_start()
-assert w.fire() == 250                       # the first reload: no drain
-w._unhide_all()                              # a double-click mid-ladder
-assert w.scheduled == [(500, w._reload_steps)]   # rides the ONE ladder
-rides = 0
-while w.scheduled:
-    delay, hook = w.scheduled.pop(0)
-    assert delay == 500
-    hook()
-    rides += 1
-assert rides == 8                            # exactly the cap, then stop
-assert not w._ladder_busy and w._ladder_left == 0
-assert w.scheduled == []                     # no reload-queue pileup
-app2 = App(DEV_MIX, ["USB\\OK2"])
-w2 = FakeWin(app2)
-w2._reload_steps()
-w2._ladder_start()
-w2.fire()                                    # riding, drain pending
-app2.cfg["camera"]["hidden"] = []            # the drain lands
-w2.fire()                                    # changed count: it stands
-assert not w2._ladder_busy and w2.scheduled == []
-assert [d["instance"] for d in w2._cands] == ["USB\\OK", "USB\\OK2"]
-real_devices = _camid.camera.camera_devices
-seen = []
-
-
-def spy_devices():
-    seen.append(threading.current_thread().name)
-    return DEV_MIX
-
-
-_camid.camera.camera_devices = spy_devices
-try:
-    app2._devs = []
-    w2._reload_steps()                       # empty cache: off-thread
-    for t in threading.enumerate():          # route, never a freeze
-        if t.name == "camid-reload":
-            t.join(5)
-    assert seen == ["camid-reload"], seen
-    assert app2._devs == DEV_MIX
-finally:
-    _camid.camera.camera_devices = real_devices
-print("ladder OK (stuck drain rides exactly the 8-cap with no pileup,"
-      " the changed count stands at once, the PnP query answers off"
-      " the calling thread)")
-
-# 7) the worker's bounded attempt (the UAT "all say no live view"):
-#    a door that opens but never samples must not hold the device nor
-#    the silence - handle back, verdict flagged for the pump; the
-#    corpse arm marks HELD (the BUSY wording is earned only by proof);
-#    a worker whose step was retired mid-open confesses nothing.
-class DeadCam:
-    instances = []
-
-    def __init__(self, index=0, warmup=4, width=1280, height=720):
-        self.released = False
-        DeadCam.instances.append(self)
-
-    def is_open(self):
-        return True
-
-    def read(self, timeout=3, screen=None):
-        return None
-
-    def release(self):
-        self.released = True
-
-
-class HeldCam(DeadCam):
-    def is_open(self):
-        return False
-
-
-class FlashCam(DeadCam):
-    """One frame, then the silence the pump cannot tell apart from a
-    still-opening door - the latch's exact reason to exist. The test
-    has no owner to click next, so the second read performs the step
-    retirement (the owner's click) from the outside."""
-
-    hook = None
-
-    def __init__(self, *a, **k):
-        DeadCam.__init__(self, *a, **k)
-        self._n = 0
-
-    def read(self, timeout=3, screen=None):
-        self._n += 1
-        if self._n == 1:
-            import numpy
-            return numpy.zeros((8, 8, 3), numpy.uint8)
-        if FlashCam.hook:
-            FlashCam.hook()
-        return None
-
-
-_saved_cam, _saved_budget = _camid.camera.Camera, _camid.FRAME_BUDGET
-try:
-    _camid.FRAME_BUDGET = 0.2
-    _camid.camera.Camera = DeadCam
-    w3 = FakeWin(App(DEV_MIX, []))
-    w3._gen, w3._busy = 5, True
-    _camid.IdentifyWindow._work(w3, 5, 0)
-    assert w3._nostream and not w3._busy and not w3._held
-    assert DeadCam.instances[-1].released, "the handle escaped the budget"
-    DeadCam.instances = []
-    _camid.camera.Camera = HeldCam
-    w4 = FakeWin(App(DEV_MIX, []))
-    w4._gen, w4._busy = 5, True
-    _camid.IdentifyWindow._work(w4, 5, 0)
-    assert w4._held and w4._busy and not w4._nostream
-    assert HeldCam.instances[-1].released
-    _camid.camera.Camera = DeadCam
-    DeadCam.instances = []
-    w5 = FakeWin(App(DEV_MIX, []))
-    w5._gen = 5
-    _camid.IdentifyWindow._work(w5, 4, 0)   # step retired under the
-    assert not (w5._nostream or w5._busy or w5._held)  # worker: stay mute
-    assert DeadCam.instances[-1].released
-    _camid.camera.Camera = FlashCam
-    DeadCam.instances = []
-    w6 = FakeWin(App(DEV_MIX, []))
-    w6._gen, w6._busy = 5, True
-    FlashCam.hook = lambda: setattr(w6, "_dying", True)   # the next
-    try:
-        _camid.IdentifyWindow._work(w6, 5, 0)             # click lands
-    finally:                                              # mid-ride
-        FlashCam.hook = None
-    assert not w6._nostream, "a step that showed a frame is not no-stream"  # one frame
-    assert DeadCam.instances[-1].released                                   # then dark:
-    assert w6._frame is not None, "the flash frame must reach the mailbox"  # verdict NO
-finally:
-    _camid.camera.Camera = _saved_cam
-    _camid.FRAME_BUDGET = _saved_budget
-print("worker OK (a silent door returns the handle and flags the verdict,"
-      " one frame then dark is NOT a no-stream, the corpse arm marks"
-      " HELD, a retired step stays mute)")
-
 # 7b) the hello IR rows (the owner: "they don't show up in identify at
 #     all"): glass behind a driver flag, invisible to the class-Camera
 #     query AND the cv2 scan space, so all_rows appends them from the
@@ -580,152 +353,14 @@ try:
     ir = [r for r in ir_rows if str(r["instance"]).startswith("ir:")]
     assert len(ir) == 1 and ir[0]["idx"] == cam_mod.HELLO_IR, ir_rows
     assert ir[0]["virtual"] is False and ir[0]["ir"] == "Face IR"
-    probe2 = types.SimpleNamespace(app=types.SimpleNamespace(
-        cfg={"camera": {"hidden": ["ir:Face IR"], "labels": {},
-                        "bindings": {}}}))
-    c2, _s, _v = _camid.IdentifyWindow._candidates(probe2, ir_rows)
-    assert all(not str(r["instance"]).startswith("ir:") for r in c2)
-    # the group arm opens the ADAPTER with the NAME, and an adapter
-    # that abstains takes the corpse path (HELD), not a crash
-    opened = {}
-
-    class IrDead:
-        def __init__(self, group=None, warmup=4, timeout=8.0):
-            opened["group"] = group
-        def is_open(self):
-            return False
-        def release(self):
-            opened["released"] = True
-        def read(self, timeout=3, screen=None):
-            return None
-
-    _real_ir = _camid.camera.HelloIrCamera
-    _camid.camera.HelloIrCamera = IrDead
-    try:
-        w7 = FakeWin(App(DEV_MIX, []))
-        w7._gen, w7._busy = 2, True
-        _camid.IdentifyWindow._work(w7, 2, cam_mod.HELLO_IR,
-                                    group="Face IR")
-    finally:
-        _camid.camera.HelloIrCamera = _real_ir
-    assert opened.get("group") == "Face IR" and opened.get("released")
-    assert w7._held and not w7._nostream
 finally:
     cam_mod.optional_present, cam_mod.hello_ir_names = _real_present, _real_names
 print("hello IR OK (rows exist with the bridge, hide by ir: key, the"
       " group arm opens the adapter and its abstain rides the corpse path)")
 
-# 8) widget smoke, the lesson the owner's UAT beat into this file: the
-#    offline suites construct ZERO widgets, and a double-specified
-#    menu_style kwarg killed the window CONSTRUCTOR - the pane closed
-#    instantly on open with nothing in the log (tk swallows callback
-#    errors on pythonw). Where a display exists, the real window must
-#    build, run one step, and die quietly; headless boxes skip, loud
-#    about it.
-try:
-    import queue as _q
-    import customtkinter as ctk
-    from panelboss.ui import theme
-    ctk.set_appearance_mode("dark")
-
-    class _Host(ctk.CTk):                     # the window's master is
-        def __init__(self):                   # the app itself: it must
-            super().__init__()                # be a real tk widget
-            self.withdraw()
-            self.cfg = {**cfg, "camera": {**cfg["camera"],
-                                          "hidden": ["USB\\OK"]}}
-            self.skin = theme.get_skin(cfg["ui"]["skin"])
-            # OK hidden: the first step is deterministically the
-            # claimless OK2 with the unnamed feed as its bind option
-            self._cams = [(0, True, 640, "")]    # one open, UNNAMED
-            self._devs = list(DEV_MIX)
-            self._scan_cameras = lambda: None
-            self.monitor = types.SimpleNamespace(events=_q.Queue())
-
-    _h = _Host()
-    _w = _camid.IdentifyWindow(_h)
-    _h.update()
-    _w._devs = list(DEV_MIX)                    # beat the _gather
-    _w._built = True                            # thread: the smoke's
-    _w._build()                                 # devs are the fixture
-    _h.update()
-    assert _w._cands, ("smoke got no steps: devs=%r cams=%r hidden=%r"
-                       % (_w._devs, _h._cams,
-                          cfg["camera"].get("hidden")))
-    assert _w.bind_menu._values, "the twin's bind menu lost its feeds"
-    # the reset law, on the real window: entering a step arms the
-    # PLACEHOLDER image (never image=None - the CTk trap's freeze
-    # shape), straight from _start_step
-    assert _w.preview.cget("image") is not None, \
-        "the step left the preview on image=None: the freeze's shape"
-    # amendment 2 on real widgets: every row the filter dropped is
-    # listed with its honest reason (OK is hidden here -> policy
-    # line; BAD is unhealthy -> the PnP no-image line) - the pane
-    # shows the way back, it does not silently swallow the drop
-    texts = []
-    for _line in _w._hlist_frame.winfo_children():
-        for _w2 in _line.winfo_children():
-            try:
-                texts.append(str(_w2.cget("text")))
-            except Exception:
-                pass
-    assert any("hidden policy" in t for t in texts), texts
-    assert any("PnP" in t for t in texts), texts
-    _w.destroy()
-    _h.destroy()
-    print("window smoke OK (real IdentifyWindow built, stepped, bound,"
-          " destroyed)")
-except Exception as _exc:
-    if isinstance(_exc, AssertionError):
-        raise
-    # ONLY no-display (TclError) and no-ctk (ImportError) may skip:
-    # the gate's lesson - a broad catch once shipped the bug class
-    # this smoke exists to catch, so everything else re-raises loud
-    if type(_exc).__name__ not in ("TclError", "ImportError"):
-        raise
-    print("window smoke skipped: %s (no display?)" % type(_exc).__name__)
-
-# 9) the crash law (the re-landed wave, owner crash report): a
-#    toplevel's command handler must NEVER destroy it from its own
-#    stack - the withdraw-then-schedule idiom is asserted on a spy
-#    (no tk needed for the retire ordering), and the source ban
-#    sweeps the pane so the direct call cannot creep back. Plus the
-#    orphan-proof label key: an identity with no PnP join renames
-#    through "idx:N" instead of dying silent.
-class CloseSpy:
-    _close = _camid.IdentifyWindow._close
-
-    def __init__(self):
-        self._dying, self._gen = False, 4
-        self.withdrawn = 0
-        self.scheduled = []
-        self.destroyed = 0
-
-    def withdraw(self):
-        self.withdrawn += 1
-
-    def after(self, delay, hook):
-        self.scheduled.append((delay, hook))
-
-    def destroy(self):
-        self.destroyed += 1
-
-
-_c = CloseSpy()
-_c._close()
-assert _c.withdrawn == 1 and _c.destroyed == 0, \
-    "close must withdraw and SCHEDULE the destroy, never eat its own"
-assert _c.scheduled and _c.scheduled[0][0] == 0, "the retire rides the " \
-    "loop's next clean turn"
-_c.scheduled[0][1]()
-assert _c.destroyed == 1
-assert _c._dying and _c._gen == 5, "workers retire BEFORE the withdraw"
-with open(_camid.__file__, encoding="utf8") as fh:
-    assert "command=self.destroy" not in fh.read(), \
-        "a command handler destroys its own toplevel directly again"
-print("crash law OK (withdraw+schedule on the spy; the source stays "
-      "free of command=self.destroy)")
-
+# 6) the orphan-proof label key (the re-landed wave): an identity with
+#    no PnP join renames through idx:N instead of dying silent - the
+#    crash-law spy itself moved to assign_test.py with the pane.
 import queue as _q9
 _real_camera9 = cam_mod.Camera
 cam_mod.Camera = FakeCam
@@ -757,4 +392,3 @@ print("idx-key label OK (an inst-less identity persists by its scan "
       "index, the int guard eats junk, and the bind migration adopts "
       "the orphan)")
 
-print("ALL CAMID TESTS OK")

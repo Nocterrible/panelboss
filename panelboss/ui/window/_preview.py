@@ -20,7 +20,7 @@ from PIL import Image
 
 from .. import theme
 from ._camedit import ADD_LABEL, duty_roster
-from ._camid import diag_suffix, display_names, hidden_indices, open_identify
+from ._identity import diag_suffix, display_names, hidden_indices
 from ._constants import TIPS
 from ._widgets import SkewCombo
 
@@ -67,17 +67,14 @@ class _CameraMixin:
             command=self._camera_changed, **self.skin.menu_style())
         self.camera_menu.pack(side="left")
         ctk.CTkButton(controls, text="rescan", width=80,
-                      command=lambda: self._scan_cameras(force=True),
-                      # the rescan BUTTON forces the diagnostic sweep
-                      # (owner law: rescan performs the same check
-                      # manually - the automatic triggers are the
-                      # record's, the button's is the human's); the
-                      # bare boot/wizard call sites keep force=False
+                      command=self._rescan_setup,
+                      # the rescan IS the setup screen (redesign law
+                      # 4: one path; rerun semantics, enabled stays
+                      # true, and the pane refresh rides the dialog
+                      # close either way - the force-probe path in
+                      # _scan_cameras serves that refresh)
                       **self.skin.secondary()).pack(
             side="left", padx=theme.S_FIELD)
-        ctk.CTkButton(controls, text="identify...", width=80,
-                      command=lambda: open_identify(self),
-                      **self.skin.secondary()).pack(side="left")
         # the label zone is a 320 px form, not the card's full width:
         # full width flings labels to one edge and menus to the other
         # and the eye has to cross a canyon to read the pair (the
@@ -177,6 +174,22 @@ class _CameraMixin:
 
 
     # --------------------------------------------------------------- cameras --
+    def _rescan_setup(self):
+        """One door, one screen (redesign law 4): rescan opens the
+        SAME setup window the first-run dialog does. One manager
+        window (the _show_overrides pattern): a second click lifts
+        the running setup instead of stacking a parallel sweep."""
+        from ._assign import SetupWindow
+        win = getattr(self, "_setup_win", None)
+        if win is not None:
+            try:
+                if win.winfo_exists():
+                    win._claim_focus()
+                    return
+            except Exception:
+                pass
+        self._setup_win = SetupWindow(self)
+
     def _diag_needed(self, found):
         """Pure read of the diagnostic record: the automatic sweep runs
         when NO record exists yet (first launch) or when the scanned

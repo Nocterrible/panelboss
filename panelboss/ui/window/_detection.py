@@ -15,17 +15,107 @@ from ._widgets import SkewCombo
 class _DetectionMixin:
     # ---------------------------------------------------------- detection --
     def _build_detection(self, page):
+        # THE consent header (redesign law 2): one big switch owns the
+        # whole tab; OFF on a virgin boot, and the gray-out is the
+        # body - the tab stays legible, every control behind the
+        # switch loses its state. Built first so the band (and the
+        # camera card beside it) lands under it in the pack order.
+        self.consent_switch = ctk.CTkSwitch(
+            page, text="enable camera detection",
+            font=self.skin.font(14, "bold"),
+            command=self._consent_flipped, **self.skin.switch_style())
+        self.consent_switch.pack(anchor="w", padx=theme.S_SECTION,
+                                 pady=(theme.S_ROW, 0))
+        self.consent_note = ctk.CTkLabel(page, text="",
+                                         font=self.skin.font(11),
+                                         wraplength=640, justify="left",
+                                         anchor="w",
+                                         **self.skin.text_style("sub"))
+        self.consent_note.pack(anchor="w", padx=theme.S_SECTION,
+                               pady=(theme.S_FIELD, theme.S_ROW))
         # ONE band anchored top-left: the camera card mounts beside
         # the settings column, never against the window edge -
         # stretching the window opens spare room to the RIGHT of the
         # pair, not in a canyon between its halves
         band = ctk.CTkFrame(page, fg_color="transparent")
         band.pack(anchor="nw")
+        self._consent_band = band                # the gray-out's scope
         left = ctk.CTkFrame(band, width=380, fg_color="transparent")
         left.pack(side="left", fill="y")
         self._build_detect_card(left)
         self._build_timers(left)
         self._build_camera_card(band)
+        self._sync_consent_switch()              # paint from cfg truth
+
+
+    def _consent_flipped(self):
+        """OFF is a door anyone may shut; ON is only real through the
+        setup screen (owner design: toggling ON ASKS, and a "No"
+        costs nothing but the flip back - an enabled app with a blind
+        picker is exactly the lockout the redesign blew away)."""
+        want = bool(self.consent_switch.get())
+        if want == bool(self.cfg["camera"].get("enabled")):
+            return                               # repaint echo, no-op
+        if not want:
+            self.monitor.events.put(("camera_enabled", False))
+            return                               # no dialog for a
+                                                 # close: the drain
+                                                 # happens in state
+        ans = None
+        try:
+            ans = ctk.CTkMessagebox(
+                "camera detection",
+                "Would you like to go through first-time setup?",
+                choices=["Yes", "No"], icon="question", parent=self)
+        except Exception:
+            ans = "Yes"                          # headless harnesses
+                                                 # and old ctk builds:
+                                                 # the setup is the
+                                                 # safe answer
+        if ans == "Yes":
+            self._rescan_setup()                 # THE one path: the
+                                                 # dialog's OK posts
+                                                 # camera_enabled and
+                                                 # the resync paints
+                                                 # this tab
+            return
+        self._sync_consent_switch()              # "No": the switch
+                                                 # flips back, the
+                                                 # truth never moved
+
+
+    def _sync_consent_switch(self):
+        """Repaint the header and the gray-out from cfg truth - the
+        state loop owns the key, the UI reads the snapshot (the same
+        resync the identity writes ride)."""
+        on = bool(self.cfg["camera"].get("enabled"))
+        try:
+            if on:
+                self.consent_switch.select()
+            else:
+                self.consent_switch.deselect()
+        except Exception:
+            pass
+        self.consent_note.configure(
+            text="" if on else
+            "Detection is off - cameras will not be opened until you "
+            "enable it.")
+        state = "normal" if on else "disabled"
+        self._gate_widgets(self._consent_band, state)
+
+    def _gate_widgets(self, widget, state):
+        """Walk the band's tree and give every widget that HAS a
+        state one (CTk and ttk both do; plain tk mostly does); the
+        rest - labels, frames, the ones that never took input
+        anyway - carry no state and must not crash the walk. The
+        switch above the band is deliberately outside the scope:
+        the door is never locked."""
+        try:
+            widget.configure(state=state)
+        except Exception:
+            pass
+        for child in widget.winfo_children():
+            self._gate_widgets(child, state)
 
 
     def _build_detect_card(self, left):

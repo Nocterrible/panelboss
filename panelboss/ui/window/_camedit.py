@@ -19,7 +19,7 @@ from __future__ import annotations
 import customtkinter as ctk
 
 from .. import theme
-from . import _camid
+from . import _identity
 from ... import camera
 from ._constants import TIPS
 from ._widgets import SkewCombo
@@ -114,10 +114,10 @@ class _CamEditMixin:
         self._cam_rows = {}
         roster = set(duty_roster(self.cfg["camera"]))
         hidden = self.cfg["camera"].get("hidden") or []
-        hid = _camid.hidden_indices(getattr(self, "_devs", None) or [],
+        hid = _identity.hidden_indices(getattr(self, "_devs", None) or [],
                                     found, hidden,
                                     self.cfg["camera"].get("bindings") or {})
-        names = _camid.display_names(getattr(self, "_devs", None) or [],
+        names = _identity.display_names(getattr(self, "_devs", None) or [],
                                      found, self.cfg["camera"])
         # the sweep's verdict rides the duty card too, under the same
         # coverage gate as the picker line (the record must have
@@ -132,7 +132,7 @@ class _CamEditMixin:
                 # a hidden device ON duty keeps its row (the engine
                 # still honors the roster) wearing an honest badge
                 self._cam_row(index, name, index in hid,
-                              (_camid.diag_suffix(self.cfg["camera"],
+                              (_identity.diag_suffix(self.cfg["camera"],
                                                   entry[0])
                                if covers else ""))
         # the IR seat's card (amendment 5): duty the cv2 loop cannot
@@ -268,3 +268,4 @@ class _CamEditMixin:
         # duty needs no badge here: rows exist ONLY for roster members
         # (owner review); an off-roster camera is not listed at all,
         # and the picker offers it again
+

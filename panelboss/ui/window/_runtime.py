@@ -126,6 +126,13 @@ class _RuntimeMixin:
                 self._startup_sync(startup.enabled())
             if message == "cameras":
                 self._apply_cameras(_value)
+                if hasattr(self, "_sync_consent_switch"):
+                    # the consent repaint (redesign law 2): every
+                    # state-side write already fans a resync post
+                    # through this arm - the header switch and the
+                    # gray-out read the moved key on the same turn,
+                    # no second channel
+                    self._sync_consent_switch()
                 # every list change resets the debug view's slot (the
                 # owner's law: never a stale frame from the previous
                 # device) - the draw arm below takes the None slot as
