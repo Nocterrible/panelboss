@@ -29,6 +29,7 @@ colour and measurably lies: on this desk it answers
 import json
 import logging
 import os
+import threading
 import time
 
 from . import config, wm
@@ -123,15 +124,57 @@ def load(dir=None):
                 not isinstance(prof.get("wins"), list):
             del data["profiles"][name]     # one rotted row does not
             log.warning("dropped rotted profile '%s'", name)
+            continue
+        # hand-edited junk rows die HERE, before layout+HDR are
+        # committed (audit: a string row passed load, apply died after
+        # the commit, with no rollback note) - drop the row, keep the
+        # profile
+        for i, d in enumerate(prof["displays"]):
+            if not isinstance(d, dict) or not d.get("id"):
+                log.warning("profile '%s': dropped junk displays row "
+                            "at index %d (needs a dict with 'id')",
+                            name, i)
+                prof["displays"][i] = None
+        prof["displays"] = [d for d in prof["displays"]
+                            if d is not None]
+        for i, w in enumerate(prof["wins"]):
+            if not isinstance(w, dict) or not w.get("proc") or \
+                    "title" not in w or not w.get("rect"):
+                log.warning("profile '%s': dropped junk wins row "
+                            "at index %d (needs a dict with 'proc', "
+                            "'title' and 'rect')", name, i)
+                prof["wins"][i] = None
+        prof["wins"] = [w for w in prof["wins"] if w is not None]
+    lg = data.get("login")                  # the "last" validation
+    if lg is not None and not isinstance(lg, dict):   # pattern, aimed
+        log.warning("dropped rotted 'login' section (not a dict)")   # at the
+        del data["login"]                   # login record
+    else:
+        if isinstance(lg, dict):
+            for key in ("took", "launch_delay"):
+                if key not in lg:
+                    continue
+                try:
+                    lg[key] = float(lg[key])
+                except (TypeError, ValueError):
+                    log.warning("dropped unparsable login '%s': %r",
+                                key, lg[key])
+                    del lg[key]
     return data
+
+
+# one lock: save() runs from the apply worker thread AND the UI main
+# thread writing one file (audit: single-writer the tmp+replace window)
+_SAVE_LOCK = threading.Lock()
 
 
 def save(data, dir=None):
     p = path(dir)
     try:
-        with open(p + ".tmp", "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=1)
-        os.replace(p + ".tmp", p)          # atomic on the same volume
+        with _SAVE_LOCK:
+            with open(p + ".tmp", "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=1)
+            os.replace(p + ".tmp", p)      # atomic on the same volume
         return True
     except OSError:
         log.exception("profiles could not be written")
@@ -196,7 +239,7 @@ def windows_now():
     return out
 
 
-def create(data, name, hdr="snap", match="process", dir=None):
+def create(data, name, hdr="snap", match="process + title", dir=None):
     prof = {"fp": wm.fingerprint(), "created": time.time(),
             "used": time.time(), "match": match, "hdr": hdr,
             "displays": capture(), "wins": []}
@@ -348,7 +391,7 @@ def drop_display(data, name, monitor_id, dir=None):
 # window lives on the pin, because only the user knows which of
 # their apps rename themselves a hundred times a day (a browser
 # window pinned by title died the moment a tab was clicked).
-def pin(data, name, win, match="process", open_if_missing=False,
+def pin(data, name, win, match="process + title", open_if_missing=False,
         exe=None, wait=None, dir=None):
     """Pin it: the window's placement RIGHT NOW becomes the
     profile's truth for that app. `open_if_missing` is the wish to
@@ -450,6 +493,22 @@ def pin_hits(row, live, taken, fallback="process"):
             hit = bool(proc) and lp == proc
         if hit:
             out.append(l)
+    if mode == "process":
+        # splash theft (audit): a process pin first-launches into the
+        # app's splash, which then parks AT the main seat while the
+        # real window sits unplaced - no_shows comes up empty and the
+        # loss is never reported. Prefer a window that is not splash
+        # sized (< 200x150) whenever one exists for this pin; when
+        # only small windows exist, the old behavior stands.
+        if out and any(len(l.get("rect") or []) >= 2 and
+                       l["rect"][2] < 200 and l["rect"][3] < 150
+                       for l in out):
+            big = [l for l in out
+                   if not (len(l.get("rect") or []) >= 2
+                           and l["rect"][2] < 200 and
+                           l["rect"][3] < 150)]
+            if big:
+                out = big
     return out
 
 
