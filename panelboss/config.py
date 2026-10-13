@@ -8,6 +8,7 @@ machine never has to None-check.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -34,7 +36,7 @@ appdata = os.environ.get("APPDATA")
 if appdata:
     CONFIG_DIR = Path(appdata) / APP_NAME
 else:
-    CONFIG_DIR = Path.home / ".config" / APP_NAME
+    CONFIG_DIR = Path.home() / ".config" / APP_NAME
 
 CONFIG_DIR = os.environ.get("PANELBOSS_CONFIG_DIR") or str(CONFIG_DIR)
 
@@ -232,6 +234,96 @@ DEFAULTS = {
     },
 }
 
+# the load boundary: hand-edited junk in a section must fail OPEN with a
+# loud warning naming the key and the offending value - never raise, never
+# stay silent. The rules are data (section, key, kind, bound); a new
+# boundary check is one row in the table.
+NORMALIZE_RULES = (
+    ("inference", "device", "oneof", ("auto", "cuda", "cpu")),
+    ("inference", "device_id", "int", None),
+    ("inference", "confidence", "float", (0.05, 0.95)),
+    ("detection", "ratio", "float", (0.0, 1.0)),
+    ("detection", "diff_level", "int", 1),
+    ("detection", "hold_sec", "int", 1),
+    ("gaming", "game_hz", "hzmap", None),
+    ("gaming", "desktop_hz", "hzmap", None),
+    ("ui", "preview_width", "int", 160),
+    ("ui", "preview_poll_ms", "int", 250),
+    ("camera", "labels", "dicttype", {}),
+    ("camera", "hidden", "listtype", []),
+)
+
+
+def _coerce(value, rule, stock):
+    """One NORMALIZE_RULES row; returns (ok, coerced, reason). A failure
+    returns the stock value and the reason the warning prints."""
+    _, _, kind, bound = rule
+    if kind == "oneof":
+        value = value.lower() if isinstance(value, str) else value
+        if value in bound:
+            return True, value, ""
+        return False, bound[0], "expected one of %s" % "/".join(bound)
+    if kind == "int":
+        if value is None:
+            return True, None, ""       # None is legal: it means unset
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return False, stock, "not an int"
+        if bound is not None and value < bound:
+            return False, stock, "below %d" % bound
+        return True, value, ""
+    if kind == "float":
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return False, stock, "not a number"
+        if not bound[0] <= value <= bound[1]:
+            return False, stock, "outside %s..%s" % bound
+        return True, value, ""
+    if kind == "hzmap":
+        # the per-monitor rate maps: None and {} are legal and mean
+        # "unset"; a dict passes through; junk (a scalar hand-edit)
+        # goes to the stock empty map, never a crash at the reader
+        if value is None or isinstance(value, dict):
+            return True, value, ""
+        return False, copy.deepcopy(stock), "not a rate map"
+    if kind in ("dicttype", "listtype"):
+        good = isinstance(value, dict) if kind == "dicttype" \
+            else isinstance(value, list)
+        if good:
+            return True, value, ""
+        return False, copy.deepcopy(bound), "not a %s" % kind[:-4]
+    raise ValueError("unknown normalize kind %r" % kind)
+
+
+def normalize_sections(merged):
+    """Runs the boundary table over the merged config: any unusable
+    value is replaced by its stock and logged with the key and the
+    offending value named. Never raises - junk fails open."""
+    for section, key, kind, _bound in NORMALIZE_RULES:
+        section_cfg = merged.get(section)
+        if not isinstance(section_cfg, dict):
+            continue
+        stock = DEFAULTS[section][key]
+        try:
+            ok, coerced, reason = _coerce(section_cfg.get(key),
+                                          (section, key, kind, _bound),
+                                          stock)
+        except Exception:
+            ok, coerced, reason = (False, copy.deepcopy(stock),
+                                   "coerce error")
+        if not ok:
+            # warn only when the FILE brought a value that differs from
+            # stock: a stock value that trips its own bound (the poll-ms
+            # 200 default vs the 250 floor) would otherwise confess on
+            # every clean load
+            if section_cfg.get(key) != stock:
+                log.warning("config [%s].%s = %r is unusable (%s); "
+                            "using %r", section, key, section_cfg.get(key),
+                            reason, stock)
+        section_cfg[key] = coerced
+
 
 def normalize_index(value):
     """[camera] index in its in-memory shape: a list of ints. A bare int
@@ -332,8 +424,17 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
                 log.exception("could not move %s aside", path)
     merged = {}
     for section, stock in DEFAULTS.items():
-        merged[section] = dict(stock)
-        merged[section].update(config.get(section, {}))
+        # deepcopy, not dict(): a shallow copy aliases the NESTED
+        # defaults, and the mutation sites (gaming rate picks, the
+        # camera_identity labels, the preview _events handler) write
+        # straight through it into DEFAULTS
+        merged[section] = copy.deepcopy(stock)
+        sec = config.get(section, {})
+        if not isinstance(sec, dict):
+            log.warning("config section %s is %r; using stock section "
+                        "alone", section, type(sec).__name__)
+            sec = {}
+        merged[section].update(sec)
     # keep top-level keys too
     for key, value in config.items():
         if key not in merged:
@@ -404,6 +505,7 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
                         "(%s) are on duty, the rest are dropped",
                         len(indexes), indexes[:4])
             camera_merged["index"] = indexes[:4]
+    normalize_sections(merged)
     return merged
 
 
@@ -469,41 +571,59 @@ def _emit_table(table, path, lines):
         lines.append("")
 
 
+# two writers share this path - the UI's debounced save and the
+# monitor loop's write_config - so the whole snapshot-and-write holds
+# one lock; without it _dumps iterates one writer's live nested dicts
+# while the other is mid-mutation
+_CFG_LOCK = threading.RLock()
+
+
 def write_config(config, path=None):
-    """Writes config back to disk (stock comments are not preserved)."""
+    """Writes config back to disk (stock comments are not preserved).
+    Serialized by _CFG_LOCK: two writers, one desk."""
     path = path or CONFIG_DIR
     if os.path.isdir(path):
         path = os.path.join(path, "config.toml")
-    data = {k: v for k, v in config.items() if not k.startswith("_")}
-    if "camera" in data:
-        # in memory the index is ALWAYS a list; on disk a single camera
-        # goes back to the bare int (the shape users and the tray have
-        # always saved) and several stay a list. name_contains: empty
-        # is "" on disk, one match a plain string, several a list. The
-        # sub-dict is copied: the live cfg keeps its list shape
-        cam = dict(data["camera"])
-        indexes = normalize_index(cam.get("index", 0))
-        cam["index"] = indexes[0] if len(indexes) == 1 else indexes
-        names = normalize_name_contains(cam.get("name_contains"))
-        cam["name_contains"] = (names[0] if len(names) == 1
-                                else names if names else "")
-        # the mode tables: in memory they are {int: mode}; on disk the
-        # keys are strings (TOML table keys are) and an EMPTY table is
-        # not written at all - a missing table means the same as an
-        # empty one (the global applies to every index)
-        for table_key in ("on", "off"):
-            table = normalize_camera_modes(cam.get(table_key))
-            if table:
-                cam[table_key] = {str(k): v for k, v in table.items()}
-            else:
-                cam.pop(table_key, None)
-        data["camera"] = cam
-    # atomic: the app saves while it runs, and a crash between
-    # truncate and finish used to leave a half file (or none)
-    with open(path + ".tmp", "w", encoding="utf-8") as f:
-        f.write("# PanelBoss config (rewritten, edit to taste)\n")
-        f.write(_dumps(data))
-    os.replace(path + ".tmp", path)
+    with _CFG_LOCK:
+        # snapshot FIRST: _dumps below iterates this copy, never the
+        # live nested dicts the writers keep mutating
+        data = copy.deepcopy(
+            {k: v for k, v in config.items() if not k.startswith("_")})
+        if "camera" in data:
+            # in memory the index is ALWAYS a list; on disk a single
+            # camera goes back to the bare int (the shape users and the
+            # tray have always saved) and several stay a list.
+            # name_contains: empty is "" on disk, one match a plain
+            # string, several a list. data is the snapshot copy, so
+            # these rewrites never reach the live cfg
+            cam = data["camera"]
+            indexes = normalize_index(cam.get("index", 0))
+            cam["index"] = indexes[0] if len(indexes) == 1 else indexes
+            names = normalize_name_contains(cam.get("name_contains"))
+            cam["name_contains"] = (names[0] if len(names) == 1
+                                    else names if names else "")
+            # the mode tables: in memory they are {int: mode}; on disk
+            # the keys are strings (TOML table keys are) and an EMPTY
+            # table is not written at all - a missing table means the
+            # same as an empty one (the global applies to every index)
+            for table_key in ("on", "off"):
+                table = normalize_camera_modes(cam.get(table_key))
+                if table:
+                    cam[table_key] = {str(k): v for k, v in
+                                      table.items()}
+                else:
+                    cam.pop(table_key, None)
+            # data["camera"] is cam itself (snapshot copy): no
+            # reassignment needed
+        # atomic: the app saves while it runs, and a crash between
+        # truncate and finish used to leave a half file (or none). The
+        # tmp carries the pid so two writers can never squat on the
+        # same literal name
+        tmp = path + (".tmp.%d" % os.getpid())
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("# PanelBoss config (rewritten, edit to taste)\n")
+            f.write(_dumps(data))
+        os.replace(tmp, path)
     log.debug(f"config saved to {path}")
     return path
 
@@ -528,6 +648,12 @@ def get_log_level(level=None):
     formatter = logging.Formatter(
         "%(asctime)s %(threadName)-12s %(name)s: %(message)s")
     handler.setFormatter(formatter)
+    # pystray's own _mainloop swallows pump exceptions and its logger
+    # is the pump's quiet grave - force it into this rotating file.
+    # Propagation is on by default; the line is idempotent and says
+    # the law out loud.
+    for name in ("pystray",):
+        logging.getLogger(name).propagate = True
     return root
 
 

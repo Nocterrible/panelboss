@@ -47,7 +47,9 @@ class _DetectionMixin:
                                  command=self._device_changed,
                                  **self.skin.menu_style())
         menu.grid(row=0, column=1, sticky="e")
-        menu.set(dict(DEVICE_KEYS)[self.cfg["inference"]["device"]])
+        menu.set(dict(DEVICE_KEYS).get(
+            self.cfg["inference"]["device"],
+            dict(DEVICE_KEYS)["auto"]))
         rows.append(("device", row))
 
         from ... import inference
