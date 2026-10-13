@@ -589,11 +589,23 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
         if not isinstance(sec_cam, dict):
             sec_cam = {}
         if "enabled" not in sec_cam:
-            camera_merged["enabled"] = bool(
-                sec_cam.get("labels") or sec_cam.get("bindings")
-                or sec_cam.get("hidden") or sec_cam.get("shown")
-                or sec_cam.get("diag")
-                or sec_cam.get("index") not in (None, 0, [0]))
+            # SPEAK WHEN IT FIRES (amendment 7): the 15:19 breach was
+            # not the consent - it was the silence. A state change the
+            # file decides must name its evidence in the log that made
+            # it, or the next mystery re-litigates a whole afternoon.
+            hits = [n for n, v in (
+                ("labels", sec_cam.get("labels")),
+                ("bindings", sec_cam.get("bindings")),
+                ("hides", sec_cam.get("hidden")),
+                ("shows", sec_cam.get("shown")),
+                ("diag", sec_cam.get("diag")),
+                ("non-stock index",
+                 sec_cam.get("index") not in (None, 0, [0]))) if v]
+            camera_merged["enabled"] = bool(hits)
+            if hits:
+                log.info("[camera] enabled absent and section reads "
+                         "configured (%s) - consent honored from file",
+                         ", ".join(hits))
     normalize_sections(merged)
     return merged
 
@@ -775,12 +787,15 @@ def get_log_level(level=None):
 
 
 def migrate_once():
-    """One-time pre-rename migration, fail-open and idempotent. The old
-    data dir is copied over once (left in place as a backup); the two
-    pre-rename scheduled tasks are retired; the legacy Run value is
-    replaced by its PanelBoss twin, so the autostart the user chose
-    survives the rename. A fresh install (no old dir, no legacy value)
-    is a silent no-op."""
+    """One-time pre-rename migration, fail-open and one-shot BY
+    CONSTRUCTION: the old data dir is copied over and the source is
+    retired under a renamed twin the moment the copy lands (a backup
+    left in place resurrected a 3-day-old config at the 15:19 launch -
+    see the retire-on-use note below). The two pre-rename scheduled
+    tasks are retired; the legacy Run value is replaced by its
+    PanelBoss twin, so the autostart the user chose survives the
+    rename. A fresh install (no old dir, no legacy value) is a silent
+    no-op."""
     log = logging.getLogger("migrate")
     appdata = os.environ.get("APPDATA")
     if not appdata:
@@ -792,8 +807,29 @@ def migrate_once():
             try:
                 shutil.copytree(old_dir, new_dir, copy_function=shutil.copy2,
                                 dirs_exist_ok=True)
-                log.info("migrate: copied settings from %s (left in place "
-                         "as backup)", old_dir)
+                # RETIRE-ON-USE (amendment 7): a copy whose source stays
+                # in place is a resurrection that can fire twice, and
+                # twice is the silent breach the 15:19 launch proved -
+                # the Oct-10 ICU dir (fingerprints: index = 2,
+                # device_id = 1, gaming and restore on) copytree'd over
+                # a file-less destination and the consent migration
+                # then HONORED the stranger's file. Moving the source
+                # out of reach the moment the copy lands makes the
+                # migration one-shot by construction. A failed rename
+                # keeps the copy (the destination file now answers the
+                # next boot anyway), but says so.
+                retired = (old_dir + "-retired-"
+                           + time.strftime("%Y%m%d-%H%M%S"))
+                try:
+                    os.rename(old_dir, retired)
+                    log.info("migrate: copied settings from %s; source "
+                             "retired to %s (can never re-resurrect)",
+                             old_dir, retired)
+                except OSError as exc:
+                    log.warning("migrate: copied settings from %s; the "
+                                "source could not be retired (%s) - the "
+                                "destination file now answers the boot",
+                                old_dir, exc)
             except Exception as exc:
                 log.warning("migrate: could not copy settings from %s: %s",
                             old_dir, exc)
