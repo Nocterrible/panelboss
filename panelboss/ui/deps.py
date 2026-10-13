@@ -34,7 +34,7 @@ class Deprompt(ctk.CTkToplevel):
         ctk.CTkButton(row, text="update & restart",
                       command=self._go, **skin.primary()).pack(
             side="right", padx=(theme.S_ROW, 0))
-        ctk.CTkButton(row, text="not now", command=self.destroy,
+        ctk.CTkButton(row, text="not now", command=self._retire,
                       **skin.secondary()).pack(side="right")
         self.update_idletasks()
         # the measured activation trick from the overrides window:
@@ -42,9 +42,16 @@ class Deprompt(ctk.CTkToplevel):
         # maps, and the topmost-blink is what wins the round
         self.after(30, self._claim_focus)
 
+    def _retire(self):
+        # scheduled destroy (owner crash law, the wizard-crash sweep):
+        # never from the button's own stack - withdraw now, destroy
+        # on the event loop's clean stack
+        self.withdraw()
+        self.after(0, self.destroy)
+
     def _go(self):
         job = self._on_install
-        self.destroy()
+        self._retire()
         if job:
             job()
 

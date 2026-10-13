@@ -330,7 +330,7 @@ class IdentifyWindow(ctk.CTkToplevel):
         head.pack(fill="x", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         self._label(head, 15, "bold", text="identify cameras").pack(
             side="left")
-        ctk.CTkButton(head, text="done", width=70, command=self.destroy,
+        ctk.CTkButton(head, text="done", width=70, command=self._close,
                       **self.skin.secondary()).pack(side="right")
         self.note = self._label(self, 10, wraplength=440, anchor="w")
         self.note.configure(text="scanning cameras...")
@@ -401,6 +401,10 @@ class IdentifyWindow(ctk.CTkToplevel):
             self.transient(app)                  # discipline: transient
         except Exception:                        # + the topmost-blink
             pass                                 # wins the focus round
+        self.protocol("WM_DELETE_WINDOW", self._close)   # the X rides
+        # the scheduled retire too: the default WM_DELETE destroys
+        # the toplevel from tk's own protocol callback - the same
+        # under-callback destroy the crash law bans
         self.after(30, self._claim_focus)
 
     def _label(self, parent, size, weight="", tier="sub", **kw):
@@ -903,6 +907,26 @@ class IdentifyWindow(ctk.CTkToplevel):
         if self._cands:
             self._pos = (self._pos + 1) % len(self._cands)
             self._start_step()
+
+    def _close(self):
+        """The retire path (owner crash law, re-landed after the
+        worktree sweep): a CTkToplevel destroyed INSIDE its own
+        command callback tears the widget tree down under the still-
+        running tk callback - the double-destroy the app has died of
+        as heap corruption (0xc0000374, the MSMF release wave; the
+        same class this pane's bind-wave constructor crash taught).
+        Withdraw FIRST (pixels gone synchronously, the close reads as
+        instant), destroy on the event loop's clean stack. The
+        worker retires before the withdraw: _dying/_gen go up so no
+        late frame posts into a corpse."""
+        self._dying = True
+        self._gen += 1
+        self.withdraw()
+        try:
+            self.after(0, self.destroy)
+        except Exception:
+            pass                          # the loop is gone: dying
+                                          # is already the outcome
 
     def destroy(self):
         self._dying = True

@@ -685,4 +685,76 @@ except Exception as _exc:
         raise
     print("window smoke skipped: %s (no display?)" % type(_exc).__name__)
 
+# 9) the crash law (the re-landed wave, owner crash report): a
+#    toplevel's command handler must NEVER destroy it from its own
+#    stack - the withdraw-then-schedule idiom is asserted on a spy
+#    (no tk needed for the retire ordering), and the source ban
+#    sweeps the pane so the direct call cannot creep back. Plus the
+#    orphan-proof label key: an identity with no PnP join renames
+#    through "idx:N" instead of dying silent.
+class CloseSpy:
+    _close = _camid.IdentifyWindow._close
+
+    def __init__(self):
+        self._dying, self._gen = False, 4
+        self.withdrawn = 0
+        self.scheduled = []
+        self.destroyed = 0
+
+    def withdraw(self):
+        self.withdrawn += 1
+
+    def after(self, delay, hook):
+        self.scheduled.append((delay, hook))
+
+    def destroy(self):
+        self.destroyed += 1
+
+
+_c = CloseSpy()
+_c._close()
+assert _c.withdrawn == 1 and _c.destroyed == 0, \
+    "close must withdraw and SCHEDULE the destroy, never eat its own"
+assert _c.scheduled and _c.scheduled[0][0] == 0, "the retire rides the " \
+    "loop's next clean turn"
+_c.scheduled[0][1]()
+assert _c.destroyed == 1
+assert _c._dying and _c._gen == 5, "workers retire BEFORE the withdraw"
+with open(_camid.__file__, encoding="utf8") as fh:
+    assert "command=self.destroy" not in fh.read(), \
+        "a command handler destroys its own toplevel directly again"
+print("crash law OK (withdraw+schedule on the spy; the source stays "
+      "free of command=self.destroy)")
+
+import queue as _q9
+_real_camera9 = cam_mod.Camera
+cam_mod.Camera = FakeCam
+try:
+    m9 = state_mod.PresenceMonitor(cfg, Det())
+    m9.ui_events = _q9.Queue()
+    m9.events.put(("camera_identity", {"index": 7, "label": "Orphan"}))
+    m9.events.put(("camera_identity", {"index": "x", "label": "junk"}))
+    m9._drain_tray()
+    assert cfg["camera"]["labels"].get("idx:7") == "Orphan"
+    assert "idx:x" not in cfg["camera"]["labels"]   # the int guard
+                                                    # eats junk
+    assert tomllib.load(open(os.path.join(SCRATCH, "config.toml"),
+                             "rb"))["camera"]["labels"]["idx:7"] \
+        == "Orphan"                                 # through the toml
+    # and a bind later MIGRATES the orphan key like the ghost it is:
+    # name first, bind after (the owner's exact flow), the label
+    # follows onto the durable instance (section 4 left a "USB\\R1"
+    # label in this shared cfg - the asserts are about the keys in
+    # play, not the whole table)
+    m9.events.put(("camera_identity", {"instance": "USB\\LATE",
+                                       "bind": 7}))
+    m9._drain_tray()
+    assert cfg["camera"]["labels"].get("USB\\LATE") == "Orphan"
+    assert "idx:7" not in cfg["camera"]["labels"], cfg["camera"]["labels"]
+finally:
+    cam_mod.Camera = _real_camera9
+print("idx-key label OK (an inst-less identity persists by its scan "
+      "index, the int guard eats junk, and the bind migration adopts "
+      "the orphan)")
+
 print("ALL CAMID TESTS OK")

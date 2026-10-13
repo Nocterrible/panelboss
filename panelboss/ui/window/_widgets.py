@@ -68,7 +68,7 @@ class _SleepPrompt(ctk.CTkToplevel):
         ctk.CTkButton(row, text="ok", command=self._go,
                       **skin.primary()).pack(side="right",
                                              padx=(theme.S_ROW, 0))
-        ctk.CTkButton(row, text="cancel", command=self.destroy,
+        ctk.CTkButton(row, text="cancel", command=self._retire,
                       **skin.secondary()).pack(side="right")
         self.update_idletasks()
         # centre on the window it belongs to: a 300-wide dialog at
@@ -84,9 +84,17 @@ class _SleepPrompt(ctk.CTkToplevel):
         self._lbl.configure(text="wake again in %d min"
                                   % (round(float(value) / 5) * 5))
 
+    def _retire(self):
+        # scheduled destroy (owner crash law): this dialog's buttons
+        # reach it from their own command callbacks, and a toplevel
+        # destroyed under a live callback is the 0xc0000374 double-
+        # destroy shape. Withdraw now, destroy on the loop's stack.
+        self.withdraw()
+        self.after(0, self.destroy)
+
     def _go(self):
         minutes = round(float(self._sld.get()) / 5) * 5
-        self.destroy()
+        self._retire()
         self._on_ok(minutes)
 
     def _claim_focus(self):

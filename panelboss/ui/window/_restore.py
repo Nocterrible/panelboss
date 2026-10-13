@@ -195,7 +195,11 @@ class _RestoreMixin:
             **self.skin.text_style()).pack(padx=theme.S_SECTION, pady=(theme.S_SECTION, theme.S_ROW))
 
         def close():
-            dlg.destroy()
+            dlg.withdraw()
+            dlg.after(0, dlg.destroy)      # scheduled retire (owner
+                                           # crash law): the got-it
+                                           # button must not destroy
+                                           # its own toplevel
             if self.restorep_warn is dlg:
                 self.restorep_warn = None
 

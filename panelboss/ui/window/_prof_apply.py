@@ -348,7 +348,11 @@ class _ModeMixin:
                 self._pin_load({"proc": misses[0]["proc"],
                                 "title": misses[0]["title"],
                                 "rect": [0, 0, 0, 0]})
-            dlg.destroy()
+            dlg.withdraw()
+            dlg.after(0, dlg.destroy)      # scheduled retire (owner
+                                           # crash law): the button
+                                           # must not destroy its own
+                                           # toplevel from its stack
 
         def quiet():
             prof = self._prof_data["profiles"].get(self._prof_sel)
@@ -359,7 +363,8 @@ class _ModeMixin:
                                                        m["title"]):
                             w["quiet"] = True
                 profiles.save(self._prof_data)
-            dlg.destroy()
+            dlg.withdraw()
+            dlg.after(0, dlg.destroy)      # the same scheduled retire
         ctk.CTkButton(line, text="I'll fix it", width=110,
                       command=fix, **self.skin.primary()).pack(
             side="left", padx=(0, theme.S_FIELD))

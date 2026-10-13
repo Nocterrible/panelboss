@@ -273,6 +273,21 @@ class _EventsMixin:
                 # owns the toml write, the UI never edits it behind
                 # the loop's back
                 inst = str(value.get("instance") or "")
+                if not inst and "index" in value:
+                    # the orphan-proof label key (owner crash report,
+                    # re-landed): an identity with no PnP join is
+                    # STILL an identity - the "idx:N" key the
+                    # synthetic rows are named by, and the ghost
+                    # migration below carries it to the real instance
+                    # when a bind later resolves. Without the
+                    # fallback, renaming an unjoinable camera arrived
+                    # and was silently dropped - the silent-ignorance
+                    # class the load boundary already refuses.
+                    try:
+                        inst = "idx:%d" % int(value["index"])
+                    except (TypeError, ValueError):
+                        pass               # junk index: no identity,
+                                           # the drop stays honest
                 if inst:
                     if value.get("label") is not None:
                         labels = self.camera_cfg.setdefault("labels", {})
