@@ -13,7 +13,7 @@ candidates, and driving the lease would rewrite the roster per cycle.
 Duty eyes release between polls under boot_per_poll; a still-busy
 device earns the honest busy line.
 
-SIZE LAW: ~320, one window - the step machine and its borrowed-frame
+SIZE LAW: 414, justified, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -157,7 +157,8 @@ class IdentifyWindow(ctk.CTkToplevel):
     def _gather_reload(self):
         # the _gather idiom on the reload path: the app's own last scan
         # is empty and the powershell query may not land on the tk
-        # thread; the pump's next tick picks up the answer
+        # thread; a later ladder reload (and the pump's deadline
+        # build) pick up the answer
         try:
             setattr(self.app, "_devs", camera.camera_devices())
         except Exception:
@@ -249,10 +250,9 @@ class IdentifyWindow(ctk.CTkToplevel):
         if cam is None or not cam.is_open():
             if cam is not None:
                 cam.release()
-            gen_now = self._gen                  # snapshot: the pump's
-            if self._gen == gen:                 # _gen check drops this
-                self._busy = True                # write if a new step
-            return                               # (its _gen bump) lands
+            if self._gen == gen:                 # a stale worker (its
+                self._busy = True                # step retired) must
+            return                               # not queue a BUSY
         try:
             while not self._dying and self._gen == gen:
                 frame = cam.read(timeout=1, screen=0)

@@ -18,6 +18,26 @@ import time
 from . import config
 
 
+def timeout_notice(text, title="PanelBoss", ms=10000):
+    """A box that dies on its own - the only channel pythonw leaves.
+
+    Slot order is the just-fixed shape (hwnd, text, caption, type,
+    wLangID, dwTimeout): the first cut passed the timeout in the
+    language slot (TaskDialog shape, not MessageBox) so the twin's
+    box never self-dismissed (measured).
+    """
+    try:
+        user32 = ctypes.windll.user32
+        user32.MessageBoxTimeoutW.restype = ctypes.c_int
+        user32.MessageBoxTimeoutW.argtypes = [
+            ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p,
+            ctypes.c_uint, ctypes.c_ushort, ctypes.c_uint]
+        user32.MessageBoxTimeoutW(0, text, title, 0x40, 0, ms)
+    except Exception:
+        pass                        # a dead box is better than a dead
+                                    # app; the log is the other channel
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="panelboss")
     parser.add_argument("command", nargs="?", default="run",
@@ -235,22 +255,11 @@ def _run(cfg, autostart=False):
             # survived the shutdown, the twin's only sound is the log
             # line above. Interactive launches get the box so a double
             # click explains itself.
-            user32 = ctypes.windll.user32
-            user32.MessageBoxTimeoutW.restype = ctypes.c_int
-            user32.MessageBoxTimeoutW.argtypes = [
-                ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p,
-                ctypes.c_uint, ctypes.c_ushort, ctypes.c_uint]
-            # signature is (hwnd, text, caption, type, wLangID, dwTimeout):
-            # the FIRST cut passed 5000 in the language slot and a
-            # byref(c_uint) in the timeout slot (TaskDialog shape, not
-            # MessageBox) so the timeout read as a huge pointer value and
-            # the twin's box never self-dismissed (measured). Correct
-            # order now: default language 0, timeout 5000 ms.
-            user32.MessageBoxTimeoutW(0,
+            timeout_notice(
                 "PanelBoss is already running (check the tray, "
                 "hidden icons live behind the chevron). One instance is "
                 "always started first.",
-                "PanelBoss", 0x40, 0, 5000)         # MB_ICONINFORMATION
+                "PanelBoss", 5000)
         return 0
     logging.getLogger("cli").info(
         "instance guard: %s" % ("won" if _MUTEX_HANDLE
@@ -431,6 +440,9 @@ def _drive(cfg, monitor, worker, ui_events):
         except Exception:                     # dies; pythonw has no
             logging.getLogger("ui").exception(  # stderr: a traceback
                 "settings window died")       # must reach the log
+            timeout_notice("settings window died: see the log",
+                           ms=10000)          # a dead window is not
+                                              # just a log line
     else:
         logging.getLogger("cli").info("no ui; running headless beside the "
                                        "tray")

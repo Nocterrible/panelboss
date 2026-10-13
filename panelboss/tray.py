@@ -192,6 +192,21 @@ class Tray(threading.Thread):
                                      title="PanelBoss",
                                      menu=self._light_menu())
             self.icon.run(setup=self._ready)
+            if self.monitor is not None and not self.monitor.quit:
+                # pystray 0.19.5's own _mainloop swallows pump
+                # exceptions and NIM_DELETEs the icon, so run() returns
+                # cleanly with the icon gone and no control surface left;
+                # the box is the only channel pythonw has for a dead pump
+                log.error("the tray pump exited without a quit request - "
+                          "the icon is gone; shutting the app down "
+                          "instead of living uncontrollably")
+                from .cli import timeout_notice   # the box helper
+                timeout_notice("PanelBoss: the tray icon died "
+                               "unexpectedly...",
+                               "PanelBoss", 10000)
+                self.monitor.quit = True         # the loop stops; _drive's
+                                                # headless park exits
+                                                # when the worker dies
         except Exception:
             log.exception("the tray always runs last and pythonw has no "
                           "console; the failure would otherwise vanish")
