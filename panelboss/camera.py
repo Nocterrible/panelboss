@@ -542,30 +542,24 @@ class Camera:
         return last
 
     def release(self):
-        if self.cap is not None:
-            # ask even a never-opened or open-yet-frozen cap to let go;
-            # cv2 handles all three without complaint. The release
-            # rides the SAME deadlined lock as the open (audit MED): a
-            # cap freed outside it races a concurrent reopen - the same
-            # concurrent device-tree touch the lock exists for.
-            with _open_timed() as got:
-                if not got:
-                    # gate fix: "the next release() retries" was a
-                    # lie - callers null self.camera right after, so
-                    # a skipped release ORPHANS the cap exactly like
-                    # the none-free class it replaced. Drop the handle
-                    # here: at worst a zombie until GC/exit, never an
-                    # untracked live cap racing the next open.
-                    log.warning("camera release skipped (open lock "
-                                "busy); handle dropped, not deferred")
-                    self.cap = None
-                    return
-                self.cap.release()
-            # one handle, one release (satellites F3): null by
-            # construction, so a second release() is a no-op and the
-            # store sweep + self.camera double-release no longer leans
-            # on cv2 idempotency one layer down
-            self.cap = None
+        """Lock-free ownership (W3A, gate 2a/2b/2c). WHY no lock:
+        every release CALLER lives on the monitor loop thread
+        (state._cams._release_camera is loop-owned; the quit-path
+        exception is fixed by the cli handoff), and concurrent-open
+        protection is the OPEN's job - the opener already self-releases
+        corpses via gen-bump invalidation, one layer down. The old
+        shape queued release() behind the AsyncOpener's 16-27 s open on
+        the same deadlined lock (stalling the exact windows the opener
+        exists to avoid) and, on a skipped lock, DROPPED the handle:
+        the "next release() retries" was a lie - CPython's destructor
+        runs cv2's release unlocked anyway.
+        """
+        cap, self.cap = self.cap, None   # TAKE ownership first: one owner
+        if cap is not None:              # releases - the null-first swap
+            cap.release()                # is the race fix (gate 2b) and
+                                         # the one-owner law (F3), no lock
+                                         # needed: the attribute swap is
+                                         # atomic under the GIL
 
     def is_open(self):
         return self.cap is not None and self.cap.isOpened()

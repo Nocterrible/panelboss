@@ -1,19 +1,23 @@
 """Camera-core probe for the W2B deltas (the audit's MED cluster).
 
-(a) DELTA 1: _open_lock now has a deadline (OPEN_LOCK_TIMEOUT). A
+(a) W3A: release is lock-free ownership. Camera.release() no longer
+    queues behind the open's deadlined lock; the null-first swap hands
+    the cap to exactly one caller, so two threads hammering release()
+    50 rounds each on ONE fake-cap camera drive the driver's let-go
+    exactly ONCE, however many times it is called, with no
+    AttributeError (the gate 2b two-waiter shape).
+(b) DELTA 2: a BaseException (cv2's C++ raise paths can surface one)
+    in the opener's factory reaps the worker's inflight row - the eye
+    is never left "opening" forever - records it exactly as the
+    dead-open footprint (failed), and STILL re-raises so the daemon
+    dies honestly. A plain Exception keeps the old swallow.
+(c) DELTA 1: _open_lock still has a deadline (OPEN_LOCK_TIMEOUT). A
     holder wedging the lock past it makes the open ABSTAIN: the
     not-opened handle (is_open() False - the module's dead-corpse
     shape _open_door already documents), the confession logged, and
     the CALLER never waits out the holder. The constant is
     monkeypatched to 0.2 s so the probe is fast; the deadline logic
     reads it at call time, which is exactly what the patch proves.
-(b) DELTA 2: a BaseException (cv2's C++ raise paths can surface one)
-    in the opener's factory reaps the worker's inflight row - the eye
-    is never left "opening" forever - records it exactly as the
-    dead-open footprint (failed), and STILL re-raises so the daemon
-    dies honestly. A plain Exception keeps the old swallow.
-(c) DELTA 3/5: Camera.release() nulls the cap and rides the deadlined
-    lock: one handle, ONE release, however many times it is called.
     (The _cams adoption nulls the store row on the same principle;
     multi_cam/asyncopen already drive that seam.)
 """
@@ -141,15 +145,36 @@ def probe_reap():
 
 
 def probe_one_release():
+    """(a) W3A: the lock-free ownership swap. Two threads hammer ONE
+    Camera's release() 50 rounds each (gate 2b's two-waiter shape,
+    stress-timed): the null-first swap elects exactly one winner, so
+    the fake cap counts ONE release ever, and a loser on a nulled cap
+    must not AttributeError."""
     shared = FakeCap()
     saved_door = cam_mod._open_door
     cam_mod._open_door = lambda *a, **k: (shared, "dshow")
     try:
         cam = cam_mod.Camera(index=0)
         assert cam.is_open(), "the fake door must read open"
-        cam.release()
-        cam.release()
-        cam.release()
+        errors = []
+
+        def hammer():
+            try:
+                for _ in range(50):
+                    cam.release()
+            except BaseException as exc:      # the old None.release()
+                errors.append(exc)            # race lands here
+
+        threads = [threading.Thread(target=hammer, daemon=True,
+                                    name="hammer%d" % i)
+                   for i in (1, 2)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join(10.0)
+        assert not any(th.is_alive() for th in threads), \
+            "a hammer never finished"
+        assert not errors, "release raised across the swap: %r" % errors[0]
         assert shared.releases == 1, \
             ("double release: the cap left the shop %d times"
              % shared.releases)
@@ -159,10 +184,10 @@ def probe_one_release():
         cam_mod._open_door = saved_door
 
 
-probe_abstain()
-print("probe| (a) locked-past-deadline abstains: OK")
+probe_one_release()
+print("probe| (a) two threads, one release, no AttributeError: OK")
 probe_reap()
 print("probe| (b) BaseException reaps the opening row: OK")
-probe_one_release()
-print("probe| (c) one handle, one release: OK")
+probe_abstain()
+print("probe| (c) locked-past-deadline abstains: OK")
 print("camcore probe: 3/3 OK")

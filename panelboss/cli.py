@@ -332,7 +332,25 @@ def _run(cfg, autostart=False):
         stop_taskbar.set()
         monitor.events.put(("stop", True))
         worker.join(3)
-        monitor._release_camera()
+        if worker.is_alive():
+            # the release is a HANDOFF, not a cross-thread grab
+            # (final gate (b)/(e)): the loop's quit handler itself
+            # does not release (_drain_tray only sets quit), so this
+            # is the quit-time release - and a loop still alive may
+            # sit in a 16-27 s driver open, mid its own release/vote
+            # code. An unlocked cross-thread release from here was
+            # the None.release() race in the first place. The OS
+            # frees the device at exit; the LED-off is the loop's
+            # while it runs.
+            logging.getLogger("cli").info(
+                "loop still winding down; its own release owns the cap")
+        else:
+            # loop confirmed stopped: no tick will ever touch
+            # self.camera again, so the main thread owns the release
+            # now - this is the sweep whose intent is the record LED
+            # going honestly off at quit (the loop never releases on
+            # its way out; this call always has)
+            monitor._release_camera()
         icon.stop()                          # the tray stops after the run
     return 0
 
@@ -372,6 +390,19 @@ def _warm_monitor(cfg, monitor):
                            "dep MISSING must not run half-blind.",
                            ms=15000)
             log.exception("warm: faces enabled, insightface missing; "
+                          "the app drains a quit and exits")
+        elif "expected detection head" in str(exc):
+            # gate MED (ledger 2): validate_head's raise was right,
+            # its REACH was the bug - a wrong-head .onnx fell into the
+            # bare-else log line and the app quit with no confession.
+            # The validator's message is the match (it says "expected
+            # detection head" verbatim); same box discipline, same
+            # quit semantics - the exit is now seen, with the fix.
+            timeout_notice("PanelBoss stops here: the model file is not "
+                           "a supported detector - " + str(exc) + ".\n"
+                           "Replace the .onnx or set [inference] model "
+                           "to a YOLO detection model.", ms=15000)
+            log.exception("warm: the onnx head is not a detection head; "
                           "the app drains a quit and exits")
         else:
             # the old no-model behavior was death; the new one is the same

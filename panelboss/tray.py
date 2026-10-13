@@ -151,6 +151,35 @@ if _PS_VERSION != "0.19.5":
                 "0.19.5, running %s: check that the Shell_NotifyIcon "
                 "wrap still fits" % _PS_VERSION)
 
+# ------------------------------------------------------------- modal menu ---
+# The warm-worker swap (_warm_menu -> _try_swap) must not destroy the
+# HMENU a TrackPopupMenuEx is showing: its modal loop pumps this
+# thread's messages, pystray re-shows the TRACKED handle after the
+# return, and a handle destroyed under the user's open menu is the
+# audit MED. pystray exposes no menu-open state, so the flag lives at
+# the same class of choke point as the identity wrap: the module
+# attribute pystray._win32 looks up at CALL time.
+_menu_modal = False
+
+
+def _wrap_track_popup():
+    global _menu_modal
+    inner = win32.TrackPopupMenuEx
+
+    def tracked(*args):
+        global _menu_modal
+        _menu_modal = True
+        try:
+            return inner(*args)
+        finally:
+            _menu_modal = False
+
+    win32.TrackPopupMenuEx = tracked
+    return tracked
+
+
+_wrap_track_popup()
+
 COLORS = {
     "active": (80, 200, 120),     # typing, the gate is closed
     "counting": (240, 200, 40),   # the camera is watching
@@ -178,8 +207,9 @@ class Tray(threading.Thread):
         self.monitor = monitor                 # the live source for the
                                                # picker's mode tail
         self.icon = None
-        self._full_menu = None                 # the warm worker's result,
-                                              # read by _on_menu_ready
+        self._pending_menu = None              # the warm worker's result,
+                                               # consumed at a pump-safe
+                                               # instant by _on_menu_ready
 
     def run(self):
         # the first menu is deliberately light: the two submenus whose
@@ -230,7 +260,12 @@ class Tray(threading.Thread):
                         "running; quit from the icon menu")
         except Exception:
             pass                        # notifications are a courtesy
-        icon._message_handlers[_MENU_READY] = self._on_menu_ready
+        if _MENU_READY:      # the pump-gate (audit MED, W3A): the
+                             # handler is the deferred path's pump half
+                             # only when the private message registered;
+                             # a fake icon without the handlers table
+                             # must not die in setup over it
+            icon._message_handlers[_MENU_READY] = self._on_menu_ready
         # the heavy submenus are built OFF the pump thread (blocking it
         # ~13 s would leave right-clicks dead until the camera probe
         # finished) and posted back for the swap when they are ready
@@ -238,33 +273,79 @@ class Tray(threading.Thread):
                          daemon=True, name="tray-menu").start()
 
     def _warm_menu(self, icon):
-        """Build the full menu off the pump thread, then post a private
-        window message so the swap (icon.menu + the HMENU rebuild)
-        happens on the pump thread, where the HMENU belongs. Until the
+        """Build the full menu off the pump thread, then land the swap
+        (icon.menu + the HMENU rebuild) at a pump-safe instant: the
+        pump's own _on_menu_ready while the private message is
+        registered, else the worker's single gated attempt. Until the
         swap lands, a right-click gets the light menu with its
         placeholders - everything except the two slow submenus works
-        the whole time."""
+        the whole time.
+
+        THE MODAL-LOOP HAZARD (audit MED, W3A): the right-click path
+        (pystray's _on_notify) runs TrackPopupMenuEx ON THE PUMP
+        THREAD - a modal loop that keeps pumping this window's
+        messages while the menu is on screen. A swap from the warm
+        worker while that loop runs destroys the HMENU the user is
+        looking at under pystray's re-show of the tracked handle -
+        the menu vanishes mid-paint, and with the pump-death-is-fatal
+        law the blast radius grew. pystray exposes no menu-open state,
+        so _wrap_track_popup brackets the _menu_modal flag around the
+        call at the same class of choke point as the identity wrap,
+        and the worker's ONE attempt is gated on pump liveness AND
+        that flag - and it runs only in the no-message world, where
+        the pump has no consume site. The pump's own handler is
+        pump-safe BY CONSTRUCTION (see _on_menu_ready). One attribute,
+        one consume site, one attempt - no new threads."""
         try:
             menu = self._build_menu()
         except Exception:
             log.exception("the warm menu failed; the light menu stays")
             return
-        self._full_menu = menu
+        self._pending_menu = menu
         if _MENU_READY:
+            # the pump consumes the pending menu at a pump-safe
+            # instant (see _on_menu_ready); no worker race at all
             win32.PostMessage(icon._hwnd, _MENU_READY, 0, 0)
             return
         log.warning("the private menu message would not register; the "
-                    "swap runs off the pump thread instead")
-        icon.menu = menu      # the property setter rebuilds the HMENU
-        log.info("tray: full menu in place")
+                    "worker's gated attempt is the only swap path")
+        self._try_swap(icon)
+        if self._pending_menu is not None:
+            log.info("tray: the full menu arrived while a menu was "
+                     "open; the light menu stays")
+
+    def _try_swap(self, icon):
+        """The worker's ONE attempt, pump-gated (see _warm_menu's
+        hazard note): swap only while the pump thread lives and
+        _menu_modal says no TrackPopupMenuEx loop can be re-showing
+        the handle this swap destroys. fail-open on every read: the
+        light menu is the designed fallback."""
+        try:
+            if (not _menu_modal and icon is not None
+                    and getattr(icon, "_thread", None) is not None
+                    and icon._thread.is_alive()):
+                icon.menu = self._pending_menu   # the setter rebuilds
+                self._pending_menu = None        # the HMENU
+                log.info("tray: full menu in place")
+        except Exception:
+            pass                   # the swap is a courtesy; the light
+                                   # menu is the designed fallback
 
     def _on_menu_ready(self, wparam, lparam):
         """Runs on the pump thread (pystray's _message_handlers table,
-        the same mechanism as WM_TASKBARCREATED)."""
-        if self._full_menu is not None:
+        the same mechanism as WM_TASKBARCREATED). Pump-safe BY
+        CONSTRUCTION: inside pystray's right-click path the menu
+        re-attaches only AFTER TrackPopupMenuEx returns, so this
+        handler either runs in the flat pump loop or in the modal
+        pump while the menu is already closed. A rebuild landing
+        between the close and the re-show is exactly what re-tracks
+        the FULL menu for this same open."""
+        if self._pending_menu is not None:
             icon = self.icon
-            icon.menu = self._full_menu    # the setter rebuilds the HMENU
-            log.info("tray: full menu in place")
+            icon.menu = self._pending_menu   # the setter rebuilds the HMENU
+            self._pending_menu = None        # one handle, one swap: a
+            log.info("tray: full menu in place")  # repeat _MENU_READY is
+                                             # a no-op, not a double swap
 
     # ------------------------------------------------------------- menu ---
     def _build_menu(self):
