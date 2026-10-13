@@ -6,4 +6,4 @@ standby state the power plan uses (SC_MONITORPOWER broadcast), then wakes
 them when a person comes back.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

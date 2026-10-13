@@ -239,6 +239,9 @@ DEFAULTS = {
 # stay silent. The rules are data (section, key, kind, bound); a new
 # boundary check is one row in the table.
 NORMALIZE_RULES = (
+    # this oneof set must track DEVICE_KEYS (ui/window/_constants.py:29):
+    # a backend added in the UI (directml someday) that the set lacks
+    # would silently revert to auto at boot
     ("inference", "device", "oneof", ("auto", "cuda", "cpu")),
     ("inference", "device_id", "int", None),
     ("inference", "confidence", "float", (0.05, 0.95)),
@@ -248,7 +251,9 @@ NORMALIZE_RULES = (
     ("gaming", "game_hz", "hzmap", None),
     ("gaming", "desktop_hz", "hzmap", None),
     ("ui", "preview_width", "int", 160),
-    ("ui", "preview_poll_ms", "int", 250),
+    # a rule's floor must not exceed the stock value or stock fails
+    # its own rule - the audit's 250 was off by 50 against its own DEFAULTS
+    ("ui", "preview_poll_ms", "int", 200),
     ("camera", "labels", "dicttype", {}),
     ("camera", "hidden", "listtype", []),
 )
@@ -257,7 +262,7 @@ NORMALIZE_RULES = (
 def _coerce(value, rule, stock):
     """One NORMALIZE_RULES row; returns (ok, coerced, reason). A failure
     returns the stock value and the reason the warning prints."""
-    _, _, kind, bound = rule
+    section, key, kind, bound = rule
     if kind == "oneof":
         value = value.lower() if isinstance(value, str) else value
         if value in bound:
@@ -283,11 +288,42 @@ def _coerce(value, rule, stock):
         return True, value, ""
     if kind == "hzmap":
         # the per-monitor rate maps: None and {} are legal and mean
-        # "unset"; a dict passes through; junk (a scalar hand-edit)
-        # goes to the stock empty map, never a crash at the reader
-        if value is None or isinstance(value, dict):
+        # "unset"; junk (a scalar hand-edit) goes to the stock empty
+        # map, never a crash at the reader. A dict's VALUES are
+        # checked: each must be an int > 0 or one of the two legal
+        # tokens ("auto"/"vrr" - the panel's own words for the rate
+        # modes, see DEFAULTS game_hz/desktop_hz) - a bad entry is
+        # dropped with a named warning, the survivors stay; a map
+        # that empties out is the stock {}
+        if value is None:
             return True, value, ""
-        return False, copy.deepcopy(stock), "not a rate map"
+        if not isinstance(value, dict):
+            return False, copy.deepcopy(stock), "not a rate map"
+        if not value:
+            return True, value, ""     # {} is legal: "unset"
+        cleaned = {}
+        for monitor, hz in value.items():
+            good = hz == "auto" or hz == "vrr"
+            if not good:
+                try:
+                    rate = int(hz)
+                except (TypeError, ValueError):
+                    rate = None
+                good = rate is not None and rate > 0
+            if good:
+                cleaned[monitor] = hz
+            else:
+                log.warning("config [%s].%s: dropping rate %r=%r "
+                            "(must be an int > 0 or auto/vrr)",
+                            section, key, monitor, hz)
+        if not cleaned:
+            # every entry was bad: one warning for the whole map, and
+            # the stock empty map stands in
+            log.warning("config [%s].%s: no usable rates left after "
+                        "cleaning; using the stock empty map",
+                        section, key)
+            return True, copy.deepcopy(stock), ""
+        return True, cleaned, ""
     if kind in ("dicttype", "listtype"):
         good = isinstance(value, dict) if kind == "dicttype" \
             else isinstance(value, list)
@@ -578,6 +614,11 @@ def _emit_table(table, path, lines):
 _CFG_LOCK = threading.RLock()
 
 
+def cfg_lock():
+    """Borrow _CFG_LOCK as a context manager: single-writer is the endgame; mutators may adopt this lock; write_config holds it through dump+replace today."""
+    return _CFG_LOCK
+
+
 def write_config(config, path=None):
     """Writes config back to disk (stock comments are not preserved).
     Serialized by _CFG_LOCK: two writers, one desk."""
@@ -587,8 +628,20 @@ def write_config(config, path=None):
     with _CFG_LOCK:
         # snapshot FIRST: _dumps below iterates this copy, never the
         # live nested dicts the writers keep mutating
-        data = copy.deepcopy(
-            {k: v for k, v in config.items() if not k.startswith("_")})
+        try:
+            data = copy.deepcopy(
+                {k: v for k, v in config.items()
+                 if not k.startswith("_")})
+        except RuntimeError:
+            # a mutator not yet on _CFG_LOCK can still resize a nested
+            # dict mid-copy ("dict changed size during iteration"):
+            # retry once after a short beat; a second failure raises
+            # (the callers already log)
+            log.warning("config mutated mid-save; retrying")
+            time.sleep(0.05)
+            data = copy.deepcopy(
+                {k: v for k, v in config.items()
+                 if not k.startswith("_")})
         if "camera" in data:
             # in memory the index is ALWAYS a list; on disk a single
             # camera goes back to the bare int (the shape users and the

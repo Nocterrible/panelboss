@@ -31,7 +31,9 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
     'tweaks_test.py', 'config_writer_test.py', 'gaming_ui_test.py',
     'mode_edit_test.py', 'taskbar_test.py', 'profiles_ui_test.py',
     'asyncopen_test.py', 'blackvote_test.py', 'veil_test.py',
-    'camid_test.py', 'guard_test.py'
+    'camid_test.py', 'guard_test.py', 'config_norm_test.py',
+    'pinlifecycle_test.py', 'companions_test.py', 'camcore_probe.py',
+    'w2c_probe.py'
 $dir = Join-Path $root "scripts"
 $fail = 0
 $miss = 0
