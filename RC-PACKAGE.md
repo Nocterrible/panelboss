@@ -1,4 +1,4 @@
-# RC package v4: PanelBoss ui-1c-reskin fix waves 1-3 (45fcc38..HEAD)
+# RC package v4: PanelBoss ui-1c-reskin fix waves 1-3 (45fcc38..93c9cc3)
 FOURTH-SUBMISSION RESULT: **RELEASE** (no blockers; RISK line: the
 lock-free release + 30 s open deadline on the owner's multi-cam NVIDIA
 desk at first quit/reboot - late presence decisions, not crashes;
@@ -8,6 +8,39 @@ header below, receipts predating probe section (d), docs-only delta
 probe-receipts-v4 regenerated at the final tip (13 suites incl. the
 (d) marker-chain line and the deterministic unknown_state), and the
 tag moved to the tested content.
+
+## POST-RELEASE addendum (UAT wave, same day) - re-tag due at 0ffa77e
+The owner's UAT battery + one live APPCRASH produced SIX more gated
+commits on top of the tagged 93c9cc3; the final gate must re-read THIS
+range (93c9cc3..0ffa77e), not the original:
+- 282b262 wizard preview freeze (CTkLabel image=None trap; ctkimg_probe
+  regression net; gate: SHIP)
+- ab90cd2 glass-first roster + virtual-cam namespace classifier +
+  session reveal checkbox + relaxed twin preview_map (gate: SHIP,
+  two below-threshold notes absorbed)
+- 0d3c8df c0000374 heap-corruption repair: W3A's lock-free release
+  re-locked the DRIVER TOUCH (null-first swap stays; busy lock defers
+  via _deferred_releases - never waits, never drops; _open_timed
+  drains). Evidence: two WER buckets today (09:13:20, 09:27:42 - the
+  second observed live), pre-W3A survivors of identical log clusters
+  as the discriminator, camcore_probe case (d) as the regression net
+  (gate: SHIP, findings absorbed)
+- df9e8c4 wizard/add-pane parity: every OPEN scanned index gets a step
+  (owner law: identify must curate what the add pane can open);
+  synthetic idx:N keys; UNKNOWN-is-not-SOFTWARE default rule;
+  dshow.py opportunistic ordinal oracle (three probed dead routes on
+  this box, documented; answers {} warn-once). Live-desk simulation
+  caught the first draft's default-hide sin (gate: SHIP, 3 note-level)
+- 0ffa77e three honest attempt states (WARMING/BUSY/NOSTREAM): the
+  owner-caught "all say no live view" - contended 18.6 s opens and
+  zero-sample MF doors hid behind silence while holding the device;
+  12 s first-frame budget with guaranteed handle return; gate-specified
+  _busy_note leak fix + worker-local got latch (gate:
+  SHIP-WITH-FIXES, all absorbed, FlashCam pins one-frame-then-dark)
+Receipts at the new tip: gauntlet-v7.log (FILE: in scratch dir),
+probe-receipts regenerated at tag time. The RISK line above is CLOSED
+by 0d3c8df: the release now rides the device-tree lock (deferral, not
+blocking), which was the gate's named worry.
 
 ## Intent
 Pre-release audit (13 batches, two-channel + probes): ~42 findings, all
