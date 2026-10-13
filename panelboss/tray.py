@@ -471,6 +471,15 @@ class Tray(threading.Thread):
         the eye's mode right now as a tail - display only, the tray
         never edits the policy."""
         from . import camera
+        if not self.config["camera"].get("enabled"):
+            # the consent gate (redesign law 1): the enumeration
+            # below OPENS every index on the desk - a right-click
+            # on a tray menu must not touch a driver the owner has
+            # not consented to. One honest info row instead (the
+            # detection tab's switch owns the door).
+            return pystray.Menu(pystray.MenuItem(
+                "detection is off", action=lambda i: None,
+                enabled=False))
         names = camera.camera_names()
         items = []
         ir = camera.hello_ir_names()   # [] without the whircam bridge;

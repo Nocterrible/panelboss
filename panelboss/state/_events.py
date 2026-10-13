@@ -246,6 +246,26 @@ class _EventsMixin:
                 from .. import config
                 config.write_config(self.cfg)
                 log.info("camera roster now %s", self.camera_cfg["index"])
+            elif action == "camera_enabled":
+                # the consent gate (redesign law 1): cameras open
+                # only after the owner says so. Loop-owned write (the
+                # ui never touches the toml); flipping OFF drains
+                # duty RIGHT HERE - release what is held, the roster
+                # and the per-index tables survive the flush (the
+                # _cams open gate is the standing enforcement; this
+                # is the prompt half, so a mid-duty disable does not
+                # wait for the next poll to let go of the LED).
+                # The cameras resync (None = re-apply the cached
+                # report) refreshes the panes against the moved key,
+                # the same idiom the identity writes use.
+                self.camera_cfg["enabled"] = bool(value)
+                if not self.camera_cfg["enabled"]:
+                    self._release_camera()
+                from .. import config
+                config.write_config(self.cfg)
+                log.info("camera detection %s",
+                         "enabled" if self.camera_cfg["enabled"]
+                         else "disabled (duty drained)")
             elif action == "camera_diag":
                 # the scan's probe verdict, keyed by the index set it
                 # measured: a re-scan that finds the same set refreshes

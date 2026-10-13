@@ -5,7 +5,9 @@ that is opening abstains, a known-dead single open keeps its
 fail-closed ABSENT through the opener's failed record (and camera's
 new evict keeps the boot blink off the loop thread), and no driver's
 17 s tax is ever paid on the loop thread again.
-SIZE LAW: ~335 lines: the two single-desk vote arms grew, but they
+SIZE LAW: measured 368 (Oct 13, after the consent gate rode in at
+_poll's head - one guard clause, the file's own doctrine): the two
+single-desk vote arms grew, but they
 ARE one contract (the (frame, opened) abstain/fail-closed split) and
 splitting them from _grab would put the vote's truth two files away
 from the code that casts it."""
@@ -18,6 +20,17 @@ log = logging.getLogger("state")
 class _CamsMixin:
 
     def _poll(self):
+        if not self.camera_cfg.get("enabled"):
+            # the consent gate (redesign law 1): NO camera opens
+            # until the owner says so. The gate sits at the poll -
+            # the one choke point every duty open (single, rotor,
+            # async) rides - so a disable mid-duty drains THROUGH
+            # this line: release what is held, keep the roster and
+            # the tables, and abstain like any eye that did not
+            # look: no verdict, no presence reset, no LED cost.
+            if self.camera is not None:
+                self._release_camera()
+            return None, 0.0
         if self.detector is None:
             # the warm-up has not landed yet: abstain like a failed
             # open - no camera touched, no verdict, no presence hits

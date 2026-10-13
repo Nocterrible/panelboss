@@ -273,7 +273,7 @@ display.foreground_is_fullscreen = lambda: False
 def scratch_cfg(camera_toml):
     d = tempfile.mkdtemp(prefix="panelboss_async_")
     with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
-        fh.write("[camera]\n" + camera_toml)
+        fh.write("[camera]\nenabled = true\n" + camera_toml)
     cfg = config.get_config(dir=d, verbose=False)
     cfg["power"]["skip_camera_when_blocked"] = False   # never consult
     cfg["power"]["assistant_task"] = False             # the real

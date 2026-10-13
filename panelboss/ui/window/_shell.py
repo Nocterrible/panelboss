@@ -21,8 +21,9 @@ Rules this file lives by:
 
 Skins come from theme.py; nothing here hardcodes a color.
 
-SIZE LAW: grandfathered, measured 692 (Oct 13, after the per-veil
-hold, the heartbeat re-lease, and the _unveil leak-reset) -
+SIZE LAW: grandfathered, measured 701 (Oct 13, after the per-veil
+hold, the heartbeat re-lease, the _unveil leak-reset, and the
+consent-gated boot scan) -
 window lifecycle, size recall, and
 the reveal-veil machinery are one story (how the window appears and
 remembers itself); the scroll hosts already live in _scroll.py and the
@@ -140,7 +141,16 @@ class SettingsWindow(
             # instant (the DWM surface already holds the drawn UI)
         else:
             self._show_first()
-        self._scan_cameras()
+        if self.cfg["camera"].get("enabled"):
+            # consent (redesign law 1): the boot scan OPENS every
+            # index (enumerate) and, on a stale record, sweeps them
+            # - on a virgin boot that is a camera opening the owner
+            # never asked for, and on a hostile desk a first-launch
+            # lockout behind a 20+ s veil. The setup dialog (or the
+            # rescan button once the switch is on) starts the first
+            # real scan; until then the picker's stock "scanning
+            # cameras..." face is honest: nothing is.
+            self._scan_cameras()
         self.after(90, self._tick_ui)
 
 

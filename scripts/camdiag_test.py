@@ -3,7 +3,7 @@ and the picker's pure pieces. No real camera, no window: the state side
 rides camera_policy_test's FakeCam fixture the way camid_test does, and
 the wizard-side tests drive the importable helpers directly. Section 6
 drives the REAL scan worker on live threads against faked driver doors.
-SIZE LAW: ~366 - one scenario chain per section, the fleet's test idiom
+SIZE LAW: ~424 - one scenario chain per section, the fleet's test idiom
 (camera_policy_test is the precedent); the chain is the reader.
 """
 import os
@@ -362,5 +362,63 @@ finally:
     cam_mod.hello_ir_names = _real_ir
 print("IR seat spec OK (duty-gated, label over group name, hidden"
       " honest, missing bridge confesses itself)")
+
+# 8) the consent gate (redesign law 1): the load migration's truth
+#    table (the ONLY judge of an absent key is the file itself -
+#    set-up files upgrade to enabled, virgin files boot dark, an
+#    explicit value always wins), the camera_enabled branch round-
+#    trip, and the duty gate on the fakes. All offline.
+def _gate(body):
+    d = tempfile.mkdtemp(prefix="panelboss_camdiag_gate_")
+    with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
+        fh.write(body)
+    return config.get_config(dir=d, verbose=False)["camera"]["enabled"]
+
+
+assert _gate("[camera]\nindex = 6\n") is False              # absent+virgin
+assert _gate('[camera]\nindex = 6\nlabels = { "USB\\\\A" = "desk" }\n'
+             ) is True                                      # set-up file
+assert _gate('[camera]\nindex = 6\nbindings = { "USB\\\\A" = 1 }\n'
+             ) is True                                      # binds count
+assert _gate("[camera]\nindex = 6\n\n[camera.diag]\nat = 1.0\n"
+             "indices = [0]\nnoimg = []\n") is True          # a swept box
+assert _gate('[camera]\nindex = 6\nenabled = false\nlabels = '
+             '{ "USB\\\\A" = "desk" }\n') is False           # explicit sticks
+assert _gate("[camera]\nindex = 6\nenabled = true\n") is True
+print("consent migration OK (absent+virgin false, set-up upgrades"
+      " true, explicit either way always wins)")
+
+_real_camera8 = cam_mod.Camera
+opened8 = []
+
+
+class SpyCam8(FakeCam):
+    def __init__(self, index=0, **kw):
+        opened8.append(index)
+        FakeCam.__init__(self, index=index)
+
+
+cam_mod.Camera = SpyCam8
+try:
+    m8 = _monitor()
+    m8.camera_cfg["enabled"] = False               # the duty gate:
+    assert m8._poll() == (None, 0.0)               # abstain BEFORE
+    assert opened8 == [] and m8.camera is None     # any open call
+    m8.events.put(("camera_enabled", True))        # the branch: loop-
+    m8._drain_tray()                               # owned write +
+    assert cfg["camera"]["enabled"] is True              # toml truth
+    assert tomllib.load(open(os.path.join(SCRATCH, "config.toml"),
+                             "rb"))["camera"]["enabled"] is True
+    m8.camera = FakeCam(index=9)                   # pretend duty
+    m8.events.put(("camera_enabled", False))       # holds an eye:
+    m8._drain_tray()                               # disable DRAINS
+    assert cfg["camera"]["enabled"] is False             # right there
+    assert m8.camera is None, "a mid-duty disable must release"
+    assert cfg["camera"]["index"], "the roster survives the flush"
+finally:
+    cam_mod.Camera = _real_camera8
+print("consent branch OK (gate abstains without touching a door,"
+      " camera_enabled round-trips the toml, disable drains duty and"
+      " keeps the roster)")
 
 print("ALL CAMDIAG TESTS OK")

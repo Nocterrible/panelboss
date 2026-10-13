@@ -151,7 +151,7 @@ def drain_mon(m):
 def scratch_cfg(index_toml, mode_on="boot_per_poll", mode_off="always_on"):
     d = tempfile.mkdtemp(prefix="panelboss_multi_")
     with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
-        fh.write("[camera]\nindex = %s\nmode_on = \"%s\"\n"
+        fh.write("[camera]\nenabled = true\nindex = %s\nmode_on = \"%s\"\n"
                  "mode_off = \"%s\"\n" % (index_toml, mode_on, mode_off))
     cfg = config.get_config(dir=d, verbose=False)
     cfg["power"]["skip_camera_when_blocked"] = False   # never consult the
@@ -624,7 +624,7 @@ try:
     #     tables at all degenerates to exactly the old globals
     d = tempfile.mkdtemp(prefix="panelboss_multi_")
     with open(os.path.join(d, "config.toml"), "w", encoding="utf8") as fh:
-        fh.write('[camera]\nindex = [0, 1, 2]\n'
+        fh.write('[camera]\nenabled = true\nindex = [0, 1, 2]\n'
                  'mode_on = "boot_per_poll"\nmode_off = "always_on"\n'
                  '[camera.on]\n0 = "always_on"\n'
                  '[camera.off]\n1 = "off"\n')

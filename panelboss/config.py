@@ -57,6 +57,16 @@ DEFAULTS = {
                                 # index (-1/-2) stays single-eyed
         "width": 1280,
         "height": 720,
+        # CONSENT (redesign law 1): no camera opens until the owner
+        # says so - false on a virgin boot keeps a hostile camera
+        # world off the whole machine; the load path migrates an
+        # ALREADY-SET-UP box to true (labels/bindings/diag record in
+        # the file mean the owner configured this app before; the
+        # upgrade must not silently stop detection). The duty loop,
+        # the tray camera submenu, and the boot scan all read this
+        # key; the detection tab's switch owns it (camera_enabled
+        # event, state-owned write).
+        "enabled": False,
         "warmup_frames": 4,     # auto-exposure needs time to settle before inference
         "mode_on": "boot_per_poll",   # "boot_per_poll" | "always_on", while screens are on
         "mode_off": "always_on",      # while screens are off, LED is invisible anyway
@@ -562,6 +572,23 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
                         "(%s) are on duty, the rest are dropped",
                         len(indexes), indexes[:4])
             camera_merged["index"] = indexes[:4]
+        # the consent migration (redesign law 1): the key absent is
+        # not ignorance, it is a question the file can answer - a
+        # camera section carrying labels, bindings or a diagnostic
+        # record was SET UP by a human, and an upgrade must keep
+        # detection running untouched (a silent flip to false would
+        # stop the screens sleeping with no word said). Absent and
+        # virgin - the stock write - boots dark: no camera opens
+        # until the owner touches the switch. An explicit value
+        # (either way) always wins: this block touches only files
+        # that do not speak.
+        sec_cam = config.get("camera")
+        if not isinstance(sec_cam, dict):
+            sec_cam = {}
+        if "enabled" not in sec_cam:
+            camera_merged["enabled"] = bool(
+                sec_cam.get("labels") or sec_cam.get("bindings")
+                or sec_cam.get("diag"))
     normalize_sections(merged)
     return merged
 
