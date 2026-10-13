@@ -239,9 +239,8 @@ DEFAULTS = {
 # stay silent. The rules are data (section, key, kind, bound); a new
 # boundary check is one row in the table.
 NORMALIZE_RULES = (
-    # this oneof set must track DEVICE_KEYS (ui/window/_constants.py:29):
-    # a backend added in the UI (directml someday) that the set lacks
-    # would silently revert to auto at boot
+    # must track DEVICE_KEYS (ui/window/_constants.py:29): a UI-added
+    # backend (directml someday) the set lacks reverts to auto at boot
     ("inference", "device", "oneof", ("auto", "cuda", "cpu")),
     ("inference", "device_id", "int", None),
     ("inference", "confidence", "float", (0.05, 0.95)),
