@@ -272,6 +272,17 @@ try:
     app._drain_ui_events()
     check(app._veil_lbl is not None and app._veil_lbl is not v1,
           "a beat after the lift RE-RAISES the veil fresh")
+    # (re-issue) the lease must die WITH the veil: _unveil resets
+    # _veil_hold to the stock 3 s, and the very next ordinary veil
+    # proves it by lifting on its OWN budget (the reviewer's leak:
+    # the sweep's tolerance must not become the window's)
+    app._unveil()
+    check(app._veil_hold == 3.0, "_unveil resets the heartbeat hold")
+    app._veil("rebuild", absolute=True)
+    ft.t += 4.0                          # 4 s of silence: past 3,
+    app._tick_inner()                    # far inside the leaked 35
+    check(app._veil_lbl is None,
+          "the next ordinary veil lifts on the stock 3 s budget")
 finally:
     app._unveil()
     _shell.time, _runtime.time = _real_times

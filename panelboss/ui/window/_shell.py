@@ -21,8 +21,8 @@ Rules this file lives by:
 
 Skins come from theme.py; nothing here hardcodes a color.
 
-SIZE LAW: grandfathered, measured 686 (Oct 13, after the per-veil
-hold, the heartbeat re-lease, and the diagnostic veil state) -
+SIZE LAW: grandfathered, measured 692 (Oct 13, after the per-veil
+hold, the heartbeat re-lease, and the _unveil leak-reset) -
 window lifecycle, size recall, and
 the reveal-veil machinery are one story (how the window appears and
 remembers itself); the scroll hosts already live in _scroll.py and the
@@ -412,6 +412,12 @@ class SettingsWindow(
                                         # longer pending: a stale id
                                         # here would make the next
                                         # _veil cancel the ghost
+        # the heartbeat lease dies with its veil (owner amendment 4
+        # re-issue): 35 s of tolerated silence was the SWEEP'S
+        # permission, not the window's - reset to the stock 3 s so a
+        # dead heartbeat cannot leak into the next ordinary veil
+        # even between veil calls (the reviewer's flagged leak)
+        self._veil_hold = 3.0
         v = getattr(self, "_veil_lbl", None)
         self._veil_lbl = None
         if v is not None:
