@@ -86,6 +86,27 @@ u32.PostMessageW.argtypes = [ctypes.c_void_p, wintypes.UINT,
 u32.PostMessageW.restype = wintypes.BOOL
 u32.GetCursorPos.argtypes = [ctypes.POINTER(POINTL)]
 u32.GetCursorPos.restype = wintypes.BOOL
+# the hwnd slots are c_void_p: a 64-bit HWND through a c_int default
+# truncates on the round-trip (the handle-trap class, audit sweep);
+# argtypes are pinned full - the C3a lesson: a partial pin rejects
+# the real call arity
+u32.IsWindowVisible.argtypes = [ctypes.c_void_p]
+u32.IsWindowVisible.restype = wintypes.BOOL
+u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(wm.RECT)]
+u32.GetWindowRect.restype = wintypes.BOOL
+u32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p,
+                              wintypes.DWORD]
+u32.GetClassNameW.restype = wintypes.DWORD
+u32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p,
+                                         ctypes.POINTER(wintypes.DWORD)]
+u32.GetWindowThreadProcessId.restype = wintypes.DWORD
+u32.EnumWindows.argtypes = [wm.WNDENUMPROC, ctypes.c_void_p]
+u32.EnumWindows.restype = wintypes.BOOL
+k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL,
+                             wintypes.DWORD]
+k32.OpenProcess.restype = ctypes.c_void_p
+k32.CloseHandle.argtypes = [ctypes.c_void_p]
+k32.CloseHandle.restype = wintypes.BOOL
 
 
 def _class_name(hwnd):

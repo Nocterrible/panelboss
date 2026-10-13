@@ -146,9 +146,18 @@ def apply_layout(entries):
     pend = [e for e in wanted if not already(e["gdi"], True)]
     order = [e for e in pend if e["gdi"] != primary] + \
             [e for e in pend if e["gdi"] == primary]
+    refused = []          # (gdi, why): a device the desk will not take
     for e in order:
         dm = current_mode(e["gdi"])
-        base = dm if dm is not None else DEVMODEW()
+        if dm is None:
+            # The banner's measured shape: a fresh DEVMODEW carries an
+            # empty dmDeviceName and every request off it answers -2,
+            # so the refusal is named BEFORE any staging.
+            refused.append((e["gdi"], "no current mode"))
+            lines.append("refuse %s: no current mode (an empty DEVMODEW "
+                         "answers -2)" % e["gdi"])
+            continue
+        base = dm
         base.dmSize = sizeof(base)
         base.dmDriverExtra = 0
         base.dmPelsWidth = int(e["w"])
@@ -169,6 +178,8 @@ def apply_layout(entries):
                                           flags, None)
         lines.append("enable %s %dx%d@%d -> %d" % (
             e["gdi"], e["w"], e["h"], e.get("rate") or 0, rc))
+        if rc not in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART):
+            refused.append((e["gdi"], "the driver answered %d" % rc))
     for e in disabled:
         if already(e["gdi"], False):
             continue
@@ -181,6 +192,11 @@ def apply_layout(entries):
                                           CDS_UPDATEREGISTRY
                                           | CDS_NORESET, None)
         lines.append("disable %s -> %d" % (e["gdi"], rc))
+        if rc not in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART):
+            refused.append((e["gdi"], "the driver answered %d" % rc))
     rc = u32.ChangeDisplaySettingsExW(None, None, None, 0, None)
     lines.append("commit -> %d" % rc)
-    return rc in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART), lines
+    for gdi, why in refused:
+        lines.append("refused %s: %s (desk left partial)" % (gdi, why))
+    ok = rc in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART)
+    return ok and not refused, lines

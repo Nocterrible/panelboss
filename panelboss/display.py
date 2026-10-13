@@ -97,6 +97,9 @@ u32.RegisterPowerSettingNotification.argtypes = [ctypes.c_void_p,
                                                  ctypes.c_void_p,
                                                  ctypes.c_uint,
                                                  ctypes.c_uint]
+# no-arg call, so a restype pin only: the default c_int restype would
+# truncate a 64-bit HWND before the caller sees it
+u32.GetForegroundWindow.restype = ctypes.c_void_p
 
 
 class _GUID(ctypes.Structure):
