@@ -1,4 +1,13 @@
-# RC package v3: PanelBoss ui-1c-reskin fix waves 1-3 (45fcc38..HEAD)
+# RC package v4: PanelBoss ui-1c-reskin fix waves 1-3 (45fcc38..HEAD)
+FOURTH-SUBMISSION RESULT: **RELEASE** (no blockers; RISK line: the
+lock-free release + 30 s open deadline on the owner's multi-cam NVIDIA
+desk at first quit/reboot - late presence decisions, not crashes;
+accepted knowingly). Housekeeping notes from that verdict (stale
+header below, receipts predating probe section (d), docs-only delta
+6ce0a1a..27a6d42) are closed by THIS commit: header refreshed,
+probe-receipts-v4 regenerated at the final tip (13 suites incl. the
+(d) marker-chain line and the deterministic unknown_state), and the
+tag moved to the tested content.
 
 ## Intent
 Pre-release audit (13 batches, two-channel + probes): ~42 findings, all
