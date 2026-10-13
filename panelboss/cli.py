@@ -196,12 +196,7 @@ def _session_age_sec():
     pe.dwSize = ctypes.sizeof(pe)
     found = k32.Process32FirstW(snap, ctypes.byref(pe))
     while found:
-        # .value FIRST: szExeFile is a c_wchar_Array, which has no
-        # .lower() - the direct call raised AttributeError EVERY
-        # iteration, and the caller's catch turned the whole login
-        # stamp probe into silent None (found by the audit's adjacent
-        # line-probe; this function has never once run clean)
-        if pe.szExeFile.value.lower() == "explorer.exe":
+        if pe.szExeFile.lower() == "explorer.exe":
             esid = wt.DWORD()
             if (k32.ProcessIdToSessionId(pe.th32ProcessID,
                                          ctypes.byref(esid))
