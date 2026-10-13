@@ -86,6 +86,18 @@ def main():
     print("[PASS] 2: unparsable login 'took' dropped with a warning, "
           "the section and its other keys survive")
 
+    # 2b) the REAL writer shape (apply stores took[who] = seconds): a
+    #     legitimate per-app dict 'took' must SURVIVE validation - the
+    #     first cut float()ed it and dropped real data on every load
+    data["login"] = {"took": {"chrome.exe": 4.5, "code.exe": 12.0},
+                     "launch_delay": 3}
+    assert PF.save(data, os.environ["PANELBOSS_CONFIG_DIR"])
+    lg = PF.load(os.environ["PANELBOSS_CONFIG_DIR"])["login"]
+    assert lg.get("took") == {"chrome.exe": 4.5, "code.exe": 12.0} \
+        and lg.get("launch_delay") == 3.0, lg
+    print("[PASS] 2b: the legitimate dict-shaped 'took' survives load "
+          "whole (validation may reject rot, never the real shape)")
+
     # 3) save() is single-writer: 16 threads hammer one shared store
     #    through the same locked dump/replace; the file re-parses and
     #    no .tmp litter is left behind
@@ -123,8 +135,9 @@ def main():
     before = (list(PF.MATCH_MODES), PF.LOGIN_DELAY, PF.LOGIN_BUFFER)
     fresh = PF.load(os.environ["PANELBOSS_CONFIG_DIR"])
     assert fresh is not data
-    assert fresh.get("login") == {"launch_delay": 12.0, "max": 99,
-                                  "at": 1234.0}, fresh.get("login")
+    assert fresh.get("login") == {"took": {"chrome.exe": 4.5,
+                                           "code.exe": 12.0},
+                                  "launch_delay": 3.0}, fresh.get("login")
     assert len(fresh["profiles"]["dirty"]["displays"]) == 1, \
         fresh["profiles"]["dirty"]["displays"]
     assert fresh.get("last") == {}, fresh.get("last")
@@ -136,8 +149,9 @@ def main():
     again = PF.load(os.environ["PANELBOSS_CONFIG_DIR"])
     assert again.get("last") == {}, again.get("last")
     assert len(again["profiles"]["dirty"]["displays"]) == 1
-    assert again.get("login") == {"launch_delay": 12.0, "max": 99,
-                                  "at": 1234.0}, again.get("login")
+    assert again.get("login") == {"took": {"chrome.exe": 4.5,
+                                           "code.exe": 12.0},
+                                  "launch_delay": 3.0}, again.get("login")
     print("[PASS] 4: mutating the loaded store leaves the freshly "
           "loaded store (and the module defaults) unchanged")
 

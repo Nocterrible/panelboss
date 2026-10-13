@@ -151,15 +151,23 @@ def load(dir=None):
         del data["login"]                   # login record
     else:
         if isinstance(lg, dict):
-            for key in ("took", "launch_delay"):
-                if key not in lg:
-                    continue
+            # REAL shapes (writer at apply: took[who] = ...): 'took' is
+            # the per-app dict of launch seconds, 'launch_delay' a
+            # scalar. The first cut float()ed BOTH, which dropped the
+            # legitimate dict on every load - validation may only
+            # reject the rotted shape, never the real one (architect
+            # fix on the lane's honest deviation flag).
+            if "took" in lg and not isinstance(lg["took"], dict):
+                log.warning("dropped rotted login 'took' (not a dict): %r",
+                            lg["took"])
+                del lg["took"]
+            if "launch_delay" in lg:
                 try:
-                    lg[key] = float(lg[key])
+                    lg["launch_delay"] = float(lg["launch_delay"])
                 except (TypeError, ValueError):
-                    log.warning("dropped unparsable login '%s': %r",
-                                key, lg[key])
-                    del lg[key]
+                    log.warning("dropped unparsable login 'launch_delay':"
+                                " %r", lg["launch_delay"])
+                    del lg["launch_delay"]
     return data
 
 
