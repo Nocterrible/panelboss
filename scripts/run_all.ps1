@@ -1,8 +1,20 @@
 # Full suite runner: powershell -File scripts\run_all.ps1
-# Honest green requires the app STOPPED (the UI suites skip their
-# window sections while a live instance holds the mutex, and say so
-# loudly in their logs). Logs land beside the scripts; ALL GREEN is
-# the verdict line.
+# Honest green requires the app STOPPED. The UI suites skip their window
+# sections while a live instance holds the mutex, and guard_test skips
+# while ANY live instance holds it - and the runner now READS those
+# markers back out of the per-suite logs instead of trusting a bare rc:
+# a green sweep that skipped every UI law is DEGRADED, not ALL GREEN.
+#
+# Exit-code table (the full contract, Oct 12 audit):
+#   0  ALL GREEN, complete  - every suite passed, no section skipped
+#   1  a suite FAILED (rc=1) - see the rc lines and the suite log
+#   2  a suite FILE is missing (python's own rc on a bad path)
+#   3  a window suite's HARD KILL fired (rc=3: the Tk loop wedged -
+#      gaming_ui_test, power_assistant_test, profiles_ui_test share it)
+#   4  DEGRADED green  - everything that ran passed, but at least one
+#      suite printed "SKIP window section" or "SKIP guard"
+# Priority when several apply: 1 > 2 > 3 > 4; a real failure is never
+# downgraded into a skip verdict. Logs land beside the scripts.
 $root = Split-Path -Parent $PSScriptRoot
 $py = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $py)) {
@@ -19,14 +31,40 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
     'tweaks_test.py', 'config_writer_test.py', 'gaming_ui_test.py',
     'mode_edit_test.py', 'taskbar_test.py', 'profiles_ui_test.py',
     'asyncopen_test.py', 'blackvote_test.py', 'veil_test.py',
-    'camid_test.py'
+    'camid_test.py', 'guard_test.py'
 $dir = Join-Path $root "scripts"
 $fail = 0
+$miss = 0
+$hard = 0
+$degraded = 0
 foreach ($s in $suites) {
-    & $py (Join-Path $dir $s) *> (Join-Path $dir ('suite_' + $s + '.log'))
+    $log = Join-Path $dir ('suite_' + $s + '.log')
+    & $py (Join-Path $dir $s) *> $log
     $rc = $LASTEXITCODE
     Write-Output ($s + ' rc=' + $rc)
-    if ($rc -ne 0) { $fail = 1 }
+    if ($rc -eq 1) { $fail = 1 }
+    elseif ($rc -eq 2) { $miss = 1 }
+    elseif ($rc -eq 3) { $hard = 1 }
+    elseif ($rc -ne 0) { $fail = 1 }    # an unknown rc is a failure
+    $txt = ''
+    if (Test-Path $log) {
+        $txt = [string](Get-Content -Raw -ErrorAction SilentlyContinue $log)
+    }
+    if ($txt -match 'SKIP window section') {
+        Write-Output ($s + ' DEGRADED (window section skipped)')
+        $degraded = 1
+    }
+    if ($txt -match 'SKIP guard') {
+        Write-Output ($s + ' DEGRADED (guard section skipped)')
+        $degraded = 1
+    }
 }
-Write-Output ('ALL GREEN: ' + ($fail -eq 0))
-exit $fail
+if ($fail) { Write-Output 'FAILED: at least one suite rc=1'; exit 1 }
+if ($miss) { Write-Output 'FAILED: a suite file is missing (rc=2)'; exit 2 }
+if ($hard) { Write-Output 'FAILED: a window suite hard-killed (rc=3)'; exit 3 }
+if ($degraded) {
+    Write-Output 'DEGRADED: ALL GREEN but sections were skipped'
+    exit 4
+}
+Write-Output 'ALL GREEN (complete)'
+exit 0
