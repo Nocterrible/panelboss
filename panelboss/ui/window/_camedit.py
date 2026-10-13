@@ -86,9 +86,12 @@ class _CamEditMixin:
         roster = set(duty_roster(self.cfg["camera"]))
         hidden = self.cfg["camera"].get("hidden") or []
         hid = _camid.hidden_indices(getattr(self, "_devs", None) or [],
-                                    found, hidden)
+                                    found, hidden,
+                                    self.cfg["camera"].get("bindings") or {})
+        names = _camid.display_names(getattr(self, "_devs", None) or [],
+                                     found, self.cfg["camera"])
         for entry in found:
-            index, name = entry[0], entry[3]
+            index, name = entry[0], names.get(entry[0], "") or entry[3]
             if isinstance(index, int) and index in roster:
                 # a hidden device ON duty keeps its row (the engine
                 # still honors the roster) wearing an honest badge

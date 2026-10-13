@@ -77,9 +77,14 @@ DEFAULTS = {
         # the instance path does not. labels maps instance -> the
         # user's name; hidden lists instances the picker and the
         # roster menu lines suppress (the engine still honors a
-        # hidden index already on duty - its row wears a badge)
+        # hidden index already on duty - its row wears a badge).
+        # bindings is the wizard's twin answer: instance -> scan
+        # index, a HUMAN assertion that outranks every name guess
+        # (identity_map applies it last); a bind to an instance that
+        # no longer exists maps nothing, like a hidden one
         "labels": {},
         "hidden": [],
+        "bindings": {},
     },
     "inference": {
         "model": "yolo11n",
@@ -255,6 +260,7 @@ NORMALIZE_RULES = (
     ("ui", "preview_poll_ms", "int", 200),
     ("camera", "labels", "dicttype", {}),
     ("camera", "hidden", "listtype", []),
+    ("camera", "bindings", "dicttype", {}),
 )
 
 

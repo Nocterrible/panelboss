@@ -13,7 +13,7 @@ from PIL import Image
 
 from .. import theme
 from ._camedit import ADD_LABEL, duty_roster
-from ._camid import hidden_indices, open_identify
+from ._camid import display_names, hidden_indices, open_identify
 from ._constants import TIPS
 from ._widgets import SkewCombo
 
@@ -229,14 +229,21 @@ class _CameraMixin:
             except Exception:                    # the PnP list
                 self._devs = []
         hid = hidden_indices(getattr(self, "_devs", None) or [],
-                             found, hidden)
+                             found, hidden,
+                             self.cfg["camera"].get("bindings") or {})
         labels = []
+        # the truth about an index's name (display_names): user label
+        # via bind or honest join FIRST, the scan's positional guess as
+        # fallback, nothing rather than a lie
+        name_of = display_names(getattr(self, "_devs", None) or [], found,
+                                self.cfg["camera"])
         for index, opened, width, name in found:
             if (index in roster and index >= 0) or index in hid:
                 continue
             label = "index %s (%s px)" % (index, int(width))
-            if name:
-                label += " %s" % name
+            nm = name_of.get(index) or name
+            if nm:
+                label += " %s" % nm
             labels.append(label)
         if not found:
             labels = ["no camera opens"]

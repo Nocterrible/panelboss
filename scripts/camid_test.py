@@ -149,9 +149,57 @@ assert pm == {PS_DEV[0]["InstanceId"]: (6, False),
 pm2 = _camid.preview_map(devs, FOUND + [(2, True, 640, "Logi C270")])
 assert PS_DEV[1]["InstanceId"] not in pm2
 assert pm2[PS_DEV[0]["InstanceId"]] == (6, False)
+# 2b) the BIND: the human answer outranks every guess. A binding maps
+#     its instance, evicts a name-guess standing on the same index,
+#     ignores a bind to an absent instance (unplugged: waits in the
+#     toml), survives hand-edited string values, and feeds the picker
+#     suppression + bind_candidates (open indexes nobody claims).
+mapped_b = _camid.identity_map(devs, FOUND,
+                               {PS_DEV[2]["InstanceId"]: 1})
+assert mapped_b == {PS_DEV[0]["InstanceId"]: 6,
+                    PS_DEV[3]["InstanceId"]: 0,
+                    PS_DEV[2]["InstanceId"]: 1}, mapped_b
+mapped_dead = _camid.identity_map(devs, FOUND, {"USB\\GONE": 0})
+assert mapped_dead == mapped                      # absent instance: no
+                                                  # claim, guess intact
+mapped_str = _camid.identity_map(devs, FOUND, {PS_DEV[1]["InstanceId"]: "1"})
+assert mapped_str[PS_DEV[1]["InstanceId"]] == 1   # toml is input
+assert _camid.bind_candidates(devs, FOUND, {}) == [1]   # the duplicated
+                                                        # model's feed:
+                                                        # unowned by the
+                                                        # join, a bind
+                                                        # candidate -
+                                                        # the twin shape
+assert _camid.bind_candidates(devs,                   # here is claimed
+                              [(9, True, 640, ""), (3, False, 0, "")],
+                              {}) == [9]
+assert _camid.bind_candidates(devs, FOUND, {PS_DEV[2]["InstanceId"]: 1}) \
+    == []                    # the second C270 twin bound to the feed
+                             # its name could never claim: nothing left
+                             # unowned (and mapped_b above proves the
+                             # eviction of the first twin's guess)
 assert _camid.hidden_indices(devs, FOUND,
                              [PS_DEV[3]["InstanceId"]]) == {0}
+assert _camid.hidden_indices(devs, FOUND,           # a bind lets a hide
+                             [PS_DEV[2]["InstanceId"]],   # reach the index
+                             {PS_DEV[2]["InstanceId"]: 1}) == {1}   # twins never could
 assert _camid.hidden_indices(devs, FOUND, ["USB\\UNSEEN"]) == set()
+# the label-first caption rule (display_names): user label via the
+# honest identity first, positional fallback only where the name is
+# still unknown, never a claim a bind could have made
+dn = _camid.display_names(devs, FOUND, {"labels": {
+    PS_DEV[0]["InstanceId"]: "desk eye"}, "bindings": {}})
+assert dn[6] == "desk eye"
+assert dn[1] == "Logi C270"                     # ambiguous: the scan's
+                                                # own guess, no label
+assert dn[0] == "OBS Virtual Camera"
+dn_b = _camid.display_names(devs, FOUND, {"labels": {"USB\\LATER": "boss"},
+                                          "bindings": {PS_DEV[2]["InstanceId"]: 1}})
+assert dn_b[1] == "Logi C270"                   # a label for an identity
+                                                # that claims nothing
+                                                # shows nowhere: the
+                                                # positional fallback,
+                                                # not a borrowed name
 print("mapping OK (unique names pick the right index, the duplicated"
       " model is admitted, hidden filters the picker)")
 
@@ -161,6 +209,7 @@ with open(os.path.join(d2, "config.toml"), "w", encoding="utf8") as fh:
     fh.write("[camera]\nindex = 6\n")
 old = config.get_config(dir=d2, verbose=False)
 assert old["camera"]["labels"] == {} and old["camera"]["hidden"] == []
+assert old["camera"]["bindings"] == {}            # the twin-bind table
 print("migration OK (absent keys read as the stock empty tables)")
 
 # 4) the state side: camera_identity events land in the live cfg AND
@@ -204,6 +253,16 @@ try:
     assert cfg["camera"]["hidden"] == [], cfg["camera"]["hidden"]
     assert tomllib.load(open(os.path.join(SCRATCH, "config.toml"),
                              "rb"))["camera"]["hidden"] == []
+    # bind: the twin answer round-trips through the loop-owned toml,
+    # and a non-numeric bind clears the claim (empty-label semantics)
+    m.events.put(("camera_identity", {"instance": "USB\\R1", "bind": 6}))
+    m._drain_tray()
+    assert cfg["camera"]["bindings"] == {"USB\\R1": 6}
+    assert tomllib.load(open(os.path.join(SCRATCH, "config.toml"),
+                             "rb"))["camera"]["bindings"] == {"USB\\R1": 6}
+    m.events.put(("camera_identity", {"instance": "USB\\R1", "bind": ""}))
+    m._drain_tray()
+    assert cfg["camera"]["bindings"] == {}
     print("identity event OK (labels/hidden stored by instance, toml"
           " round-trips, empty label clears, hide and unhide are"
           " idempotent)")
@@ -260,8 +319,14 @@ assert all(not r["virtual"] for r in synth.values()), \
 assert all(r["idx"] == int(str(r["instance"])[4:]) for r in synth.values())
 assert _camid.hidden_indices(DEV_MIX, FOUND_MIX, ["idx:9"]) >= {9}
 assert _camid.hidden_indices(DEV_MIX, FOUND_MIX, ["idx:9", "USB\\OK"]) == {9, 0}
+bound = _camid.all_rows(DEV_MIX, FOUND_MIX, {"USB\\OK2": 9})
+assert [r["instance"] for r in bound if str(r["instance"]).startswith("idx:")] \
+    == ["idx:7"], bound                           # 9 became a real
+assert [r for r in bound if r["instance"] == "USB\\OK2"][0]["idx"] == 9  # device row
+assert all("idx" not in r or r["idx"] is not None for r in bound)  # no leak-through
 print("merge OK (open indexes walk, closed do not, claimed are not"
-      " duplicated, idx: keys hide by index)")
+      " duplicated, idx: keys hide by index, a bind flips a synthetic"
+      " into its device row)")
 
 # 6) the unhide recheck ladder: a stuck drain is ridden EXACTLY the
 #    cap (8 rides at 500 ms after the first 250 ms reload), a second

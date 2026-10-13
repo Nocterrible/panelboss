@@ -2,12 +2,14 @@
 preview, label them, hide the virtual ones.
 
 Identity is the PnP InstanceId (camera.camera_devices): indexes drift
-on replugs, so labels and hidden ride the instance path. A device's
-CURRENT index is annotated from the app's own last scan (app._cams):
-the picker and hidden filter match by UNIQUE name only (identity_map -
-a guess there hides the wrong device), while the live view falls back
-to the relaxed preview_map: one scanned feed answering to a shared
-name lights up every twin, confessed as shared on the note line.
+on replugs, so labels, hides, and BINDINGS ride the instance path. A
+device's CURRENT index resolves in precedence order: the owner's bind
+(camera.bindings - a human assertion that evicts guesses), the unique
+name join (identity_map), then the relaxed preview fallback
+(preview_map: one shared-name feed lights every twin, confessed).
+Unclaimed open indexes still walk as synthetic idx:N rows so the
+wizard covers every feed the picker shows - and every such row is
+itself a bind candidate for the twin case.
 
 Frames are BORROWED (v1, packet item 5): Camera opens directly on a
 private worker - the monitor's framebox carries the duty mosaic, not
@@ -18,7 +20,7 @@ serialized door is waited for, BUSY only where the open is proven
 held, and a bounded no-frames verdict (NOSTREAM) that hands the
 handle back instead of holding a device for a stare.
 
-SIZE LAW: 622, justified, one window - the step machine and its borrowed-frame
+SIZE LAW: 709, justified, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -36,6 +38,7 @@ import customtkinter as ctk
 from PIL import Image
 
 from .. import theme
+from ._widgets import SkewCombo
 from ... import camera
 
 log = logging.getLogger("ui")
@@ -53,23 +56,67 @@ FRAME_BUDGET = 12.0  # seconds a step waits for its FIRST frame before
                      # nobody (measured Oct 13: contended auto-door
                      # opens burn 18 s and some MF doors never sample)
 DUP = ("two identical models share this name: the app cannot tell them "
-       "apart. Unplug one and rerun this wizard to pin the other.")
+       "apart. Wave at one camera and bind the device to the feed that "
+       "moves - the bind is stored on the device, replugs and all.")
 
 
-def identity_map(devs, found):
-    """{instance: index}: a device maps only when its friendly name
-    appears EXACTLY once in the PnP list and one scanned entry carries
-    that name - uniqueness is the only honest clue (the documented
-    limit: identical models need the wizard re-run after a replug)."""
+def identity_map(devs, found, bindings=None):
+    """{instance: index}. The human answer FIRST of all: camera.bindings
+    (the wizard's "this device is that feed") is applied LAST over the
+    name join and EVICTS a guess standing on the same index - a bind
+    whose instance is not in the PnP rows maps nothing (unplugged: the
+    claim waits in the toml, exactly like a hidden instance waits).
+    With no bind, a device maps only when its friendly name appears
+    EXACTLY once in the PnP list and one scanned entry carries that
+    name - uniqueness is the fallback clue; identical models now have
+    the bind as their way, replacing the unplug-and-rerun dance."""
     hits = {}
-    for d in devs:
-        hits.setdefault(d["name"].lower(), []).append(d["instance"])
+    present = set()
+    for d in devs or []:
+        present.add(str(d["instance"]))
+        hits.setdefault(str(d["name"]).lower(), []).append(d["instance"])
     out = {}
     for entry in found or []:
         got = hits.get(str(entry[3] or "").lower(), [])
         if len(got) == 1:
             out[got[0]] = entry[0]
+    for inst, idx in (bindings or {}).items():
+        try:                            # hand-edited toml is input
+            idx = int(idx)              # like every other value here
+        except (TypeError, ValueError):
+            continue
+        if str(inst) in present:
+            for guess, gidx in list(out.items()):
+                if gidx == idx and guess != str(inst):
+                    del out[guess]      # the human evicts the guess
+            out[str(inst)] = idx
     return out
+
+
+def display_names(devs, found, cfg_camera):
+    """index -> the name the UI may show: the user's label for the
+    identity that index maps to (BIND first, honest unique-name join
+    second), the scan's positional guess as fallback, NOTHING rather
+    than a lie. The panes that caption cameras call this instead of
+    trusting entry[3]."""
+    ids = identity_map(devs, found, (cfg_camera or {}).get("bindings") or {})
+    labels = (cfg_camera or {}).get("labels") or {}
+    out = {idx: str(labels.get(inst, "") or "") for inst, idx in ids.items()}
+    for entry in found or []:
+        got = out.setdefault(entry[0], "")
+        if not got and len(entry) > 3 and entry[3]:
+            out[entry[0]] = str(entry[3])        # positional fallback:
+    return out                                   # better than nothing,
+                                                 # never more than truth
+
+
+def bind_candidates(devs, found, bindings=None):
+    """Open scanned indexes no identity claims (bind or join): the
+    feeds only a human eye can assign - the wizard offers exactly
+    these to "bind this device to a feed"."""
+    owned = set(identity_map(devs, found, bindings).values())
+    return [entry[0] for entry in found or []
+            if len(entry) > 1 and entry[1] and entry[0] not in owned]
 
 
 def preview_map(devs, found):
@@ -99,7 +146,7 @@ def preview_map(devs, found):
     return out
 
 
-def all_rows(devs, found):
+def all_rows(devs, found, bindings=None):
     """PnP rows + a synthetic row per OPEN scanned index that no PnP
     row claimed: the wizard walks what the picker shows (the owner's
     UAT law - identify gives the add pane its names and hides, so it
@@ -113,14 +160,19 @@ def all_rows(devs, found):
     until the enumeration route is cracked, synthetic rows are the
     truthful stand-in - preview works, labels persist, no positional
     name lie rides them."""
-    mapped = set(identity_map(devs, found).values())
+    ids = identity_map(devs, found, bindings)
+    mapped = set(ids.values())
     mapped |= {got[0] for got in preview_map(devs, found).values()}
     try:
         from ... import dshow              # the ordinal oracle: {} on a
         truth = dshow.index_instances()    # box without the registered
     except Exception:                      # SystemDeviceEnum class
         truth = {}                         # (the dev desk today)
-    rows = list(devs or [])
+    rows = [dict(d) for d in (devs or [])]   # copies: the idx attach
+    for row in rows:                          # below must not leak
+        idx = ids.get(row["instance"])        # back into _devs
+        if idx is not None:
+            row["idx"] = idx
     for entry in found or []:
         if len(entry) < 2 or not entry[1] or entry[0] in mapped:
             continue
@@ -139,7 +191,7 @@ def all_rows(devs, found):
     return rows
 
 
-def hidden_indices(devs, found, hidden):
+def hidden_indices(devs, found, hidden, bindings=None):
     """Scan indexes to suppress in the picker and menu lines. An
     unmappable hidden device suppresses nothing - it stays visible
     here, so the wizard remains its way out. The "idx:N" synthetic
@@ -148,7 +200,7 @@ def hidden_indices(devs, found, hidden):
     hidden = list(hidden or [])
     out = {int(str(i)[4:]) for i in hidden
            if str(i).startswith("idx:") and str(i)[4:].isdigit()}
-    out |= {idx for inst, idx in identity_map(devs, found).items()
+    out |= {idx for inst, idx in identity_map(devs, found, bindings).items()
             if inst in set(hidden)}
     return out
 
@@ -209,6 +261,17 @@ class IdentifyWindow(ctk.CTkToplevel):
             text_color_disabled=self.skin.txt3)
         self._vbox.pack(anchor="w", padx=theme.S_SECTION,
                         pady=(theme.S_ROW, 0))
+        # the twin answer (owner UAT): the app cannot tell identical
+        # models apart, the owner's eyes can. Shown only on steps with
+        # no index and at least one unowned open feed; picking a feed
+        # and saving stores instance -> index (camera.bindings), the
+        # one identity clue that outranks every guess.
+        self._bind_map = {}
+        self.bind_menu = SkewCombo(
+            self, values=[], font=self.skin.font(10), width=220,
+            **self.skin.menu_style())
+        self.bind_menu.set("bind this device to a feed")
+        self._bind_pady = (0, theme.S_ROW)
         self.entry = ctk.CTkEntry(self, font=self.skin.font(12))
         self.entry.pack(fill="x", padx=theme.S_SECTION, pady=theme.S_FIELD)
         row = ctk.CTkFrame(self, fg_color="transparent")
@@ -373,7 +436,8 @@ class IdentifyWindow(ctk.CTkToplevel):
         if not self._built or not self._devs:
             return
         self._cands, self._skipped, self._vhidden = self._candidates(
-            all_rows(self._devs, self.app._cams or []))
+            all_rows(self._devs, self.app._cams or [],
+                     self.app.cfg["camera"].get("bindings") or {}))
         self._pos = 0
         if self._cands:
             self._start_step()
@@ -382,7 +446,8 @@ class IdentifyWindow(ctk.CTkToplevel):
 
     def _build(self):
         self._cands, self._skipped, self._vhidden = self._candidates(
-            all_rows(self._devs, self.app._cams or []))
+            all_rows(self._devs, self.app._cams or [],
+                     self.app.cfg["camera"].get("bindings") or {}))
         self._pos = 0
         if self._cands:
             return self._start_step()
@@ -403,16 +468,30 @@ class IdentifyWindow(ctk.CTkToplevel):
                                                  # the next step's line
         dev = self._cands[self._pos]             # any busy line the old
         inst = dev["instance"]                   # worker may have queued
-        idx = dev.get("idx")             # a synthetic row IS its index:
-        if idx is None:                  # no map lookup can or should
-            idx = identity_map(self._devs, self.app._cams or []).get(inst)
-        shared = False
-        if idx is None:
-            # the strict map refused (name collision): the relaxed map
-            # may still know the one feed answering to this name
+        idx = dev.get("idx")             # all_rows answered this once:
+        shared = False                 # bind, join, or the row's own
+        if idx is None:                  # synthetic index - the step
+            # the strict map refused (name collision): the relaxed map  # machine must not
+            # may still know the one feed answering to this name       # re-derive
             got = preview_map(self._devs, self.app._cams or []).get(inst)
             if got is not None:
                 idx, shared = got
+        # the bind menu: only for a row with no index (and not itself
+        # an index-keyed synthetic), only over feeds nothing claims
+        bindings = self.app.cfg["camera"].get("bindings") or {}
+        opts = (bind_candidates(self._devs, self.app._cams or [],
+                                bindings)
+                if idx is None and not str(inst).startswith("idx:")
+                else [])
+        if opts:
+            self._bind_map = {("bind to feed %d" % n): n for n in opts}
+            self.bind_menu.configure(values=list(self._bind_map))
+            self.bind_menu.set("bind this device to a feed")
+            self.bind_menu.pack(after=self._vbox, anchor="w",
+                                padx=theme.S_SECTION, pady=self._bind_pady)
+        else:
+            self._bind_map = {}
+            self.bind_menu.pack_forget()
         stored = (self.app.cfg["camera"].get("labels") or {}).get(inst, "")
         self.entry.delete(0, "end")
         self.entry.insert(0, stored or dev["name"])
@@ -484,10 +563,19 @@ class IdentifyWindow(ctk.CTkToplevel):
 
     def _save(self):
         dev = self._ident()
-        if dev is not None:
-            self.app.monitor.events.put(("camera_identity", {
-                "instance": dev["instance"], "label": self.entry.get()}))
-            self.note.configure(text="saved - the loop writes the toml")
+        if dev is None:
+            return
+        payload = {"instance": dev["instance"], "label": self.entry.get()}
+        pick = self.bind_menu.get() if self._bind_map else None
+        if pick in self._bind_map:
+            payload["bind"] = self._bind_map[pick]
+        self.app.monitor.events.put(("camera_identity", payload))
+        self.note.configure(text="saved - the loop writes the toml")
+        if "bind" in payload and not self._ladder_busy:
+            # the row flip (device lights, synthetic placeholder
+            # retires) rides the SAME re-read ladder the unhide uses:
+            # the loop owns the toml turn
+            self._ladder_start()
 
     def _hide(self):
         dev = self._ident()
@@ -587,7 +675,8 @@ class IdentifyWindow(ctk.CTkToplevel):
             return
         self._devs = self.app._devs
         self._cands, self._skipped, self._vhidden = self._candidates(
-            all_rows(self._devs, self.app._cams or []))
+            all_rows(self._devs, self.app._cams or [],
+                     self.app.cfg["camera"].get("bindings") or {}))
         self._pos = 0
         if self._cands:
             self._start_step()

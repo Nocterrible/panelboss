@@ -271,6 +271,18 @@ class _EventsMixin:
                         hidden = self.camera_cfg.setdefault("hidden", [])
                         if inst in hidden:
                             hidden.remove(inst)
+                    if "bind" in value:
+                        # the wizard's twin answer: "this instance IS
+                        # the feed at index N". Stored on the instance
+                        # (survives label edits, composes with hide);
+                        # a non-numeric bind clears the claim, the
+                        # same shape as an empty label
+                        bindings = self.camera_cfg.setdefault(
+                            "bindings", {})
+                        try:
+                            bindings[inst] = int(value["bind"])
+                        except (TypeError, ValueError):
+                            bindings.pop(inst, None)
                     from .. import config
                     config.write_config(self.cfg)
                     log.info("camera identity stored for %s", inst)
