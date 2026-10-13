@@ -42,8 +42,14 @@ class MotionDetector:
         self.ratio = max(1e-9, float(cfg.get("ratio", 0.003)))
         self.diff_level = int(cfg.get("diff_level", 22))
         self.hold_sec = float(cfg.get("hold_sec", 180))
-        self.conf = self.ratio         # the confidence slider writes here;
-                                       # the differencing gate reads ratio
+        self.conf = self.ratio         # the ("confidence", v) hot-write
+                                       # still lands here (mode-blind),
+                                       # but the gate reads ratio - and
+                                       # since W3B the UI mirrors the
+                                       # confidence slider to ratio in
+                                       # motion mode (gate MED: this
+                                       # alias used to make the slider
+                                       # a silent no-op in this mode)
         self._prev = None              # blurred gray of the previous frame
         self._last = None              # monotonic stamp of the last motion
         self._box = None               # its region, in frame space

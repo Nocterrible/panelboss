@@ -160,7 +160,8 @@ class _DetectionMixin:
         self.detect_note.pack_forget()
         self.detect_note.configure(
             text=("no model: the differencer is rebuilt the moment a "
-                  "slider moves" if mode == "motion" else
+                  "slider moves; the confidence threshold sets the "
+                  "motion ratio in this mode" if mode == "motion" else
                   "device applies immediately; the model file itself "
                   "needs a restart"))
         self.detect_note.pack(anchor="w", pady=(theme.S_FIELD, 0))
@@ -212,6 +213,22 @@ class _DetectionMixin:
         self.cfg["inference"]["confidence"] = round(float(value), 2)
         self.conf_label.configure(text="%.2f" % value)
         self.monitor.events.put(("confidence", round(float(value), 2)))
+        # gate MED (misses list): the confidence slider writes
+        # detector.conf, but MotionDetector ignores conf - its knob is
+        # ratio. In motion mode the SAME slider therefore also drives
+        # the motion ratio: cfg first (a rebuild reads it back), then
+        # the hot-write to the live instance - the exact seam the
+        # ("confidence", v) event uses for detector.conf in
+        # _events.py, mirrored for the knob this mode actually gates
+        # on. The frame-changes readout follows the number it shares.
+        if (self.cfg.get("detection") or {}).get("mode") == "motion":
+            self.cfg["detection"]["ratio"] = round(float(value), 2)
+            det = self.monitor.detector
+            if hasattr(det, "ratio"):
+                det.ratio = round(float(value), 2)
+            shown = getattr(self, "motion_labels", {}).get("ratio")
+            if shown is not None:
+                shown.configure(text="%.4f" % round(float(value), 2))
         self._save()
 
 

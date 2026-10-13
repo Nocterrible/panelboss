@@ -106,8 +106,14 @@ class FaceGate:
                                                # list(stored.values())
 
     def remove(self, name="all"):
-        if name == "all":
-            self.stored = {}
-        else:
-            self.stored.pop(name, None)
-        self._save()
+        # gate fix (mirror of enroll): the rebind and the del ran
+        # OUTSIDE the lock while a voting thread could be mid
+        # np.stack(list(stored.values())); the SAVE too belongs under
+        # the same lock, so no third party mutates between the del and
+        # the snapshot it persists (_save re-takes this same RLock).
+        with self._lock:
+            if name == "all":
+                self.stored = {}
+            else:
+                self.stored.pop(name, None)
+            self._save()

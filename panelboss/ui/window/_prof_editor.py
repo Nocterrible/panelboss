@@ -58,7 +58,7 @@ class _EditorMixin:
                     (l["title"] or "(untitled)")[:40],
                     l["proc"][:14], l["rect"][2], l["rect"][3],
                     l["rect"][0], l["rect"][1],
-                    l["monitor"] or "?"),
+                    l.get("monitor") or "?"),
                 font=self.skin.font(11),
                 command=lambda k=key: self._pin_select(k),
                 fg_color=self.skin.accent if picked
@@ -169,7 +169,7 @@ class _EditorMixin:
             notes.append("will save: %s %dx%d at %d,%d on %s" % (
                 picked["proc"][:14], picked["rect"][2],
                 picked["rect"][3], picked["rect"][0],
-                picked["rect"][1], picked["monitor"] or "?"))
+                picked["rect"][1], picked.get("monitor") or "?"))
         elif saved_row:
             notes.append("saved seat: %dx%d at %d,%d on %s (the "
                          "window is closed; move the window and hit "

@@ -29,6 +29,25 @@ class FrameBox:
             return self.latest
 
 
+def _tile_rgb(frame):
+    """One mosaic tile: camera frame -> PIL RGB image, or None when the
+    frame has no honest tile. THE MONO-DRIVER CLASS (same as detector's
+    letterbox fix, W2A - closed at BOTH ends now): the letterbox fix
+    let grayscale frames survive DETECTION, so they now reach this
+    compositor too, and cvtColor(BGR2RGB) RAISES on a 2-D frame. Branch
+    on ndim: 2-D (mono/IR) converts GRAY2RGB, 3-D (BGR) keeps the old
+    path; anything else (a 2-channel depth frame) cannot be painted
+    honestly, so the caller abstains the tile - the labeled hole the
+    wall already renders for the cameras it does not hold."""
+    import cv2
+    from PIL import Image
+    if frame.ndim == 2:
+        return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB))
+    if frame.ndim == 3 and frame.shape[2] == 3:
+        return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    return None
+
+
 class _PreviewMixin:
 
     def _preview(self, now):
@@ -192,9 +211,18 @@ class _PreviewMixin:
                 label = "degraded poll"
             else:
                 label = config.MODE_LABELS.get(mode, "poll")
-            frames[index] = Image.fromarray(
-                cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            labels[index] = label
+            tile = _tile_rgb(frame)
+            if tile is None:
+                # no honest tile exists (a 2-channel depth pin): the
+                # eye ABSTAINS - the labeled hole the wall already
+                # renders for the cameras it does not hold - and the
+                # label says what the frame really is
+                frames[index] = None
+                labels[index] = "no rgb tile (%s)" % (
+                    "x".join(str(s) for s in frame.shape),)
+            else:
+                frames[index] = tile
+                labels[index] = label
         # an open in flight PINS the lease (see _pin_lease): without it
         # a 1.5 s heartbeat lapse kills a slow eye's 20+ s open mid-
         # flight and the spiral begins. When the workers land or the

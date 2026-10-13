@@ -412,6 +412,15 @@ def _reconcile_plan(store, active, pick, set_plan):
             return "handed back to %s" % prev
         return ("handback FAILED, the marker stands "
                 "(next boot retries)")      # never orphan silently
+    if not perf:
+        # gate LOW: marker set but the performance plan resolves to
+        # nothing (cleared from config after a crash mid-game) - the
+        # claim must not vanish quietly: the desk may still sit on
+        # the game plan until someone switches by hand
+        log.warning("reconcile: ownership marker set but no performance "
+                    "plan on this box - desk may still be on the game "
+                    "plan; claim cleared, switch manually if the desk "
+                    "runs hot")
     gaming.clear_plan_owned(store)
     return "not ours any more (moved by someone else): cleared"
 
@@ -463,14 +472,34 @@ def _apply_power_plan(side, gcfg, gaming_now, cfg):
     elif not gaming_now and state["active"]:
         cur = power_plan.active()
         # hand back only if WE still own it; if the user or a
-        # scheduled task moved it mid-game, that is the new truth.
-        if cur and cur.lower() == state["active"].lower():
-            if power_plan.set_plan(state["saved"]):
+        # scheduled task moved it mid-game, that is the new truth
+        # and the claim is simply void (the boot rule agrees).
+        if not cur or cur.lower() != state["active"].lower():
+            gaming.clear_plan_owned(gcfg)               # ours no more
+            _persist_plan_state(cfg)
+            state["saved"] = state["active"] = ""
+        else:
+            # gate MED (ledger 1): a FAILED set_plan (False return or
+            # raise) used to clear the marker anyway - the desk stayed
+            # on High-Performance with no retry token. The boot rule
+            # (_reconcile_plan) clears ONLY on success; mirror it: keep
+            # BOTH keys standing, log the failure, and let the next
+            # boot's reconcile retry the handback.
+            try:
+                back = bool(power_plan.set_plan(state["saved"]))
+            except Exception:
+                back = False
+                log.exception("gaming hz: power plan handback raised")
+            if back:
                 log.info("gaming hz: power plan back to %s",
                          state["saved"])
-        gaming.clear_plan_owned(gcfg)               # ours no more
-        _persist_plan_state(cfg)
-        state["saved"] = state["active"] = ""
+                gaming.clear_plan_owned(gcfg)           # ours no more
+                _persist_plan_state(cfg)
+                state["saved"] = state["active"] = ""
+            else:
+                log.error("gaming hz: power plan handback FAILED (%s); "
+                          "the marker stands so the boot reconcile "
+                          "retries", state["saved"])
 
 
 def _gpu_usage():
