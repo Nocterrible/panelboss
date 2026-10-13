@@ -174,21 +174,23 @@ class _CameraMixin:
             try:
                 devs = camera.camera_devices()
                 self._devs = devs                # identities ride the
-                # same scan report - and the SAME drop rule as
-                # camera_names(): an empty name must not shift every
-                # later label through the positional mapping (gate
-                # finding 2). A name that appears more than once is
-                # reported as NO name: the positional guess cannot
-                # tell identical models apart, and a confidently
-                # wrong label hides the wrong menu line. The wizard
-                # is the disambiguator for that case, by preview.
-                names = [d["name"].strip() for d in devs
-                         if d["name"].strip()]
-                uniq = {n for n in names if names.count(n) == 1}
+                # same scan report. A name attaches to an OpenCV index
+                # ONLY when it is unique across the whole PnP list:
+                # camera_names() concedes the PnP enumeration order
+                # need not match the OpenCV index order, so a
+                # positional attach on a repeated name can only be a
+                # guess (gate finding 8: the positional-label lie) -
+                # a confidently wrong label hides the wrong menu line.
+                # An empty name drops the same way: it must not shift
+                # every later label through the positional mapping
+                # (gate finding 2). The wizard is the disambiguator
+                # for that case, by preview.
+                names = [d["name"].strip() for d in devs]
+                counts = {n: names.count(n) for n in names if n}
                 found = [(index, opened, width,
                           names[index]
                           if index < len(names)
-                          and names[index] in uniq else "")
+                          and counts.get(names[index], 0) == 1 else "")
                          for index, opened, width
                          in camera.enumerate_cameras() if opened]
             except Exception:

@@ -13,7 +13,7 @@ candidates, and driving the lease would rewrite the roster per cycle.
 Duty eyes release between polls under boot_per_poll; a still-busy
 device earns the honest busy line.
 
-SIZE LAW: 270, one window - the step machine and its borrowed-frame
+SIZE LAW: ~320, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -79,6 +79,11 @@ class IdentifyWindow(ctk.CTkToplevel):
         self._dying, self._built = False, False
         self._frame, self._img, self._gen = None, None, 0
         self._devs, self._cands, self._pos = [], [], 0
+        self._busy = False                       # worker -> pump, the
+        # ONLY marshaling path (no naked self.after from workers):
+        self._ladder_busy = False                # the unhide recheck
+        self._ladder_left, self._ladder_prev = 0, None   # ladder state
+        self._fetched = False                    # a fresh count to beat
         self._deadline = time.time() + 30        # the first scan may fail
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
@@ -149,6 +154,16 @@ class IdentifyWindow(ctk.CTkToplevel):
             log.exception("identity query failed")
             self._devs = []
 
+    def _gather_reload(self):
+        # the _gather idiom on the reload path: the app's own last scan
+        # is empty and the powershell query may not land on the tk
+        # thread; the pump's next tick picks up the answer
+        try:
+            setattr(self.app, "_devs", camera.camera_devices())
+        except Exception:
+            log.exception("identity query failed")
+            setattr(self.app, "_devs", [])
+
     def _pump(self):
         if self._dying:
             return
@@ -160,6 +175,11 @@ class IdentifyWindow(ctk.CTkToplevel):
             frame, self._frame = self._frame, None
             if frame is not None:
                 self._show(frame)
+            elif self._busy:
+                # the BUSY line, marshaled: the worker only flips the
+                # flag; this tick is the main-thread render (no naked
+                # self.after from a worker anywhere in this file)
+                self.preview.configure(image=None, text=BUSY)
         except Exception:
             log.exception("camid pump failed; the loop goes on")
         try:
@@ -167,18 +187,38 @@ class IdentifyWindow(ctk.CTkToplevel):
         except Exception:
             pass
 
-    def _build(self):
+    def _candidates(self, devs):
+        """Visible steps + the honest count of what the filter skipped:
+        hidden never (a hide is a policy row, not a candidate drop) and
+        unhealthy (PnP Status not OK) never earns a step or a wasted
+        open. Filtering is candidate-list-only - an unhealthy device
+        stays labelable through the unhide path, never policy-destroyed."""
         hidden = set(self.app.cfg["camera"].get("hidden") or [])
-        self._cands = [d for d in self._devs if d["instance"] not in hidden]
+        unhealthy = 0
+        cands = []
+        for d in devs or []:
+            if d["instance"] in hidden:
+                continue
+            if not (str(d.get("status") or "OK").lower() == "ok"):
+                unhealthy += 1
+                continue
+            cands.append(d)
+        return cands, unhealthy
+
+    def _build(self):
+        self._cands, self._skipped = self._candidates(self._devs)
         self._pos = 0
         if self._cands:
             return self._start_step()
         self.idline.configure(text="no visible cameras")
+        if self._skipped:
+            self.note.configure(text="%d unhealthy camera(s) skipped (PnP status)" % self._skipped)
 
     def _start_step(self):
         self._gen += 1                           # retires the old worker
-        dev = self._cands[self._pos]
-        inst = dev["instance"]
+        self._busy = False                       # a new step replaces
+        dev = self._cands[self._pos]             # any busy line the old
+        inst = dev["instance"]                   # worker may have queued
         idx = identity_map(self._devs, self.app._cams or []).get(inst)
         stored = (self.app.cfg["camera"].get("labels") or {}).get(inst, "")
         self.entry.delete(0, "end")
@@ -186,9 +226,13 @@ class IdentifyWindow(ctk.CTkToplevel):
         self.idline.configure(text="%d/%d  %s · ...%s · %s" % (
             self._pos + 1, len(self._cands), dev["name"], inst[-12:],
             dev["status"] or "?"))
-        self.note.configure(text=step_warning(self._devs, dev) or (
+        note = step_warning(self._devs, dev) or (
             "index %s right now" % idx if idx is not None else
-            "no openable index in the last scan - rescan first"))
+            "no openable index in the last scan - rescan first")
+        if getattr(self, "_skipped", 0):
+            note += "  ·  %d unhealthy camera(s) skipped (PnP status)" \
+                % self._skipped
+        self.note.configure(text=note)
         if idx is None:
             return self.preview.configure(image=None, text="no live view")
         threading.Thread(target=self._work, daemon=True,
@@ -205,12 +249,10 @@ class IdentifyWindow(ctk.CTkToplevel):
         if cam is None or not cam.is_open():
             if cam is not None:
                 cam.release()
-            try:                                 # closed inside the open
-                self.after(0, lambda: self.preview.configure(
-                    image=None, text=BUSY))      # is a silent no-op
-            except Exception:
-                pass
-            return
+            gen_now = self._gen                  # snapshot: the pump's
+            if self._gen == gen:                 # _gen check drops this
+                self._busy = True                # write if a new step
+            return                               # (its _gen bump) lands
         try:
             while not self._dying and self._gen == gen:
                 frame = cam.read(timeout=1, screen=0)
@@ -254,10 +296,20 @@ class IdentifyWindow(ctk.CTkToplevel):
     def _unhide_all(self):
         """The way OUT (gate finding 5): hiding is a door, not a
         cell. The step line counts the tenants so the verb cannot
-        be a blind wipe; the reload is DEFERRED because the loop
+        be a blind wipe. The reload is DEFERRED because the loop
         owns the toml and applies events on its own turn - reading
         the cfg back synchronously would see the pre-unhide world
-        and rebuild the very list we came to free."""
+        and rebuild the very list we came to free. A single deferred
+        call used to ASSUME that turn had drained by then; a tick
+        blocked on a slow open (a virtual camera takes ~16 s) drains
+        later and the reload read stale hidden, ending at "nothing
+        left visible" with no re-trigger. So the reload rides a
+        BOUNDED recheck ladder: each reload compares the visible
+        candidate count to the previous one - unchanged and attempts
+        remain, reschedule (500 ms spacing, cap 8, ~4 s); changed,
+        the reload stands and the ladder stops. One ladder per view:
+        a click mid-ladder enqueues its events and the running
+        ladder re-reads them, no second ladder piles up."""
         hidden = self.app.cfg["camera"].get("hidden") or []
         if not hidden:
             self.note.configure(text="nothing is hidden")
@@ -266,18 +318,74 @@ class IdentifyWindow(ctk.CTkToplevel):
             self.app.monitor.events.put(("camera_identity", {
                 "instance": inst, "unhide": True}))
         self.note.configure(text="unhidden %d device(s)" % len(hidden))
-        self.after(250, self._reload_steps)
+        if not self._ladder_busy:
+            # one ladder per view: the running ladder re-reads the cfg
+            # (its events are already queued), a second click must not
+            # schedule a second ladder behind the first
+            self._ladder_start()
+
+    def _ladder_start(self):
+        self._ladder_busy = True                 # one in-flight ladder
+        self._ladder_left = 8                    # per view: a second
+        self._ladder_prev = len(self._cands)     # click re-runs on the
+        self.after(250, self._reload_steps)      # FIRST (the stale
+                                                 # count to beat), never
+                                                 # piles up
+
+    def _ladder_stop(self):
+        self._ladder_busy = False
+        self._ladder_left = 0
+        self._ladder_prev = None
+
+    def _ladder_check(self):
+        """One step of the unhide recheck: the reload counts as
+        STANDING when the visible-candidate count CHANGED (the drain
+        landed) or when the attempts are spent; only an UNCHANGED
+        count reschedules the next reload at 500 ms, capped, so a
+        blocked state loop is waited for but never shadowed by an
+        infinite pump. A reload that rode the off-thread PnP fetch has
+        no fresh count to compare yet (the branch left _cands stale):
+        it reschedules on the remaining budget alone. Each reload
+        does its own normal work - the ladder only decides the next
+        500 ms."""
+        if not self._ladder_busy:
+            return
+        if self._fetched:                        # the full path ran:
+            self._fetched = False                # a CHANGED count is
+            if len(self._cands) != self._ladder_prev:   # the drain -
+                self._ladder_stop()              # the reload stands
+                return
+        if self._ladder_left <= 0:
+            self._ladder_stop()                  # cap spent: the ride
+            return                               # ends honest, bounded
+        self._ladder_prev = len(self._cands)     # unchanged: compare
+        self._ladder_left -= 1                   # the next reload to
+        self.after(500, self._reload_steps)      # THIS count
 
     def _reload_steps(self):
-        self._devs = getattr(self.app, "_devs", None) or \
-            camera.camera_devices()
-        hidden = set(self.app.cfg["camera"].get("hidden") or [])
-        self._cands = [d for d in self._devs if d["instance"] not in hidden]
+        if self._dying:
+            return                               # destroyed mid-ladder
+        self._fetched = False
+        if not getattr(self.app, "_devs", None):
+            # the first reload may not see the app's own last scan: the
+            # PnP query is a ~10 s powershell round trip and must not
+            # run on the tk thread (it froze the wizard mid-unhide).
+            # Route it through the worker idiom _gather uses; the pump's
+            # next tick sees the result and this step only keeps the
+            # ladder alive.
+            threading.Thread(target=self._gather_reload, daemon=True,
+                             name="camid-reload").start()
+            self._ladder_check()
+            return
+        self._devs = self.app._devs
+        self._cands, self._skipped = self._candidates(self._devs)
         self._pos = 0
         if self._cands:
             self._start_step()
         else:
             self.idline.configure(text="nothing left visible")
+        self._fetched = True                     # the comparison to
+        self._ladder_check()                     # beat is a FRESH one
 
     def _next(self):
         if self._cands:

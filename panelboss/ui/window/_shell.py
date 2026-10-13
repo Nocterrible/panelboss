@@ -240,6 +240,13 @@ class SettingsWindow(
         for widget in (self._top, self._actions, self._tabs_bar,
                        self._body):
             widget.destroy()
+        win = getattr(self, "_camid_win", None)    # the wizard carries
+        if win is not None:                        # build-time colors:
+            try:                                   # rebuild re-dresses
+                win.destroy()                      # it from the next
+            except Exception:                      # open
+                pass
+            self._camid_win = None
         self.skin = theme.get_skin(self.cfg["ui"]["skin"])
         theme.apply_ctk_font(self.skin)
         ctk.set_appearance_mode(self.skin.mode)
