@@ -99,9 +99,11 @@ class FaceGate:
             raise RuntimeError("no face found; the camera is always started "
                                "before enrolling")
         embed = np.array(faces[0].embedding, dtype=np.float32)
-        self.stored[name] = embed / np.linalg.norm(embed)
-        self._save()
-        return name
+        with self._lock:                       # gate fix: the dict write
+            self.stored[name] = embed / np.linalg.norm(embed)   # belongs to
+        self._save()                           # the lock too - a voting
+        return name                            # thread can be mid-
+                                               # list(stored.values())
 
     def remove(self, name="all"):
         if name == "all":

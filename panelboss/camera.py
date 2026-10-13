@@ -547,12 +547,18 @@ class Camera:
             # cv2 handles all three without complaint. The release
             # rides the SAME deadlined lock as the open (audit MED): a
             # cap freed outside it races a concurrent reopen - the same
-            # concurrent device-tree touch the lock exists for. A
-            # locked round is skipped exactly like the open skips it
-            # (the warning says so): the cap stays owned, the next
-            # release() retries.
+            # concurrent device-tree touch the lock exists for.
             with _open_timed() as got:
                 if not got:
+                    # gate fix: "the next release() retries" was a
+                    # lie - callers null self.camera right after, so
+                    # a skipped release ORPHANS the cap exactly like
+                    # the none-free class it replaced. Drop the handle
+                    # here: at worst a zombie until GC/exit, never an
+                    # untracked live cap racing the next open.
+                    log.warning("camera release skipped (open lock "
+                                "busy); handle dropped, not deferred")
+                    self.cap = None
                     return
                 self.cap.release()
             # one handle, one release (satellites F3): null by

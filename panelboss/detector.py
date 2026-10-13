@@ -39,6 +39,12 @@ class PersonDetector:
     def detect(self, frame, conf=None):
         """Boxes (x1y1x2y2) in frame space plus their scores."""
         img, left, top, r = _letterbox(frame, self.input_size)
+        if r == 0.0:
+            # gate fix: zero ratio (0-size frame) makes _scale divide by
+            # zero - inf/NaN boxes can survive _nms's self-keep and vote
+            # present as garbage. Abstain NOW, before the inference:
+            # no boxes, no scores, no vote.
+            return np.empty((0, 4)), np.empty(0)
         img = img[..., ::-1]                  # BGR -> RGB, first
         blob = np.transpose(img, (2, 0, 1)).astype(np.float32)
         blob = blob[np.newaxis] / 255
