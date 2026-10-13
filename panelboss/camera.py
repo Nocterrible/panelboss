@@ -22,6 +22,8 @@ seams). Rotor+camera basics remain the split candidates.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import json
 import logging
 import subprocess
@@ -39,11 +41,43 @@ log = logging.getLogger("camera")
 # is double that and then some; a slow eye must not pin forever
 OPEN_GRACE_SEC = 90
 
+# a slow driver OPEN is not a reason for the whole subsystem to wedge:
+# the NVIDIA driver's measured open window is 16-27 s (38 s for one
+# enumeration), so a 30 s deadline sits just above it - a healthy open
+# still lands, but a hung holder (a dead driver that grabs the lock and
+# never lets go) stops blocking every other poll forever. Every
+# acquisition of _open_lock now runs through _open_timed and ABSTAINS
+# (returns the caller's None/busy shape, never raises, never blocks the
+# loop) when the deadline passes instead of queuing behind the hang.
+OPEN_LOCK_TIMEOUT = 30.0
+
 # the NVIDIA virtual camera driver dies when two threads open devices
 # at the same time (measured: interprocess mutex timeout, then OpenCV
 # raises a C++ exception); every open and every enumerate goes through
 # this lock, so at most one thread touches the device tree
 _open_lock = threading.RLock()
+
+
+@contextmanager
+def _open_timed():
+    """_open_lock with a deadline. Yields True when the lock was
+    acquired, False when OPEN_LOCK_TIMEOUT passed first (the holder is
+    a hung driver open): the caller abstains that tick - it never
+    raises and never blocks the poll loop behind the holder. A single
+    thread re-acquires (RLock) so an open that holds the lock and then
+    releases the cap it just opened does not self-deadlock; the
+    deadline guards only the cross-thread case where a DIFFERENT thread
+    is wedged in a slow open and this one would queue behind it."""
+    got = _open_lock.acquire(timeout=OPEN_LOCK_TIMEOUT)
+    if not got:
+        log.warning("camera open locked past %ds; skipping this round",
+                    int(OPEN_LOCK_TIMEOUT))
+        yield False
+    else:
+        try:
+            yield True
+        finally:
+            _open_lock.release()
 
 BLACK_CEIL = 16      # a frame whose brightest pixel is below this is
                      # evidence of "cannot see", never of "empty desk"
@@ -215,7 +249,12 @@ def enumerate_cameras(start=0, stop=8):
     MF's slowness - the device's cost, not the app's."""
     found = []
     for index in range(start, stop):
-        with _open_lock:                 # one open at a time, always
+        with _open_timed() as got:       # one open at a time, but with a
+            if not got:                  # deadline: a hung holder must not
+                found.append((index, False, 0.0))
+                continue                 # wedge the enumeration forever;
+                # the row takes the dead-probe shape (an unopened cap
+                # reports 0.0 too - cli.py:int() would frown at None)
             cap, door = _open_door(index)
             opened = cap.isOpened()
             width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -247,7 +286,9 @@ def find_camera(index=-1, name_contains=None, fallback=0):
         indexes.insert(0, index)   # the config index comes second
     indexes.append(fallback)       # and we always fall back to something
     for idx in indexes:
-        with _open_lock:                 # one open at a time, always
+        with _open_timed() as got:       # one open at a time, but with a
+            if not got:                  # deadline: a hung holder must not
+                continue                 # wedge the whole find forever
             cap, _door = _open_door(idx)
             if cap.isOpened():
                 cap.release()
@@ -307,7 +348,17 @@ class HelloIrCamera:
             raise RuntimeError("the hello IR camera needs the optional "
                                "whircam package: pip install whircam") \
                 from exc
-        with _open_lock:                 # open timing varies wildly; the
+        with _open_timed() as got:     # open timing varies wildly; the
+            # deadline keeps a hung open from wedging every other
+            # acquire (audit MED); on timeout the abstain is the
+            # not-opened shape: is_open() False, the caller's corpse
+            # arm releases the husk and retries next tick
+            if not got:
+                self._cam = None
+                self.warmup = warmup
+                self.width = 0
+                self.height = 0
+                return
             self._cam = whircam.IRCam(group=group,   # lock at least keeps
                                       format_output="bgr",   # the device
                                       timeout=timeout)         # tree sane
@@ -394,9 +445,19 @@ class Camera:
         self.index = index
         self.warmup = warmup
         self.started = time.perf_counter()
-        with _open_lock:                 # the driver hates concurrent
-            self.cap, _door = _open_door(index, width,   # opens: lock
-                                          height)        # the device tree
+        self.cap = None
+        # the driver hates concurrent opens: lock the device tree - but
+        # with the deadline (audit MED: the unbounded acquire turned ONE
+        # hung open into a whole-subsystem wedge). A locked round is the
+        # documented not-opened shape, the same corpse _open_door can
+        # already return: is_open() is False, the caller's corpse arm
+        # releases it and retries next tick. Never raise, never block.
+        with _open_timed() as got:
+            if not got:
+                self.width = 0
+                self.height = 0
+                return
+            self.cap, _door = _open_door(index, width, height)
             self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         elapsed = time.perf_counter() - self.started
@@ -483,8 +544,22 @@ class Camera:
     def release(self):
         if self.cap is not None:
             # ask even a never-opened or open-yet-frozen cap to let go;
-            # cv2 handles all three without complaint
-            self.cap.release()
+            # cv2 handles all three without complaint. The release
+            # rides the SAME deadlined lock as the open (audit MED): a
+            # cap freed outside it races a concurrent reopen - the same
+            # concurrent device-tree touch the lock exists for. A
+            # locked round is skipped exactly like the open skips it
+            # (the warning says so): the cap stays owned, the next
+            # release() retries.
+            with _open_timed() as got:
+                if not got:
+                    return
+                self.cap.release()
+            # one handle, one release (satellites F3): null by
+            # construction, so a second release() is a no-op and the
+            # store sweep + self.camera double-release no longer leans
+            # on cv2 idempotency one layer down
+            self.cap = None
 
     def is_open(self):
         return self.cap is not None and self.cap.isOpened()
@@ -650,8 +725,17 @@ class AsyncOpener:
     def _bg(self, index, gen, deadline):
         """open_async's worker: factory, warm up, and only THEN decide
         whether the handle is still wanted (the stale checks share the
-        publish lock; see the class docstring)."""
+        publish lock; see the class docstring). The factory is wrapped
+        in BaseException, not Exception: cv2's C++ raise paths can
+        surface an error a bare except misses, and a worker that dies
+        on one leaves its inflight row "opening" FOREVER - every later
+        tick then waits on a dead eye. The row is reaped in a finally
+        so a dying worker clears its own opening flag, and the
+        BaseException is re-raised AFTER the reap so the daemon still
+        dies honestly instead of swallowing a SystemExit."""
         t0 = time.monotonic()
+        cam = None
+        fatal = None
         try:
             cam = self._factory(index)
             if cam is not None:
@@ -659,33 +743,45 @@ class AsyncOpener:
                     cam.warm_up()      # settled frames or an honest
                 except Exception:      # hole: an unwarmed eye reads
                     pass               # dark and lies (gate finding 3)
-        except Exception:
-            cam = None
+        except Exception:              # the open DIED at the factory:
+            cam = None                 # the old shape, the abstain
+            # already logged, the row reaped by the publish block below
+        except BaseException as err:   # the gap around cv2's C++ raise
+            fatal = err                # paths (audit MED): a worker that
+            cam = None                 # dies on this must still reap its
+                                       # own row - an inflight row left
+                                       # behind reads "opening" forever
+                                       # and every later tick queues on
+                                       # an eye that will never publish
         me = threading.current_thread()
-        with self.lock:
-            job = self.inflight.get(index)
-            mine = job is not None and job.thread is me
-            if mine:
-                self.inflight.pop(index, None)   # my row ends with me
-            stale = (not mine or self.gen != gen
-                     or time.monotonic() >= deadline)
-            if cam is not None and not stale:
-                self._store(index, cam)
-                self.failed.discard(index)       # the eye lives again
-            elif cam is None and mine:
-                self.failed.add(index)           # the open DIED at the
-                # factory: the next vote can tell a dead eye from an
-                # opening one (the single desk keeps its fail-closed
-                # vote; a replaced row belongs to whoever replaced it)
-        if cam is None:
-            return                     # the factory logged the abstain
-        if stale:
-            cam.release()
-            log.info("camera %d open went stale; released its own handle",
-                     index)
-        else:
-            log.info("camera %d open published after %.1f s",
-                     index, time.monotonic() - t0)
+        try:
+            with self.lock:
+                job = self.inflight.get(index)
+                mine = job is not None and job.thread is me
+                if mine:
+                    self.inflight.pop(index, None)   # my row ends with me
+                stale = (not mine or self.gen != gen
+                         or time.monotonic() >= deadline)
+                if cam is not None and not stale:
+                    self._store(index, cam)
+                    self.failed.discard(index)       # the eye lives again
+                elif cam is None and mine:
+                    self.failed.add(index)           # the open DIED at the
+                    # factory: the next vote can tell a dead eye from an
+                    # opening one (the single desk keeps its fail-closed
+                    # vote; a replaced row belongs to whoever replaced it)
+            if cam is not None:
+                if stale:
+                    cam.release()
+                    log.info("camera %d open went stale; released its own"
+                             " handle", index)
+                else:
+                    log.info("camera %d open published after %.1f s",
+                             index, time.monotonic() - t0)
+        finally:
+            if fatal is not None:     # a BaseException still propagates:
+                raise fatal            # the daemon dies, but only after its
+                                       # opening flag has been reaped
 
     def inflight_live(self, now=None):
         """True while any registered worker is still alive AND inside

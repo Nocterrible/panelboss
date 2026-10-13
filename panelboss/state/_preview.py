@@ -47,7 +47,15 @@ class _PreviewMixin:
             return              # no model yet (warm-up) or ever (the
                                 # fail-open build failure): abstain
         rot = self.camera
-        if len(self._indexes()) > 1:
+        if len(self._indexes()) > 1 or getattr(rot, "rotating", False):
+            # a rotor goes through the mosaic EVEN when the config row
+            # now says one camera (satellites F2): the hot-plug rotor
+            # _rotor keeps alive would take the plain single read below,
+            # and RotatingCamera.read has no screen parameter - one
+            # TypeError per leased tick, the release/reopen spiral all
+            # over again. The mosaic already walks a 1-eye rotor as one
+            # labeled tile, so the smaller branch is here, not a second
+            # read shape in the single path.
             if rot is None:
                 # the lease owns one rotor and stores it: an unstored
                 # one would be rebuilt every tick, leak its opened

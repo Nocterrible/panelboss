@@ -186,7 +186,17 @@ class _CamsMixin:
                     return None, dead
                 self.camera = cam            # ADOPT the published
                 # handle: every other seam (hold, lease, cooloff,
-                # release) knows the desk's live eye through self.camera
+                # release) knows the desk's live eye through self.camera.
+                # Null the store row on adoption (satellites F3): the
+                # same handle in held AND self.camera was released
+                # TWICE by _release_camera (sweep + self.camera), saved
+                # only by cv2 idempotency one layer down - one owner
+                # releases now. The None row is the sweep's own evict
+                # footprint ("None rows are the vote's evict footprint:
+                # already released on the spot"): verified while reading
+                # the sweep, it releases only non-None rows, so the
+                # adopted-None row lands in the already-safe shape.
+                op.held[index] = None
             frame = cam.read()
             self._note_vote(index, frame)
             if frame is None and self.camera is not None:
