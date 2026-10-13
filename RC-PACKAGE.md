@@ -41,6 +41,19 @@ because two lanes died at zero writes and the surviving content was
 built-and-verified inline (receipts below) - declared, not hidden.
 
 ## Evidence set (named files, no shell)
+RECEIPT for the process blocker (wave-3 range lacked an independent
+gate): the reviewer gate over 633a5c6^..2ed7645 returned AGGREGATE
+SHIP-WITH-FIXES on the deep channel (no fallback ridden): "one low
+finding (tray _on_menu_ready's modal-pump assumption; worst case a
+one-time cosmetic menu-close in the first ~13 s) ... Everything else
+in the range - the camera ownership swap, the quit handoff, the
+raised-death arm, the _path marker write-back, the locale-evidence
+gate, the TypeError belt, the ratio domain map, the fixture
+arithmetic, and the runner stamps - verified against the code, not
+the dispositions." Both offered remedies (probe or reword) were
+comment-grade and re-review-exempt; the reword shipped as 6ce0a1a
+together with the runner's DIRTY-stamp. All 9 interrogation items
+answered at the receipt.
 1. C:\Users\user\AppData\Local\Temp\opencode\rc-fixwave-v3.patch
    - complete diff incl. every suite and probe, 54 files
 2. C:\Users\user\AppData\Local\Temp\opencode\gauntlet-final-tagc.log
