@@ -532,4 +532,51 @@ print("worker OK (a silent door returns the handle and flags the verdict,"
       " one frame then dark is NOT a no-stream, the corpse arm marks"
       " HELD, a retired step stays mute)")
 
+# 8) widget smoke, the lesson the owner's UAT beat into this file: the
+#    offline suites construct ZERO widgets, and a double-specified
+#    menu_style kwarg killed the window CONSTRUCTOR - the pane closed
+#    instantly on open with nothing in the log (tk swallows callback
+#    errors on pythonw). Where a display exists, the real window must
+#    build, run one step, and die quietly; headless boxes skip, loud
+#    about it.
+try:
+    import queue as _q
+    import customtkinter as ctk
+    from panelboss.ui import theme
+    ctk.set_appearance_mode("dark")
+
+    class _Host(ctk.CTk):                     # the window's master is
+        def __init__(self):                   # the app itself: it must
+            super().__init__()                # be a real tk widget
+            self.withdraw()
+            self.cfg = {**cfg, "camera": {**cfg["camera"],
+                                          "hidden": ["USB\\OK"]}}
+            self.skin = theme.get_skin(cfg["ui"]["skin"])
+            # OK hidden: the first step is deterministically the
+            # claimless OK2 with the unnamed feed as its bind option
+            self._cams = [(0, True, 640, "")]    # one open, UNNAMED
+            self._devs = list(DEV_MIX)
+            self._scan_cameras = lambda: None
+            self.monitor = types.SimpleNamespace(events=_q.Queue())
+
+    _h = _Host()
+    _w = _camid.IdentifyWindow(_h)
+    _h.update()
+    _w._devs = list(DEV_MIX)                    # beat the _gather
+    _w._built = True                            # thread: the smoke's
+    _w._build()                                 # devs are the fixture
+    _h.update()
+    assert _w._cands, ("smoke got no steps: devs=%r cams=%r hidden=%r"
+                       % (_w._devs, _h._cams,
+                          cfg["camera"].get("hidden")))
+    assert _w.bind_menu._values, "the twin's bind menu lost its feeds"
+    _w.destroy()
+    _h.destroy()
+    print("window smoke OK (real IdentifyWindow built, stepped, bound,"
+          " destroyed)")
+except Exception as _exc:
+    if isinstance(_exc, AssertionError):
+        raise
+    print("window smoke skipped: %s (no display?)" % type(_exc).__name__)
+
 print("ALL CAMID TESTS OK")

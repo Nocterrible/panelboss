@@ -20,7 +20,7 @@ serialized door is waited for, BUSY only where the open is proven
 held, and a bounded no-frames verdict (NOSTREAM) that hands the
 handle back instead of holding a device for a stare.
 
-SIZE LAW: 709, justified, one window - the step machine and its borrowed-frame
+SIZE LAW: 720, justified, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -267,9 +267,8 @@ class IdentifyWindow(ctk.CTkToplevel):
         # and saving stores instance -> index (camera.bindings), the
         # one identity clue that outranks every guess.
         self._bind_map = {}
-        self.bind_menu = SkewCombo(
-            self, values=[], font=self.skin.font(10), width=220,
-            **self.skin.menu_style())
+        self.bind_menu = SkewCombo(self, values=[], width=220,
+                                   **self.skin.menu_style())
         self.bind_menu.set("bind this device to a feed")
         self._bind_pady = (0, theme.S_ROW)
         self.entry = ctk.CTkEntry(self, font=self.skin.font(12))
@@ -393,11 +392,18 @@ class IdentifyWindow(ctk.CTkToplevel):
         """Visible steps + the honest counts of what the filter skipped:
         hidden never (a hide is a policy row, not a candidate drop),
         unhealthy (PnP Status not OK) never earns a step or a wasted
-        open, and software devices (is_virtual_camera: the instance is
-        not a USB namespace) stay hidden unless the checkbox says
+        open, and SOFTWARE rows stay hidden unless the checkbox says
         otherwise - the owner's call, GPU filters are nobody's default
-        camera. Filtering is candidate-list-only - a skipped device
-        stays labelable through the checkbox or the unhide path, never
+        camera. The verdict rides the row's "virtual" flag, not a
+        re-derivation here: rows from camera_devices carry the
+        namespace classification, all_rows encodes the UNKNOWN-is-not-
+        -software law for synthetic idx: rows on exactly this channel
+        (re-classifying "idx:2" by namespace here would hide the owner's
+        physical cam2 behind a checkbox - the UAT smoke caught this
+        exact shape). PnP-sourced rows always carry the key; a row from
+        any other caller without it falls back to the namespace.
+        Filtering is candidate-list-only - a skipped device stays
+        labelable through the checkbox or the unhide path, never
         policy-destroyed."""
         hidden = set(self.app.cfg["camera"].get("hidden") or [])
         show_virtual = getattr(self, "_show_virtual", False)
@@ -409,7 +415,10 @@ class IdentifyWindow(ctk.CTkToplevel):
             if not (str(d.get("status") or "OK").lower() == "ok"):
                 unhealthy += 1
                 continue
-            if not show_virtual and camera.is_virtual_camera(d["instance"]):
+            soft = d.get("virtual")
+            if soft is None:
+                soft = camera.is_virtual_camera(d["instance"])
+            if not show_virtual and soft:
                 vhidden += 1
                 continue
             cands.append(d)
