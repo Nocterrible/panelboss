@@ -173,8 +173,19 @@ try:
     back = config.get_config(dir=SCRATCH, verbose=False)
     assert back["camera"]["hidden"] == ["USB\\V2"]     # round trip
     assert back["camera"]["labels"] == {}
+    # unhide: the door, not the cell (gate finding 5) - removal is
+    # idempotent and survives the toml round trip like its inverse
+    m.events.put(("camera_identity", {"instance": "USB\\V2",
+                                      "unhide": True}))
+    m.events.put(("camera_identity", {"instance": "USB\\GONE",
+                                      "unhide": True}))   # never hidden
+    m._drain_tray()
+    assert cfg["camera"]["hidden"] == [], cfg["camera"]["hidden"]
+    assert tomllib.load(open(os.path.join(SCRATCH, "config.toml"),
+                             "rb"))["camera"]["hidden"] == []
     print("identity event OK (labels/hidden stored by instance, toml"
-          " round-trips, empty label clears, hide is idempotent)")
+          " round-trips, empty label clears, hide and unhide are"
+          " idempotent)")
 finally:
     cam_mod.Camera = _real_camera
     cam_mod.subprocess = _real_subprocess

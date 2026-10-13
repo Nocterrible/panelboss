@@ -202,7 +202,14 @@ gcv = gs._canvas
 _off = gcv.canvasy(0)
 _pt = (gcv.winfo_rootx() + gcv.winfo_width() // 2,
        gcv.winfo_rooty() + 60)
-_und = app.winfo_containing(*_pt)
+# the event is generated ON THE CANVAS, not via winfo_containing:
+# the first cut of this check asked the display stack who owns the
+# pixel and once in the gauntlet got None (a sibling test window sat
+# on the point - the answer is window-manager state, not our law).
+# event_generate on the canvas runs the same bind chain the pointer
+# would (_wheel dispatches off event.widget's master walk), so the
+# law is tested without the test inheriting the desktop's mood.
+_und = gcv
 _und.event_generate("<MouseWheel>", x=10, y=10, delta=120)
 check(gcv.canvasy(0) == _off,
       "a fitted page does not flash a scroll (canvasy(0) unmoved"

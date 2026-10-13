@@ -174,9 +174,21 @@ class _CameraMixin:
             try:
                 devs = camera.camera_devices()
                 self._devs = devs                # identities ride the
-                names = [d["name"] for d in devs]  # same scan report
+                # same scan report - and the SAME drop rule as
+                # camera_names(): an empty name must not shift every
+                # later label through the positional mapping (gate
+                # finding 2). A name that appears more than once is
+                # reported as NO name: the positional guess cannot
+                # tell identical models apart, and a confidently
+                # wrong label hides the wrong menu line. The wizard
+                # is the disambiguator for that case, by preview.
+                names = [d["name"].strip() for d in devs
+                         if d["name"].strip()]
+                uniq = {n for n in names if names.count(n) == 1}
                 found = [(index, opened, width,
-                          names[index] if index < len(names) else "")
+                          names[index]
+                          if index < len(names)
+                          and names[index] in uniq else "")
                          for index, opened, width
                          in camera.enumerate_cameras() if opened]
             except Exception:

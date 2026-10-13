@@ -106,6 +106,10 @@ class IdentifyWindow(ctk.CTkToplevel):
                                                     padx=theme.S_FIELD)
         ctk.CTkButton(row, text="next", width=70, command=self._next,
                       **self.skin.secondary()).pack(side="right")
+        ctk.CTkButton(row, text="unhide all", width=100,
+                      command=self._unhide_all,
+                      **self.skin.secondary()).pack(side="right",
+                                                    padx=theme.S_FIELD)
         if not app._cams:
             app._scan_cameras()                  # fills app._cams/_devs
         threading.Thread(target=self._gather, daemon=True,
@@ -246,6 +250,34 @@ class IdentifyWindow(ctk.CTkToplevel):
         if not self._cands:
             return self.idline.configure(text="nothing left visible")
         self._start_step()
+
+    def _unhide_all(self):
+        """The way OUT (gate finding 5): hiding is a door, not a
+        cell. The step line counts the tenants so the verb cannot
+        be a blind wipe; the reload is DEFERRED because the loop
+        owns the toml and applies events on its own turn - reading
+        the cfg back synchronously would see the pre-unhide world
+        and rebuild the very list we came to free."""
+        hidden = self.app.cfg["camera"].get("hidden") or []
+        if not hidden:
+            self.note.configure(text="nothing is hidden")
+            return
+        for inst in list(hidden):
+            self.app.monitor.events.put(("camera_identity", {
+                "instance": inst, "unhide": True}))
+        self.note.configure(text="unhidden %d device(s)" % len(hidden))
+        self.after(250, self._reload_steps)
+
+    def _reload_steps(self):
+        self._devs = getattr(self.app, "_devs", None) or \
+            camera.camera_devices()
+        hidden = set(self.app.cfg["camera"].get("hidden") or [])
+        self._cands = [d for d in self._devs if d["instance"] not in hidden]
+        self._pos = 0
+        if self._cands:
+            self._start_step()
+        else:
+            self.idline.configure(text="nothing left visible")
 
     def _next(self):
         if self._cands:

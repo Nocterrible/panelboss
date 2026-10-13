@@ -302,6 +302,19 @@ class _EditorMixin:
         self._status_lbl.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
 
+    def _pin_hover_full(self, btn, w, live):
+        """The hover carrier's live decision (gate finding 3): the
+        bubble shows the full label ONLY while the row reads
+        shortened - read fresh, so the in-place upsert can never
+        strand the tooltip on the row's birth state."""
+        bubble = self._pin_row_text(w, live, full=True)
+        if bubble != btn.cget("text"):
+            # only shortened rows get a bubble - the full label IS
+            # the text otherwise, and a bubble under the cursor that
+            # says nothing is noise with a tooltip costume
+            self.tips._schedule(bubble, btn)
+        return "break"
+
     def _pin_row_text(self, w, live, full=False):
         """The row's whole label, one builder: used at fill time and
         when an update-pin reconfigures the row in place (Oct 12).
@@ -370,14 +383,17 @@ class _EditorMixin:
             text_color=self.skin.text,
             corner_radius=self.skin.radius)
         btn.pack(side="left")
-        if self._pin_row_text(w, live, full=True) != btn.cget("text"):
-            # the row reads shortened - the whole label rides the hover
-            btn.bind("<Enter>",
-                     lambda e=None, b=btn: self.tips._schedule(
-                         self._pin_row_text(w, live, full=True), b),
-                     add="+")
-            btn.bind("<Leave>", lambda e=None: self.tips._hide_soon(),
-                     add="+")
+        # hover ALWAYS binds (gate finding 3): the decision "is this
+        # row shortened?" is taken live at hover time, so a row that
+        # was born with its full label and later became a process
+        # pin still carries the whole story - a conditional bind
+        # froze the bubble on the birth state and the in-place
+        # upsert never rebinds
+        btn.bind("<Enter>",
+                 lambda e=None, b=btn: self._pin_hover_full(b, w, live),
+                 add="+")
+        btn.bind("<Leave>", lambda e=None: self.tips._hide_soon(),
+                 add="+")
         ctk.CTkButton(row, text="edit", width=48,
                       command=lambda r=w: self._pin_load(r),
                       **self.skin.secondary()).pack(side="left",

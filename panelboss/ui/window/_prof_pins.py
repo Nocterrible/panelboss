@@ -229,10 +229,16 @@ class _PinMixin:
         e = getattr(self, "_pins_empty", None)
         if e is not None and e.winfo_exists():
             e.pack_forget()
-        # the sub-columns _fill_pins laid out (one until the list
-        # outgrows four rows): append keeps the row-major balance
-        # by cycling on the CURRENT row count
+        # the sub-columns _fill_pins laid out: an append that would
+        # CROSS the four-row threshold is a layout change, not a row
+        # - it earns the section swap (owner ruling's carve-out for
+        # bulk verbs; gate finding 1: appending into a frozen 1-col
+        # layout silently violated the flow law until the next full
+        # render). Below the threshold the surgical append stands.
         cols = getattr(self, "_pins_cols", None) or [inner]
+        if len(self._pin_rows) + 1 > 4 and len(cols) == 1:
+            self._repaint("pins")
+            return
         self._pin_row(cols[len(self._pin_rows) % len(cols)], w, live)
 
 

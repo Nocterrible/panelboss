@@ -1,9 +1,11 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
 
-SIZE LAW: ~340, grandfathered skeleton; the Oct-12 two-column
-restructure stayed net-neutral by retiring the single-column flow
-notes below. The _repaint/_section double-buffer pair (_section
+SIZE LAW: measured 388 lines (the Oct-12 two-column restructure
+cost +36 over the ~340 it claims on its header's birth - the claim
+now states the measurement, per the law's own purpose: headers that
+can be trusted; the restructure also retired the single-column flow
+notes). The _repaint/_section double-buffer pair (_section
 lives in _widgets.py) is the pane's whole paint pipeline and reads as
 one story here; splitting the fills further would scatter a mechanism
 that is debugged by reading top to bottom. No cover on repaints
@@ -109,6 +111,13 @@ class _ProfilesMixin:
         try:
             self._profiles_fill()
         finally:
+            # re-pin the fill target to the LEFT body no matter how
+            # the fills went (gate finding 6): the pin fills retarget
+            # it as they run, and a raise mid-fill must not leave an
+            # idempotent status rebuild parenting its fresh frame
+            # into the right body while the stash it replaces lives
+            # in the left - before= anchors are parent-relative
+            self._prof_detail = self._prof_body
             for f in (old, old_r):
                 if f is not None:
                     # BOTH bodies die together: the pin sections

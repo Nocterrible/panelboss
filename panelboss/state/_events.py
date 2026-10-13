@@ -251,6 +251,12 @@ class _EventsMixin:
                         hidden = self.camera_cfg.setdefault("hidden", [])
                         if inst not in hidden:
                             hidden.append(inst)
+                    if value.get("unhide"):
+                        # the door, not the cell (gate finding 5):
+                        # removal is idempotent, like the hide above
+                        hidden = self.camera_cfg.setdefault("hidden", [])
+                        if inst in hidden:
+                            hidden.remove(inst)
                     from .. import config
                     config.write_config(self.cfg)
                     log.info("camera identity stored for %s", inst)
