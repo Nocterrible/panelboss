@@ -4,6 +4,7 @@ tuples for BOTH switches (screen, sleep), the one-old hold_timers
 key seeding them, and _parse hiding OUR [PROCESS] line even though
 the flat dump (measured on this box) prints no PID - only the image
 path, and of the BASE install the venv launcher re-exec'd."""
+import math
 import os
 import sys
 
@@ -68,6 +69,33 @@ m.snooze_until = 10.0
 m._apply_hold(5.0)
 assert held[-1] == (False, False), "snooze releases the plan again"
 print("policy OK (each switch alone, together, pause, snooze, dark)")
+
+# 2b) the pause gate RELEASE re-arms the phase machine (audit HIGH:
+#     without it math.inf outlives the gate and the camera never polls
+#     again - a lit desk stays lit all night, a dark desk only wakes on
+#     physical input). Drive the same m._tick() as the run loop: state
+#     "off" + idle 90.0 keeps the on-phase's own "typing won" branch
+#     (next_poll = math.inf while idle) out of the picture, so the only
+#     finite next_poll after the unpause tick is the gate's re-arm.
+m.state = "off"
+m.paused = True
+m._tick()
+assert m.next_poll == math.inf, "the pause gate must hold the camera"
+m.paused = False
+m._tick()
+assert m.next_poll != math.inf, \
+    "the unpause left next_poll stuck at math.inf - no re-arm, no polls"
+print("gate re-arm OK (pause sets inf, unpause re-arms the phase clock)")
+
+# and the released eye carries no verdict debt (DELTA 2): a credit
+# armed before the release must die with the eye, not be consumed as
+# an ABSENT by a later fail-closed tick
+m._vote_index = 0
+m._round = {0}
+m._release_camera()
+assert m._vote_index is None, "a released eye kept its in-flight credit"
+assert m._round is None, "a released eye kept a half-collected AND round"
+print("release clear OK (released eye: no vote credit, no round debt)")
 
 # 3) migration: one old hold_timers answer seeds both new keys, keys
 #    the file sets itself always win, and the fossil never survives a

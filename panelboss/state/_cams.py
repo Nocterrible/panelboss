@@ -310,6 +310,16 @@ class _CamsMixin:
             self._release_camera()
 
     def _release_camera(self):
+        self._vote_index = None          # a released eye has no verdict:
+        self._round = None               # a credit armed before this
+                                         # release must never be
+                                         # consumed as an ABSENT verdict
+                                         # by a later fail-closed tick
+                                         # (audit: an eye with no verdict
+                                         # cast one, closing the AND round
+                                         # a whole preview lease early); a
+                                         # half-collected AND round
+                                         # straddling a release starts over
         self.preview_cool = 0.0          # a wall that just died cannot
                                          # be warm (gate finding 3: any
                                          # release path clears the flag)

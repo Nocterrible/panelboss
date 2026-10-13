@@ -172,6 +172,14 @@ class _BootMixin:
             self._release_camera()             # user flicker: release NOW
             self.next_poll = math.inf
             return
+        if self.next_poll == math.inf:
+            # gate release re-arms: math.inf is ONLY ever set by the
+            # paused/snooze gate above, so arriving here past the gate
+            # means the gate just opened (unpause click or snooze
+            # expiry) - without this the phase machine never polls
+            # again (audit HIGH: lit desk stays lit all night, dark
+            # desk camera-wakes only on physical input)
+            self.next_poll = now
         idle = display.get_idle_time()     # the input gate always comes first
         if self.state == "off":
             self._off_phase(now, idle)

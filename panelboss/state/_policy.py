@@ -116,7 +116,8 @@ class _PolicyMixin:
         eye on duty this table state has had its turn since the last
         positive and none of them saw anybody (owner door-cam doctrine,
         Oct 12 - an empty door must never veto a warm desk). Blind eyes
-        abstained before reaching here; policy-off eyes never entered
+        abstained before reaching here - the want-set now excludes them,
+        matching the claim; policy-off eyes never entered
         the round at all; the round can only close on verdicts."""
         if getattr(self, "_vote_index", None) is None:
             if not present:              # fail-closed ABSENT (stall/died
@@ -130,8 +131,12 @@ class _PolicyMixin:
             self._round = None           # a positive ENDS the round
             return
         table = "off" if self.state == "off" else "on"
+        # blind eyes abstained BEFORE this tally - counting them makes
+        # the round unclosable: hits freezes at 1 forever, degrading
+        # min_hits to "one more ever"
         want = {i for i in self._indexes()
-                if self._table_mode(i, table) != "off"}
+                if self._table_mode(i, table) != "off"
+                and not self._blind.get(i, False)}
         if self._round is None:
             self._round = {idx}
         else:

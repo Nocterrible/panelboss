@@ -21,10 +21,19 @@ class _EventsMixin:
             return
         while True:
             try:
-                event, value, ts = watcher.queue.get_nowait()
+                item = watcher.queue.get_nowait()
             except queue.Empty:
                 break
-            self._notice_screens(now, value)
+            try:
+                event, value, ts = item
+            except (TypeError, ValueError):
+                log.warning("display queue item %r is not an "
+                            "event triple; dropped", item)
+                continue
+            try:
+                self._notice_screens(now, value)
+            except Exception:
+                log.exception("display notice failed on %r", item)
 
     def _notice_screens(self, now, value):
         """The screens came up on their own (or went dark)."""
@@ -141,7 +150,12 @@ class _EventsMixin:
                 event = self.events.get_nowait()
             except queue.Empty:
                 break
-            action, value = event[0], event[1]
+            try:
+                action, value = event[0], event[1]
+            except (TypeError, ValueError, IndexError):
+                log.warning("tray event %r is not an action/value pair; "
+                            "dropped", event)
+                continue
             if action == "quit":
                 self.quit = True
                 if self.ui_events is not None:
@@ -271,6 +285,8 @@ class _EventsMixin:
                 self._rebuild_detector()        # motion never loads a model;
                                                 # person opens the session now
                 log.info("detection mode switched to %s", value)
+            else:
+                log.warning("unknown ui event %r (dropped)", event)
 
     def _rebuild_detector(self):
         """Re-open whatever the CURRENT mode wants: motion rebuilds the
