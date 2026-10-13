@@ -108,6 +108,14 @@ fake_run.payload = json.dumps(PS_DEV).encode()
 devs = cam_mod.camera_devices()
 assert calls[0].get("creationflags") == 0x08000000, calls
 assert [d["instance"] for d in devs] == [d["InstanceId"] for d in PS_DEV]
+# the namespace classifier rides every row: USB\ is glass, the rest is
+# software (measured Oct 13: Broadcast ROOT\UNNAMED_DEVICE, DroidCam
+# SWD\SGDEVAPI\... - the fixture's SW\VCAM stands in for the OBS entry)
+assert [d["virtual"] for d in devs] == [False, False, False, True], devs
+assert cam_mod.is_virtual_camera("USB4\\ROOT\\0") is False
+assert cam_mod.is_virtual_camera("usb\\vid_1532") is False   # case-free
+assert cam_mod.is_virtual_camera("ROOT\\UNNAMED_DEVICE\\0003") is True
+assert cam_mod.is_virtual_camera("") is True                 # no claim
 assert cam_mod.camera_names() == [d["FriendlyName"] for d in PS_DEV]
 fake_run.payload = json.dumps(PS_DEV[0]).encode()      # the lone device
 assert len(cam_mod.camera_devices()) == 1
@@ -129,6 +137,18 @@ assert mapped == {PS_DEV[0]["InstanceId"]: 6,
                   PS_DEV[3]["InstanceId"]: 0}, mapped
 assert _camid.step_warning(devs, devs[1]) == _camid.DUP
 assert _camid.step_warning(devs, devs[0]) == ""
+# the relaxed preview map: the duplicated "Logi C270" name has ONE
+# scanned feed, so both twins light up (shared=True, confessed); the
+# unique names map plain (shared=False); with TWO feeds for one name
+# the ordinal order is a coin flip and nothing maps
+pm = _camid.preview_map(devs, FOUND)
+assert pm == {PS_DEV[0]["InstanceId"]: (6, False),
+              PS_DEV[1]["InstanceId"]: (1, True),
+              PS_DEV[2]["InstanceId"]: (1, True),
+              PS_DEV[3]["InstanceId"]: (0, False)}, pm
+pm2 = _camid.preview_map(devs, FOUND + [(2, True, 640, "Logi C270")])
+assert PS_DEV[1]["InstanceId"] not in pm2
+assert pm2[PS_DEV[0]["InstanceId"]] == (6, False)
 assert _camid.hidden_indices(devs, FOUND,
                              [PS_DEV[3]["InstanceId"]]) == {0}
 assert _camid.hidden_indices(devs, FOUND, ["USB\\UNSEEN"]) == set()
@@ -194,19 +214,29 @@ finally:
 # 5) the candidate filter: an unhealthy PnP entry (Status="Error")
 #    earns no wizard step and no wasted open while the OK entries -
 #    any case - stay candidates; a hidden entry drops WITHOUT being
-#    counted unhealthy (the count confesses what the filter skipped)
+#    counted unhealthy (the count confesses what the filter skipped);
+#    a software-namespace entry is hidden by default and counted, and
+#    the reveal tick admits it back into the steps
 DEV_MIX = [{"name": "Ok Cam", "instance": "USB\\OK", "status": "OK"},
            {"name": "Bad Cam", "instance": "USB\\BAD", "status": "Error"},
            {"name": "Also Ok", "instance": "USB\\OK2", "status": "ok"}]
+DEV_SOFT = {"name": "Filter Cam", "instance": "SWD\\VCAM\\1", "status": "OK"}
 probe = types.SimpleNamespace(app=types.SimpleNamespace(
     cfg={"camera": {"hidden": ["USB\\GONE"], "labels": {}}}))
-cands, skipped = _camid.IdentifyWindow._candidates(
-    probe, DEV_MIX + [{"name": "Gone", "instance": "USB\\GONE",
-                       "status": "OK"}])
+cands, skipped, vhidden = _camid.IdentifyWindow._candidates(
+    probe, DEV_MIX + [DEV_SOFT] + [{"name": "Gone", "instance": "USB\\GONE",
+                                    "status": "OK"}])
 assert [d["instance"] for d in cands] == ["USB\\OK", "USB\\OK2"]
-assert skipped == 1
+assert skipped == 1 and vhidden == 1
+probe._show_virtual = True
+cands, skipped, vhidden = _camid.IdentifyWindow._candidates(
+    probe, DEV_MIX + [DEV_SOFT])
+assert [d["instance"] for d in cands] == ["USB\\OK", "USB\\OK2",
+                                          "SWD\\VCAM\\1"]
+assert skipped == 1 and vhidden == 0
 print("filter OK (the Error entry gets no step, OK entries ride in any"
-      " case, the skipped count counts only PnP-status drops)")
+      " case, software cams hide by default and answer to the tick,"
+      " both counts confess what was skipped)")
 
 # 6) the unhide recheck ladder: a stuck drain is ridden EXACTLY the
 #    cap (8 rides at 500 ms after the first 250 ms reload), a second
@@ -254,7 +284,8 @@ class FakeWin:
         self._ladder_busy = False
         self._ladder_left, self._ladder_prev = 0, None
         self._fetched = False
-        self._devs, self._cands, self._skipped = [], [], 0
+        self._devs, self._cands = [], []
+        self._skipped, self._vhidden = 0, 0
         self.scheduled = []
         self.note, self.idline = Label(), Label()
 

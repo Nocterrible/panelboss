@@ -3,9 +3,11 @@ preview, label them, hide the virtual ones.
 
 Identity is the PnP InstanceId (camera.camera_devices): indexes drift
 on replugs, so labels and hidden ride the instance path. A device's
-CURRENT index is annotated from the app's own last scan (app._cams)
-matched by UNIQUE name - two identical models share one name and
-neither maps; the step line says so instead of pretending.
+CURRENT index is annotated from the app's own last scan (app._cams):
+the picker and hidden filter match by UNIQUE name only (identity_map -
+a guess there hides the wrong device), while the live view falls back
+to the relaxed preview_map: one scanned feed answering to a shared
+name lights up every twin, confessed as shared on the note line.
 
 Frames are BORROWED (v1, packet item 5): Camera opens directly on a
 private worker - the monitor's framebox carries the duty mosaic, not
@@ -13,7 +15,7 @@ candidates, and driving the lease would rewrite the roster per cycle.
 Duty eyes release between polls under boot_per_poll; a still-busy
 device earns the honest busy line.
 
-SIZE LAW: 414, justified, one window - the step machine and its borrowed-frame
+SIZE LAW: 529, justified, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -54,6 +56,33 @@ def identity_map(devs, found):
         got = hits.get(str(entry[3] or "").lower(), [])
         if len(got) == 1:
             out[got[0]] = entry[0]
+    return out
+
+
+def preview_map(devs, found):
+    """{instance: (index, shared)}: identity_map's pessimism RELAXED
+    for the wizard's live view only. When a name is carried by several
+    PnP rows but exactly ONE scanned index answers to it (the common
+    shape: a twin-sensor module where only the color stream ever
+    opens), that feed shows for every twin and the step line confesses
+    the twins are indistinguishable. The picker and hidden filter keep
+    the strict map - there a guess HIDES the wrong device, here it
+    only lights the wrong preview, and the user sees which it is.
+    Two+ indexes for one name: ordinal order is a coin flip, nothing
+    maps (the UAT gap this closes: identical models made a streaming
+    physical cam untestable in the wizard)."""
+    rows = {}
+    for d in devs:
+        rows.setdefault(d["name"].lower(), []).append(d["instance"])
+    idxs = {}
+    for entry in found or []:
+        idxs.setdefault(str(entry[3] or "").lower(), []).append(entry[0])
+    out = {}
+    for name, insts in rows.items():
+        got = idxs.get(name, [])
+        if len(got) == 1:
+            for inst in insts:
+                out[inst] = (got[0], len(insts) > 1)
     return out
 
 
@@ -102,6 +131,21 @@ class IdentifyWindow(ctk.CTkToplevel):
         self.preview.pack(pady=theme.S_ROW)
         self.idline = self._label(self, 11, tier="text")
         self.idline.pack(anchor="w", padx=theme.S_SECTION)
+        # the owner's UAT call: software filters (Broadcast/OBS/DroidCam)
+        # are nobody's default pick - glass first, tick to reveal. The
+        # reveal is session-only on purpose: a permanent per-device hide
+        # already exists (the hide button writes the policy row).
+        self._show_virtual = False
+        self._vbox = ctk.CTkCheckBox(
+            self, text="show virtual cameras", font=self.skin.font(10),
+            command=self._toggle_virtual, checkbox_width=14,
+            checkbox_height=14, fg_color=self.skin.accent,
+            hover_color=self.skin.accent_hover,
+            border_color=self.skin.border_raised,
+            text_color=self.skin.text,
+            text_color_disabled=self.skin.txt3)
+        self._vbox.pack(anchor="w", padx=theme.S_SECTION,
+                        pady=(theme.S_ROW, 0))
         self.entry = ctk.CTkEntry(self, font=self.skin.font(12))
         self.entry.pack(fill="x", padx=theme.S_SECTION, pady=theme.S_FIELD)
         row = ctk.CTkFrame(self, fg_color="transparent")
@@ -208,13 +252,18 @@ class IdentifyWindow(ctk.CTkToplevel):
             pass
 
     def _candidates(self, devs):
-        """Visible steps + the honest count of what the filter skipped:
-        hidden never (a hide is a policy row, not a candidate drop) and
+        """Visible steps + the honest counts of what the filter skipped:
+        hidden never (a hide is a policy row, not a candidate drop),
         unhealthy (PnP Status not OK) never earns a step or a wasted
-        open. Filtering is candidate-list-only - an unhealthy device
-        stays labelable through the unhide path, never policy-destroyed."""
+        open, and software devices (is_virtual_camera: the instance is
+        not a USB namespace) stay hidden unless the checkbox says
+        otherwise - the owner's call, GPU filters are nobody's default
+        camera. Filtering is candidate-list-only - a skipped device
+        stays labelable through the checkbox or the unhide path, never
+        policy-destroyed."""
         hidden = set(self.app.cfg["camera"].get("hidden") or [])
-        unhealthy = 0
+        show_virtual = getattr(self, "_show_virtual", False)
+        unhealthy = vhidden = 0
         cands = []
         for d in devs or []:
             if d["instance"] in hidden:
@@ -222,17 +271,49 @@ class IdentifyWindow(ctk.CTkToplevel):
             if not (str(d.get("status") or "OK").lower() == "ok"):
                 unhealthy += 1
                 continue
+            if not show_virtual and camera.is_virtual_camera(d["instance"]):
+                vhidden += 1
+                continue
             cands.append(d)
-        return cands, unhealthy
+        return cands, unhealthy, vhidden
+
+    def _skip_note(self):
+        """The confession suffix: whatever the candidate filter dropped
+        rides the note line, joined on the separator the wizard
+        already uses."""
+        parts = []
+        if getattr(self, "_skipped", 0):
+            parts.append("%d unhealthy camera(s) skipped (PnP status)"
+                         % self._skipped)
+        if getattr(self, "_vhidden", 0):
+            parts.append("%d virtual camera(s) hidden (software)"
+                         % self._vhidden)
+        return ("  ·  " + "  ·  ".join(parts)) if parts else ""
+
+    def _toggle_virtual(self):
+        """Session-only reveal (no config churn): tick, the software
+        rows join the steps; untick, they retreat. Before the first
+        build the pump picks the state up on its own tick."""
+        self._show_virtual = bool(self._vbox.get())
+        if not self._built or not self._devs:
+            return
+        self._cands, self._skipped, self._vhidden = self._candidates(
+            self._devs)
+        self._pos = 0
+        if self._cands:
+            self._start_step()
+        else:
+            self.idline.configure(text="no visible cameras")
 
     def _build(self):
-        self._cands, self._skipped = self._candidates(self._devs)
+        self._cands, self._skipped, self._vhidden = self._candidates(
+            self._devs)
         self._pos = 0
         if self._cands:
             return self._start_step()
         self.idline.configure(text="no visible cameras")
-        if self._skipped:
-            self.note.configure(text="%d unhealthy camera(s) skipped (PnP status)" % self._skipped)
+        if self._skipped or self._vhidden:
+            self.note.configure(text=self._skip_note().strip(" ·"))
 
     def _start_step(self):
         self._gen += 1                           # retires the old worker
@@ -240,18 +321,27 @@ class IdentifyWindow(ctk.CTkToplevel):
         dev = self._cands[self._pos]             # any busy line the old
         inst = dev["instance"]                   # worker may have queued
         idx = identity_map(self._devs, self.app._cams or []).get(inst)
+        shared = False
+        if idx is None:
+            # the strict map refused (name collision): the relaxed map
+            # may still know the one feed answering to this name
+            got = preview_map(self._devs, self.app._cams or []).get(inst)
+            if got is not None:
+                idx, shared = got
         stored = (self.app.cfg["camera"].get("labels") or {}).get(inst, "")
         self.entry.delete(0, "end")
         self.entry.insert(0, stored or dev["name"])
         self.idline.configure(text="%d/%d  %s · ...%s · %s" % (
             self._pos + 1, len(self._cands), dev["name"], inst[-12:],
             dev["status"] or "?"))
-        note = step_warning(self._devs, dev) or (
-            "index %s right now" % idx if idx is not None else
-            "no openable index in the last scan - rescan first")
-        if getattr(self, "_skipped", 0):
-            note += "  ·  %d unhealthy camera(s) skipped (PnP status)" \
-                % self._skipped
+        if shared:
+            note = ("index %s right now (name shared with an identical"
+                    " model: every twin shows this one feed)" % idx)
+        else:
+            note = step_warning(self._devs, dev) or (
+                "index %s right now" % idx if idx is not None else
+                "no openable index in the last scan - rescan first")
+        note += self._skip_note()
         self.note.configure(text=note)
         if idx is None:
             # (the same CTkLabel image=None landmine as the pump's
@@ -403,7 +493,8 @@ class IdentifyWindow(ctk.CTkToplevel):
             self._ladder_check()
             return
         self._devs = self.app._devs
-        self._cands, self._skipped = self._candidates(self._devs)
+        self._cands, self._skipped, self._vhidden = self._candidates(
+            self._devs)
         self._pos = 0
         if self._cands:
             self._start_step()

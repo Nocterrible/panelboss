@@ -204,8 +204,21 @@ def _open_door(index, width=None, height=None):
     return cap, "auto"
 
 
+def is_virtual_camera(instance):
+    """True for software cameras (filters, not glass). The PnP instance
+    namespace decides, no heuristics: physically-attached devices are
+    enumerated under USB\\ / USB4\\; everything else is a software device.
+    Measured Oct 13 on the dev box: NVIDIA Broadcast answers as
+    ROOT\\UNNAMED_DEVICE (and hides under class MEDIA, invisible to the
+    Camera-class query), DroidCam as SWD\\SGDEVAPI\\...YourCameraGroup,
+    OBS Virtual Camera as an SWD\ entry too. The rule is namespace-wide
+    so the classes we cannot see today are covered when they appear."""
+    inst = (instance or "").strip().upper()
+    return not inst.startswith(("USB\\", "USB4\\"))
+
+
 def camera_devices():
-    """[{name, instance, status}] - every PnP camera, one query. The
+    """[{name, instance, status, virtual}] - every PnP camera, one query. The
     InstanceId is the identity the wizard keys labels and hides on:
     friendly names collide across identical models and OpenCV indexes
     DRIFT on replugs (measured Oct 12: roster [6,1] -> [6,1,0,2] ->
@@ -233,7 +246,8 @@ def camera_devices():
         data = [data]                          # JSON should have been
     return [{"name": str(d.get("FriendlyName") or "").strip(),
              "instance": str(d.get("InstanceId") or "").strip(),
-             "status": str(d.get("Status") or "").strip()}
+             "status": str(d.get("Status") or "").strip(),
+             "virtual": is_virtual_camera(str(d.get("InstanceId") or ""))}
             for d in data if isinstance(d, dict)]
 
 
