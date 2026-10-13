@@ -12,10 +12,13 @@ name lights up every twin, confessed as shared on the note line.
 Frames are BORROWED (v1, packet item 5): Camera opens directly on a
 private worker - the monitor's framebox carries the duty mosaic, not
 candidates, and driving the lease would rewrite the roster per cycle.
-Duty eyes release between polls under boot_per_poll; a still-busy
-device earns the honest busy line.
+Duty eyes release between polls under boot_per_poll; the worker's
+attempt has three honest endings in the note line: WARMING while the
+serialized door is waited for, BUSY only where the open is proven
+held, and a bounded no-frames verdict (NOSTREAM) that hands the
+handle back instead of holding a device for a stare.
 
-SIZE LAW: 577, justified, one window - the step machine and its borrowed-frame
+SIZE LAW: 622, justified, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -39,6 +42,16 @@ log = logging.getLogger("ui")
 
 BUSY = ("the monitor is holding this camera - pause it from the tray "
         "and retry")
+WARMING = ("opening this camera - the driver serializes opens behind the "
+           "monitor's lease; frames appear when the door delivers")
+NOSTREAM = ("opens, but serves no frames yet - the door may still be "
+            "settling or the stream stays dark; try next and come back")
+FRAME_BUDGET = 12.0  # seconds a step waits for its FIRST frame before
+                     # confessing NOSTREAM and handing the handle back:
+                     # an owner staring at "no live view" deserves a
+                     # verdict, and an idle open is a device held for
+                     # nobody (measured Oct 13: contended auto-door
+                     # opens burn 18 s and some MF doors never sample)
 DUP = ("two identical models share this name: the app cannot tell them "
        "apart. Unplug one and rerun this wizard to pin the other.")
 
@@ -158,7 +171,11 @@ class IdentifyWindow(ctk.CTkToplevel):
         # ONLY marshaling path (no naked self.after from workers):
         self._busy_note = None                   # the step text BUSY
                                                  # displaced, restored
-                                                 # by the first frame
+        self._held = False                       # by the first frame;
+                                                 # BUSY (held) vs
+        self._nostream = False                   # WARMING (door) is
+                                                 # the corpse arm's
+                                                 # distinction
         self._ladder_busy = False                # the unhide recheck
         self._ladder_left, self._ladder_prev = 0, None   # ladder state
         self._fetched = False                    # a fresh count to beat
@@ -275,8 +292,18 @@ class IdentifyWindow(ctk.CTkToplevel):
                     self._busy_note = None
                 self._busy = False
                 self._show(frame)
+            elif self._nostream:
+                # the bounded attempt confessed: the worker already
+                # handed the handle back (no device held for a stare);
+                # the note owns the verdict, the preview keeps its
+                # harmless still per the CTk doctrine
+                self._nostream = False
+                self._busy = False
+                self._held = False
+                self._busy_note = None          # a verdict does not
+                self.note.configure(text=NOSTREAM)  # ride a restore
             elif self._busy and self._busy_note is None:
-                # the BUSY line, marshaled: the worker only flips the
+                # the state line, marshaled: the worker only flips the
                 # flag; this tick is the main-thread render (no naked
                 # self.after from a worker anywhere in this file).
                 # RENDERED IN THE NOTE LINE, not the preview label:
@@ -287,9 +314,11 @@ class IdentifyWindow(ctk.CTkToplevel):
                 # ctk_label.py:238-253), and the UAT found the wizard
                 # preview frozen exactly that way. A configured label
                 # never goes back to image=None here; the note is the
-                # state channel this wizard already owns.
+                # state channel this wizard already owns. WARMING
+                # while the door is waited for, BUSY only when the
+                # corpse arm proved the monitor holds the device.
                 self._busy_note = self.note.cget("text")
-                self.note.configure(text=BUSY)
+                self.note.configure(text=BUSY if self._held else WARMING)
         except Exception:
             log.exception("camid pump failed; the loop goes on")
         try:
@@ -363,7 +392,15 @@ class IdentifyWindow(ctk.CTkToplevel):
 
     def _start_step(self):
         self._gen += 1                           # retires the old worker
-        self._busy = False                       # a new step replaces
+        self._busy = True                        # the WARMING line
+        self._held = False                       # stands from tick one:
+        self._nostream = False                   # an attempt without a
+        self._frame = None                       # first frame ends in
+        self._busy_note = None                   # a verdict, never in
+                                                 # silence - and a note
+                                                 # captured mid-WARMING
+                                                 # must not ride onto
+                                                 # the next step's line
         dev = self._cands[self._pos]             # any busy line the old
         inst = dev["instance"]                   # worker may have queued
         idx = dev.get("idx")             # a synthetic row IS its index:
@@ -392,12 +429,12 @@ class IdentifyWindow(ctk.CTkToplevel):
         note += self._skip_note()
         self.note.configure(text=note)
         if idx is None:
-            # (the same CTkLabel image=None landmine as the pump's
-            # BUSY branch: after ANY frame has shown, dropping to
-            # image=None leaves the inner label holding a dead
-            # pyimage name that the next text-set validates - the
-            # no-index state rides the note channel, preview keeps
-            # the last frame as a harmless still)
+            # no worker is coming for this step: the busy flag goes
+            # down by hand, or WARMING would lie forever on a step
+            # that never attempts an open (the same CTkLabel
+            # image=None landmine as the pump's BUSY branch keeps
+            # the preview on its last harmless still here)
+            self._busy = False
             return self.note.configure(text=note + "  ·  no live view")
         threading.Thread(target=self._work, daemon=True,
                          args=(self._gen, idx), name="camid-view").start()
@@ -414,15 +451,23 @@ class IdentifyWindow(ctk.CTkToplevel):
             if cam is not None:
                 cam.release()
             if self._gen == gen:                 # a stale worker (its
-                self._busy = True                # step retired) must
+                self._held = self._busy = True   # step retired) must
             return                               # not queue a BUSY
         try:
-            while not self._dying and self._gen == gen:
-                frame = cam.read(timeout=1, screen=0)
-                if frame is not None:
-                    self._frame = frame
-        finally:
-            cam.release()
+            give_up = time.monotonic() + FRAME_BUDGET
+            got = False                          # worker-local first-
+            while (not self._dying and self._gen == gen  # frame latch:
+                   and (got or time.monotonic() < give_up)):  # once ONE
+                frame = cam.read(timeout=1, screen=0)  # frame lands,
+                if frame is not None:                    # the budget is
+                    got = True                           # retired - the
+                    self._frame = frame                  # pump drains
+        finally:                                       # the mailbox,
+            cam.release()                              # a latch beats
+            if self._gen == gen:                       # a mailbox read
+                self._busy = False
+                if not got:
+                    self._nostream = True        # the pump confesses it
 
     def _show(self, frame):                      # the _draw resize, shared
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

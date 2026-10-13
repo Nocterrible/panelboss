@@ -311,6 +311,9 @@ class FakeWin:
         self._fetched = False
         self._devs, self._cands = [], []
         self._skipped, self._vhidden = 0, 0
+        self._frame, self._busy = None, False
+        self._held, self._nostream = False, False
+        self._busy_note = None
         self.scheduled = []
         self.note, self.idline = Label(), Label()
 
@@ -372,5 +375,96 @@ finally:
 print("ladder OK (stuck drain rides exactly the 8-cap with no pileup,"
       " the changed count stands at once, the PnP query answers off"
       " the calling thread)")
+
+# 7) the worker's bounded attempt (the UAT "all say no live view"):
+#    a door that opens but never samples must not hold the device nor
+#    the silence - handle back, verdict flagged for the pump; the
+#    corpse arm marks HELD (the BUSY wording is earned only by proof);
+#    a worker whose step was retired mid-open confesses nothing.
+class DeadCam:
+    instances = []
+
+    def __init__(self, index=0, warmup=4, width=1280, height=720):
+        self.released = False
+        DeadCam.instances.append(self)
+
+    def is_open(self):
+        return True
+
+    def read(self, timeout=3, screen=None):
+        return None
+
+    def release(self):
+        self.released = True
+
+
+class HeldCam(DeadCam):
+    def is_open(self):
+        return False
+
+
+class FlashCam(DeadCam):
+    """One frame, then the silence the pump cannot tell apart from a
+    still-opening door - the latch's exact reason to exist. The test
+    has no owner to click next, so the second read performs the step
+    retirement (the owner's click) from the outside."""
+
+    hook = None
+
+    def __init__(self, *a, **k):
+        DeadCam.__init__(self, *a, **k)
+        self._n = 0
+
+    def read(self, timeout=3, screen=None):
+        self._n += 1
+        if self._n == 1:
+            import numpy
+            return numpy.zeros((8, 8, 3), numpy.uint8)
+        if FlashCam.hook:
+            FlashCam.hook()
+        return None
+
+
+_saved_cam, _saved_budget = _camid.camera.Camera, _camid.FRAME_BUDGET
+try:
+    _camid.FRAME_BUDGET = 0.2
+    _camid.camera.Camera = DeadCam
+    w3 = FakeWin(App(DEV_MIX, []))
+    w3._gen, w3._busy = 5, True
+    _camid.IdentifyWindow._work(w3, 5, 0)
+    assert w3._nostream and not w3._busy and not w3._held
+    assert DeadCam.instances[-1].released, "the handle escaped the budget"
+    DeadCam.instances = []
+    _camid.camera.Camera = HeldCam
+    w4 = FakeWin(App(DEV_MIX, []))
+    w4._gen, w4._busy = 5, True
+    _camid.IdentifyWindow._work(w4, 5, 0)
+    assert w4._held and w4._busy and not w4._nostream
+    assert HeldCam.instances[-1].released
+    _camid.camera.Camera = DeadCam
+    DeadCam.instances = []
+    w5 = FakeWin(App(DEV_MIX, []))
+    w5._gen = 5
+    _camid.IdentifyWindow._work(w5, 4, 0)   # step retired under the
+    assert not (w5._nostream or w5._busy or w5._held)  # worker: stay mute
+    assert DeadCam.instances[-1].released
+    _camid.camera.Camera = FlashCam
+    DeadCam.instances = []
+    w6 = FakeWin(App(DEV_MIX, []))
+    w6._gen, w6._busy = 5, True
+    FlashCam.hook = lambda: setattr(w6, "_dying", True)   # the next
+    try:
+        _camid.IdentifyWindow._work(w6, 5, 0)             # click lands
+    finally:                                              # mid-ride
+        FlashCam.hook = None
+    assert not w6._nostream, "a step that showed a frame is not no-stream"  # one frame
+    assert DeadCam.instances[-1].released                                   # then dark:
+    assert w6._frame is not None, "the flash frame must reach the mailbox"  # verdict NO
+finally:
+    _camid.camera.Camera = _saved_cam
+    _camid.FRAME_BUDGET = _saved_budget
+print("worker OK (a silent door returns the handle and flags the verdict,"
+      " one frame then dark is NOT a no-stream, the corpse arm marks"
+      " HELD, a retired step stays mute)")
 
 print("ALL CAMID TESTS OK")
