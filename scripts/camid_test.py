@@ -238,6 +238,31 @@ print("filter OK (the Error entry gets no step, OK entries ride in any"
       " case, software cams hide by default and answer to the tick,"
       " both counts confess what was skipped)")
 
+# 5b) the parity merge (the owner's UAT law): every OPEN scanned index
+#     earns a wizard step - claimed ones through their PnP row, the
+#     rest as a synthetic "idx:N" row that previews by its own index
+#     and takes policy by it. A closed index gets nothing; an index
+#     whose positional name is real rides that name, else "camera N".
+FOUND_MIX = [(9, True, 640, ""), (0, True, 640, "Ok Cam"),
+             (7, True, 640, "DroidCam Video"), (3, False, 0, "")]
+merged = _camid.all_rows(DEV_MIX, FOUND_MIX)
+assert [r["instance"] for r in merged[:3]] == ["USB\\OK", "USB\\BAD",
+                                               "USB\\OK2"]      # PnP first
+synth = {r["instance"]: r for r in merged if str(r["instance"]).startswith("idx:")}
+assert set(synth) == {"idx:9", "idx:7"}, merged                # 0 claimed,
+                                                               # 3 closed
+assert synth["idx:9"]["name"] == "camera 9"                    # blank gets
+                                                               # the honest
+                                                               # placeholder
+assert synth["idx:7"]["name"] == "DroidCam Video"
+assert all(not r["virtual"] for r in synth.values()), \
+    "unknown identity must not default-hide: the UAT law is PnP-seen"
+assert all(r["idx"] == int(str(r["instance"])[4:]) for r in synth.values())
+assert _camid.hidden_indices(DEV_MIX, FOUND_MIX, ["idx:9"]) >= {9}
+assert _camid.hidden_indices(DEV_MIX, FOUND_MIX, ["idx:9", "USB\\OK"]) == {9, 0}
+print("merge OK (open indexes walk, closed do not, claimed are not"
+      " duplicated, idx: keys hide by index)")
+
 # 6) the unhide recheck ladder: a stuck drain is ridden EXACTLY the
 #    cap (8 rides at 500 ms after the first 250 ms reload), a second
 #    click mid-ladder schedules no second ladder, the reload stands

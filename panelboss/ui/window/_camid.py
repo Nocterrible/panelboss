@@ -15,7 +15,7 @@ candidates, and driving the lease would rewrite the roster per cycle.
 Duty eyes release between polls under boot_per_poll; a still-busy
 device earns the honest busy line.
 
-SIZE LAW: 529, justified, one window - the step machine and its borrowed-frame
+SIZE LAW: 577, justified, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -86,12 +86,58 @@ def preview_map(devs, found):
     return out
 
 
+def all_rows(devs, found):
+    """PnP rows + a synthetic row per OPEN scanned index that no PnP
+    row claimed: the wizard walks what the picker shows (the owner's
+    UAT law - identify gives the add pane its names and hides, so it
+    must see EVERYTHING the add pane can open). A claimed index is one
+    identity_map or preview_map resolved; the synthetic remainder keys
+    policy on "idx:N" - drifts on replug renumbering, the honest
+    documented twin of the unplug-and-rerun pattern for identical
+    models. The DSHOW/MF ordinal->instance oracle that would name
+    these properly lives in panelboss/dshow.py's ledger note: this
+    box registers no SystemDeviceEnum class (cv2 carries its own), so
+    until the enumeration route is cracked, synthetic rows are the
+    truthful stand-in - preview works, labels persist, no positional
+    name lie rides them."""
+    mapped = set(identity_map(devs, found).values())
+    mapped |= {got[0] for got in preview_map(devs, found).values()}
+    try:
+        from ... import dshow              # the ordinal oracle: {} on a
+        truth = dshow.index_instances()    # box without the registered
+    except Exception:                      # SystemDeviceEnum class
+        truth = {}                         # (the dev desk today)
+    rows = list(devs or [])
+    for entry in found or []:
+        if len(entry) < 2 or not entry[1] or entry[0] in mapped:
+            continue
+        nm = str(entry[3]).strip() if len(entry) > 3 and entry[3] else ""
+        inst = truth.get(entry[0])
+        rows.append({"name": nm or ("camera %d" % entry[0]),
+                     "instance": inst or ("idx:%d" % entry[0]),
+                     "status": "OK",
+                     # UNKNOWN is not SOFTWARE: only a resolved
+                     # non-USB instance may hide a synthetic row by
+                     # default; an unresolved one shows, previews and
+                     # waits for the owner's verdict (that IS the
+                     # wizard's job)
+                     "virtual": bool(inst) and camera.is_virtual_camera(inst),
+                     "idx": entry[0]})
+    return rows
+
+
 def hidden_indices(devs, found, hidden):
     """Scan indexes to suppress in the picker and menu lines. An
     unmappable hidden device suppresses nothing - it stays visible
-    here, so the wizard remains its way out."""
-    return {idx for inst, idx in identity_map(devs, found).items()
-            if inst in set(hidden or [])}
+    here, so the wizard remains its way out. The "idx:N" synthetic
+    keys (all_rows) hide by index directly: that IS their whole
+    identity claim."""
+    hidden = list(hidden or [])
+    out = {int(str(i)[4:]) for i in hidden
+           if str(i).startswith("idx:") and str(i)[4:].isdigit()}
+    out |= {idx for inst, idx in identity_map(devs, found).items()
+            if inst in set(hidden)}
+    return out
 
 
 def step_warning(devs, dev):
@@ -298,7 +344,7 @@ class IdentifyWindow(ctk.CTkToplevel):
         if not self._built or not self._devs:
             return
         self._cands, self._skipped, self._vhidden = self._candidates(
-            self._devs)
+            all_rows(self._devs, self.app._cams or []))
         self._pos = 0
         if self._cands:
             self._start_step()
@@ -307,7 +353,7 @@ class IdentifyWindow(ctk.CTkToplevel):
 
     def _build(self):
         self._cands, self._skipped, self._vhidden = self._candidates(
-            self._devs)
+            all_rows(self._devs, self.app._cams or []))
         self._pos = 0
         if self._cands:
             return self._start_step()
@@ -320,7 +366,9 @@ class IdentifyWindow(ctk.CTkToplevel):
         self._busy = False                       # a new step replaces
         dev = self._cands[self._pos]             # any busy line the old
         inst = dev["instance"]                   # worker may have queued
-        idx = identity_map(self._devs, self.app._cams or []).get(inst)
+        idx = dev.get("idx")             # a synthetic row IS its index:
+        if idx is None:                  # no map lookup can or should
+            idx = identity_map(self._devs, self.app._cams or []).get(inst)
         shared = False
         if idx is None:
             # the strict map refused (name collision): the relaxed map
@@ -494,7 +542,7 @@ class IdentifyWindow(ctk.CTkToplevel):
             return
         self._devs = self.app._devs
         self._cands, self._skipped, self._vhidden = self._candidates(
-            self._devs)
+            all_rows(self._devs, self.app._cams or []))
         self._pos = 0
         if self._cands:
             self._start_step()

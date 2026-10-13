@@ -337,7 +337,22 @@ boundary - template for the normalizer)
   OpenCV indexes (guarded by uniqueness only) - the docstring itself concedes
   order can differ: unique-but-wrong labels on a reordered multi-cam desk
   (policies still right; labels lie). Withhold label when unprovable; folds
-  into the InstanceId keying wave.
+  into the InstanceId keying wave. PART-CLOSED by the wizard-parity wave:
+  the wizard no longer rides positional names for its identity keys (open
+  indexes get idx: rows; claims via maps only) - the ADD PANE's displayed
+  names stay positional until the ordinal oracle lands.
+- BACKLOG MED dshow.py ordinal oracle — CLSID_SystemDeviceEnum is registered
+  NOWHERE on the dev desk (HKLM/HKCU/WOW64 all probed; devenum+qedit
+  DllGetClassObject -> CLASS_E_CLASSNOTAVAILABLE; cv2 statically compiles
+  the enumerator, hence DSHOW works for it). In-process routes to
+  index->instance are blocked on this box; the wizard degrades honestly to
+  idx: keys. Next routes (tried-and-failed documented in dshow.py): a
+  matching devenum regsvr32 (admin) or MFEnumDeviceSources through a
+  reg-free activation context. Until then dshow.py answers {} (warn-once).
+  Gate note (optional future): when identity_map claims an index N that a
+  hidden "idx:N" key also covers, drop the idx: key - the row now has a
+  real instance to ride (stale idx: keys mis-hide the new owner of N
+  until the wizard re-run clears them).
 - BACKLOG LOW _camedit.py:77-100 — wizard hide/label saves never re-fire
   _apply_cameras: "(hidden)" badges stale until manual rescan. Push a
   "cameras" ui_event after the identity write.
