@@ -42,7 +42,9 @@ k32 = ctypes.windll.kernel32
 WM_SYSCOMMAND = 0x112
 SC_MONITORPOWER = 0xF170
 HWND_BROADCAST = 0xFFFF        # every top-level window receives it
-HWND_MESSAGE = 0xFFFFFFFF      # message-only windows always receive it too
+HWND_MESSAGE = -3              # (HWND)-3 per winuser.h; the 32-bit legacy
+                               # 0xFFFFFFF0 is (HWND)-16 and fails to create
+                               # on this 64-bit box (measured)
 MONITOR_ON = 1
 MONITOR_OFF = 2                # DPMS standby, same as the power plan
 
@@ -87,6 +89,14 @@ u32.CreateWindowExW.argtypes = [ctypes.c_void_p,      # hInstance (0, loader ign
                                     ctypes.c_wchar_p,          # class name
                                     ctypes.c_wchar_p              # window title
                                     ] + [ctypes.c_void_p] * 9
+
+# partial argtypes would reject the 4-arg call, so the full pin lands now;
+# the hwnd slot is c_void_p so the 64-bit sink handle never truncates
+u32.RegisterPowerSettingNotification.restype = ctypes.c_void_p
+u32.RegisterPowerSettingNotification.argtypes = [ctypes.c_void_p,
+                                                 ctypes.c_void_p,
+                                                 ctypes.c_uint,
+                                                 ctypes.c_uint]
 
 
 class _GUID(ctypes.Structure):
@@ -141,6 +151,26 @@ class Display(threading.Thread):
         self._handle = None
 
     def run(self):
+        try:
+            self._run()
+        except Exception:
+            # a startup raise used to leave the global watcher set with a
+            # dead thread: confess, then let the state machine's
+            # watcher-is-None path (assume-on) own the failure
+            log.exception("display watcher died at startup")
+            raise
+        finally:
+            self._settle()
+
+    def _settle(self):
+        """Confess any unrequested exit and null the global watcher."""
+        if self._handle and not self._stop:
+            log.error("display watcher exiting without a stop request")
+        global watcher
+        if watcher is self:
+            watcher = None
+
+    def _run(self):
         msg = wintypes.MSG()
         u32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 0)  # create the queue
         wc = WNDCLASSEX()
@@ -155,11 +185,8 @@ class Display(threading.Thread):
             log.error("RegisterClassExW failed (%s); no state tracking",
                       k32.GetLastError())
             return
-        for parent in (ctypes.c_void_p(-3),             # HWND_MESSAGE:
-                                                  # message-only windows
-                                                  # are created with -3, the
-                                                  # 32-bit value truncates
-                      ctypes.c_void_p(0)):            # top level fallback
+        for parent in (ctypes.c_void_p(HWND_MESSAGE),   # -3: message-only
+                       ctypes.c_void_p(0)):            # top level fallback
             self._hwnd = u32.CreateWindowExW(ctypes.c_void_p(0), CLASS_NAME,
                                              None, 0, 0, 0, 64, 64, parent,
                                              None, ctypes.c_void_p(0), None)
@@ -178,12 +205,31 @@ class Display(threading.Thread):
         while not self._stop:
             while u32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 1):
                 if msg.message == WM_POWER and msg.wParam == PBT_POWER:
-                    self._record(msg.lParam)
+                    if not msg.lParam:
+                        # NULL is an ACCESS VIOLATION, not an exception:
+                        # from_address(0) kills this thread natively,
+                        # below any except (the lane's probe measured
+                        # 0xC0000005; the try below only guards malformed
+                        # NON-NULL payloads - audit HIGH's real fix is
+                        # refusing the null before the read)
+                        log.warning("WM_POWER payload pointer is null; "
+                                    "message skipped")
+                    else:
+                        try:
+                            self._record(msg.lParam)
+                        except Exception:
+                            # fail-open per message: the watcher's death is
+                            # the bug, one bad lParam must not kill it
+                            log.exception("power record failed (lParam=%r); "
+                                           "message skipped", msg.lParam)
                 u32.DefWindowProcW(msg.hWnd, msg.message, msg.wParam,
                                    msg.lParam)
             time.sleep(0.1)
-        u32.UnregisterPowerSettingNotification(self._handle)
-        u32.DestroyWindow(self._hwnd)
+        try:
+            u32.UnregisterPowerSettingNotification(self._handle)
+            u32.DestroyWindow(self._hwnd)
+        except Exception:
+            log.exception("display watcher shutdown failed")
 
     def _record(self, lparam):
         """POWERBROADCAST_HDR is Version(4) Guid(16) Length(4) Data[]."""
