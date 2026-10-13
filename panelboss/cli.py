@@ -354,12 +354,31 @@ def _warm_monitor(cfg, monitor):
             monitor.faces = faces_module.FaceGate()
         log.info("warm: detector ready in %.1f s; the monitor starts "
                  "pumping", time.monotonic() - t0)
-    except Exception:
-        # the old no-model behavior was death; the new one is the same
-        # exit, seen: the tray stays up, the loop drains the quit and
-        # the window closes after it
-        log.exception("warm: the detector would not build; the app "
-                      "drains a quit and exits")
+    except Exception as exc:
+        # faces without its optional package is NOT a detector failure
+        # (audit W2C MED): FaceGate raises RuntimeError naming
+        # 'insightface' and it used to exit under the misleading "the
+        # detector would not build" banner. Deprompt wants a mapped Tk
+        # parent and this warm pass runs on a worker thread (widget
+        # calls would cross the Tcl thread), so the packet's else
+        # branch is the law here: the honest self-dying box from this
+        # module, naming the missing extra.
+        if isinstance(exc, RuntimeError) and "insightface" in str(
+                exc).lower():
+            timeout_notice("PanelBoss stops here: faces are enabled but "
+                           "the optional extra 'insightface' is missing.\n"
+                           "Install it (pip install insightface) or turn "
+                           "faces off; a monitor with faces ON and the "
+                           "dep MISSING must not run half-blind.",
+                           ms=15000)
+            log.exception("warm: faces enabled, insightface missing; "
+                          "the app drains a quit and exits")
+        else:
+            # the old no-model behavior was death; the new one is the same
+            # exit, seen: the tray stays up, the loop drains the quit and
+            # the window closes after it
+            log.exception("warm: the detector would not build; the app "
+                          "drains a quit and exits")
         monitor.events.put(("quit", True))
     monitor.run()
 

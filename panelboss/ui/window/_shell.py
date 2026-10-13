@@ -616,6 +616,27 @@ class SettingsWindow(
 
 
 def run(cfg, monitor, ui_events):
-    window = SettingsWindow(cfg, monitor, ui_events)
+    # boot containment (audit W2C MED): the CTk root maps WITHDRAWN at
+    # construction, so a build_all/_show_first raise (both run INSIDE
+    # __init__) leaves a live, undestroyed root with no mainloop and
+    # no tick - a zombie - and the measured second-CTk-root class says
+    # an in-process retry would then kill the whole Tcl app. A raise
+    # inside the constructor never binds the name, so the root is
+    # buried through tkinter's own default-root handle (exactly one
+    # root is ever born here, and it is the window). Destroy, confess,
+    # RE-RAISE: cli._drive's shield catches, boxes, and the shutdown
+    # proceeds.
+    try:
+        window = SettingsWindow(cfg, monitor, ui_events)
+    except Exception:
+        try:
+            window.destroy()
+        except NameError:               # the raise came from inside
+            if tk._default_root is not None:   # __init__: the name was
+                tk._default_root.destroy()     # never bound, the born
+                                       # root is this process's default
+        log.exception("boot: settings window died; the half-dressed "
+                      "root is destroyed and the failure re-raised")
+        raise
     window.mainloop()
     return window

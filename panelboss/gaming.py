@@ -39,6 +39,43 @@ log = logging.getLogger("gaming")
 DEFAULTS = {"threshold_pct": 5.0, "seen_secs": 10.0,
             "grace_secs": 60.0}
 
+# plan-ownership marker (audit W2C MED): the gaming power-plan switch
+# used to live ONLY on the loop-local `side`, so a quit (or crash)
+# between the switch to the performance plan and the switch-back
+# orphaned the desk on High-Performance forever, and boot had no
+# reconcile. The marker is the persisted twin of that memory, written
+# through the app's ONE state store - the config, the same dict that
+# already holds the seen-plan overrides (cfg["gaming"]). Key style
+# follows the section's snake_case (power_plan, threshold_pct, ...):
+#   power_plan_owned  bool - we switched the plan and owe it back
+#   power_plan_prev   guid - the plan to hand back (recorded at switch)
+# gaming_watch writes/reads them at the transitions and reconciles on
+# boot; evaluate (the pure brain) never touches them.
+PLAN_OWNED = "power_plan_owned"
+PLAN_PREV = "power_plan_prev"
+
+
+def mark_plan_owned(gaming_cfg, prev_guid):
+    """Claim the plan at switch time (the hands call this on a
+    SUCCESSFUL swap only, so the marker never claims an unmade
+    promise). prev_guid may be '' - then boot leaves the plan (Windows'
+    own default already holds it) and just drops the claim."""
+    gaming_cfg[PLAN_OWNED] = True
+    gaming_cfg[PLAN_PREV] = str(prev_guid or "")
+
+
+def clear_plan_owned(gaming_cfg):
+    gaming_cfg[PLAN_OWNED] = False
+    gaming_cfg[PLAN_PREV] = ""
+
+
+def plan_owned(gaming_cfg):
+    return bool((gaming_cfg or {}).get(PLAN_OWNED))
+
+
+def plan_prev(gaming_cfg):
+    return str((gaming_cfg or {}).get(PLAN_PREV) or "")
+
 
 def _get(d, key, default=None):
     try:

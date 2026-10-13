@@ -53,6 +53,35 @@ def _base(name):
     return toks[0] if toks else ""
 
 
+def _row_for(rows, cat, base):
+    """Which live request row an override entry folds into (audit MED:
+    the old BIDIRECTIONAL substring match let the earlier row eat the
+    later row's override - python.exe vs pythonw.exe collided, first
+    match in order won). The law now: EXACT base match first;
+    substring only when it resolves to EXACTLY ONE candidate row
+    (casefold both sides); an ambiguous substring warns and skips the
+    fold - never a guess. Returns None when nothing answers."""
+    if not base:
+        return None
+    base = base.casefold()
+    exact = [k for k in rows
+             if rows[k]["caller"] == cat and k[1].casefold() == base]
+    if exact:
+        return rows[exact[0]]           # exact first, always
+    sub = [k for k in rows
+           if rows[k]["caller"] == cat
+           and (base in k[1].casefold() or k[1].casefold() in base)]
+    if len(sub) == 1:
+        return rows[sub[0]]             # the only candidate that fits
+    if sub:
+        log.warning("overrides: base %r names %d rows (%s); the "
+                    "override is not folded into any of them - "
+                    "never guess",
+                    base, len(sub),
+                    ", ".join(sorted(k[1] for k in sub)))
+    return None
+
+
 def merge_seen(seen, result):
     """Fold one powercfg read into the session's accumulating view.
 
@@ -82,10 +111,7 @@ def merge_seen(seen, result):
             g["overridden"].add(e["request"])
     for o in (result or {}).get("override_entries") or []:
         base = _base(o["name"])
-        g = next((fresh[k] for k in order
-                  if fresh[k]["caller"] == o["cat"]
-                  and (base == k[1] or base in k[1] or k[1] in base)),
-                 None)
+        g = _row_for(fresh, o["cat"], base)
         if g is None:
             g = touch(o["cat"], o["name"], base)
         g["overridden"] |= set(o["types"])

@@ -55,6 +55,29 @@ CHECK_SEC = 2.0
 # darken, so they are listed for information but never block polling
 DISPLAY_WORDS = ("display", "monitor", "console")
 
+# the DISPLAY request's section header, locale-proof: the words above
+# are English (localized powercfg headers the gate would otherwise
+# miss - audit MED: English-only DISPLAY_WORDS parsing kills the
+# display-gate on a localized Windows), and this is the Display
+# subgroup GUID, MEASURED off this box (powercfg /query SCHEME_CURRENT:
+# Subgroup GUID: 7516b95f-f776-4464-8c53-06167f40cc99 (Display)); the
+# scheme/subgroup GUIDs are locale-independent, the words around them
+# are not (the precedent power_plan.py sets for /list). On this
+# (English) box the words still match first, so behavior is identical
+# (the suite proves it); where a header carries its GUID instead of
+# (or beside) the label, the GUID answers.
+_DISPLAY_GUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}",
+                           re.IGNORECASE)
+_DISPLAY_GUIDS = {"7516b95f-f776-4464-8c53-06167f40cc99"}
+
+
+def _is_display_section(sec):
+    low = sec.lower()
+    if any(w in low for w in DISPLAY_WORDS):
+        return True
+    m = _DISPLAY_GUID.search(low)
+    return bool(m) and m.group(0) in _DISPLAY_GUIDS
+
 # an assistant dump older than this is a broken/removed task, not news
 STALE_SEC = 60
 
@@ -157,7 +180,7 @@ def _parse(text):
         entries.append({"caller": caller, "object": _object_for(caller, item),
                         "request": section.upper(), "text": item,
                         "overridden": False})
-        if any(word in section.lower() for word in DISPLAY_WORDS):
+        if _is_display_section(section):
             display.append(item)
         else:
             other.append("%s: %s" % (section, item))
@@ -270,7 +293,7 @@ def _report(text):
         sect = e["request"]
         e["overridden"] = _ov_hit(
             e["text"], ovs, ("DISPLAY", "CONSOLE")
-            if any(w in sect.lower() for w in DISPLAY_WORDS) else (sect,))
+            if _is_display_section(sect) else (sect,))
     result["display"] = display
     result["other"] = other
     result["overridden"] = overridden

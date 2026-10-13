@@ -297,7 +297,7 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
         if ledger:                       # switched off mid-game: the
             mons = senses.get("mons", wm.monitors())
             _release_all(ledger, mons, gcfg)
-        _apply_power_plan(side, gcfg, False)   # and the plan back
+        _apply_power_plan(side, gcfg, False, cfg)   # and the plan back
         _timer_boost(side, False)              # and the timer hand
         st.clear()
         return st, None
@@ -325,7 +325,7 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
         _adopt_or_hands_off(st, ledger, mons)
         if not gaming_now:
             _enforce_desktop(ledger, mons, gcfg)
-        _apply_power_plan(side, gcfg, gaming_now)
+        _apply_power_plan(side, gcfg, gaming_now, cfg)
         _timer_boost(side, gaming_now)
         return st, plan
     for short in plan.get("desktop") or []:
@@ -341,7 +341,7 @@ def tick(st, ledger, cfg, notify=None, senses=None, side=None):
                     wanted_hz(gcfg, "game_hz", m,
                               wm.offered_modes(m["gdi"])),
                     "game", notify, g.get("proc", ""))
-    _apply_power_plan(side, gcfg, gaming_now)
+    _apply_power_plan(side, gcfg, gaming_now, cfg)
     _timer_boost(side, gaming_now)
     return st, plan
 
@@ -367,13 +367,84 @@ def _timer_boost(side, gaming_now):
                   "held at 1 ms" if gaming_now else "released")
 
 
-def _apply_power_plan(side, gcfg, gaming_now):
+def _persist_plan_state(cfg):
+    """The marker rides cfg["gaming"] - the app's one state store (the
+    same dict the seen-plan overrides live in) - and reaches the disk
+    through config.write_config: the writer takes the WHOLE cfg (it
+    rewrites every section, not one table) and serializes the snapshot
+    under its own lock, the shape the UI's debounced save rides. The
+    call is lazy (the watcher must not pin the config module at import).
+    A cfg with no _path never came off disk (the offline test's fake
+    desk), so there is nothing to write back to - skip it fail-open
+    rather than invent a location; a real failure to write costs the
+    marker for one boot, not the desk."""
+    if "_path" not in cfg:
+        return
+    try:
+        from . import config
+        config.write_config(cfg)
+    except Exception:
+        log.warning("gaming: the plan marker could not be persisted",
+                    exc_info=True)
+
+
+def _reconcile_plan(store, active, pick, set_plan):
+    """Boot pass (audit W2C MED): if the marker is set, a previous
+    session left mid-game - the quit (or crash) skipped the
+    switch-back. If the plan NOW is the performance plan, the desk is
+    still wearing OUR suit: hand back to the recorded previous,
+    falling back to letting Windows balance (no swap, no claim) when
+    no previous was ever recorded. If the plan is NOT ours any more,
+    somebody else moved it and the claim is simply void. Injected
+    callables so the probe drives it with no powercfg; production
+    passes power_plan (pick takes the gaming cfg dict)."""
+    if not gaming.plan_owned(store):
+        return None
+    prev = gaming.plan_prev(store)
+    cur = (active() or "").lower()
+    perf = (pick(store) or "").lower()
+    if perf and cur == perf:
+        if not prev:
+            gaming.clear_plan_owned(store)
+            return "no recorded previous: let Windows balance"
+        if set_plan(prev):
+            gaming.clear_plan_owned(store)
+            return "handed back to %s" % prev
+        return ("handback FAILED, the marker stands "
+                "(next boot retries)")      # never orphan silently
+    gaming.clear_plan_owned(store)
+    return "not ours any more (moved by someone else): cleared"
+
+
+def _boot_reconcile(cfg):
+    """The loop's startup pass: wire _reconcile_plan to the real
+    powercfg layer, persist whatever the reconcile decided."""
+    if gaming is None:
+        return
+    gcfg = cfg.get("gaming") or {}
+    if not gaming.plan_owned(gcfg):
+        return
+    from . import power_plan
+
+    def _pick(g):
+        want = (g.get("power_plan") or "").strip()
+        return power_plan.pick(power_plan.plans(), want) if want else ""
+    outcome = _reconcile_plan(gcfg, power_plan.active, _pick,
+                              power_plan.set_plan)
+    if outcome:
+        log.info("gaming boot: stale plan ownership - %s", outcome)
+        _persist_plan_state(cfg)
+
+
+def _apply_power_plan(side, gcfg, gaming_now, cfg):
     """The plan swap rides the same transition as the Hz swap: a
     game earns the fast plan, leaving gives back the plan that was
     active BEFORE the game (never a guessed 'balanced'). Gated by
     gaming.power_plan (name fragment or guid; '' = never touch it).
     side is long-lived so the saved guid survives the engine
-    clearing its own state."""
+    clearing its own state; the config marker (gaming.mark_plan_owned)
+    survives the PROCESS clearing it - the quit-mid-game orphan the
+    audit caught, closed by _boot_reconcile."""
     want = (gcfg.get("power_plan") or "").strip()
     state = side.setdefault("power_plan", {"saved": "", "active": ""})
     if not want and not state["active"]:
@@ -385,6 +456,8 @@ def _apply_power_plan(side, gcfg, gaming_now):
         if cur and target and target.lower() != cur.lower():
             if power_plan.set_plan(target):
                 state["saved"], state["active"] = cur, target
+                gaming.mark_plan_owned(gcfg, cur)   # claim: the desk
+                _persist_plan_state(cfg)            # wears our suit
                 log.info("gaming hz: power plan -> %s (was %s)",
                          target, cur)
     elif not gaming_now and state["active"]:
@@ -395,6 +468,8 @@ def _apply_power_plan(side, gcfg, gaming_now):
             if power_plan.set_plan(state["saved"]):
                 log.info("gaming hz: power plan back to %s",
                          state["saved"])
+        gaming.clear_plan_owned(gcfg)               # ours no more
+        _persist_plan_state(cfg)
         state["saved"] = state["active"] = ""
 
 
@@ -410,6 +485,12 @@ def loop(cfg, stop):
     effect live); dies quietly when stop is set."""
     log.info("gaming watcher alive (enabled=%s)",
              bool((cfg.get("gaming") or {}).get("enabled")))
+    try:
+        _boot_reconcile(cfg)             # the startup pass (audit W2C
+    except Exception:                    # MED): a marker from a quit
+        log.exception("gaming boot reconcile died")   # -mid-game session
+                                       # comes home before this loop
+                                       # books any new claim
     st, ledger, side = {}, {}, {}
     while not stop.is_set():
         try:

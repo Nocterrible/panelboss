@@ -81,6 +81,18 @@ def set_plan(guid):
     return True
 
 
+# the three Microsoft-standard scheme GUIDs are fixed and carry no
+# words at all (measured on this box with /list): a user who set the
+# English name on a localized Windows still lands on the right plan
+# through them, which the localized display names never promise
+# (audit W2C MED: prefer the known-GUID layer over the words).
+STANDARD_SCHEMES = {
+    "high performance": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    "balanced": "381b4222-f694-41f0-9685-ff5bb260df2e",
+    "power saver": "a1841308-3541-4fab-bc81-f71556f20b4a",
+}
+
+
 def pick(plans_list, want):
     """Resolve a user's wish ("high performance", a fragment, or a
     bare guid) against the enumerated list; '' when nothing fits -
@@ -92,6 +104,15 @@ def pick(plans_list, want):
     if GUID.fullmatch(raw):           # a bare guid is the answer,
         return raw                    # whatever case it arrived in
     want = raw.lower()
+    for name, guid in STANDARD_SCHEMES.items():
+        if want in name:              # the fragment names a standard
+            if any(p["guid"].lower() == guid for p in plans_list):
+                return guid           # scheme: match through its
+                                      # locale-proof GUID, but ONLY
+                                      # when the enumeration lists it
+            break                     # the box lacks that scheme:
+                                      # fall through to the names,
+                                      # never guess an absent guid
     for p in plans_list:
         if want in p["name"].lower():
             return p["guid"]
