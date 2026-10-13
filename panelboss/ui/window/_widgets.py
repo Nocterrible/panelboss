@@ -77,6 +77,12 @@ class _SleepPrompt(ctk.CTkToplevel):
         y = parent.winfo_rooty() + (parent.winfo_height() - 150) // 3
         self.geometry("+%d+%d" % (max(x, 0), max(y, 0)))
         self.after(30, self._claim_focus)
+        # the X too (gate finding 1, the wave's own crash law): the
+        # title-bar close lands on tk's protocol callback with this
+        # toplevel as its target - the direct-destroy ban applies to
+        # it exactly as to the buttons; the same scheduled retire
+        # takes both (0xc0000374 is double-destroy, not button-specific)
+        self.protocol("WM_DELETE_WINDOW", self._retire)
 
     def _show(self, value):
         # snap to 5 despite number_of_steps: the callback value is a

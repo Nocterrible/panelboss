@@ -375,13 +375,19 @@ def _gate(body):
     return config.get_config(dir=d, verbose=False)["camera"]["enabled"]
 
 
-assert _gate("[camera]\nindex = 6\n") is False              # absent+virgin
-assert _gate('[camera]\nindex = 6\nlabels = { "USB\\\\A" = "desk" }\n'
+assert _gate("[camera]\nindex = 0\n") is False              # absent+virgin
+assert _gate('[camera]\nindex = 0\nlabels = { "USB\\\\A" = "desk" }\n'
              ) is True                                      # set-up file
-assert _gate('[camera]\nindex = 6\nbindings = { "USB\\\\A" = 1 }\n'
+assert _gate('[camera]\nindex = 0\nbindings = { "USB\\\\A" = 1 }\n'
              ) is True                                      # binds count
-assert _gate("[camera]\nindex = 6\n\n[camera.diag]\nat = 1.0\n"
+assert _gate("[camera]\nindex = 0\n\n[camera.diag]\nat = 1.0\n"
              "indices = [0]\nnoimg = []\n") is True          # a swept box
+assert _gate('[camera]\nindex = 0\nhidden = ["USB\\\\A"]\n'
+             ) is True                                      # hidden-only
+assert _gate('[camera]\nindex = 0\nshown = ["USB\\\\A"]\n'
+             ) is True                                      # shown-only
+assert _gate("[camera]\nindex = 3\n") is True               # roster-only
+assert _gate("[camera]\nindex = [0]\n") is False            # [0] is stock
 assert _gate('[camera]\nindex = 6\nenabled = false\nlabels = '
              '{ "USB\\\\A" = "desk" }\n') is False           # explicit sticks
 assert _gate("[camera]\nindex = 6\nenabled = true\n") is True

@@ -41,6 +41,10 @@ class Deprompt(ctk.CTkToplevel):
         # Windows yanks focus back to the parent right after a toplevel
         # maps, and the topmost-blink is what wins the round
         self.after(30, self._claim_focus)
+        # the X rides the scheduled retire too (gate finding 1, the
+        # wave's crash law: WM_DELETE fires the destroy inside tk's
+        # own callback, the same double-destroy shape as the buttons)
+        self.protocol("WM_DELETE_WINDOW", self._retire)
 
     def _retire(self):
         # scheduled destroy (owner crash law, the wizard-crash sweep):

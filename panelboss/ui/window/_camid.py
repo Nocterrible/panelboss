@@ -37,7 +37,7 @@ the reset), and the hidden list (camera.shown) brings dropped rows
 back ONE at a time: the unhide-all stays the door, this is the
 decision per device.
 
-SIZE LAW: measured 923 this wave (Oct 13) - the pane grew the sweep
+SIZE LAW: measured 953 this wave (Oct 13) - the pane grew the sweep
 pre-mark, the hidden list, and the placeholder seams, and paid for
 the growth by folding three all_rows arguments into one cfg dict;
 the line stays justified as one window: the step machine and its
@@ -919,6 +919,10 @@ class IdentifyWindow(ctk.CTkToplevel):
         instant), destroy on the event loop's clean stack. The
         worker retires before the withdraw: _dying/_gen go up so no
         late frame posts into a corpse."""
+        if self._dying:
+            return                        # retire once: the X and a
+                                          # button can land in one
+                                          # burst (gate finding 4)
         self._dying = True
         self._gen += 1
         self.withdraw()

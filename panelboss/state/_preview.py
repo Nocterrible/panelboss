@@ -74,6 +74,16 @@ class _PreviewMixin:
         or the previous wall - simply survives until the frame lands).
         Both paths feed the SAME one slot framebox, so the window's
         single draw path never learns the difference."""
+        if not self.camera_cfg.get("enabled"):
+            # consent (redesign law 1, gate finding 5): the live
+            # preview is the boot-scan's consent-exempt sibling no
+            # longer - this path OPENS the duty eye (and the rotor,
+            # and every index on the wall), and a lease heartbeat
+            # landing between the switch graying and the tab's
+            # disabled repaint must not put a driver on a desk the
+            # owner closed. The lease itself is untouched: flip
+            # consent back on and the next tick composes as before.
+            return
         if self.detector is None:
             return              # no model yet (warm-up) or ever (the
                                 # fail-open build failure): abstain

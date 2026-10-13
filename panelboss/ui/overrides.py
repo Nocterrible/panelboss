@@ -131,6 +131,16 @@ def merge_seen(seen, result):
 
 
 class OverridesWindow(ctk.CTkToplevel):
+    def _retire(self):
+        # scheduled destroy (owner crash law): withdraw now, destroy
+        # on the loop's clean stack - the X and every future close
+        # verb ride this one door
+        self.withdraw()
+        try:
+            self.after(0, self.destroy)
+        except Exception:
+            pass                          # the loop is gone already
+
     def __init__(self, cfg, monitor, skin, parent=None):
         super().__init__(master=parent, fg_color=skin.panel)
         self._parent = parent
@@ -141,6 +151,11 @@ class OverridesWindow(ctk.CTkToplevel):
         self.desired = {}                     # (caller, base, type) -> want
         self._busy = False
         self._reading = False
+        # the X rides a scheduled retire (gate finding 1, the wave's
+        # crash law): WM_DELETE fires inside tk's own callback and a
+        # destroy THERE is the 0xc0000374 double-destroy shape the
+        # buttons already learned to withdraw-then-schedule around
+        self.protocol("WM_DELETE_WINDOW", self._retire)
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         ctk.CTkLabel(head, text="manage powercfg overrides",

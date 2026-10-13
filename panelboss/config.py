@@ -574,21 +574,26 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
             camera_merged["index"] = indexes[:4]
         # the consent migration (redesign law 1): the key absent is
         # not ignorance, it is a question the file can answer - a
-        # camera section carrying labels, bindings or a diagnostic
-        # record was SET UP by a human, and an upgrade must keep
-        # detection running untouched (a silent flip to false would
-        # stop the screens sleeping with no word said). Absent and
-        # virgin - the stock write - boots dark: no camera opens
-        # until the owner touches the switch. An explicit value
-        # (either way) always wins: this block touches only files
-        # that do not speak.
+        # camera section carrying labels, bindings, hides, shows or
+        # a diagnostic record, or pointing at a NON-STOCK index, was
+        # SET UP by a human (gate finding 2: a roster-only or
+        # hidden-only upgrade must not silently flip consent off -
+        # the screens would wake on an occupied desk with no word
+        # said), and an upgrade must keep detection running
+        # untouched. Absent and virgin - the stock write, stock
+        # index 0, no tables - boots dark: no camera opens until the
+        # owner touches the switch. An explicit value (either way)
+        # always wins: this block touches only files that do not
+        # speak.
         sec_cam = config.get("camera")
         if not isinstance(sec_cam, dict):
             sec_cam = {}
         if "enabled" not in sec_cam:
             camera_merged["enabled"] = bool(
                 sec_cam.get("labels") or sec_cam.get("bindings")
-                or sec_cam.get("diag"))
+                or sec_cam.get("hidden") or sec_cam.get("shown")
+                or sec_cam.get("diag")
+                or sec_cam.get("index") not in (None, 0, [0]))
     normalize_sections(merged)
     return merged
 

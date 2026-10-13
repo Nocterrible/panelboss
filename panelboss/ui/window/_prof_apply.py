@@ -343,16 +343,20 @@ class _ModeMixin:
         line = ctk.CTkFrame(dlg, fg_color="transparent")
         line.pack(pady=(0, theme.S_SECTION))
 
+        def retire():
+            # ONE scheduled retire for this dialog (gate finding 1,
+            # the wave's crash law): both buttons AND the X ride it;
+            # destroy inside a live callback - button or protocol -
+            # is the same 0xc0000374 double-destroy shape
+            dlg.withdraw()
+            dlg.after(0, dlg.destroy)
+
         def fix():
             if len(misses) == 1:
                 self._pin_load({"proc": misses[0]["proc"],
                                 "title": misses[0]["title"],
                                 "rect": [0, 0, 0, 0]})
-            dlg.withdraw()
-            dlg.after(0, dlg.destroy)      # scheduled retire (owner
-                                           # crash law): the button
-                                           # must not destroy its own
-                                           # toplevel from its stack
+            retire()
 
         def quiet():
             prof = self._prof_data["profiles"].get(self._prof_sel)
@@ -363,8 +367,8 @@ class _ModeMixin:
                                                        m["title"]):
                             w["quiet"] = True
                 profiles.save(self._prof_data)
-            dlg.withdraw()
-            dlg.after(0, dlg.destroy)      # the same scheduled retire
+            retire()
+        dlg.protocol("WM_DELETE_WINDOW", retire)
         ctk.CTkButton(line, text="I'll fix it", width=110,
                       command=fix, **self.skin.primary()).pack(
             side="left", padx=(0, theme.S_FIELD))

@@ -266,6 +266,11 @@ class _EventsMixin:
                 log.info("camera detection %s",
                          "enabled" if self.camera_cfg["enabled"]
                          else "disabled (duty drained)")
+                if self.ui_events is not None:
+                    # the resync the comment promised (gate finding
+                    # 3): the panes re-derive against the moved key,
+                    # the identity-write idiom verbatim
+                    self.ui_events.put(("cameras", None))
             elif action == "camera_diag":
                 # the scan's probe verdict, keyed by the index set it
                 # measured: a re-scan that finds the same set refreshes

@@ -202,6 +202,9 @@ class _RestoreMixin:
                                            # its own toplevel
             if self.restorep_warn is dlg:
                 self.restorep_warn = None
+        dlg.protocol("WM_DELETE_WINDOW", close)   # the X rides the
+        # same retire (gate finding 1) - and the same guard, or a
+        # closed-by-X warn dialog would block the next one forever
 
         ctk.CTkButton(dlg, text="got it", width=110, command=close,
                       **self.skin.primary()).pack(pady=(0, theme.S_SECTION))
