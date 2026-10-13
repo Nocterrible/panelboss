@@ -20,7 +20,7 @@ serialized door is waited for, BUSY only where the open is proven
 held, and a bounded no-frames verdict (NOSTREAM) that hands the
 handle back instead of holding a device for a stare.
 
-SIZE LAW: 754, justified, one window - the step machine and its borrowed-frame
+SIZE LAW: 766, justified, one window - the step machine and its borrowed-frame
 worker share one _gen/_dying lifecycle, and splitting the widget
 shell from the identity core would scatter a protocol debugged by
 reading top to bottom (the importable helpers the picker filter reuses
@@ -529,8 +529,12 @@ class IdentifyWindow(ctk.CTkToplevel):
             self._bind_map = {}
             self.bind_menu.pack_forget()
         stored = (self.app.cfg["camera"].get("labels") or {}).get(inst, "")
-        self.entry.delete(0, "end")
-        self.entry.insert(0, stored or dev["name"])
+        self._prefill = stored or dev["name"]    # the WIZARD made this
+        self.entry.delete(0, "end")              # text up: _save only
+        self.entry.insert(0, self._prefill)      # sends a label the
+                                                 # owner actually typed
+                                                 # (or cleared), never
+                                                 # the manufactured one
         self.idline.configure(text="%d/%d  %s · ...%s · %s" % (
             self._pos + 1, len(self._cands), dev["name"], inst[-12:],
             dev["status"] or "?"))
@@ -608,7 +612,15 @@ class IdentifyWindow(ctk.CTkToplevel):
         dev = self._ident()
         if dev is None:
             return
-        payload = {"instance": dev["instance"], "label": self.entry.get()}
+        payload = {"instance": dev["instance"]}
+        text = self.entry.get()
+        if text != getattr(self, "_prefill", None):
+            # only a typed (or deliberately cleared) label travels:
+            # the manufactured prefill is NOT the owner's intent, and
+            # sending it would poison the bind migration (the gate's
+            # finding: prefill "USB Camera" arriving as a label made
+            # the migration skip, orphaning the real "Desk")
+            payload["label"] = text
         pick = self.bind_menu.get() if self._bind_map else None
         if pick in self._bind_map:
             payload["bind"] = self._bind_map[pick]
