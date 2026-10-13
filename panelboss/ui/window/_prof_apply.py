@@ -10,7 +10,9 @@ from __future__ import annotations
 from .. import theme
 
 import logging
+import sys
 import threading
+import tkinter as tk
 
 import customtkinter as ctk
 
@@ -234,27 +236,74 @@ class _ModeMixin:
             pass
 
 
+    def _apply_buttons(self, state):
+        """Quiet the apply path while a reshuffle runs. The two entry
+        buttons live in _profiles.py's fill and are rebuilt on every
+        render (no references survive a paint), so the visible lock is
+        the profile picker - the pane-level control that decides WHICH
+        profile an apply would target; the re-entrancy guard in
+        _profile_apply is the belt for the buttons themselves."""
+        try:
+            self.profile_menu.configure(state=state)
+        except Exception:
+            pass                  # a mid-teardown window has no picker
+
     def _profile_apply(self, force=False):
         # the reshuffle takes seconds (modes, settle-poll, windows
         # and maybe a 30 s wait for a pinned app to wake), and Tk
         # must not sit frozen through any of it
+        if getattr(self, "_applying", False):        # one apply at a time:
+            self._prof_msg = ("already reshaping the desktop - one "
+                              "apply at a time")
+            self._status_lbl.configure(text=self._prof_msg)
+            return
+        self._applied_name = self._prof_sel          # captured: the user
+                                                     # can switch profiles
+        # mid-apply, and the outcome belongs to the one that was applied
+        self._apply_buttons("disabled")              # the visible lock (see
+        # _apply_buttons); the re-entrancy guard above is the belt for
+        # the two entry buttons themselves. The flag goes up LAST: a
+        # raise on the way in must not wedge the pane into permanent
+        # "already reshaping"
+        self._applying = True
         name, data = self._prof_sel, self._prof_data
         self._prof_msg = "reshaping the desktop..."
         self._status_lbl.configure(text=self._prof_msg)
 
         def work():
-            ok, text, info = profiles.apply(data, name,
-                                            best_effort=force)
-            log.info("profile '%s' %s: %s", name,
-                     "applied" if ok else "refused", text)
+            try:
+                ok, text, info = profiles.apply(data, name,
+                                                best_effort=force)
+                log.info("profile '%s' %s: %s", name,
+                         "applied" if ok else "refused", text)
+                failed = None
+            except Exception:                    # the worker confesses
+                log.exception("profile apply died for '%s'", name)
+                ok, text, info = (False, "apply died: %s"
+                                  % sys.exc_info()[1], None)
+                failed = text
 
             def done():
+                self._apply_buttons("normal")
+                self._applying = False
                 self._prof_msg = text
-                self._profiles_render()
-                misses = (info or {}).get("no_shows") or []
-                if misses:
-                    self._noshows_ask(misses)
-            self.after(0, done)
+                if self._prof_sel == self._applied_name:
+                    self._profiles_render()
+                else:                            # the user switched
+                    self._status_lbl.configure(  # mid-apply: show the
+                                                 # outcome, skip the repaint
+                    text=self._prof_msg)
+                if not failed:
+                    misses = (info or {}).get("no_shows") or []
+                    if misses:
+                        self._noshows_ask(misses)
+            try:
+                self.after(0, done)
+            except tk.TclError:                  # the window closed while
+                                                 # the apply ran - the worker
+                                                 # still confesses
+                log.exception("profile apply done() lost the marshal "
+                              "for '%s'", name)
         threading.Thread(target=work, daemon=True).start()
 
 

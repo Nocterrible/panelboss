@@ -8,7 +8,7 @@ from .. import theme
 
 import customtkinter as ctk
 
-from ... import profiles
+from ... import profiles, wm
 from ._constants import TIPS, RESTORE_LAST, RESTORE_SCOPES, RESTORE_WHENS
 from ._widgets import SkewCombo
 
@@ -29,6 +29,7 @@ class _RestoreMixin:
         entry installed by the startup row stamps --autostart on
         itself, and cli reads that stamp as proof."""
         rst = self.cfg.setdefault("restore", {})
+        self._restorep_gone = False
         head = ctk.CTkFrame(parent, fg_color="transparent")
         head.pack(fill="x", pady=(theme.S_ROW, 0))
         ctk.CTkLabel(head, text="restore a profile at start",
@@ -45,11 +46,16 @@ class _RestoreMixin:
         if rst.get("enabled"):
             self.restorep_switch.select()
         row = self._row(parent, "which profile", TIPS["restore_profile"])
+        armed = rst.get("profile") or "last"
         self.restorep_menu = SkewCombo(
             row, values=self._restorep_names(), width=240,
             command=self._restorep_pick, **self.skin.menu_style())
+        # the "last" label resolves to the desk's last-used name when
+        # the store has one - the picker and the armed row speak the
+        # same truth, and a store that never met this desk (login boot,
+        # pre-any-save) falls back to the literal label via name_for_desk
         self._set_menu(self.restorep_menu,
-                       self._restorep_label(rst.get("profile") or "last"))
+                       self._restorep_label(self._restorep_value(armed)))
         self.restorep_menu.grid(row=0, column=1, sticky="e")
         row = self._row(parent, "what to restore", TIPS["restore_scope"])
         self.restorep_scope_menu = SkewCombo(
@@ -73,21 +79,67 @@ class _RestoreMixin:
             wraplength=560, justify="left", anchor="w",
             **self.skin.text_style("sub"))
         self.restorep_note.pack(anchor="w")
+        self._restorep_gone_check()
 
 
     def _restorep_names(self):
         """'last' first, then every profile by name - the picker on
-        the profiles tab and this one read the same truth."""
-        return [RESTORE_LAST[1]] + sorted(profiles.load()["profiles"])
+        the profiles tab and this one read the same truth. The in-
+        memory store wins when one exists (a profile captured since
+        the window opened shows without a reload); the login-boot
+        path - before any store exists - still loads from disk."""
+        data = getattr(self, "_prof_data", None) or profiles.load()
+        return [RESTORE_LAST[1]] + sorted(data["profiles"])
 
+    def _armed_restore_name(self):
+        """The armed profile's NAME: 'last' resolves through the store
+        to the desk's last-used profile (None when the store never met
+        this desk - the pre-store login-boot case)."""
+        armed = self.cfg.get("restore", {}).get("profile") or "last"
+        if armed == "last":
+            data = getattr(self, "_prof_data", None) or profiles.load()
+            return profiles.name_for_desk(data, wm.monitors())
+        return armed
 
     def _restorep_label(self, value):
-        return RESTORE_LAST[1] if value == "last" else value
-
+        """The picker button's text. An armed profile absent from the
+        built list renders with a ' (gone)' suffix on its own line
+        rather than a silent ghost selection: the name the store still
+        points at, visibly missing."""
+        label = value
+        if value == "last":
+            label = self._armed_restore_name() or RESTORE_LAST[1]
+        if label not in self._restorep_names():
+            label = label + " (gone)"
+        return label
 
     def _restorep_value(self, label):
-        return "last" if label == RESTORE_LAST[1] else label
+        if label in (RESTORE_LAST[1],
+                     (self._armed_restore_name() or RESTORE_LAST[1])
+                     + " (gone)"):
+            return "last"
+        return label.rsplit(" (gone)", 1)[0]
 
+
+    def _restorep_gone_check(self):
+        """User-visible notice when the armed profile is gone - the
+        SAME shape as the named-gone path (the ' (gone)' suffix on its
+        own line, spoken by the note under the picker): the no-match
+        'last' case and the named-gone case both say so out loud,
+        never a silent ghost selection."""
+        self._restorep_gone = False
+        armed = self.cfg.get("restore", {}).get("profile") or "last"
+        gone = armed if armed != "last" else self._armed_restore_name()
+        if gone and gone not in self._restorep_names():
+            self._restorep_gone = True
+            self.restorep_note.configure(
+                text=("the profile this restore is armed for is gone "
+                      "- %s no longer exists. re-pick a profile, or "
+                      "let the first login re-arm a live one."
+                      % gone))
+            self._set_menu(self.restorep_menu, self._restorep_label(armed))
+            return
+        self.restorep_note.configure(text=self._restorep_note())
 
     def _restorep_note(self):
         """fine print that tells the truth about how long login will
@@ -153,12 +205,14 @@ class _RestoreMixin:
         self._save()
         if on:
             self._restorep_warn()
+        self._restorep_gone_check()
 
 
     def _restorep_pick(self, label):
         self.cfg.setdefault("restore", {})["profile"] = \
             self._restorep_value(label)
         self._save()
+        self._restorep_gone_check()
 
 
     def _restorep_scope(self, label):

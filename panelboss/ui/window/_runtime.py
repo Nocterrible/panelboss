@@ -100,7 +100,13 @@ class _RuntimeMixin:
             if message == "assistant_truth":
                 self._assistant_truth(_value)
             if message == "assistant_ui":
-                self._assistant_ui(_value)
+                # the boot path posts a bare bool; a click's round trip
+                # posts (state, generation) - the switch re-enables
+                # only on the generation of the click that disabled it
+                if isinstance(_value, tuple):
+                    self._assistant_ui(_value[0], _value[1])
+                else:
+                    self._assistant_ui(_value)
             if message == "startup":
                 from ... import startup
                 self._startup_sync(startup.enabled())

@@ -11,6 +11,7 @@ import sys
 import textwrap
 import threading
 import time
+import tkinter as tk
 
 import customtkinter as ctk
 
@@ -212,21 +213,39 @@ class _GeneralMixin:
         """The write verifies itself by re-read; the switch always ends
         on what the registry says, never on hope. Registry I/O is fast,
         but a locked-down hive can block on policy - the worker keeps
-        even that worst case off the UI thread."""
+        even that worst case off the UI thread. Single-flight: the
+        switch disables at click and wakes only when this round trip
+        answers (last-click-wins: a second flip cannot over- or under-
+        write the first in the window)."""
         from ... import startup
         want = bool(self.startup_switch.get())
+        self.startup_switch.configure(state="disabled")
 
         def work():
-            ok, msg = (startup.enable() if want else startup.disable())
-            stored = startup.enabled()
-            self.after(0, lambda: self._startup_done(ok, msg, stored))
+            try:
+                ok, msg = (startup.enable() if want
+                           else startup.disable())
+                stored = startup.enabled()
+                try:
+                    self.after(0,
+                               lambda: self._startup_done(ok, msg, stored))
+                except tk.TclError:              # the window closed
+                    log.exception(               # mid-write: confess,
+                        "autostart round trip lost the marshal")  # the
+            except Exception:                    # registry already holds
+                log.exception(                   # the real answer - the
+                    "autostart round trip died")  # next boot syncs the
+                                                 # switch from the hive
         threading.Thread(target=work, daemon=True).start()
 
 
     def _startup_done(self, ok, msg, stored):
         if not ok:
-            self.startup_note.configure(text=msg)     # the failure needs
-            self.startup_switch.set(1 if stored else 0)   # to introduce
-            return                                      # itself
+            self.startup_note.configure(text=msg)      # the failure needs
+            self.startup_switch.set(1 if stored else 0)     # to introduce
+            self.startup_switch.configure(                  # itself
+                state="normal")                             # on the truth
+            return                                      # the registry gave
         self._startup_sync(stored)
+        self.startup_switch.configure(state="normal")
 

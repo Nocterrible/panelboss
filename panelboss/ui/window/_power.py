@@ -17,6 +17,8 @@ import queue
 import threading
 import time
 
+import tkinter as tk
+
 import customtkinter as ctk
 
 from .. import theme
@@ -117,6 +119,10 @@ class _PowerMixin:
             size=(16, 16))
         ctk.CTkLabel(prow, text="", image=self._shield_img,
                      fg_color="transparent", width=22).pack(side="left")
+        self._assistant_gen = 0                # click round-trips: the
+                                               # switch re-enables only on
+                                               # the event for the click
+                                               # that disabled it
         self.power_switch = ctk.CTkSwitch(
             prow, text="wait out other display locks",
             font=self.skin.font(12), command=self._power_assistant_changed,
@@ -157,22 +163,30 @@ class _PowerMixin:
         # flight (delete then create), so a first "gone" is doubted and
         # re-asked before believed
         def truth():
-            from ... import power
-            real = power.task_installed()
-            for _ in range(3):
-                if real:
-                    break
-                time.sleep(2)
+            try:
+                from ... import power
                 real = power.task_installed()
-            log.info("assistant truth: task store says %s", real)
-            # NOT self.after(0, ...): this thread can beat app.mainloop
-            # (measured: schtasks answered while the constructor still
-            # ran) and tkinter then raises "main thread is not in main
-            # loop" - pythonw ate the traceback, the answer evaporated,
-            # and the switch drifted from reality forever. The queue is
-            # thread-safe whenever; _tick_ui drains it on the main
-            # thread once the loop exists.
-            self.ui_events.put(("assistant_truth", real))
+                for _ in range(3):
+                    if real:
+                        break
+                    time.sleep(2)
+                    real = power.task_installed()
+                log.info("assistant truth: task store says %s", real)
+                # NOT self.after(0, ...): this thread can beat
+                # app.mainloop (measured: schtasks answered while the
+                # constructor still ran) and tkinter then raises
+                # "main thread is not in main loop" - pythonw ate the
+                # traceback, the answer evaporated, and the switch
+                # drifted from reality forever. The queue is
+                # thread-safe whenever; _tick_ui drains it on the main
+                # thread once the loop exists.
+                self.ui_events.put(("assistant_truth", real))
+            except Exception:
+                # the task store itself is unreadable: post NOTHING
+                # (absence already renders the default), but confess
+                # loudly - pythonw has no stderr, and a silent truth
+                # is how "does not persist" was born
+                log.exception("assistant truth unreadable")
         threading.Thread(target=truth, daemon=True).start()
         # the overrides manager exists only while the assistant does:
         # its entire data source is the assistant's dump, so the button
@@ -305,8 +319,21 @@ class _PowerMixin:
         self._assistant_ui(real)
 
 
-    def _assistant_ui(self, on):
-        """Everything that lives and dies with the assistant switch."""
+    def _assistant_ui(self, on, gen=None):
+        """Everything that lives and dies with the assistant switch.
+        When a generation is passed (the drain path), the switch
+        re-enables only if this event is for the click that disabled
+        it - a stale event from an older click must not un-quiet a
+        switch a newer click has since disabled."""
+        if gen is not None:
+            # the re-enable is for the click that disabled the switch
+            # - and only for that one, never for its stale predecessors
+            if gen != self._assistant_gen:
+                return
+            try:
+                self.power_switch.configure(state="normal")
+            except tk.TclError:
+                pass
         try:
             if on:
                 if not self.overrides_button.winfo_manager():
@@ -337,36 +364,63 @@ class _PowerMixin:
     def _power_assistant_changed(self):
         """Tick ON registers the task (one UAC confirm, which can flash
         up behind this borderless window); tick OFF deletes it. Both
-        paid on a worker thread so the window stays alive."""
+        paid on a worker thread so the window stays alive. The switch
+        is disabled at click until the assistant_ui event for THIS
+        click arrives (the generation counter) - a mid-flight flip
+        would re-enter a task operation that is still in flight."""
         want = bool(self.power_switch.get())
+        self._assistant_gen += 1
+        gen = self._assistant_gen
+        self.power_switch.configure(state="disabled")
         self.power_msg = ("waiting for the admin confirm - check the "
                           "taskbar if no prompt is visible"
                           if want else "removing the scheduled task...")
         self.power_msg_ts = time.time()
 
         def work():
-            from ... import power
-            ok, msg = power.install() if want else power.uninstall()
-            self.cfg["power"]["assistant_task"] = bool(ok and want)
-            self.monitor.events.put(("power_assistant", bool(ok and want)))
-            self.ui_events.put(("assistant_ui", bool(ok and want)))
-            if not ok:
-                self.power_msg = msg
-                self.power_msg_ts = time.time()
-                self.after(0, lambda: self.power_switch.set(not want))
-            else:
-                # the waiting line must die on success too, or the user
-                # never learns the truth until its expiry timer ends it
-                self.power_msg = ""
-                self.power_msg_ts = 0.0
-                try:    # read through the assistant just created (or
-                        # honestly say admin after deleting), instead of
-                        # letting last week's error string linger
-                    self.monitor.blockers = power.requests(
-                        self.cfg["power"]["ignore"],
-                        assistant=bool(ok and want))
+            try:
+                from ... import power
+                ok, msg = power.install() if want else power.uninstall()
+                self.cfg["power"]["assistant_task"] = bool(ok and want)
+                self.monitor.events.put(("power_assistant", bool(ok and want)))
+                self.ui_events.put(("assistant_ui", (bool(ok and want),
+                                                      gen)))
+                if not ok:
+                    self.power_msg = msg
+                    self.power_msg_ts = time.time()
+                    self.after(0, lambda: self.power_switch.set(not want))
+                else:
+                    # the waiting line must die on success too, or the
+                    # user never learns the truth until its expiry timer
+                    # ends it
+                    self.power_msg = ""
+                    self.power_msg_ts = 0.0
+                    try:    # read through the assistant just created
+                             # (or honestly say admin after deleting),
+                             # instead of letting last week's error
+                             # string linger
+                        self.monitor.blockers = power.requests(
+                            self.cfg["power"]["ignore"],
+                            assistant=bool(ok and want))
+                    except Exception:
+                        pass
+                    self.after(0, self._update_blockers)
+            except Exception:
+                # the worker confesses: post a state event so the
+                # switch RE-SYNCS against the truth (the drain reads
+                # it through _assistant_truth) - a dead worker that
+                # leaves the switch in the clicked state is a silent
+                # lie
+                log.exception("power assistant install/uninstall died")
+                try:
+                    real = power.task_installed()
                 except Exception:
-                    pass
-                self.after(0, self._update_blockers)
+                    real = bool(self.cfg["power"]["assistant_task"])
+                self.power_msg = ("the task store could not confirm "
+                                  "the change - re-syncing")
+                self.power_msg_ts = time.time()
+                self.ui_events.put(("assistant_truth", real))
+                self.ui_events.put(("assistant_ui", (bool(
+                    self.cfg["power"]["assistant_task"]), gen)))
         threading.Thread(target=work, daemon=True).start()
 

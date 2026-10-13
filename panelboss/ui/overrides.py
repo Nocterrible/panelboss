@@ -21,11 +21,17 @@ Changes stage locally until the apply button shows up; applying is
 the same handoff-elevate-then-verify dance the assistant install uses
 (truth comes from a fresh dump, never from the exit code). The data
 source is the assistant dump, so this window is only opened while the
-powercfg assistant is on."""
+powercfg assistant is on.
+
+Worker-thread marshaling note: the two after() calls in _refresh and
+_save are guarded TclError-and-log - that is the confession, not the
+cure. Full queue-marshaling (the ui_events pattern the main window
+uses) stays backlog for this window."""
 from . import theme
 import logging
 import threading
 import time
+import tkinter as tk
 from tkinter import BooleanVar
 
 import customtkinter as ctk
@@ -301,7 +307,11 @@ class OverridesWindow(ctk.CTkToplevel):
             try:
                 rep = power.requests(assistant=bool(
                     self.cfg["power"]["assistant_task"]))
-                self.after(0, lambda: self._merged(rep))
+                try:
+                    self.after(0, lambda: self._merged(rep))
+                except tk.TclError:          # the window closed while
+                    log.exception(          # the read ran: confess, do
+                        "overrides refresh lost the marshal")  # not evaporate
             except Exception:
                 log.exception("overrides refresh crashed")
         threading.Thread(target=work, daemon=True).start()
@@ -338,7 +348,11 @@ class OverridesWindow(ctk.CTkToplevel):
                 ok, msg, fresh = power.apply_overrides(
                     ops,
                     assistant=bool(self.cfg["power"]["assistant_task"]))
-                self.after(0, lambda: self._applied(ok, msg, fresh))
+                try:
+                    self.after(0, lambda: self._applied(ok, msg, fresh))
+                except tk.TclError:          # the window closed while
+                    log.exception(          # the apply ran: confess, do
+                        "overrides apply lost the marshal")    # not evaporate
             except Exception:
                 log.exception("overrides apply crashed")
         threading.Thread(target=work, daemon=True).start()
