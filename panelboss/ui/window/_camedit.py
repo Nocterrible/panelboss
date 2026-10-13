@@ -90,19 +90,29 @@ class _CamEditMixin:
                                     self.cfg["camera"].get("bindings") or {})
         names = _camid.display_names(getattr(self, "_devs", None) or [],
                                      found, self.cfg["camera"])
+        # the sweep's verdict rides the duty card too, under the same
+        # coverage gate as the picker line (the record must have
+        # measured THIS scan): a duty camera that served no image says
+        # so on its own card
+        diag = self.cfg["camera"].get("diag") or {}
+        covers = bool(diag) and \
+            sorted(diag.get("indices") or []) == sorted(e[0] for e in found)
         for entry in found:
             index, name = entry[0], names.get(entry[0], "") or entry[3]
             if isinstance(index, int) and index in roster:
                 # a hidden device ON duty keeps its row (the engine
                 # still honors the roster) wearing an honest badge
-                self._cam_row(index, name, index in hid)
+                self._cam_row(index, name, index in hid,
+                              (_camid.diag_suffix(self.cfg["camera"],
+                                                  entry[0])
+                               if covers else ""))
         if not self._cam_rows:
             ctk.CTkLabel(self._cam_rows_frame,
                          text="no cameras on duty - add one above",
                          font=self.skin.font(11),
                          **self.skin.text_style("sub")).pack(anchor="w")
 
-    def _cam_row(self, index, name, hidden=False):
+    def _cam_row(self, index, name, hidden=False, verdict=""):
         """Camera header at tier 1, then the two policy lines at hint
         tier (the card is ~350 px: two combos sharing one line do not
         fit, so each policy owns a line, mirroring the global pair's
@@ -115,6 +125,13 @@ class _CamEditMixin:
             title += " · %s" % str(name)[:NAME_CLIP]
         if hidden:
             title += " · (hidden from menus)"
+        # the sweep's verdict appended AFTER the clip, like the hidden
+        # badge: NAME_CLIP is the NAME's width guard, and a state
+        # suffix must not eat the name's budget - nor be eaten by it
+        # (a 29-char verdict clipped to 24 would never survive, which
+        # is why this rides post-clip rather than the call site: the
+        # packet's law, applied to the real clip)
+        title += verdict
         head = ctk.CTkLabel(row, text=title, font=self.skin.font(12),
                             **self.skin.text_style())
         head.grid(row=0, column=0, sticky="w")

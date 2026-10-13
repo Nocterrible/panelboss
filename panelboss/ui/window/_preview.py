@@ -4,6 +4,7 @@ view is the exact frame the detector judged.
 
 from __future__ import annotations
 
+import concurrent.futures as cf
 import logging
 import threading
 
@@ -13,7 +14,7 @@ from PIL import Image
 
 from .. import theme
 from ._camedit import ADD_LABEL, duty_roster
-from ._camid import display_names, hidden_indices, open_identify
+from ._camid import diag_suffix, display_names, hidden_indices, open_identify
 from ._constants import TIPS
 from ._widgets import SkewCombo
 
@@ -60,7 +61,12 @@ class _CameraMixin:
             command=self._camera_changed, **self.skin.menu_style())
         self.camera_menu.pack(side="left")
         ctk.CTkButton(controls, text="rescan", width=80,
-                      command=self._scan_cameras,
+                      command=lambda: self._scan_cameras(force=True),
+                      # the rescan BUTTON forces the diagnostic sweep
+                      # (owner law: rescan performs the same check
+                      # manually - the automatic triggers are the
+                      # record's, the button's is the human's); the
+                      # bare boot/wizard call sites keep force=False
                       **self.skin.secondary()).pack(
             side="left", padx=theme.S_FIELD)
         ctk.CTkButton(controls, text="identify...", width=80,
@@ -165,10 +171,36 @@ class _CameraMixin:
 
 
     # --------------------------------------------------------------- cameras --
-    def _scan_cameras(self):
+    def _diag_needed(self, found):
+        """Pure read of the diagnostic record: the automatic sweep runs
+        when NO record exists yet (first launch) or when the scanned
+        index set differs from the record's. No clock condition on
+        purpose: a dark-room verdict is refreshed by TOUCHING a camera,
+        which reindexes the door caches and lands a different set on
+        the next scan - the event that makes a re-measure meaningful,
+        not a timer deciding for the owner. Worker-safe: the cfg dict
+        is shared state under the GIL, and a torn read here only
+        re-sweeps (or skips) once, never corrupts the record (state
+        owns that write)."""
+        cfg = self.cfg["camera"].get("diag") or {}
+        idx = sorted(e[0] for e in found)
+        return (not cfg) or sorted(cfg.get("indices") or []) != idx
+
+    def _scan_probe(self, found, force=False):
+        """The worker's sweep decision, split out so the offline suite
+        can drive the OR without threads: force (the rescan button -
+        the owner's deliberate re-measure verb) sweeps whatever the
+        record says; the automatic paths (boot, wizard fill) answer to
+        _diag_needed's record-vs-set rule alone."""
+        return bool(force) or self._diag_needed(found)
+
+    def _scan_cameras(self, force=False):
         """Opening every index is slow (the virtual camera alone takes
         up to 16 s), so enumerate on a helper thread and hand the
-        answer back through after()."""
+        answer back through after(). When the sweep is due (the record
+        rule, or a forced rescan) the SAME worker probes the openable
+        indexes before reporting, so the list and the verdict land on
+        the window together - behind the veil."""
         def worker():
             from ... import camera
             try:
@@ -179,8 +211,8 @@ class _CameraMixin:
                 # camera_names() concedes the PnP enumeration order
                 # need not match the OpenCV index order, so a
                 # positional attach on a repeated name can only be a
-                # guess (gate finding 8: the positional-label lie) -
-                # a confidently wrong label hides the wrong menu line.
+                # guess (gate finding 8: the positional-label lie) - a
+                # confidently wrong label hides the wrong menu line.
                 # An empty name drops the same way: it must not shift
                 # every later label through the positional mapping
                 # (gate finding 2). The wizard is the disambiguator
@@ -196,6 +228,84 @@ class _CameraMixin:
             except Exception:
                 log.exception("camera scan failed")
                 found = []
+            # the diagnostic sweep (feature law 1): give every OPEN
+            # index 15 s to deliver ANY frame - black counts, it IS an
+            # image; no frame at all is "no image". Camera.read's own
+            # contract (camera.py def read, ~line 571): the deadline
+            # loop samples until the timeout, and screen=0 means ANY
+            # frame wins the screening. The veil is the worker's own
+            # first post: the page wears it for the sweep's duration,
+            # progress re-dressed in place, and the report below is
+            # what lifts it (_diag_veiled is the handoff flag).
+            if self._scan_probe(found, force):
+                idxs = [e[0] for e in found]
+
+                def one(idx):
+                    # the probe for ONE index: opens at the configured
+                    # size (the duty size, not a smaller lie), waits
+                    # 15 s for any frame, releases in every ending
+                    try:
+                        cam = camera.Camera(
+                            index=idx, warmup=2,
+                            width=int(self.cfg["camera"].get(
+                                "width", 1280)),
+                            height=int(self.cfg["camera"].get(
+                                "height", 720)))
+                    except Exception:
+                        return False       # no handle: no image
+                    try:
+                        return cam.read(timeout=15, screen=0) is not None
+                    except Exception:
+                        return False       # the stream confessed
+                    finally:
+                        cam.release()
+                try:
+                    self.ui_events.put(("cameras_veil",
+                                        "testing cameras, please wait"))
+                    noimg = []
+                    done = 0
+                    lock = threading.Lock()    # the counter is worker-
+                    # thread-only today (one consumer, the as_completed
+                    # loop); the lock names that invariant rather than
+                    # trusting it, so a second consumer cannot arrive
+                    # silently
+                    #
+                    # The opens still SERIALIZE on the engine's own
+                    # _open_lock (camera.py's device-tree law: the
+                    # NVIDIA driver dies on concurrent opens, measured
+                    # - the deadline door is _open_timed's own answer).
+                    # What the threads OVERLAP is the 15 s first-frame
+                    # budgets, which touch no shared driver state once
+                    # the cap is open. Worst case is therefore
+                    # sum(short opens) + max(15 s), not 6x15 s; the
+                    # veil's 140 s hold still covers the pathological
+                    # path (a slow auto-door holds the lock for its
+                    # own open while the rest wait).
+                    with cf.ThreadPoolExecutor(
+                            max_workers=min(8,
+                                            max(1, len(idxs)))) as ex:
+                        futs = {ex.submit(one, i): i for i in idxs}
+                        for fut in cf.as_completed(futs):
+                            if not fut.result():
+                                noimg.append(futs[fut])
+                            with lock:
+                                done += 1
+                                n = done
+                            try:      # progress re-dresses the ONE
+                                self.ui_events.put((   # veil in place
+                                    "cameras_veil",
+                                    "testing cameras, please wait "
+                                    "(%d of %d done)" % (n, len(idxs))))
+                            except Exception:
+                                pass  # window closed: the sweep loses
+                                      # its audience, not the verdict
+                    noimg.sort()       # the record reads sorted: the
+                    # toml stays stable when a reindex moves nothing
+                    self.ui_events.put(("camera_diag",
+                                        {"indices": [e[0] for e in found],
+                                         "noimg": noimg}))
+                except Exception:
+                    log.exception("camera diagnostic sweep failed")
             try:
                 self.ui_events.put(("cameras", found))
             except Exception:
@@ -237,6 +347,9 @@ class _CameraMixin:
         # fallback, nothing rather than a lie
         name_of = display_names(getattr(self, "_devs", None) or [], found,
                                 self.cfg["camera"])
+        diag = self.cfg["camera"].get("diag") or {}
+        diag_covers = bool(diag) and \
+            sorted(diag.get("indices") or []) == sorted(e[0] for e in found)
         for index, opened, width, name in found:
             if (index in roster and index >= 0) or index in hid:
                 continue
@@ -244,6 +357,12 @@ class _CameraMixin:
             nm = name_of.get(index) or name
             if nm:
                 label += " %s" % nm
+            # the sweep's verdict rides the picker line, but ONLY
+            # while the record covers this exact scan: a verdict of an
+            # older index set says nothing about a camera it never
+            # measured (the sweep is keyed by its set on both ends)
+            label += diag_suffix(self.cfg["camera"], index) \
+                if diag_covers else ""
             labels.append(label)
         if not found:
             labels = ["no camera opens"]
@@ -291,6 +410,24 @@ class _CameraMixin:
         # rows from the tables (never from the outgoing widgets), so a
         # rescan that renames the set cannot strand stale rows
         self._rebuild_cam_rows(found)
+
+
+    def _preview_placeholder(self):
+        """The main pane's half of the reset law (the owner's: a list
+        change must NEVER leave a stale frame from the previous
+        device reading as live). The CTk trap is general, not wizard-
+        local: a CTkLabel preview resets to a configured PLACEHOLDER
+        image, never back to image=None (the Oct 13 freeze's law) -
+        one image per window, cheap, built on the first reset."""
+        img = Image.new("RGB",
+                        (int(self.cfg["ui"]["preview_width"]), 90),
+                        (24, 26, 33))
+        self._ph_img = self._ph_img or ctk.CTkImage(
+            light_image=img, dark_image=img, size=(img.size[0], 90))
+        self.preview_label.configure(image=self._ph_img, text="")
+        self.preview_info.configure(
+            text="camera list changed - the placeholder replaces the "
+                 "previous device's frame")
 
 
     def _draw(self, slot):

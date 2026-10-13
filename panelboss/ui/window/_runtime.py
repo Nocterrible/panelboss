@@ -59,15 +59,29 @@ class _RuntimeMixin:
         # veil watchdog: a veil that outlives its rebuild is a bricked
         # UI, and every failure path between veil() and unveil() would
         # otherwise be allowed to leave one up. The tick lifts it after
-        # 3 s and confesses in the log - loud stop, not silent stuck.
+        # ITS OWN budget and confesses in the log - loud stop, not
+        # silent stuck. The budget is per-veil now (the hold= the
+        # caller passed, staged in _veil_hold): every stock veil holds
+        # 3 s exactly as before, and only the camera diagnostic sweep
+        # asks for longer, because waiting on a driver IS its job.
         if getattr(self, "_veil_lbl", None) is not None \
-                and time.time() - self._veil_since > 3.0:
+                and time.time() - self._veil_since > getattr(
+                    self, "_veil_hold", 3.0):
             log.warning("ui: veil stuck past its rebuild window; lifting")
             self._unveil()
         self._drain_ui_events()
         slot = self.monitor.framebox.get()
         if slot is not None and slot[3] != self._shown_ts:
             self._draw(slot)
+        elif slot is None and self._shown_ts is not None:
+            # the cleared slot (a list change, _drain_ui_events) is
+            # the reset signal: a None arm that only SKIPS the redraw
+            # would leave the canvas painted with the old picture -
+            # the previous device's last frame, reading as live. The
+            # placeholder takes it (one paint at the transition, not
+            # every tick: the flag goes down with the shown ts)
+            self._shown_ts = None
+            self._preview_placeholder()
         self._update_status(now, slot)
         if bool(self.live_switch.get()) and self.state() == "normal":
             self._lease_ticks += 1
@@ -112,6 +126,33 @@ class _RuntimeMixin:
                 self._startup_sync(startup.enabled())
             if message == "cameras":
                 self._apply_cameras(_value)
+                # every list change resets the debug view's slot (the
+                # owner's law: never a stale frame from the previous
+                # device) - the draw arm below takes the None slot as
+                # the signal to paint the placeholder, so the reset is
+                # visible without touching a widget off-thread
+                self.monitor.framebox.clear()
+                if getattr(self, "_diag_veiled", False):
+                    self._diag_veiled = False
+                    self._unveil()       # the report lands: the sweep
+                                        # (if this scan rode one) is
+                                        # over, the list is dressed
+            if message == "cameras_veil":
+                # the diagnostic sweep's progress line: the first post
+                # veils (absolute: the worker owns the timing, the
+                # sweep may rebuild nothing but must still own the
+                # page), later posts re-dress the ONE veil in place
+                # (_shell's already-veiled branch re-sets the note).
+                # 140 s = the enumerate plus 8 indexes x 15 s: the
+                # worst-case serialized path of the whole sweep
+                self._diag_veiled = True
+                self._veil(_value, absolute=True, hold=140.0)
+            if message == "camera_diag":
+                # the sweep's verdict rides to the state loop, which
+                # owns the toml write (camera_diag branch); the record
+                # reaches the panes through the report resync, not a
+                # second UI-side write
+                self.monitor.events.put(("camera_diag", _value))
         if getattr(self, "_veil_lbl", None) is not None:
             # tk law: fresh children stack OVER the veil, and the
             # handlers above build exactly such children. This end-of-

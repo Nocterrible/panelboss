@@ -352,7 +352,7 @@ assert all(not r["virtual"] for r in synth.values()), \
 assert all(r["idx"] == int(str(r["instance"])[4:]) for r in synth.values())
 assert _camid.hidden_indices(DEV_MIX, FOUND_MIX, ["idx:9"]) >= {9}
 assert _camid.hidden_indices(DEV_MIX, FOUND_MIX, ["idx:9", "USB\\OK"]) == {9, 0}
-bound = _camid.all_rows(DEV_MIX, FOUND_MIX, {"USB\\OK2": 9})
+bound = _camid.all_rows(DEV_MIX, FOUND_MIX, {"bindings": {"USB\\OK2": 9}})
 assert [r["instance"] for r in bound if str(r["instance"]).startswith("idx:")] \
     == ["idx:7"], bound                           # 9 became a real
 assert [r for r in bound if r["instance"] == "USB\\OK2"][0]["idx"] == 9  # device row
@@ -398,6 +398,8 @@ class FakeWin:
     _candidates = _camid.IdentifyWindow._candidates
     _unhide_all = _camid.IdentifyWindow._unhide_all
     _gather_reload = _camid.IdentifyWindow._gather_reload
+    _rebuild_hidden_list = lambda self, rows: None   # the reload lands
+    _placeholder = lambda self: None                 # here: no tk
     _start_step = lambda self: None          # widget churn is not the
     _work = None                             # duty here
 
@@ -414,6 +416,7 @@ class FakeWin:
         self._busy_note = None
         self.scheduled = []
         self.note, self.idline = Label(), Label()
+        self.preview = Label()
 
     def after(self, delay, hook):
         self.scheduled.append((delay, hook))
@@ -650,6 +653,24 @@ try:
                        % (_w._devs, _h._cams,
                           cfg["camera"].get("hidden")))
     assert _w.bind_menu._values, "the twin's bind menu lost its feeds"
+    # the reset law, on the real window: entering a step arms the
+    # PLACEHOLDER image (never image=None - the CTk trap's freeze
+    # shape), straight from _start_step
+    assert _w.preview.cget("image") is not None, \
+        "the step left the preview on image=None: the freeze's shape"
+    # amendment 2 on real widgets: every row the filter dropped is
+    # listed with its honest reason (OK is hidden here -> policy
+    # line; BAD is unhealthy -> the PnP no-image line) - the pane
+    # shows the way back, it does not silently swallow the drop
+    texts = []
+    for _line in _w._hlist_frame.winfo_children():
+        for _w2 in _line.winfo_children():
+            try:
+                texts.append(str(_w2.cget("text")))
+            except Exception:
+                pass
+    assert any("hidden policy" in t for t in texts), texts
+    assert any("PnP" in t for t in texts), texts
     _w.destroy()
     _h.destroy()
     print("window smoke OK (real IdentifyWindow built, stepped, bound,"

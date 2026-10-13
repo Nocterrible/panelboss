@@ -28,6 +28,18 @@ class FrameBox:
         with self._lock:
             return self.latest
 
+    def clear(self):
+        """The list-change reset (feature law 4, the owner's: a camera
+        list change resets the preview in BOTH panes): the held frame
+        belongs to a roster that just changed, and showing it one
+        more tick would let the previous device's picture read as
+        live. The window's draw arm turns the None slot into its
+        placeholder; the state side simply stops feeding until the
+        new duty serves its own frame - an honest blank beats a
+        flattering lie."""
+        with self._lock:
+            self.latest = None
+
 
 def _tile_rgb(frame):
     """One mosaic tile: camera frame -> PIL RGB image, or None when the

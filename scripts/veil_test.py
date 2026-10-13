@@ -57,8 +57,11 @@ class FakeMonitor:
 
 class ProbeWindow(_shell.SettingsWindow):
     # the veil story needs no cameras; the boot scan would open real
-    # doors (and fight a running app for them) for seconds on end
-    def _scan_cameras(self):
+    # doors (and fight a running app for them) for seconds on end.
+    # The signature tracks the ui-1c force kwarg: the rescan button
+    # posts force=True, and a stub that cannot take it would lie
+    # about the pane's one click that matters here.
+    def _scan_cameras(self, force=False):
         pass
 
 

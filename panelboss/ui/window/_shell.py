@@ -21,10 +21,12 @@ Rules this file lives by:
 
 Skins come from theme.py; nothing here hardcodes a color.
 
-SIZE LAW: grandfathered at ~530 - window lifecycle, size recall, and
-the reveal-veil machinery are one story (how the window appears and
-remembers itself); the scroll hosts already live in _scroll.py and the
-next seam to split out is the size-recall trio if this grows again.
+SIZE LAW: grandfathered, measured 677 (Oct 13, after the per-veil
+hold and the diagnostic veil state) - window lifecycle, size recall,
+and the reveal-veil machinery are one story (how the window appears
+and remembers itself); the scroll hosts already live in _scroll.py
+and the next seam to split out is the size-recall trio if this grows
+again.
 """
 
 
@@ -109,6 +111,19 @@ class SettingsWindow(
         self._save_job = None
         self._veil_lbl = None
         self._veil_since = 0.0
+        self._veil_hold = 3.0              # the watchdog budget of the
+                                          # veil currently up; _veil
+                                          # restamps it per veil
+        self._diag_veiled = False          # the veil currently up is
+                                          # the camera diagnostic's:
+                                          # the next list report owes
+                                          # the unveil (runtime's
+                                          # cameras arm collects it)
+        self._ph_img = None                # the main pane's reset
+                                          # placeholder (see the
+                                          # _camid trap law: a CTk
+                                          # preview resets to an
+                                          # IMAGE, never to None)
         self._unveil_job = None          # the tracked after(300) that lifts
                                          # a boot/skin veil: a re-veil
                                          # mid-flight must cancel it, never
@@ -290,7 +305,8 @@ class SettingsWindow(
 
     # ------------------------------------------------------------ top bar --
     # ------------------------------------------------------------- veil --
-    def _veil(self, note="PanelBoss", absolute=False, full=False):
+    def _veil(self, note="PanelBoss", absolute=False, full=False,
+              hold=3.0):
         """The Electron ready-to-show trick, tkinter edition: an
         OPAQUE frame at the page tier covering the body, painted
         BEFORE whatever rebuild happens, destroyed after. CTk's own
@@ -305,7 +321,11 @@ class SettingsWindow(
         exactly mid-sweep. The plain RELATIVE form rode the tab
         switch and was retired with it (Oct 12: switching raises a
         pre-painted layer now - no burst to cover); callers today
-        pass full or absolute."""
+        pass full or absolute. `hold` is this veil's watchdog budget
+        in seconds: the stock 3.0 fits every rebuild veil byte-
+        identical, and only a caller whose work is SLOW BY DESIGN
+        (the camera diagnostic sweep) passes a longer one - the
+        watchdog reads it through _veil_hold."""
         if getattr(self, "_unveil_job", None) is not None:
             # a timed lift is still pending from the PREVIOUS veil (audit
             # MED: rebuilds under 300 ms raced the stale after - the
@@ -319,11 +339,18 @@ class SettingsWindow(
             self._unveil_job = None
         if getattr(self, "_veil_lbl", None) is not None:
             # already veiled: never stack, but a caller may have just
-            # changed the skin - re-dress the color, not the geometry
+            # changed the skin - re-dress the color, not the geometry.
+            # A changed NOTE rides the same re-dress (diffed, per the
+            # no-op-configure law): the diagnostic sweep posts its
+            # progress ("(N of M done)") as fresh veil messages and
+            # the in-place update is what keeps ONE veil on screen -
+            # stacking would fight the never-stack invariant above.
             try:
                 self._veil_lbl.configure(bg=self.skin.panel)
-                self._veil_lbl.winfo_children()[0].configure(
-                    bg=self.skin.panel, fg=self.skin.subtext)
+                lbl = self._veil_lbl.winfo_children()[0]
+                if lbl.cget("text") != note:
+                    lbl.configure(text=note)
+                lbl.configure(bg=self.skin.panel, fg=self.skin.subtext)
             except Exception:
                 pass
             return
@@ -361,6 +388,9 @@ class SettingsWindow(
         self._veil_lbl.winfo_children()[0].configure(
             bg=self.skin.panel, fg=self.skin.subtext)
         self._veil_since = time.time()
+        self._veil_hold = float(hold)      # the watchdog reads THIS,
+                                          # not a literal: the hold is
+                                          # per-veil now
         try:
             self.update()                # paint NOW (idle tasks alone
                                          # leave it blank - documented

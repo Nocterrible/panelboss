@@ -20,11 +20,33 @@ serialized door is waited for, BUSY only where the open is proven
 held, and a bounded no-frames verdict (NOSTREAM) that hands the
 handle back instead of holding a device for a stare.
 
-SIZE LAW: 766, justified, one window - the step machine and its borrowed-frame
-worker share one _gen/_dying lifecycle, and splitting the widget
-shell from the identity core would scatter a protocol debugged by
-reading top to bottom (the importable helpers the picker filter reuses
-stay module-level anyway).
+The diagnostic sweep (ui-1c): the scan worker probes every OPENABLE
+index for one frame in 15 s (camera.py's read contract, screen=0 -
+black IS an image; no frame = "no image"), behind the window veil,
+concurrently: opens serialize on the engine's _open_lock while the
+threads overlap their budgets (owner law - 6x15 s under a veil is
+unacceptable). The verdict lands as camera.diag (state-owned); a
+dark synthetic row is PRE-MARKED virtual behind the show-virtual
+checkbox and its index wears the suffix in both panes - but a human
+touch (label, bind, or the hidden list's per-device show) vetoes the
+mark forever: the sweep informs, only people hide.
+
+The reset law: a step change or a list change resets the preview to
+a PLACEHOLDER IMAGE (the CTk trap - image=None is the freeze, not
+the reset), and the hidden list (camera.shown) brings dropped rows
+back ONE at a time: the unhide-all stays the door, this is the
+decision per device.
+
+SIZE LAW: measured 923 this wave (Oct 13) - the pane grew the sweep
+pre-mark, the hidden list, and the placeholder seams, and paid for
+the growth by folding three all_rows arguments into one cfg dict;
+the line stays justified as one window: the step machine and its
+borrowed-frame worker share one _gen/_dying lifecycle, and splitting
+the widget shell from the identity core would scatter a protocol
+debugged by reading top to bottom (the importable helpers the picker
+filter reuses stay module-level anyway). The next seam to cut is the
+hidden list (a pure rows-minus-candidates report) if this grows
+again.
 """
 
 from __future__ import annotations
@@ -124,6 +146,19 @@ def display_names(devs, found, cfg_camera):
                                                  # never more than truth
 
 
+def diag_suffix(cfg_camera, index):
+    """The sweep's verdict as a picker/duty-card line suffix: ONE
+    static for both panes (feature law 3). Membership only - the
+    record is rewritten whole by the state loop at every sweep, so a
+    present noimg list is by construction the current truth about
+    THESE indexes; the call sites add the coverage gate (the record
+    must have measured this exact scan) so a verdict of an older set
+    never speaks for a camera it never probed."""
+    d = (cfg_camera or {}).get("diag") or {}
+    return " (no image during diagnostic)" \
+        if index in (d.get("noimg") or []) else ""
+
+
 def bind_candidates(devs, found, bindings=None):
     """Open scanned indexes no identity claims (bind or join): the
     feeds only a human eye can assign - the wizard offers exactly
@@ -160,7 +195,7 @@ def preview_map(devs, found):
     return out
 
 
-def all_rows(devs, found, bindings=None):
+def all_rows(devs, found, cfg_camera=None):
     """PnP rows + a synthetic row per OPEN scanned index that no PnP
     row claimed: the wizard walks what the picker shows (the owner's
     UAT law - identify gives the add pane its names and hides, so it
@@ -173,7 +208,19 @@ def all_rows(devs, found, bindings=None):
     box registers no SystemDeviceEnum class (cv2 carries its own), so
     until the enumeration route is cracked, synthetic rows are the
     truthful stand-in - preview works, labels persist, no positional
-    name lie rides them."""
+    name lie rides them.
+
+    cfg_camera is the whole camera config dict (amendment 2: ONE
+    argument, not a param per table - the pre-mark below reads diag,
+    labels, bindings, and shown, and every caller already holds
+    app.cfg["camera"]). The sweep's no-image verdict PRE-MARKS the
+    synthetic rows it measured dark (feature law 3): a sometimes-
+    plugged camera the owner named, bound, or showed (camera.shown)
+    is human-touched by ANY of the three, and the stickiness law says
+    the sweep can then only INFORM - its verdict never re-hides what
+    a hand wrote, forever."""
+    cfg_camera = cfg_camera or {}
+    bindings = cfg_camera.get("bindings") or {}
     ids = identity_map(devs, found, bindings)
     mapped = set(ids.values())
     mapped |= {got[0] for got in preview_map(devs, found).values()}
@@ -215,6 +262,23 @@ def all_rows(devs, found, bindings=None):
             rows.append({"name": g, "instance": "ir:" + g,
                          "status": "OK", "virtual": False,
                          "idx": camera.HELLO_IR, "ir": g})
+    # the diagnostic pre-mark (feature law 3), AFTER the synthetic rows
+    # stand: a measured-dark index hides its SYNTHETIC row behind the
+    # show-virtual checkbox (the sweep could not name the feed, only
+    # time it - a bound/known instance keeps its namespace verdict,
+    # and a human touch (label, bind, or a one-at-a-time show: the
+    # stickiness law, amendment 2) outranks the sweep permanently -
+    # the verdict rides the picker line's suffix either way, so dark
+    # stays VISIBLE to the eye that decides
+    noimg = (cfg_camera.get("diag") or {}).get("noimg") or []
+    touched = (set(cfg_camera.get("labels") or {})
+               | set(bindings)
+               | set(cfg_camera.get("shown") or []))
+    for row in rows:
+        if (str(row["instance"]).startswith("idx:")
+                and row.get("idx") in noimg
+                and row["instance"] not in touched):
+            row["virtual"] = True
     return rows
 
 
@@ -245,6 +309,9 @@ class IdentifyWindow(ctk.CTkToplevel):
         self.geometry("480x560")
         self._dying, self._built = False, False
         self._frame, self._img, self._gen = None, None, 0
+        self._ph = None                          # the reset placeholder
+        # image (CTk trap law: the preview NEVER goes back to
+        # image=None - a reset configures a placeholder IMAGE)
         self._devs, self._cands, self._pos = [], [], 0
         self._busy = False                       # worker -> pump, the
         # ONLY marshaling path (no naked self.after from workers):
@@ -288,6 +355,17 @@ class IdentifyWindow(ctk.CTkToplevel):
             text_color_disabled=self.skin.txt3)
         self._vbox.pack(anchor="w", padx=theme.S_SECTION,
                         pady=(theme.S_ROW, 0))
+        # the hidden list (amendment 2, owner law): the way back is ONE
+        # camera at a time - the blanket "unhide all" is a wipe, and a
+        # wipe is not a decision. Every row the candidate filter drops
+        # (hidden policy, unhealthy, virtual) lands here with its
+        # honest reason and a show button; contents rebuild wherever
+        # the filter runs, from the tables (the discard-rebuild idiom
+        # of _camedit._rebuild_cam_rows - never patch the old widgets).
+        # One scrollless pack: a desk has <=8 cameras.
+        self._hlist_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self._hlist_frame.pack(anchor="w", fill="x", padx=theme.S_SECTION,
+                               pady=(theme.S_FIELD, 0))
         # the twin answer (owner UAT): the app cannot tell identical
         # models apart, the owner's eyes can. Shown only on steps with
         # no index and at least one unowned open feed; picking a feed
@@ -451,6 +529,75 @@ class IdentifyWindow(ctk.CTkToplevel):
             cands.append(d)
         return cands, unhealthy, vhidden
 
+    def _rebuild_hidden_list(self, rows):
+        """Amendment 2 (owner law): the way back is ONE camera at a
+        time. Every row the candidate filter dropped gets a line -
+        name, the honest reason it is off the steps, and a show
+        button that brings JUST this one back. Destroyed and rebuilt
+        from the tables wherever the filter runs (the duty-rows
+        idiom): a hidden set that moved under the widgets must not
+        leave a stale line claiming a door that already closed.
+        Reasons follow the filter's own ladder, so what the list
+        says is exactly why the row is out."""
+        for widget in self._hlist_frame.winfo_children():
+            widget.destroy()
+        cfg = self.app.cfg["camera"]
+        hidden = set(cfg.get("hidden") or [])
+        noimg = (cfg.get("diag") or {}).get("noimg") or []
+        kept = {id(d) for d in self._cands}
+        for r in rows:
+            if id(r) in kept:
+                continue
+            inst = str(r["instance"])
+            if inst in hidden:
+                why = "hidden policy"
+            elif not (str(r.get("status") or "OK").lower() == "ok"):
+                why = "no image (PnP status)"
+            elif str(inst).startswith("idx:") and r.get("idx") in noimg:
+                why = "no image (diagnostic)"
+            elif r.get("virtual"):
+                why = "virtual (software)"
+            else:
+                continue         # dropped by a rule this list does
+                                 # not know: no line, no lie
+            line = ctk.CTkFrame(self._hlist_frame, fg_color="transparent")
+            line.pack(anchor="w", fill="x")
+            self._label(line, 10, text="%s · %s" % (r["name"], why)).pack(
+                side="left")
+            ctk.CTkButton(line, text="show", width=50,
+                          font=self.skin.font(10),
+                          command=self._show_back(inst),
+                          **self.skin.secondary()).pack(side="right")
+
+    def _show_back(self, inst):
+        def command():
+            # the per-device door: an event to the state loop (the ui
+            # never writes the toml) - the handler un-hides the
+            # instance AND marks it shown, and the shown key sticks
+            # forever: no later sweep may re-hide what this click
+            # decided (the stickiness law). The refresh rides the
+            # re-read ladder the unhide paths already run: the loop
+            # owns the toml turn, the ladder waits for it honestly
+            self.app.monitor.events.put(("camera_identity",
+                                         {"instance": inst,
+                                          "show": True}))
+            if not self._ladder_busy:
+                self._ladder_start()
+        return command
+
+    def _placeholder(self):
+        """The reset image (CTk trap law, ~the pump's BUSY note: a
+        CTkLabel preview NEVER configures back to image=None - the
+        dangling pyimage freeze is measured). Every reset CONFIGURES
+        this flat tile instead: once per window, cheap."""
+        if self._ph is None:
+            img = Image.new("RGB",
+                            (int(self.app.cfg["ui"]["preview_width"]), 90),
+                            (24, 26, 33))
+            self._ph = ctk.CTkImage(light_image=img, dark_image=img,
+                                    size=(img.size[0], 90))
+        return self._ph
+
     def _skip_note(self):
         """The confession suffix: whatever the candidate filter dropped
         rides the note line, joined on the separator the wizard
@@ -471,9 +618,10 @@ class IdentifyWindow(ctk.CTkToplevel):
         self._show_virtual = bool(self._vbox.get())
         if not self._built or not self._devs:
             return
-        self._cands, self._skipped, self._vhidden = self._candidates(
-            all_rows(self._devs, self.app._cams or [],
-                     self.app.cfg["camera"].get("bindings") or {}))
+        rows = all_rows(self._devs, self.app._cams or [],
+                        self.app.cfg["camera"])
+        self._cands, self._skipped, self._vhidden = self._candidates(rows)
+        self._rebuild_hidden_list(rows)
         self._pos = 0
         if self._cands:
             self._start_step()
@@ -481,9 +629,10 @@ class IdentifyWindow(ctk.CTkToplevel):
             self.idline.configure(text="no visible cameras")
 
     def _build(self):
-        self._cands, self._skipped, self._vhidden = self._candidates(
-            all_rows(self._devs, self.app._cams or [],
-                     self.app.cfg["camera"].get("bindings") or {}))
+        rows = all_rows(self._devs, self.app._cams or [],
+                        self.app.cfg["camera"])
+        self._cands, self._skipped, self._vhidden = self._candidates(rows)
+        self._rebuild_hidden_list(rows)
         self._pos = 0
         if self._cands:
             return self._start_step()
@@ -502,6 +651,11 @@ class IdentifyWindow(ctk.CTkToplevel):
                                                  # captured mid-WARMING
                                                  # must not ride onto
                                                  # the next step's line
+        # the step moved: the preview resets to the placeholder before
+        # this step's worker can show anything (the owner's law -
+        # never a stale frame from the previous device; the next feed
+        # may open slower, or not at all)
+        self.preview.configure(image=self._placeholder(), text="")
         dev = self._cands[self._pos]             # any busy line the old
         inst = dev["instance"]                   # worker may have queued
         idx = dev.get("idx")             # all_rows answered this once:
@@ -729,9 +883,14 @@ class IdentifyWindow(ctk.CTkToplevel):
             self._ladder_check()
             return
         self._devs = self.app._devs
-        self._cands, self._skipped, self._vhidden = self._candidates(
-            all_rows(self._devs, self.app._cams or [],
-                     self.app.cfg["camera"].get("bindings") or {}))
+        rows = all_rows(self._devs, self.app._cams or [],
+                        self.app.cfg["camera"])
+        self._cands, self._skipped, self._vhidden = self._candidates(rows)
+        self._rebuild_hidden_list(rows)
+        # the list moved under the pane: the preview resets even where
+        # no new step follows (an all-hidden reload keeps the last
+        # feed's picture, and that feed may be gone)
+        self.preview.configure(image=self._placeholder(), text="")
         self._pos = 0
         if self._cands:
             self._start_step()
