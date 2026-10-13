@@ -87,6 +87,9 @@ class FaceGate:
             gallery = np.stack(list(self.stored.values()))
         gallery = gallery / np.linalg.norm(gallery, axis=1)[:, None]
         sims = gallery @ embed
+        # a zero-embedding (insightface's degenerate output) NaNs a sim,
+        # and np.max propagates the NaN: NaN >= 0.4 is False, so a
+        # degenerate face falls closed, never open
         return bool(np.max(sims) >= 0.4)     # the threshold always comes
                                               # after the cosine
 
