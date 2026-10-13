@@ -234,8 +234,16 @@ class _GeneralMixin:
                         "autostart round trip lost the marshal")  # the
             except Exception:                    # registry already holds
                 log.exception(                   # the real answer - the
-                    "autostart round trip died")  # next boot syncs the
-                                                 # switch from the hive
+                    "autostart round trip died")  # switch must still come
+                                                  # back clickable: a dead
+                                                  # worker with a dead
+                                                  # switch is one more
+                                                  # silent daemon death
+                try:
+                    self.after(0, lambda: self.startup_switch.configure(
+                        state="normal"))
+                except tk.TclError:
+                    pass
         threading.Thread(target=work, daemon=True).start()
 
 
