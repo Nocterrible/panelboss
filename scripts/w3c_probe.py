@@ -15,7 +15,7 @@ from panelboss import taskbar  # noqa: isort:skip  (the point of the order)
 from panelboss import display, wm
 
 assert display.foreground_is_fullscreen() in (True, False)
-wins = wm.windows_now()               # _inspect's census: its own
+wins = wm._toplevel_facts()           # _inspect's census: its own
 assert isinstance(wins, list), wins   # EnumWindows callback on the
                                       # same shared singleton
 assert taskbar.bars() is not None     # taskbar's own EnumWindows path
