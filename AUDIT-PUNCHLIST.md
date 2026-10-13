@@ -363,7 +363,17 @@ boundary - template for the normalizer)
    HELLO_IR sentinel is never in it, so per-camera modes for the IR eye
    are unreachable from the panel (the global table governs). Fix rides
    next IR pass: append the sentinel row from cfg when roster lists it.
- - IN FLIGHT (camdiag wave, owner laws, two amendments): first-launch /
+   CLOSED (e69c22c: ir_row_spec appends the sentinel duty card from the
+   roster - remove/policy pair reachable; the redesign went further:
+   a62d9b9 gives EVERY bridge group its own setup-screen card with a
+   snapshot, the seat the wizard never had).
+ - SHIPPED (camdiag wave: 2e4c6e1, f689587, 98f4e23, aad8e8e, e69c22c,
+   7289b14; owner amendments 1-5 all folded; the wizard-era surfaces of
+   this block - in-wizard pre-mark display and the wizard's hidden-row
+   SHOW list - were superseded by the redesign the same night, see the
+   redesign section at the file's end; the record, the sweep trigger,
+   the stickiness law, and the placeholder reset survived verbatim):
+   first-launch /
    reindex / manual-rescan diagnostic rides the existing scan under a
    held veil ("testing cameras, please wait" + honest N-of-M progress);
    probes are THREADED (opens serialize on the device-tree lock, the
@@ -379,7 +389,10 @@ boundary - template for the normalizer)
    panes (framebox.clear on the cameras event).
 - BACKLOG LOW _camedit.py:77-100 — wizard hide/label saves never re-fire
   _apply_cameras: "(hidden)" badges stale until manual rescan. Push a
-  "cameras" ui_event after the identity write.
+  "cameras" ui_event after the identity write. CLOSED (the identity
+  handler's resync fanout landed that round trip, and stage 4 (9a54ebd)
+  made the hidden list ride the same fanout: every identity write
+  rebuilds rows and hides together).
 - BACKLOG LOW _shell.py:232 + _preview.py:92 — skin rebuild resets live-
   preview switch to off while frames may land ~2.5s more (UI claims off).
   Restore pre-rebuild selection or enqueue preview 0 at rebuild start.
@@ -390,6 +403,16 @@ boundary - template for the normalizer)
 
 ## widgets/text/constants/camid (deep, PASS - no HIGH; module-state and
 import sweeps clean; _constants pure)
+SUPERSEDED by the camera-setup redesign (a62d9b9): every _camid.py
+finding below was the WIZARD's, and the wizard's funeral is that
+commit ("the tab gate, the one rescan path, and the wizard's
+funeral"). The ladder lines retired with the ladder (the redesign
+refreshes through the resync fanout instead of recheck ladders);
+the main-thread PnP query is structurally excluded in the
+successor (_assign._gather fetches off-thread from birth); the
+stale-dress and post-destroy configure findings retired with their
+class. The data functions live on in _identity.py, tested by the
+same file's data sections (camid_test keeps them).
 - FIX-NOW MED _camid.py:269 — `_unhide_all`'s 250ms deferred reload ASSUMES
   the drain already happened; a tick blocked on a slow open (~16s for a
   virtual cam) drains later → stale `hidden` read, freed device missing from
@@ -583,3 +606,47 @@ dispositions closed in wave 3 + this ledger's third-gate fixes. Loop
 state: third submission returned BLOCK-ON-PROCESS (wave-3 range carried
 no independent gate) - the reviewer pass is dispatched as part of this
 resubmission cycle; on RELEASE: merge word to master.
+
+## CAMERA-SETUP REDESIGN (owner: "blow it away") - CODE-COMPLETE, first
+## launch pending owner's witness (Oct 13)
+- CONSENT (laws 1+2): [camera] enabled=false stock; the load migration
+  reads the file (labels/bindings/hidden/shown/diag record or a
+  non-stock index = a human set this box up -> true; virgin -> false;
+  an explicit value always wins). Duty gate at the _poll head (a
+  mid-duty disable drains there, roster survives); the preview lease
+  gates the same way (gate finding 5); the tray camera submenu answers
+  a right-click with an info row INSTEAD of enumerate_cameras (the
+  menu itself used to open every index); the boot scan is gated; the
+  detection tab grays behind ONE big switch - ON asks (setup IS the
+  enable), OFF needs no ceremony. (980d55a, 1d19fc4, a62d9b9)
+- ONE SETUP SCREEN (laws 3+4): _assign.py - every enumerated index
+  (dead seats earn timed-out cards) and every bridge group gets a
+  card, snapshot per feed (black frames are an answer), diff-only
+  renames, hide checkbox (dark cards start CHECKED, keeping one
+  posts the STICKY show verb), queue+pump marshaling (no worker ever
+  touches a widget), scheduled retire from birth on both X and OK,
+  OK posting the EXISTING identity verbs plus camera_enabled. The
+  wizard and its button are deleted; the data functions survive in
+  _identity.py (git mv). (a62d9b9)
+- HIDDEN LIST (law 5): bottom of the camera card, per-row SHOW riding
+  the same sticky verb and the identity resync fanout. (9a54ebd)
+- CRASH LAW APP-WIDE: five dialog Xs + every command button retire by
+  withdraw+after(0,destroy); an app-wide source ban asserts it in
+  assign_test. (1d19fc4, a62d9b9)
+- COVERAGE RECORD, honest: the diagnostic suffix's "record covers
+  THIS scan" display gate is widget-side (the _apply_cameras /
+  _rebuild_cam_rows consumers); the offline suites pin the membership
+  finder and the truth tables, the gate line itself is smoke-only.
+- KNOWN BLEMISH: the stage-3 commit subject carries one stray CJK
+  glyph ("keeps the谱" - lineage was the word). No-amend law kept it;
+  noted here so the final-gate package reads it as a typo, not a
+  concealment.
+- FOLLOW-UPS (owner's call, none owed): tray menu can show a stale
+  roster after a switch flip (update_menu timing); consent-off grays
+  the hidden list's SHOW buttons with the whole tab (law 2 as
+  written; lifting the scope is two lines); the stale-idx: keys note
+  above now clears itself - a setup re-run re-derives the maps.
+- DEPLOY SHAPE: the HKCU Run key fires THIS worktree's venv directly
+  (run.py --autostart), so there is no separate installed tree: the
+  tip IS the deployment, the kill leg is the process, and the copy
+  leg is a no-op. First launch happens on the owner's word.
