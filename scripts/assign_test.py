@@ -5,9 +5,15 @@ SetupWindow on faked doors: cards spawn per settle, the veil counts
 truthfully to done, OK posts the identity verbs, the duty-roster
 write (amendment 6's add boxes: seeded from the roster, grayed at
 the four-feed ceiling, re-lit on uncheck) and the consent enable,
-and the close retires by schedule. The pure data contract (rows_from
-/ card_spec / ok_verbs / add_ceilings) is truth-tabled in camdiag_test
-section 9; this file owns the window's behavior."""
+and the close retires by schedule. The fix wave (owner UAT, four
+defects) pins the ANSWER (the ask is the stdlib box, the phantom
+message box is banned), the UNBLIND (every exit resyncs the tab from
+cfg truth), the DEADLINE (a faked wedged door: the veil names the
+stall, the row draws dead, OK appears regardless), and the WHEEL
+(disabled means the wheel does not move - on a MAPPED window, the
+measured pin trap). The pure data contract (rows_from / card_spec /
+ok_verbs / add_ceilings / veil_text) is truth-tabled here and in
+camdiag_test section 9; this file owns the window's behavior."""
 import os
 import sys
 import tempfile
@@ -22,6 +28,7 @@ import numpy as np
 from panelboss import camera as cam_mod
 from panelboss import config
 from panelboss.ui.window import _assign
+import panelboss.ui.window._detection as _det
 from panelboss.ui.window._assign import CEILING_NOTE as _CEILING_TXT
 
 fails = []
@@ -47,10 +54,13 @@ class Spy:
         self.scheduled = []
         self.destroyed = 0
         self.scans = 0
+        self.syncs = 0
         self.app = type("A", (), {})()
         self.app.cfg = {"camera": {"enabled": enabled}}
         self.app._scan_cameras = lambda *a, **k: setattr(
             self, "scans", self.scans + 1)
+        self.app._sync_consent_switch = lambda: setattr(
+            self, "syncs", self.syncs + 1)
 
     def withdraw(self):
         self.withdrawn += 1
@@ -69,16 +79,20 @@ check(s.withdrawn == 1 and s.destroyed == 0,
 check(s.scheduled and s.scheduled[0][0] == 0,
       "the retire rides the loop's next clean turn")
 check(s.scans == 0, "X on a never-enabled boot does not open the doors")
+check(s.syncs == 1, "the X re-syncs the tab from cfg truth (defect 3)")
 s.scheduled[0][1]()
 check(s.destroyed == 1, "the scheduled destroy lands")
 s._close()
-check(s.destroyed == 1, "retire ONCE (the X + OK burst cannot double)")
+check(s.destroyed == 1 and s.syncs == 1,
+      "retire ONCE, resync ONCE (the X + OK burst cannot double)")
 ok = Spy(enabled=True)
 ok._close(refresh=True)
-check(ok.scans == 1, "OK refreshes the picker (captions follow the setup)")
+check(ok.scans == 1 and ok.syncs == 1,
+      "OK refreshes the picker (captions follow the setup)")
 en = Spy(enabled=True)
 en._close()
-check(en.scans == 1, "an X on an enabled desk still refreshes captions")
+check(en.scans == 1 and en.syncs == 1,
+      "an X on an enabled desk still refreshes captions")
 
 # 2) the source ban, app-wide this time: no command= may point a
 #    button straight at destroy() anywhere in the UI package - the
@@ -98,6 +112,47 @@ check(not bad, "no UI file destroys its own toplevel from a callback: %s"
       % (bad,))
 check("WM_DELETE_WINDOW" in pathlib.Path(_assign.__file__).read_text(
     encoding="utf8"), "the setup's X is routed, not default")
+
+# 2d) the consent ask's grave, and the resync's structure (owner UAT
+#     fix wave A, defects 1+3): the venv's customtkinter 6.0 has NO
+#     CTkMessagebox (measured AttributeError) and the old except
+#     manufactured "Yes" into that hole - the ban keeps the name from
+#     ever returning, and the LOUD fallback must ride with it. The
+#     unblind law is STRUCTURAL: the resync call site lives inside
+#     _close itself (every exit routes through it), not in a callback
+#     that a rebuilt tab could forget.
+_as_src = pathlib.Path(_assign.__file__).read_text(encoding="utf8")
+_de_src = pathlib.Path(pathlib.Path(_assign.__file__).parent
+                       / "_detection.py").read_text(encoding="utf8")
+check("CTkMessagebox" not in _de_src,
+      "the phantom message box stays banned from _detection: the ctk "
+      "6.0 venv has no CTkMessagebox, the except made that a silent Yes")
+check("askyesno" in _de_src, "the ask is the stdlib message box")
+check("log.exception" in _de_src,
+      "a consent ask that cannot draw is LOUD (the headless fallback)")
+_i = _as_src.index("def _close(self")
+_blk = _as_src[_i:]
+_nx = _re.search(r"\n    def ", _blk)
+check(_nx and "_sync_consent_switch" in _blk[:_nx.start()]
+      and "getattr" in _blk[:_nx.start()],
+      "every window exit re-syncs the tab from cfg truth (inside _close)")
+
+# 2e) the veil's line, pure (defect 2b): silence gets a shape, a
+#     NAME, and a count - truth-tabled, no widgets
+_vt = _assign.veil_text
+check(_vt(0, 0) == "done", "an empty board is a done board (no veil prison)")
+check(_vt(2, 5) == "testing cameras... (2 of 5)  ·  starting",
+      "no beat yet says starting, not nothing")
+check(_vt(2, 5, "1", 2)
+      == "testing cameras... (2 of 5)  ·  probing 1, 2 waiting",
+      "the stalling feed is NAMED and its queue counted")
+check(_vt(0, 1, "ir Face IR", 0)
+      == "testing cameras... (0 of 1)  ·  probing ir Face IR",
+      "the IR sentinel is nameable; an empty queue drops the clause")
+check(_vt(5, 5, "1") == "done", "done outranks every progress line")
+check(_assign.row_label({"idx": 3, "group": None}) == "3"
+      and _assign.row_label({"idx": None, "group": "G1"}) == "ir G1",
+      "row_label: the index, or the IR group")
 
 # 2b) the card SEED law (gate finding 2 - the second-run trap): a
 #     rerun must not undo the desk it is showing. Offline on the
@@ -187,7 +242,12 @@ try:
             self.monitor = type("M", (),
                                 {"events": _q.Queue()})()
             self.scans = []
+            self.syncs = []
             self._scan_cameras = lambda *a, **k: self.scans.append(1)
+            # the defect-3 seam on the REAL window: _close re-syncs
+            # the tab through this method (the Spy pins the guard's
+            # once-ness; this pins that the live window uses it)
+            self._sync_consent_switch = lambda: self.syncs.append(1)
 
     _real_cd = cam_mod.camera_devices
     _real_ec = cam_mod.enumerate_cameras
@@ -206,6 +266,19 @@ try:
     cam_mod.Camera = lambda index=0, **kw: FakeEye(
         index, alive=(index in (0, 1)))
     cam_mod.HelloIrCamera = lambda group=None, **kw: FakeEye(group=group)
+    def _retire(host):
+        # ctk reschedules its DPI check forever; destroying a host
+        # with those afters pending lets a LATER section's event
+        # pump consume the corpse (the measured bgerror wall this
+        # wave grew). Cancel on the way out: no ghosts for the next
+        # window's update() to trip over.
+        for _aid in host.tk.call("after", "info"):
+            try:
+                host.tk.call("after", "cancel", _aid)
+            except Exception:
+                pass
+        host.destroy()
+
     _h = Host()
     _w = _assign.SetupWindow(_h)
     for _ in range(40):                        # pump the 60 ms drain
@@ -264,16 +337,122 @@ try:
     check(keep and keep[0][1].get("show") is True,
           "a kept dark seat posts the STICKY show verb: %s" % keep)
     check(_w._dying, "OK retires: withdrawn and guarded, destroy pending")
+    check(len(_h.syncs) == 1,
+          "OK's exit re-syncs the tab once (defect 3, real window)")
     for _ in range(5):                         # the host loop runs
         _h.update()                            # the scheduled destroy
     check(not _w.winfo_exists(),
           "the scheduled destroy lands (no leak, no zombie toplevel)")
-    _h.destroy()
+    _retire(_h)
     cam_mod.camera_devices = _real_cd
     cam_mod.enumerate_cameras = _real_ec
     cam_mod.Camera = _real_cam
     cam_mod.hello_ir_names = _real_irn
     cam_mod.HelloIrCamera = _real_ir
+
+    # ---- defect 2 (owner UAT, the 18:33 stall shape): a door that
+    # never returns. The wedged fallback driver cannot be summoned on
+    # demand (and the owner's desk was busy), so the faked door
+    # reproduces the SHAPE - a read that blocks forever - and the
+    # deadline machinery must out-argue it: the veil NAMES the stall
+    # while it lives, the row draws dead, and OK appears REGARDLESS
+    # (defect 2c) so a wedged door cannot eat the exit. The deadline
+    # constants shrink to a coffee-cup scale and return in finally.
+    import threading as _thr
+    import time as _time
+    _stall = _thr.Event()                      # never set: the wedged
+    class StalledEye(FakeEye):                 # cap.read() that went
+        def read(self, timeout=3, screen=None):
+            _stall.wait()                      # inside the driver
+            return None
+
+    _saved = (_assign.FRAME_BUDGET, _assign.MARGIN_SEC,
+              cam_mod.OPEN_LOCK_TIMEOUT)
+    try:
+        _assign.FRAME_BUDGET = 0.2
+        _assign.MARGIN_SEC = 0.2               # row deadline 0.6 s,
+        cam_mod.OPEN_LOCK_TIMEOUT = 0.2        # board the same
+        cam_mod.camera_devices = lambda: []
+        cam_mod.enumerate_cameras = lambda *a, **k: [
+            (9, True, 1280.0, "Wedged")]
+        cam_mod.hello_ir_names = lambda: []
+        cam_mod.Camera = lambda index=0, **kw: StalledEye(index)
+        _h2 = Host()
+        _w2 = _assign.SetupWindow(_h2)
+        _veils = []
+        for _ in range(40):                    # past two board deadlines
+            _h2.update()
+            _veils.append(_w2.veil.cget("text"))
+            _time.sleep(0.03)
+        check(any(t.startswith("testing cameras... (0 of 1)")
+                  and "probing 9" in t for t in _veils),
+              "the veil NAMED the stalling feed while it lived: %r"
+              % [t for t in _veils if "probing" in t][:2])
+        cards2 = {c["key"]: c for c in _w2._cards}
+        check(set(cards2) == {"idx:9"},
+              "the stalled row gets exactly ONE dead card: %s"
+              % sorted(cards2))
+        check(cards2["idx:9"]["started"] is True,
+              "drawn dead means drawn HIDDEN, the dark-feed default")
+        check(_w2.veil.cget("text") == "done",
+              "the stalled board settles to done (defect 2b/2c)")
+        check(_w2.ok_button.winfo_manager() == "pack",
+              "OK appears when the last row DIES, not only at n of n")
+        check(not _h2.syncs, "a live window has not earned the resync")
+        _w2._close()                           # the X on a stalled board
+        check(len(_h2.syncs) == 1,
+              "the exit un-blinds the tab even from a stalled board")
+        for _ in range(5):
+            _h2.update()
+        check(not _w2.winfo_exists(), "the stalled setup retires clean too")
+        _retire(_h2)
+    finally:
+        _assign.FRAME_BUDGET, _assign.MARGIN_SEC = _saved[0], _saved[1]
+        cam_mod.OPEN_LOCK_TIMEOUT = _saved[2]
+        cam_mod.camera_devices = _real_cd
+        cam_mod.enumerate_cameras = _real_ec
+        cam_mod.Camera = _real_cam
+        cam_mod.hello_ir_names = _real_irn
+
+    # ---- defect 4 (owner UAT): a grayed slider that still took the
+    # wheel was a disabled that lied. THE PIN TRAP (measured twice
+    # before believing it): event_generate on an UNMAPPED canvas is a
+    # SILENT NO-OP - the handler never runs and the value sits even
+    # when the wheel should work - so the window is MAPPED (position
+    # parked off the visible desk) and the ENABLED leg is asserted
+    # FIRST: if delivery ever dies the pin fails loudly instead of
+    # the disabled leg passing by accident.
+    _hw = ctk.CTk()
+    _hw.geometry("+12000+12000")
+    _gate = ctk.CTkFrame(_hw)
+    _gate.pack()
+    _sl = ctk.CTkSlider(_gate, from_=0.1, to=0.9, number_of_steps=80,
+                        width=180)
+    _sl.pack()
+    _sl.set(0.5)
+    _hw.deiconify()
+    _hw.update()
+
+    class _Walker(_det._DetectionMixin):
+        pass
+
+    _walk = _Walker()
+    _walk._gate_widgets(_gate, "normal")
+    _sl._canvas.event_generate("<MouseWheel>", delta=120)
+    _hw.update()
+    _v1 = _sl.get()
+    check(_v1 != 0.5, "the wheel is REAL on this pin (the mapped-window "
+          "trap, measured: an unmapped canvas drops it silently)")
+    _walk._gate_widgets(_gate, "disabled")
+    _sl._canvas.event_generate("<MouseWheel>", delta=120)
+    _hw.update()
+    check(_sl.get() == _v1, "the DISABLED slider ignores the wheel")
+    _walk._gate_widgets(_gate, "normal")       # the un-gray returns it
+    _sl._canvas.event_generate("<MouseWheel>", delta=120)
+    _hw.update()
+    check(_sl.get() != _v1,
+          "the RE-ENABLED slider answers the wheel again (no steal)")
+    _retire(_hw)
 except Exception as _exc:
     if isinstance(_exc, AssertionError):
         raise

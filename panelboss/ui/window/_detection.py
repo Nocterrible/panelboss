@@ -1,8 +1,16 @@
 """Detection tab: person and motion rows, mode picker,
 timers, and their change callbacks.
+
+SIZE LAW: measured 422 (Oct 13, fix wave A grew the consent ask -
+the loud stdlib replacement - and the wheel veto inside the
+gray-out walker; the next seam out is the change-callback block,
+which is row machinery the timers already shadow).
 """
 
 from __future__ import annotations
+
+import logging
+from tkinter import messagebox
 
 import customtkinter as ctk
 
@@ -10,6 +18,8 @@ from .. import theme
 from ... import config
 from ._constants import TIMER_SPECS, DEVICE_KEYS, DEVICE_BY_LABEL, PERSON_ROWS, MOTION_ROWS, TIPS
 from ._widgets import SkewCombo
+
+log = logging.getLogger("ui")
 
 
 class _DetectionMixin:
@@ -63,11 +73,22 @@ class _DetectionMixin:
                                                  # happens in state
         ans = None
         try:
-            ans = ctk.CTkMessagebox(
+            # tkinter's own, not ctk's: the venv's customtkinter 6.0
+            # removed the widget outright - the old call raised
+            # AttributeError into the except below on EVERY flip and
+            # the except manufactured a "Yes" with no question on
+            # screen (owner UAT defect 1, the silent-ignorance class
+            # itself; the assign_test ban keeps the name dead). The
+            # stdlib dialog always exists and always draws.
+            ans = "Yes" if messagebox.askyesno(
                 "camera detection",
                 "Would you like to go through first-time setup?",
-                choices=["Yes", "No"], icon="question", parent=self)
+                parent=self) else "No"
         except Exception:
+            log.exception("consent ask could not draw - substituting "
+                          "the safe answer (headless harnesses only: "
+                          "a real desk that raises here loses the ask "
+                          "LOUDLY, not silently)")
             ans = "Yes"                          # headless harnesses
                                                  # and old ctk builds:
                                                  # the setup is the
@@ -109,11 +130,34 @@ class _DetectionMixin:
         rest - labels, frames, the ones that never took input
         anyway - carry no state and must not crash the walk. The
         switch above the band is deliberately outside the scope:
-        the door is never locked."""
+        the door is never locked.
+
+        The wheel travels WITH the state (owner UAT defect 4): the
+        ctk 6.0 slider binds <MouseWheel> on its own canvas and the
+        handler NEVER consults the state (measured), so a grayed
+        slider still answered the wheel and the owner's "disabled"
+        was a lie. The fix is the swap, not a wrapper: disabling
+        UNBINDS the sequence from the widget's canvas; enabling
+        rebinds the widget's own live handler (one binding, no
+        stacking across resyncs, and a rebuilt band re-arms here on
+        wherever the walker walks next). The swap runs first and
+        outright because the toolkit's handler runs on the same
+        canvas and would otherwise move the value before any veto
+        got the event."""
         try:
             widget.configure(state=state)
         except Exception:
             pass
+        wheel = getattr(widget, "_mouse_scroll_event", None)
+        canvas = getattr(widget, "_canvas", None)
+        if wheel is not None and canvas is not None:
+            try:
+                if state == "disabled":
+                    canvas.unbind("<MouseWheel>")
+                else:
+                    canvas.bind("<MouseWheel>", wheel)
+            except Exception:
+                pass
         for child in widget.winfo_children():
             self._gate_widgets(child, state)
 

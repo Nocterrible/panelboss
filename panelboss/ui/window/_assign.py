@@ -34,11 +34,16 @@ at four checked every unchecked add-box grays (checked boxes never
 do - the exit is to give a seat up), the reason rides the count line.
 The state-side first-four truncation at load stays as the net.
 
-SIZE LAW: measured 518 (Oct 13) - the split seam is
+SIZE LAW: measured 696 (Oct 13, fix wave A: the dialog watchdog
+- row beats, the sum-of-budgets deadline, the dead-draw close -
+plus the exit resync) - the split seam is
 named: everything
 above the class line (rows_from, card_spec, ok_verbs, add_ceilings)
 is the pure data contract - importable, testable without a display
-(camdiag section 9); the SetupWindow class is the widget shell. If
+(camdiag section 9) - the SetupWindow class is the widget shell. The
+watchdog trio (row_label, veil_text, and the budget arithmetic in
+_gather) joined the pure side at fix wave A: the deadline is a
+number, and numbers get truth-tabled. If
 the shell grows dialog-section machinery, it splits by section the
 way _camedit did from _preview, not by helper archaeology.
 """
@@ -46,6 +51,7 @@ way _camedit did from _preview, not by helper archaeology.
 import logging
 import queue
 import threading
+import time
 
 import cv2
 import customtkinter as ctk
@@ -58,10 +64,38 @@ from ... import camera
 log = logging.getLogger("ui")
 
 FRAME_BUDGET = 15.0        # seconds a feed gets for its FIRST frame
+MARGIN_SEC = 5.0           # the named margin of the watchdog
+                           # arithmetic (computed where it rides:
+                           # _gather's dialog deadline)
 SNAP_W, SNAP_H = 220, 140  # the card's photo box: 8 seats at ~400px
 
 
 # ------------------------------------------------------------- pure core --
+def row_label(row):
+    """A row's honest one-word name for the veil (defect 2b): the
+    index, or the IR group the sentinel stands for."""
+    return "ir %s" % row["group"] if row["group"] is not None \
+        else str(row["idx"])
+
+
+def veil_text(done, total, probing=None, waiting=0):
+    """The veil's line, pure (defect 2b): a bare "testing cameras..."
+    gave the owner no shape to read while a wedged door held the
+    line for six minutes. The count truth FIRST (the card spawns on
+    the settle, so the k-of-n never lies); while the board is open
+    the LONGEST-WAITING un-settled feed is NAMED - the one that
+    knocked first and has not been answered - and the rest are
+    counted, so silence always has a shape and a number."""
+    if done >= total:
+        return "done"
+    base = "testing cameras... (%d of %d)" % (done, total)
+    if probing is None:
+        return base + "  ·  starting"
+    if waiting:
+        return base + "  ·  probing %s, %d waiting" % (probing, waiting)
+    return base + "  ·  probing %s" % (probing,)
+
+
 def rows_from(devs, enumerated, ir_names, cfg_camera):
     """The screen's seat list: one row per enumerated index (opened
     or not - a dead index still earns a timed-out card, the owner
@@ -247,6 +281,24 @@ class SetupWindow(ctk.CTkToplevel):
         self._results = queue.Queue()              #   entry, var, started
         self._done = 0
         self._total = 0
+        # the dialog watchdog (defect 2, owner UAT): the deadline is
+        # armed the moment the board is counted (and already now,
+        # for the enumerate phase, with the scan ceiling standing in
+        # for the row count - the same arithmetic _gather re-arms
+        # with), and the PUMP owns it: an op that wedges holds the
+        # device-tree lock while it hangs, so a worker cannot be
+        # trusted to report its own death, and a board cannot be
+        # trusted to answer at all. Rows announced, rows settled,
+        # rows beaten - the veil reads all three (defect 2b: silence
+        # gets a shape and a name).
+        self._rows = []
+        self._settled = set()
+        self._started = []
+        self._deadline_at = (time.monotonic() + 8 * (
+            float(getattr(camera, "OPEN_LOCK_TIMEOUT", 30.0))
+            + FRAME_BUDGET) + MARGIN_SEC)
+        self._board_seen = False
+        self._board_done = False
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         ctk.CTkLabel(head, text="camera setup",
@@ -295,7 +347,14 @@ class SetupWindow(ctk.CTkToplevel):
         """Enumerate + one snapshot per row, off the tk thread. The
         opens serialize on the engine's own _open_lock (device-tree
         law); what the threads OVERLAP are the frame budgets (the
-        amendment-1 doctrine, inherited whole)."""
+        amendment-1 doctrine, inherited whole). Defect 2 (owner UAT,
+        the 18:33 stall): the read's timeout arg is sampled BETWEEN
+        frames by the engine, and a wedged driver blocks INSIDE
+        cap.read() - the promise never gets to run. So the op runs
+        in its own inner thread and the worker JOINS it with a
+        deadline: a timed join CANNOT hang whatever the driver does
+        (the packet's named choice - the timeout arg exists but is
+        defeatable, the join is the smallest thing that cannot)."""
         import concurrent.futures as cf
         try:
             devs = camera.camera_devices()   # never raises: [] on a
@@ -307,35 +366,80 @@ class SetupWindow(ctk.CTkToplevel):
         except Exception:
             log.exception("setup: enumerate failed")
             enumerated = []
-        rows, self._total = rows_from(devs, enumerated,
-                                      camera.hello_ir_names(), cfg_cam)
+        try:
+            ir_names = camera.hello_ir_names()
+        except Exception:
+            log.exception("setup: the IR bridge never named itself")
+            ir_names = []
+        rows, n = rows_from(devs, enumerated, ir_names, cfg_cam)
+        self._rows = rows
+        # the arithmetic, named (defects 2a/2d). ROW deadline: the
+        # engine's published lock-wait (OPEN_LOCK_TIMEOUT - the
+        # worst a wedged SIBLING open may honestly make it) + the
+        # frame budget + margin; the op joins against it, so a single
+        # wedged door (which HOLDS the device-tree lock while it
+        # hangs, silencing every row queued behind it) is caught at
+        # its own deadline, not the board's. BOARD deadline: the SUM
+        # of every budget (opens serialize: n rows × one full
+        # lock-wait each, the frame budget is the one shared tail -
+        # the boot scan's own bound, inherited whole) + margin. Past
+        # the board deadline every un-settled row draws dead and the
+        # OK button appears regardless of what the driver is still
+        # chewing on (defect 2c).
+        lock_wait = float(getattr(camera, "OPEN_LOCK_TIMEOUT", 30.0))
+        row_deadline = lock_wait + FRAME_BUDGET + MARGIN_SEC
+        self._deadline_at = (time.monotonic()
+                             + max(1, n) * (lock_wait + FRAME_BUDGET)
+                             + MARGIN_SEC)
+        self._results.put(("board", None, n))
 
         def one(row):
             # the both-ends discipline of the wave's probe: the card
-            # spawns on the SETTLE, so the k-of-n never lies
-            cam = None
-            try:
-                if row["group"] is not None:
-                    cam = camera.HelloIrCamera(group=row["group"],
-                                               warmup=2)
-                else:
-                    cam = camera.Camera(
-                        index=row["idx"], warmup=2,
-                        width=int(cfg_cam.get("width", 1280)),
-                        height=int(cfg_cam.get("height", 720)))
-                frame = cam.read(timeout=FRAME_BUDGET, screen=0)
-                if frame is None:
-                    self._results.put(("noimg", row, None))
-                else:
-                    self._results.put(("ok", row, frame))
-            except Exception as err:
-                self._results.put(("error", row, type(err).__name__))
-            finally:
-                if cam is not None:
-                    try:
-                        cam.release()
-                    except Exception:
-                        pass
+            # spawns on the SETTLE, so the k-of-n never lies - and
+            # the beat lands BEFORE the op touches a door, so the
+            # veil can name the stall while it lives (defect 2b)
+            self._results.put(("probing", row, None))
+            box = []
+
+            def op():
+                cam = None
+                try:
+                    if row["group"] is not None:
+                        cam = camera.HelloIrCamera(group=row["group"],
+                                                   warmup=2)
+                    else:
+                        cam = camera.Camera(
+                            index=row["idx"], warmup=2,
+                            width=int(cfg_cam.get("width", 1280)),
+                            height=int(cfg_cam.get("height", 720)))
+                    frame = cam.read(timeout=FRAME_BUDGET, screen=0)
+                    if frame is None:
+                        box.append(("noimg", None))
+                    else:
+                        box.append(("ok", frame))
+                except Exception as err:
+                    box.append(("error", type(err).__name__))
+                finally:
+                    if cam is not None:
+                        try:
+                            cam.release()
+                        except Exception:
+                            pass
+
+            t = threading.Thread(target=op, daemon=True,
+                                 name="assign-op-%s" % row["key"])
+            t.start()
+            t.join(row_deadline)
+            if box:
+                kind, payload = box[0]
+            else:
+                # the join outlived the op: drawn dead now (the
+                # honest verdict), not counted by the board deadline
+                # later - the abandoned daemon keeps its wedged
+                # driver handle and dies with the process, the
+                # measured cost of pulling a foot off a train
+                kind, payload = "error", "stalled"
+            self._results.put((kind, row, payload))
         try:
             with cf.ThreadPoolExecutor(
                     max_workers=min(8, max(1, len(rows)))) as ex:
@@ -354,24 +458,84 @@ class SetupWindow(ctk.CTkToplevel):
                     kind, row, payload = self._results.get_nowait()
                 except queue.Empty:
                     break
+                if kind == "board":
+                    self._total = payload
+                    self._board_seen = True
+                    if not payload:
+                        # the empty board is a SETTLED board (defect
+                        # 2c): OK appears now, not when a settle
+                        # arrives that will never come
+                        self._close_board()
+                    continue
+                if kind == "probing":
+                    self._started.append(row["key"])
+                    continue
+                if row["key"] in self._settled:
+                    continue                       # dead-and-late:
+                    # the first verdict owns the card (a row the
+                    # watchdog drew dead stays dead - the rescan is
+                    # its second chance, not this dialog's problem)
+                self._settled.add(row["key"])
                 self._add_card(row,
                                None if kind == "ok" else payload,
                                payload if kind == "ok" else None)
                 self._done += 1
-                if self._done < self._total:
-                    self.veil.configure(
-                        text="testing cameras... (%d of %d)"
-                             % (self._done, self._total))
+                if self._done >= self._total:
+                    self._close_board()
+            if not self._board_done:
+                if time.monotonic() >= self._deadline_at:
+                    # the dialog-level dead-man (defect 2d): the sum
+                    # of all budgets passed and the board is still
+                    # open - whatever has not reported is DEAD, and
+                    # saying so is the dialog's job, not the driver's
+                    log.warning("setup watchdog: %d of %d rows never "
+                                "reported - drawing them dead",
+                                self._total - self._done, self._total)
+                    self._close_board()
                 else:
-                    self.veil.configure(text="done")
-                    self.ok_button.pack(side="left")
-                    self.rerun_note.pack(side="right")
+                    if self._board_seen:
+                        # before the board event there is no honest
+                        # count to paint (a 0-of-0 would read
+                        # "done" mid-enumerate): the veil keeps its
+                        # build text until the count lands
+                        self.veil.configure(text=self._progress())
         except Exception:
             log.exception("setup pump failed; the loop goes on")
         try:
             self.after(60, self._pump)
         except Exception:
             pass
+
+    def _progress(self):
+        """The veil's live line (defect 2b): settled count, then the
+        row that knocked FIRST and has not been answered - the
+        stall's name, read off the beat order - and how many sit
+        behind it. Pure veil_text does the dressing."""
+        prober = next((r for r in self._rows
+                       if r["key"] in self._started
+                       and r["key"] not in self._settled), None)
+        waiting = max(0, self._total - self._done - (1 if prober else 0))
+        return veil_text(self._done, self._total,
+                         row_label(prober) if prober else None, waiting)
+
+    def _close_board(self):
+        """One board close, every ending (defect 2c): the last settle,
+        the dead-man deadline, and the empty board all land here.
+        Un-reported rows are drawn DEAD first - the owner must see
+        the seat the driver ate, not count cards and wonder - then
+        the veil settles and the OK button appears REGARDLESS: a
+        hung door may not eat the exit."""
+        if self._board_done:
+            return
+        for row in self._rows:
+            if row["key"] not in self._settled:
+                self._settled.add(row["key"])
+                self._add_card(row, "stalled", None)
+                self._done += 1
+        self._board_done = True
+        self.veil.configure(text="done")
+        self.ok_button.pack(side="left")
+        self.rerun_note.pack(side="right")
 
     def _add_card(self, row, error, frame):
         spec = card_spec(row, frame is None, self.app.cfg["camera"])
@@ -491,6 +655,20 @@ class SetupWindow(ctk.CTkToplevel):
         if self._dying:
             return
         self._dying = True
+        # EVERY exit re-syncs the detection tab, unconditionally
+        # (owner UAT defect 3): X, OK and the skin rebuild all ride
+        # this one function, and the tab must never keep wearing the
+        # click that opened this window. enabled is the state loop's
+        # key (OK posts it, the loop writes it, the (cameras, None)
+        # round-trip repaints it) - a close that never completed
+        # consent leaves the truth OFF, and the resync paints exactly
+        # that: switch back to the key, note up, gray-out re-derived.
+        # Inside the guard, so an X+OK burst retires ONCE and resyncs
+        # ONCE (the Spy pin); the hasattr is the test seam (the Spy
+        # app is a bare stub), not a behavior gate.
+        resync = getattr(self.app, "_sync_consent_switch", None)
+        if resync is not None:
+            resync()
         self.withdraw()
         try:
             self.after(0, self.destroy)
