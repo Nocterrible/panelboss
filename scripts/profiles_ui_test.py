@@ -22,6 +22,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from panelboss import config
 from panelboss import profiles as PF
 from panelboss import wm as WM
+from panelboss.wm import _displaycfg as DC    # the fake speaks the
+#                                       engine's REAL refusal words (Oct 14)
 
 cfg = config.get_config(verbose=False)
 
@@ -314,11 +316,125 @@ def check():
         app.update_idletasks()
         print("[PASS] create-now yields one loadable default-filled card")
 
+        # 8c) THE LOUD LAYOUT REFUSAL (the loud-voice wave's visible-
+        #     voice pin, scaffolded on 8b-RAISE: swap the fake, drive
+        #     the REAL handler, restore after the outcome). The chain
+        #     lives in check_8c below - THE PUMP LAW it obeys (why an
+        #     update()-poll cannot watch a worker's marshaled done())
+        #     is documented there.
+        app.after(0, check_8c)
+    except tk.TclError as why:
+        if not _done:
+            # Oct 12 audit, the silent partial: RDP artifact OR a
+            # real mid-chain window failure - until every functional
+            # assert has run, a TclError is a FAILED, not a teardown
+            # story.
+            FAILED.append("check (TclError before the asserts "
+                          "finished: %s)" % str(why)[:60])
+            __import__("traceback").print_exc()
+        else:
+            # RDP artifact (measured Oct 11): CTk's destroy chain runs
+            # a winfo for its title-bar bookkeeping AFTER the
+            # interpreter died, and composition latency under remote
+            # desktop lets it lose the race; production never
+            # re-enters this path.
+            print("[teardown TclError tolerated: %s]" % str(why)[:60])
+    except Exception:
+        _fail("check")
+
+
+_S8 = {}                 # the 8c chain's ledger: swap ledger + balloons
+
+
+def _refusing_layout(entries):
+    """8c's fake, speaking the REAL refusal shape (the loud-voice
+    wave): the driver killed T1 (rc -1) and took T2 - the refusal line
+    addresses the dead panel by its profile SHORT with RC_WHY's human
+    word, exactly what _displaycfg emits, and the (False, lines)
+    answer is what profiles.py's sentence builder must parse."""
+    lines, dead = [], []
+    for e in entries:
+        rc = -1 if e["gdi"] == r"\\.\DISPLAY1" else 0
+        lines.append("enable %s %dx%d@%d -> %d" % (
+            e["gdi"], e.get("w") or 0, e.get("h") or 0,
+            e.get("rate") or 0, rc))
+        if rc:
+            dead.append(e)
+    lines.append("commit -> 0")
+    for e in dead:
+        # rc -1: the fake driver failed the switch on T1
+        lines.append("refused %s: %s (desk left partial)" % (
+            e.get("short") or e["gdi"], DC.RC_WHY[-1]))
+    return not dead, lines
+
+
+def check_8c():
+    """the visible-voice pin (the loud-voice wave) and the reason the
+    chain exists: the worker marshals done() with a cross-thread
+    after(), and the main thread must be PARKED in mainloop for the
+    marshal to land (measured Oct 14 on the pre-suite probe: an
+    update()-poll races it and loses it to "main thread is not in main
+    loop" - the frozen "reshaping..." label the probe caught). Every
+    hop re-arms until _prof_err shows or the 5 s bound (the packet's)
+    expires; the assertions and the former tail (sections 9/10) ride
+    the terminal hop."""
+    global _done
+    try:
+        if "t0" not in _S8:
+            _S8["real"] = WM.apply_layout
+            WM.apply_layout = _refusing_layout
+            _S8["balloons"] = []
+            fm.notifier = _S8["balloons"].append
+            app._profile_picked("captured")
+            app.update_idletasks()
+            app._profile_apply(False)   # the REAL verb, real worker
+            _S8["t0"] = time.time()
+            app.after(20, check_8c)
+            return
+        if not getattr(app, "_prof_err", False) and \
+                time.time() - _S8["t0"] < 5.0:
+            app.after(20, check_8c)     # park; let done() land
+            return
+        assert getattr(app, "_prof_err", False), \
+            "the refusal never armed the pane's voice (5 s bound)"
+        WM.apply_layout = _S8["real"]   # the worker delivered - it is
+        #                                done with the fake: restore first
+        app.update()                    # fresh geometry for the asserts
+        _lbl = str(app._status_lbl.cget("text"))
+        assert "layout refused" in _lbl and "refused T1" in _lbl, _lbl
+        assert str(app._status_lbl.cget("text_color")).lower() == \
+            app.skin.danger.lower(), app._status_lbl.cget("text_color")
+        # THE GAZE GEOMETRY (the packet's regression pin against re-
+        # basementing): the voice's top edge may sit at most one field
+        # step under the apply buttons' bottom edge - the literal
+        # "root-y ABOVE the button's bottom" cannot hold for a label
+        # packed BELOW the button (the create-new precedent it cites
+        # packs S_FIELD under; the probe measured the gap at 4 px),
+        # and a re-basementing drops the voice a whole section down.
+        _btn = app._apply_btns[0]
+        _gap = app._status_lbl.winfo_rooty() - (
+            _btn.winfo_rooty() + _btn.winfo_height())
+        assert _gap <= 50, \
+            "the refusal voice sits %d px under the apply buttons - " \
+            "re-basemented off the gaze" % _gap
+        assert len(_S8["balloons"]) == 1, _S8["balloons"]  # exactly one
+        assert _S8["balloons"][0].startswith("profile 'captured': "
+                                             "layout refused"), \
+            _S8["balloons"][0]
+        assert "refused T1" in _S8["balloons"][0], _S8["balloons"][0]
+        # the shout is per-outcome: picking another profile calms it
+        app._profile_picked("profile-1")
+        app.update_idletasks()
+        assert app._prof_err is False, "the danger outlived its outcome"
+        print("[PASS] layout refusal shouts at the gaze (danger label, "
+              "gaze geometry, exactly one addressed balloon)")
+
         # 9) owner sketch (Oct 12): the tab is TWO columns side by
         #    side - whole-desktop profiles + restore on the left,
         #    the pin half on the right. The check runs from an
-        #    after() callback INSIDE mainloop, so the window is
-        #    mapped; one full event pass makes that certain anyway.
+        #    after() callback INSIDE mainloop (the 8c chain's hops
+        #    park there too), so the window is mapped; one full event
+        #    pass makes that certain anyway.
         app.update()
         assert app._prof_left.winfo_manager() == "pack", \
             app._prof_left.winfo_manager()
@@ -378,7 +494,7 @@ def check():
             # real mid-chain window failure - until every functional
             # assert has run, a TclError is a FAILED, not a teardown
             # story.
-            FAILED.append("check (TclError before the asserts "
+            FAILED.append("check_8c (TclError before the asserts "
                           "finished: %s)" % str(why)[:60])
             __import__("traceback").print_exc()
         else:
@@ -389,7 +505,7 @@ def check():
             # re-enters this path.
             print("[teardown TclError tolerated: %s]" % str(why)[:60])
     except Exception:
-        _fail("check")
+        _fail("check_8c")
 
 
 def _watchdog():
