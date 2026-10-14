@@ -135,6 +135,17 @@ def load(dir=None):
                             "at index %d (needs a dict with 'id')",
                             name, i)
                 prof["displays"][i] = None
+            elif "hdr" in d and d["hdr"] not in (True, False, None):
+                # the per-display color ask (amendment 8): the key
+                # carries exactly three answers - true, false, or
+                # null for hands off, which is also the default. A
+                # hand-edit that names none of them lands on hands
+                # off (never on a surprise toggle) with its name in
+                # the debug log
+                log.debug("profile '%s': display %s hdr=%r is not a "
+                          "tri-state; reading hands off", name,
+                          d.get("id"), d["hdr"])
+                d["hdr"] = None
         prof["displays"] = [d for d in prof["displays"]
                             if d is not None]
         for i, w in enumerate(prof["wins"]):

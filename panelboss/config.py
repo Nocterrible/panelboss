@@ -202,8 +202,33 @@ DEFAULTS = {
                                  # its max) or a number; unset means auto
         "desktop_hz": {},        # monitor short -> the rate the panel gets
                                  # back when no game owns it; unset means 60
+        # the DESKTOP-COLOR lever (amendment 8, the power-options side):
+        # monitor short -> true/false, the HDR state the panel wears
+        # when nobody games - applied by the same desktop pass that
+        # returns the desktop rate. An ABSENT entry (or "keep" in the
+        # menu) is the absence of a rule, never a false: the owner's
+        # color state is nobody's business unless they set this
+        "hdr": {},
         "power_plan": "",        # name fragment or guid swapped in when a
                                  # game starts ('' = hands off the plan)
+    },
+    # the auto-switch tiers (amendment 8): per PHYSICAL PANEL, keyed
+    # by the same EDID model identity the profiles use (slots shuffle,
+    # the model does not). Default empty = every panel "off" - the
+    # default-off law: nothing here may surprise a virgin boot. The
+    # watcher that acts on these lives in state/_hdrwatch.py
+    "hdr": {
+        "auto": {},              # model -> "off"|"video"|"content":
+                                 # video = PDH video-engine activity
+                                 # (a decoder is playing something);
+                                 # content = the mpv pipe says the
+                                 # playing video IS HDR (bt.2020+PQ)
+        "mpv_pipe": r"\\.\pipe\mpv-video",   # the player-ipc probe
+                                 # target (the string is pinned equal
+                                 # to _videostats.MPV_PIPE_DEFAULT in
+                                 # the offline suite - one truth); an
+                                 # mpv started --input-ipc-server=
+                                 # <this> answers video-params
     },
     "tweaks": {
         "fso_apps": [],          # full exe paths that get fullscreen
@@ -287,6 +312,13 @@ NORMALIZE_RULES = (
     ("camera", "shown", "listtype", []),
     ("camera", "bindings", "dicttype", {}),
     ("camera", "diag", "dicttype", {}),
+    # the amendment 8 maps: per-monitor color state (gaming.hdr: real
+    # booleans - TOML has no null, so "keep" is the ABSENCE of a key,
+    # never a written false-lie) and the auto tiers (hdr.auto: an
+    # absent model reads as the law's default, off; a present value
+    # must name one of the tiers, case-insensitive on the way in)
+    ("gaming", "hdr", "boolmap", {}),
+    ("hdr", "auto", "tiermap", {}),
 )
 
 
@@ -351,6 +383,41 @@ def _coerce(value, rule, stock):
             # every entry was bad: one warning for the whole map, and
             # the stock empty map stands in
             log.warning("config [%s].%s: no usable rates left after "
+                        "cleaning; using the stock empty map",
+                        section, key)
+            return True, copy.deepcopy(stock), ""
+        return True, cleaned, ""
+    if kind in ("boolmap", "tiermap"):
+        # the amendment 8 per-monitor maps, same cleaning law as
+        # hzmap: a junk map goes to stock with a warning, a bad
+        # ENTRY is dropped by name and the survivors stay. boolmap
+        # values are real booleans only (a written "true"/"yes"
+        # string is a hand-edit someone must mean loudly - dropped);
+        # tiermap values are the three tier words.
+        if value is None:
+            return True, None, ""
+        if not isinstance(value, dict):
+            return False, copy.deepcopy(stock), "not a monitor map"
+        if not value:
+            return True, value, ""     # {} is legal: nothing claimed
+        cleaned = {}
+        for monitor, got in value.items():
+            if kind == "boolmap":
+                good = isinstance(got, bool)
+            else:
+                good = isinstance(got, str) \
+                    and got.strip().lower() in ("off", "video", "content")
+                if good:
+                    got = got.strip().lower()
+            if good:
+                cleaned[monitor] = got
+            else:
+                log.warning("config [%s].%s: dropping %s=%r (%s)",
+                            section, key, monitor, got,
+                            "must be true or false" if kind == "boolmap"
+                            else "must be off/video/content")
+        if not cleaned:
+            log.warning("config [%s].%s: no usable entries left after "
                         "cleaning; using the stock empty map",
                         section, key)
             return True, copy.deepcopy(stock), ""
