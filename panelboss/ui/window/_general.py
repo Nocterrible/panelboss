@@ -122,6 +122,17 @@ class _GeneralMixin:
         self._save()
 
 
+    def _sync_general_switches(self):
+        """Knob-lie belt (see _power._sync_power_switches): the two
+        truths this pane builds from - cfg and the Run key - painted
+        again at settled geometry. _startup_sync is the build's own
+        entry point (registry read, note re-set), reused verbatim."""
+        from ... import startup
+        self.min_switch.select() if self.cfg["ui"].get("start_minimized") \
+            else self.min_switch.deselect()
+        self._startup_sync(startup.enabled())
+
+
     def _open_log(self):
         try:
             os.startfile(config.LOG_DIR)

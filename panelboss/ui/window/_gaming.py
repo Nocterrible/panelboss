@@ -1,6 +1,7 @@
 """Gaming refresh-rate section of the power plan tab.
-Size law (measured 368, Oct 13 - the claim includes its own
-lines; the amendment-8 color selector added the last thirty): the
+Size law (measured 384, Oct 13 - the claim includes its own
+lines; the knob-lie sync entry added the last sixteen, the
+amendment-8 color selector the thirty before): the
 card, its commits and the
 exe browse are one story read top-to-bottom when a rate or a list
 misbehaves; the pure list/commit helpers could split, but the
@@ -214,6 +215,22 @@ class _GamingMixin:
 
 
     # ------------------------------------------------------------ gaming ---
+    def _sync_gaming_switches(self):
+        """Knob-lie belt (see _power._sync_power_switches): the enable
+        switch from cfg, the DVR row from the registry - the truths
+        their builds read, painted again at settled geometry."""
+        import tkinter as tk
+        self.gaming_switch.select() if self.cfg["gaming"].get("enabled") \
+            else self.gaming_switch.deselect()
+        from ... import tweaks
+        for tid, sw in getattr(self, "dvr_switches", {}).items():
+            try:
+                sw.select() if tweaks.is_on(tid) else sw.deselect()
+            except tk.TclError:
+                pass                        # mid-swap: a dead view dies,
+                                            # the truth survives the rebuild
+
+
     def _gaming_changed(self):
         # cfg["gaming"] IS the watcher's gcfg: the loop re-reads it
         # every tick, so writing is applying

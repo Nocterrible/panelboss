@@ -1,8 +1,9 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
 
-SIZE LAW: measured 413 (Oct 13 - the checkbox's both-branch paint
-landed here; the claim had drifted from ~360, corrected in-commit).
+SIZE LAW: measured 432 (Oct 13 - the checkbox's both-branch paint
+and the knob-lie sync entry landed here; the claim had drifted from
+~360, corrected in-commit).
 These are the pane's five section fills plus the
 row builder - one story (what a section looks like when painted),
 split from the VERBS (_prof_pins.py) that mutate them in place, and
@@ -222,6 +223,23 @@ class _EditorMixin:
                           command=self._pin_cancel,
                           **self.skin.secondary()).pack(side="left",
                                                         padx=(6, 0))
+
+
+    # ----------------------------------------------------------- repaint --
+    def _sync_editor_switches(self):
+        """Knob-lie belt (see _power._sync_power_switches): the open-
+        wish box from the editor's own dict - the truth _fill_editor
+        reads. The pane's swap discipline owns the widget slot, so a
+        stale reference is a miss, not an error: the fresh fill paints
+        from the same dict."""
+        ed = getattr(self, "_pin_edit", None)
+        box = getattr(self, "pin_open_box", None)
+        if ed is None or box is None:
+            return
+        try:
+            box.select() if ed["open"] else box.deselect()
+        except Exception:
+            pass                            # destroyed row: harmless
 
 
     def _fill_pins(self):

@@ -39,10 +39,15 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
                                     # eat the board (offline fake cv2)
     'w2c_probe.py', 'w3b_probe.py', 'w3c_probe.py',
     'daemon_confess_probe.py',
-    'ctkimg_probe.py'                 # the wizard-preview freeze's
+    'ctkimg_probe.py',                # the wizard-preview freeze's
                                       # net (UAT find, Oct 13): a
                                       # probe that runs only when
                                       # remembered is a rumor
+    'switch_geom_probe.py'            # the knob-lie family's geometry
+                                      # pin (owner's bar-was-on catch,
+                                      # Oct 13 night): truth switches
+                                      # repaint after they know their
+                                      # size; app-up compatible
 $dir = Join-Path $root "scripts"
 # ledger 16: the log must be attributable - tip stamp at the head,
 # and DIRTY when the tested worktree differs from it (a stamp that

@@ -3,8 +3,9 @@ assistant, the Game DVR card, overrides viewer, hdr-while-away.
 The gaming rate section lives in _gaming.py beside it: it shares
 this tab's SECOND column (Oct 12, owner: the gaming cards moved
 right) but trades monitor rates, not powercfg flags.
-Size law (measured 479, Oct 13 after the widget-blind family's
-both-branch paint landed - the two-column split and the defect-2
+Size law (measured 510, Oct 13 after the widget-blind family's
+both-branch paint and the knob-lie sync entry landed - the
+two-column split and the defect-2
 knob-from-truth paint came before it): this
 is ONE page's paint-and-refresh
 routine; splitting the cards across files would scatter the tab's
@@ -477,4 +478,34 @@ class _PowerMixin:
                 self.ui_events.put(("assistant_ui", (bool(
                     self.cfg["power"]["assistant_task"]), gen)))
         threading.Thread(target=work, daemon=True).start()
+
+
+    # --------------------------------------------------- repaint on show --
+    def _sync_power_switches(self):
+        """THE KNOB-LIE BELT (second corpse, the owner's bar-was-on
+        catch): a CTkSwitch painted while its window is WITHDRAWN
+        drew its knob at the geometry of a widget that did not know
+        its size yet; the track color told the truth, the knob did
+        not. Called on every window show and every power-tab reveal
+        (the _shell.SWITCH_SYNC dispatch reaches it by name) - the
+        select()/deselect() pair re-runs _draw at settled geometry,
+        fires no commands, and is diff-cheap. The assistant switch
+        repaints from the cfg flag: the consent law already owns
+        where the flag stands (a lying ON self-heals on the truth
+        beat), so the flag remains the honest state between beats."""
+        p = self.cfg["power"]
+        self.hold_display_switch.select() if p.get("hold_display") \
+            else self.hold_display_switch.deselect()
+        self.hold_sleep_switch.select() if p.get("hold_sleep") \
+            else self.hold_sleep_switch.deselect()
+        self.restore_switch.select() if p.get("restore_windows") \
+            else self.restore_switch.deselect()
+        self.hdr_away_switch.select() if bool(p.get("hdr_off_when_away")) \
+            else self.hdr_away_switch.deselect()
+        self.fullscreen_switch.select() \
+            if self.cfg["guards"]["fullscreen"] \
+            else self.fullscreen_switch.deselect()
+        self.power_switch.select() if p["assistant_task"] \
+            else self.power_switch.deselect()
+        self._assistant_ui(bool(p["assistant_task"]))
 

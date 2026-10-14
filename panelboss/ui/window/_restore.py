@@ -219,6 +219,17 @@ class _RestoreMixin:
                                              # back without this
 
 
+    # ----------------------------------------------------------- repaint --
+    def _sync_restore_switches(self):
+        """Knob-lie belt (see _power._sync_power_switches): the armed
+        lever from cfg truth. The section rebuilds with every render
+        anyway; this re-paints the CURRENT widget at settled geometry
+        when the pane was born hidden."""
+        rst = self.cfg.setdefault("restore", {})
+        self.restorep_switch.select() if rst.get("enabled") \
+            else self.restorep_switch.deselect()
+
+
     def _restorep_changed(self):
         on = bool(self.restorep_switch.get())
         self.cfg.setdefault("restore", {})["enabled"] = on

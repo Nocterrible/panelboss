@@ -21,9 +21,10 @@ Rules this file lives by:
 
 Skins come from theme.py; nothing here hardcodes a color.
 
-SIZE LAW: grandfathered, measured 713 (Oct 13, after the per-veil
-hold, the heartbeat re-lease, the _unveil leak-reset, and the
-consent-gated boot scan) -
+SIZE LAW: grandfathered, measured 770 (Oct 13, after the per-veil
+hold, the heartbeat re-lease, the _unveil leak-reset, the
+consent-gated boot scan, and the SWITCH_SYNC repaint seam the
+knob-lie family's second corpse cost) -
 window lifecycle, size recall, and
 the reveal-veil machinery are one story (how the window appears and
 remembers itself); the scroll hosts already live in _scroll.py and the
@@ -185,6 +186,57 @@ class SettingsWindow(
         else:
             self.deiconify()
             self.lift()
+        # knob-lie belt (second corpse, the owner's bar-was-on catch):
+        # every switch painted during this window's hidden birth drew
+        # its knob at zero geometry - the deferred resync re-arms the
+        # same truth paint once the map and its <Configure> have
+        # landed (see _repaint_switches; the probe pins the ordering).
+        self.after(0, self._repaint_switches)
+
+
+    # -------------------------------------------------- switch repaint --
+    # One dispatch table per PANE (the owner's law: the next switch
+    # added to the house joins for free by riding its pane's sync
+    # entry, never by remembering call sites). Values are method
+    # names; every entry paints BOTH branches from its truth source -
+    # cfg, the registry, the editor dict - and fires no commands.
+    SWITCH_SYNC = {
+        "detection": ("_sync_consent_switch",),
+        "monitor profiles": ("_sync_restore_switches",
+                             "_sync_editor_switches"),
+        "power plan": ("_sync_power_switches", "_sync_gaming_switches"),
+        "general": ("_sync_general_switches",),
+    }
+
+    def _repaint_switches(self, pane=None):
+        """Re-paint the truth switches at settled geometry. WHY: a
+        CTkSwitch drawn while its window is WITHDRAWN colors its track
+        honestly but leaves the knob at the zero-width position (the
+        owner's screenshot: green bar, knob left); select()/deselect()
+        re-runs the widget's own _draw - the geometry-honest order is
+        flush the pending layout (update_idletasks), then repaint,
+        and the call sites ride the seam that follows the map
+        (after(0) at show, the reveal itself at tab-switch) so the
+        window's <Configure> has landed first - pinned by
+        scripts/switch_geom_probe.py. Idempotent, command-free, and
+        missing panes (never built, or mid-swap) are a miss, not an
+        error: their truth still lands at build paint."""
+        if getattr(self, "_dying", False):
+            return
+        try:
+            self.update_idletasks()
+        except tk.TclError:
+            return                        # destroyed under the resync
+        for key in ((pane,) if pane else tuple(self.SWITCH_SYNC)):
+            for name in self.SWITCH_SYNC.get(key, ()):
+                fn = getattr(self, name, None)
+                if fn is None:
+                    continue
+                try:
+                    fn()
+                except Exception:
+                    log.debug("switch repaint %s missed (pane %s)",
+                              name, key)
 
 
     # ------------------------------------------------------------- build --
@@ -261,6 +313,11 @@ class SettingsWindow(
         for k, b in self.tab_buttons.items():
             b.configure(**(self.skin.primary() if k == key
                           else self.skin.secondary()))
+        # knob-lie belt, pane arm: the reveal re-paints this pane's
+        # truth switches (their build paint may have happened hidden;
+        # a switch's geometry cannot lie twice under the eye that
+        # reads it - the same table as the show path, scoped here)
+        self._repaint_switches(pane=key)
 
 
     def rebuild_for_skin(self):
