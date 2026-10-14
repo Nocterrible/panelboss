@@ -1,7 +1,9 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
 
-SIZE LAW: measured 482 lines (Oct 14 freeze-fix wave recount -
+SIZE LAW: measured 485 lines (Oct 14 gate finding 1: the claim
+lied by two at the blob; the byte-count is the ruler and the
+claim includes its own rewrite - recount at every touch,
 the hdr-walk arm took the wake walk off the pump; the loud-voice
 412 (same day) moved the status label to the gaze; the Oct-12 +36
 header-trust lesson both restatements were born for stands). The
@@ -473,6 +475,8 @@ class _ProfilesMixin:
             try:
                 self.ui_events.put(("hdr_data", payload))
             except Exception:
+                self._hdr_walk = None     # gate finding 2: a lost post
+                                          # must not arm the guard forever
                 log.debug("hdr_data post lost (window closed?)",
                           exc_info=True)
         t = threading.Thread(target=walk, name="hdr-walk", daemon=True)
