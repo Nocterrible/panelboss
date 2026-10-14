@@ -3,8 +3,9 @@ assistant, the Game DVR card, overrides viewer, hdr-while-away.
 The gaming rate section lives in _gaming.py beside it: it shares
 this tab's SECOND column (Oct 12, owner: the gaming cards moved
 right) but trades monitor rates, not powercfg flags.
-Size law (measured 449, Oct 13 after the two-column split and the
-defect-2 knob-from-truth paint): this
+Size law (measured 479, Oct 13 after the widget-blind family's
+both-branch paint landed - the two-column split and the defect-2
+knob-from-truth paint came before it): this
 is ONE page's paint-and-refresh
 routine; splitting the cards across files would scatter the tab's
 ordering lessons for zero readability the window/ split already
@@ -55,8 +56,16 @@ class _PowerMixin:
                                                  command=self._hold_changed,
                                                  **self.skin.switch_style())
         self.hold_display_switch.grid(row=0, column=1, sticky="e")
+        # knob-from-truth, BOTH branches (the _sync_consent_switch /
+        # dd42d43 idiom, now the whole house's law): painting only
+        # select() on the True case lets the false case ride the
+        # widget's build default instead of the config - a fresh CTk
+        # is off by accident, and the owner's afternoon of catching
+        # widget-blind paints proved accidents do not survive reuse.
         if self.cfg["power"].get("hold_display"):
             self.hold_display_switch.select()
+        else:
+            self.hold_display_switch.deselect()
         row = self._row(box, "sleep", TIPS["hold_sleep"])
         self.hold_sleep_switch = ctk.CTkSwitch(row, text="",
                                                font=self.skin.font(12),
@@ -65,6 +74,8 @@ class _PowerMixin:
         self.hold_sleep_switch.grid(row=0, column=1, sticky="e")
         if self.cfg["power"].get("hold_sleep"):
             self.hold_sleep_switch.select()
+        else:
+            self.hold_sleep_switch.deselect()
 
         box = self._card(col, "when the screens wake on their own")
         row = self._row(box, "unexpected wake", TIPS["wake"])
@@ -86,6 +97,8 @@ class _PowerMixin:
         self.fullscreen_switch.grid(row=0, column=1, sticky="e")
         if self.cfg["guards"]["fullscreen"]:
             self.fullscreen_switch.select()
+        else:
+            self.fullscreen_switch.deselect()
         row = self._row(box, "auto re-off", TIPS["reoff"])
         self.reoff_label = ctk.CTkLabel(row, text="on",
                                         font=self.skin.font(12),
@@ -106,6 +119,8 @@ class _PowerMixin:
         self.restore_switch.grid(row=0, column=1, sticky="e")
         if self.cfg["power"].get("restore_windows"):
             self.restore_switch.select()
+        else:
+            self.restore_switch.deselect()
 
         # the UAC shield before the assistant label is the honest hint
         # that ticking it means one admin confirm (drawn to match the
@@ -139,8 +154,22 @@ class _PowerMixin:
         self.power_switch.bind(
             "<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
         self._hint(cell, TIPS["assistant"])
+        # THE RECONCILED SWITCH (the ruling the E2 ledger owed): the
+        # truth thread below asks the task store once per build and
+        # posts the answer; both branches now paint from cfg, so the
+        # lie window is EXACTLY one truth beat: typical ~1 s
+        # (schtasks /Query), doubt-loop worst ~12 s (3 reads x ~2 s
+        # + 2 x 2 s sleeps), measured 3.4 s on this box (22:47:34
+        # boot -> 22:47:37 truth line). A lying ON self-heals OFF
+        # within that beat; the wave-B consent law keeps a stray task
+        # from ever lighting an OFF switch (flag is consent). After
+        # the beat the switch is store-honest until a click re-enters
+        # the install/uninstall verify-poll (disabled + msg line,
+        # 2 s cadence, 180 s human budget).
         if self.cfg["power"]["assistant_task"]:
             self.power_switch.select()
+        else:
+            self.power_switch.deselect()
         # the blockers report: the red lines are the apps that actually
         # hold the display (they pause the camera); everything else is
         # news. Scrollable: a crowded report never overflows the card.
@@ -206,6 +235,8 @@ class _PowerMixin:
         self.hdr_away_switch.grid(row=0, column=1, sticky="e")
         if bool(self.cfg["power"].get("hdr_off_when_away")):
             self.hdr_away_switch.select()
+        else:
+            self.hdr_away_switch.deselect()
         self._gaming_section(col2)      # column two (owner request)
         self._dvr_section(col2)
 

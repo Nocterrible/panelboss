@@ -1,7 +1,9 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
 
-SIZE LAW: ~360. These are the pane's five section fills plus the
+SIZE LAW: measured 413 (Oct 13 - the checkbox's both-branch paint
+landed here; the claim had drifted from ~360, corrected in-commit).
+These are the pane's five section fills plus the
 row builder - one story (what a section looks like when painted),
 split from the VERBS (_prof_pins.py) that mutate them in place, and
 from the row-flow helper (_PinMixin._pin_cols) the two pin lists
@@ -128,8 +130,15 @@ class _EditorMixin:
                                             fg_color=self.skin.accent,
                                             hover_color=self.skin.accent)
         self.pin_open_box.grid(row=0, column=1, sticky="e")
+        # knob-from-truth, BOTH branches (the editor checkbox is the
+        # family's ninth member - caught in the same owner pass): the
+        # wish state comes from the editor's dict, and the false arm
+        # must paint, not lean on the fresh-widget default - the
+        # editor rebuilds on every _repaint("editor") swap.
         if ed["open"]:
             self.pin_open_box.select()
+        else:
+            self.pin_open_box.deselect()
 
         if ed["open"]:
             # the wish's advanced half: how long patience lasts,

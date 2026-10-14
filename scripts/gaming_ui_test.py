@@ -461,6 +461,58 @@ def check():
         finally:
             for t in _tog:
                 tweaks._put(_tog[t][1], _tog[t][2], _snap[t])
+        # 9b) THE REST OF THE SWITCH FAMILY (the widget-blind class the
+        #     owner personally caught): every knob the power/restore/
+        #     editor panes build must paint BOTH branches from cfg
+        #     truth - drive the REAL build both ways and read the knobs
+        #     back. cfg is the owner's live desk here (this suite
+        #     predates the scratch-dir wave): snapshot, drive, restore.
+        _ck = [(cfg["power"], k) for k in
+               ("hold_display", "hold_sleep", "restore_windows",
+                "hdr_off_when_away", "assistant_task")]
+        _ck.append((cfg["guards"], "fullscreen"))
+        _ck.append((cfg["restore"], "enabled"))
+        _snap_cfg = {(id(s), k): s.get(k) for s, k in _ck}
+        try:
+            for flip in (True, False):
+                cfg["power"]["hold_display"] = flip
+                cfg["power"]["hold_sleep"] = not flip
+                cfg["power"]["restore_windows"] = flip
+                cfg["power"]["hdr_off_when_away"] = not flip
+                cfg["guards"]["fullscreen"] = flip
+                cfg["power"]["assistant_task"] = not flip
+                cfg["gaming"]["enabled"] = flip
+                app._build_power(app.pages["power plan"].inner)
+                assert bool(app.hold_display_switch.get()) is flip, \
+                    "hold_display painted its default, not its cfg"
+                assert bool(app.hold_sleep_switch.get()) is (not flip), \
+                    "hold_sleep kept a stale ON"
+                assert bool(app.restore_switch.get()) is flip
+                assert bool(app.hdr_away_switch.get()) is (not flip)
+                assert bool(app.fullscreen_switch.get()) is flip
+                assert bool(app.power_switch.get()) is (not flip)
+                assert bool(app.gaming_switch.get()) is flip
+            # the profiles tab's lever + the editor's checkbox: same
+            # law, driven through their own rebuild seams
+            for flip in (True, False):
+                cfg["restore"]["enabled"] = flip
+                app._profiles_render()
+                assert bool(app.restorep_switch.get()) is flip, \
+                    "the armed lever betrays its origin"
+                app._pin_edit["open"] = flip
+                app._repaint("editor")
+                assert bool(app.pin_open_box.get()) is flip, \
+                    "the open-wish box paints half the story"
+            print("[PASS] power/restore/editor switches paint knob-from"
+                  "-truth both ways (the exterminated family)")
+        finally:
+            for s, k in _ck:
+                if _snap_cfg[(id(s), k)] is None:
+                    s.pop(k, None)
+                else:
+                    s[k] = _snap_cfg[(id(s), k)]
+            app._build_power(app.pages["power plan"].inner)
+            app._profiles_render()
         # 10) DESKTOP-HZ / GAME-HZ per panel SURVIVES a silent driver
         #     (defect 3): a panel whose driver lists no rates (the RDP
         #     session display, a cable mid-renegotiation) must still

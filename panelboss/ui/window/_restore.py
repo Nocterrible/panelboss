@@ -43,8 +43,15 @@ class _RestoreMixin:
                                              command=self._restorep_changed,
                                              **self.skin.switch_style())
         self.restorep_switch.grid(row=0, column=1, sticky="e")
+        # knob-from-truth, BOTH branches (the house law this wave
+        # finished): the false case paints explicitly, never rides
+        # the build default. The pane rebuilds with every render, and
+        # a reused build path without the else re-armed the stale-ON
+        # class the owner screenshotted.
         if rst.get("enabled"):
             self.restorep_switch.select()
+        else:
+            self.restorep_switch.deselect()
         row = self._row(parent, "which profile", TIPS["restore_profile"])
         armed = rst.get("profile") or "last"
         self.restorep_menu = SkewCombo(
