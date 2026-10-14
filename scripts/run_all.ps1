@@ -34,6 +34,9 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
     'camid_test.py', 'assign_test.py', 'camdiag_test.py', 'guard_test.py', 'config_norm_test.py',
     'virgin_boot_test.py', 'hdrwatch_test.py',
     'pinlifecycle_test.py', 'companions_test.py', 'camcore_probe.py',
+    'enumwatch_test.py',            # wave C: the enumeration's join
+                                    # watchdog - a wedged door may not
+                                    # eat the board (offline fake cv2)
     'w2c_probe.py', 'w3b_probe.py', 'w3c_probe.py',
     'daemon_confess_probe.py',
     'ctkimg_probe.py'                 # the wizard-preview freeze's

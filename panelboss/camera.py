@@ -11,7 +11,10 @@
   back open-yet-frozen forever (measured), so we never close across it,
   and any handle that stops delivering frames is released and reopened
 
-SIZE LAW: ~1000 lines, grandfathered - Camera (device+warmup) and the
+SIZE LAW: measured 1283 (Oct 13, wave C: the door-cycle join
+watchdog lives HERE, beside the lock it guards - a file across the
+seam could not hold the caller-must-hold-the-lock contract) -
+grandfathered ~1000 - Camera (device+warmup) and the
 Rotor (rotation+async opens) share the module-level _open_lock and the
 enumeration cache; splitting now buys two files that must re-declare
 that shared state. The known seam paid its first dividend Oct 12: the
@@ -56,6 +59,16 @@ OPEN_GRACE_SEC = 90
 # paths do not call enumerate; opens on the loop are the async
 # worker's, so the tick stall this admits is bounded and rare.
 OPEN_LOCK_TIMEOUT = 30.0
+
+# the join budget for ONE door cycle (wave C, the owner's third
+# virgin boot - the 18:33 fingerprint, byte-for-byte): lock + door +
+# margin, all three published constants: OPEN_LOCK_TIMEOUT is the
+# worst ACQUISITION wait, OPEN_GRACE_SEC is the engine's own ceiling
+# for a LEGITIMATE open ("double the worst real open measured"), and
+# the 5 mirrors the dialog's margin. Read at CALL time by everything
+# below - the suite shrinks it to watch the watchdog fire, which is
+# exactly what the patch proves (the camcore probe (c) doctrine).
+DOOR_BUDGET_SEC = OPEN_LOCK_TIMEOUT + OPEN_GRACE_SEC + 5.0
 
 # the NVIDIA virtual camera driver dies when two threads open devices
 # at the same time (measured: interprocess mutex timeout, then OpenCV
@@ -247,6 +260,61 @@ def _open_door(index, width=None, height=None):
     return cap, "auto"
 
 
+def _join_open(op, budget, what):
+    """THE join watchdog of the engine (owner UAT, wave C: the setup
+    screen re-hung at the byte-for-byte 18:33 fingerprint - one
+    MF-poisoned fallback door, and the whole enumeration vanished
+    with it because the per-index verb is a cv2 call the driver owns,
+    not the deadline loop). THE CALLER MUST HOLD _open_lock across
+    the call: the op touches the device tree under the caller's
+    shield (the RLock is thread-owned; re-acquiring it in the child
+    would deadlock against the join that waits for it). Returns
+    op()'s verdict, or None when the op outlived the budget - the
+    thread is ABANDONED (daemon), keeping its cap: the measured trade
+    wave A named at the dialog level and the c0000374 doctrine
+    already accepts for a wedged driver - you cannot pull a foot off
+    a train, but the BOARD can be pulled out of the station. A
+    stalled child's late release lands in the deferred queue via
+    _release_cap's own busy-check, exactly like every other
+    deferred let-go. THE SWEEP STOPS AT A STALL (callers below): a
+    second open running alongside the zombie is the two-threads
+    device-tree death this lock exists to prevent - measured, at the
+    top of this file - so the dead row is honest for THIS pass and
+    the next enumeration (or the rescan verb) re-asks the rest."""
+    box = []
+
+    def run():
+        try:
+            box.append(op())
+        except Exception:
+            box.append(None)               # the dead-open shape
+
+    t = threading.Thread(target=run, daemon=True,
+                         name="door-join-%s" % (what,))
+    t.start()
+    t.join(budget)
+    if box:
+        return box[0]
+    log.warning("door op for %s outlived its %.0f s join budget - "
+                "reported dead, the zombie keeps the handle",
+                what, budget)
+    return None
+
+
+def _open_probe(index):
+    """One index's enumeration verdict as data (wave C factoring, the
+    body the enumerate loop used to run inline): open, read the size,
+    let go THROUGH THE LOCK-HONEST PATH (_release_cap defers while a
+    foreign holder owns the tree instead of touching it unlocked -
+    and the parent's own _open_timed drains the queue on the way
+    out)."""
+    cap, door = _open_door(index)
+    try:
+        return (cap.isOpened(), cap.get(cv2.CAP_PROP_FRAME_WIDTH), door)
+    finally:
+        _release_cap(cap)
+
+
 def is_virtual_camera(instance):
     """True for software cameras (filters, not glass). The PnP instance
     namespace decides, no heuristics: physically-attached devices are
@@ -309,7 +377,11 @@ def enumerate_cameras(start=0, stop=8):
     truth, and an index only the auto door opens keeps its auto-door
     meaning because Camera falls back to auto FOR THAT INDEX ONLY.
     Such an index is logged ("MSMF-only; slow door") and still pays
-    MF's slowness - the device's cost, not the app's."""
+    MF's slowness - the device's cost, not the app's.
+
+    CANNOT HANG (wave C): each index's door cycle runs behind the
+    _join_open watchdog; a wedged driver answers the dead shape and
+    stops the sweep, it never swallows the board."""
     found = []
     for index in range(start, stop):
         with _open_timed() as got:       # one open at a time, but with a
@@ -318,10 +390,26 @@ def enumerate_cameras(start=0, stop=8):
                 continue                 # wedge the enumeration forever;
                 # the row takes the dead-probe shape (an unopened cap
                 # reports 0.0 too - cli.py:int() would frown at None)
-            cap, door = _open_door(index)
-            opened = cap.isOpened()
-            width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-            cap.release()
+            # wave C: the ACQUIRE deadline above bounds WAITING, not
+            # WORKING - a wedged fallback door blocks INSIDE the cv2
+            # verb (the 18:33 fingerprint: one "fell back to auto
+            # door" line, then forever), and the caller then never
+            # learns there were ever rows. The door cycle gets the
+            # same join watchdog the dialog's rows carry (DOOR_
+            # BUDGET_SEC, read live so the suite can shrink it): a
+            # stalled index answers the DEAD shape above, never an
+            # exception - and the sweep stops there (a second open
+            # alongside the zombie is the two-threads device-tree
+            # death this lock exists to prevent - measured, top of
+            # file), every later index taking this pass's dead shape
+            # honestly for the next enumeration or the rescan.
+            verdict = _join_open(lambda: _open_probe(index),
+                                 DOOR_BUDGET_SEC, "index %d" % index)
+            if verdict is None:
+                for rest in range(index, stop):
+                    found.append((rest, False, 0.0))
+                return found
+            opened, width, door = verdict
         if opened and door == "auto":
             # honest confession: could be a true MSMF-only device OR
             # one the default-size DSHOW probe could not serve (the
@@ -352,9 +440,18 @@ def find_camera(index=-1, name_contains=None, fallback=0):
         with _open_timed() as got:       # one open at a time, but with a
             if not got:                  # deadline: a hung holder must not
                 continue                 # wedge the whole find forever
-            cap, _door = _open_door(idx)
-            if cap.isOpened():
-                cap.release()
+            # wave C: the same join watchdog as the enumeration - the
+            # identical verb shape (open, probe, let go) gets the
+            # identical bound; a stalled door stops the FIND (the
+            # zombie owns the tree now, and the next candidate may
+            # not probe beside it - the measured two-threads death at
+            # the top of this file) and the search's own contract
+            # answers: RuntimeError, the privacy-settings confession.
+            verdict = _join_open(lambda: _open_probe(idx),
+                                 DOOR_BUDGET_SEC, "find %d" % idx)
+            if verdict is None:
+                break
+            if verdict[0]:
                 log.debug(f"camera {idx} opens cleanly")
                 return idx
     raise RuntimeError("no camera opened; check privacy settings")
@@ -652,7 +749,14 @@ def _device_tree(max_index=8):
 def _probe(index):
     """Is this index openable right now? Built through the module
     Camera so a test can swap in a fake; in production this is the
-    same one-shot open the real Camera does."""
+    same one-shot open the real Camera does. EXEMPT from the wave-C
+    join (owner packet, check-before-bound): this verb only runs at
+    duty-open time and only when name_contains is configured, and it
+    runs through Camera itself - whose duty path is already bounded
+    from OUTSIDE twice over (AsyncOpener's grace deadline and the
+    wave-A dialog join); a thread around THIS would wrap a thread in
+    a thread on every named load, and the packet's own law forbids
+    double-wrapping the poor open."""
     cam = Camera(index=index)
     try:
         return cam.is_open()
