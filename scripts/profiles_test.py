@@ -13,6 +13,8 @@ import types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from panelboss import profiles
+from panelboss.wm import _displaycfg as DC    # the fake must speak the
+#                                    engine's REAL refusal words (Oct 14)
 
 # 1) pin hits: how one saved seat recognises its live windows. A
 # process pin owns EVERY window of that app (the promise the UI
@@ -120,7 +122,13 @@ assert profiles.desk_mismatch(prof, [{"id": "MONITOR\\BBB"},
                                      {"id": "MONITOR\\AAA"}]) == ""
 s = profiles.desk_mismatch(prof, [{"id": "MONITOR\\CCC"}])
 assert "AAA" in s and "BBB" in s and "CCC" in s, s
-print("gate OK (identity set; swapped panel named both ways)")
+# THE GATE-SENTENCE SHORT-NAME LAW (the loud-voice wave): a panel the
+# profile knows is ADDRESSED BY ITS SHORT in the sentence the owner
+# reads; the raw \\.\-style id may speak only for strangers (the
+# unprofiled extra has no short, so it rides its id).
+assert "MONITOR\\AAA" not in s and "MONITOR\\BBB" not in s, s
+print("gate OK (identity set; swapped panel named both ways; panels "
+      "the profile knows addressed by short)")
 
 # 5) target fingerprint: order-proof, dark panels excluded
 t1 = profiles.target_fp([{"id": "B", "x": 0, "y": 0, "w": 9,
@@ -141,11 +149,15 @@ class FakeWM:
     """records every call the apply makes; the desk answers whatever
     fp list it is handed, one string per poll. hdr rows (the driver
     answers for 24H2+) are optional: none = the OS stays silent and
-    the apply must fall back to the belief path."""
+    the apply must fall back to the belief path. layout_ok is
+    tri-state (the loud-voice wave): True obeys, False kills every
+    panel, a list of gdies kills exactly those - the partial desk
+    the real engine produces daily."""
 
     def __init__(self, mons, fps, layout_ok=True, hdr=None):
         self.mons, self.fps = mons, list(fps)
-        self.layout_ok = layout_ok
+        self.dead = (set() if layout_ok is True else
+                     None if layout_ok is False else set(layout_ok))
         self.calls, self.entries = [], []
         self.pressed, self.placed, self.rescued = [], [], []
         self.hdr, self.sets = hdr or [], []
@@ -162,8 +174,27 @@ class FakeWM:
         self.entries = entries
         order = [e["gdi"] for e in entries]
         self.calls.append(("layout", order))
-        return self.layout_ok, (["skip all"] if self.layout_ok
-                                else ["refused 87"])
+        # THE REAL REFUSAL SHAPE (test-only-truth correction, Oct 14):
+        # the old fake answered ["refused 87"] - a line no version of
+        # the real engine can produce, so the sentence builder was
+        # pinned against a fiction and its lines[-1:] truncation hid
+        # behind it. The fake now speaks the engine's own dialect:
+        # enable rows carrying the driver's rc, one commit row, and a
+        # refusal line (short + RC_WHY's human word) per dead panel.
+        lines, refused = [], []
+        for e in entries:
+            rc = -1 if (self.dead is None or e["gdi"] in self.dead) else 0
+            lines.append("enable %s %dx%d@%d -> %d" % (
+                e["gdi"], e.get("w") or 0, e.get("h") or 0,
+                e.get("rate") or 0, rc))
+            if rc not in (0, 1):
+                refused.append((e.get("short") or e["gdi"],
+                                DC.RC_WHY.get(rc, "the driver answered %d"
+                                              % rc)))
+        lines.append("commit -> 0")
+        for who, why in refused:
+            lines.append("refused %s: %s (desk left partial)" % (who, why))
+        return not refused, lines
 
     def press_keys(self, combo):
         self.pressed.append(combo)
@@ -326,6 +357,32 @@ try:
     assert ok6 and "never confirmed" in say6, say6
     assert f6.pressed == [] and f6.sets == [(AAA["gdi"], True)]
 
+    # THE HDR REFUSAL ADDRESSED (the loud-voice wave): a color command
+    # the driver answers with words must speak the panel's PROFILE
+    # SHORT and quote the driver - the engine built the addressed shape
+    # ("hdr %s: %s" by short at the trouble site) but until the wave no
+    # scenario ever made the driver refuse, so the format was an
+    # unverified promise. Now it is pinned.
+    tmp6 = tempfile.mkdtemp()
+    profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
+                   "last": {}, "profiles": {"p": prof6}}, tmp6)
+
+    class MuteHDR(FakeWM):
+        def hdr_set(self, gdi, on):         # refuses in words
+            self.sets.append((gdi, on))
+            return ("this monitor cannot do HDR"
+                    if gdi == AAA["gdi"] else "")
+
+    f6 = MuteHDR(DESK, [TARGET], True,
+                 [{"gdi": AAA["gdi"], "supported": True,
+                   "state": "off"}])
+    profiles.wm = f6
+    ok6, say6, _info6 = profiles.apply(profiles.load(tmp6), "p",
+                                       dir=tmp6)
+    assert "hdr AAA: this monitor cannot do HDR" in say6, say6
+    assert "never confirmed" in say6, say6   # the refusal is not eaten
+    assert f6.sets == [(AAA["gdi"], True)], f6.sets
+
     # 6a2) THE EXPLICIT PER-PANEL COLOR ASK (amendment 8): a display's
     # true/false outranks the profile-wide ask AND snap (an
     # instruction beats a memory); the wide ask keeps running over
@@ -390,10 +447,27 @@ try:
     assert f6.placed, "best effort must still place windows"
     assert info6["no_shows"] == [], info6
 
-    # the driver refuses: no verify, no windows, honest sentence
+    # the driver refuses EVERY panel: no verify, no windows - and the
+    # sentence (loud-voice wave) names EVERY dead panel by its profile
+    # short and speaks the driver's rc in human words, not the last
+    # log line's number. No applied clause: nothing did apply.
     ok6, say6, f6, _, info6 = scenario([TARGET], ok=False)
     assert not ok6 and "layout refused" in say6 and not f6.placed
+    assert "refused AAA" in say6 and "refused BBB" in say6, say6
+    assert "the driver failed the switch" in say6, say6
+    assert r"\\.\DISPLAY" not in say6, say6      # short, never the slot
+    assert " - applied: " not in say6, say6
     assert info6.get("no_shows", []) == [], "refused apply chased windows"
+
+    # THE PARTIAL DESK (the loud-voice wave): AAA died, BBB took the
+    # mode - the sentence owes BOTH halves: WHAT refused (short + the
+    # human rc word) and WHAT DID apply, terse.
+    ok6, say6, f6, _, info6 = scenario([TARGET], ok=[AAA["gdi"]])
+    assert not ok6, say6
+    assert "layout refused" in say6 and "refused AAA" in say6, say6
+    assert "the driver failed the switch" in say6, say6
+    assert " - applied: " in say6 and BBB["gdi"] in say6, say6
+    assert not f6.placed, "a refused apply chased windows"
 
     # 6b) the open pin: a seat whose app is not running starts the
     # exe it saved (or the launcher the user browsed to), waits as

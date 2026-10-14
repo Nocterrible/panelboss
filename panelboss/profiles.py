@@ -811,8 +811,23 @@ def apply(data, name, best_effort=False, scope="full", login=False,
             for t in lines:
                 log.info("apply '%s': %s", name, t)
             if not ok:
-                return False, ("layout refused: " +
-                               "; ".join(lines[-1:])), {}
+                # CONTENT LAW (loud-voice wave): the sentence says
+                # WHAT REFUSED - every refusal line, the panel's
+                # short and the driver's human word - and, on a
+                # partial desk, WHAT DID apply (the enable rows the
+                # driver took). The old lines[-1:] truncation made a
+                # two-dead-panel desk name one of them.
+                refusals = [t for t in lines
+                            if t.startswith("refused ")]
+                applied = [t.partition(" -> ")[0][len("enable "):]
+                           for t in lines
+                           if t.startswith("enable ")
+                           and t.rpartition(" -> ")[2] in ("0", "1")]
+                say = "layout refused: " + "; ".join(
+                    refusals or lines[-1:])
+                if refusals and applied:
+                    say += " - applied: " + ", ".join(applied)
+                return False, say, {}
 
     # 3. HDR: ask the driver first. Where it answers precisely
     # (24H2+), command only the monitors that disagree, then READ

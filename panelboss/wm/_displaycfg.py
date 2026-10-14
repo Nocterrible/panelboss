@@ -34,6 +34,17 @@ DM_DISPLAYFREQUENCY = 0x400000
 DISP_CHANGE_SUCCESSFUL = 0
 DISP_CHANGE_RESTART = 1
 
+# A refusal the user cannot read is silence with extra steps (the
+# loud-voice wave, Oct 14): ChangeDisplaySettingsExW's error codes,
+# in human words. An unmapped rc still speaks its number - the fall-
+# through string is the belt, the map is the voice.
+RC_WHY = {-1: "the driver failed the switch",
+          -2: "the driver does not offer that mode",
+          -3: "the registry could not be written",
+          -4: "the request carried bad flags",
+          -5: "the request carried bad params",
+          -6: "dualview forbids the change"}
+
 u32.ChangeDisplaySettingsExW.argtypes = [
     ctypes.c_wchar_p, ctypes.POINTER(DEVMODEW), ctypes.c_void_p,
     wintypes.DWORD, ctypes.c_void_p]
@@ -146,14 +157,15 @@ def apply_layout(entries):
     pend = [e for e in wanted if not already(e["gdi"], True)]
     order = [e for e in pend if e["gdi"] != primary] + \
             [e for e in pend if e["gdi"] == primary]
-    refused = []          # (gdi, why): a device the desk will not take
+    refused = []   # (name, why): a device the desk will not take -
+    #                named by the profile short when the entry has one
     for e in order:
         dm = current_mode(e["gdi"])
         if dm is None:
             # The banner's measured shape: a fresh DEVMODEW carries an
             # empty dmDeviceName and every request off it answers -2,
             # so the refusal is named BEFORE any staging.
-            refused.append((e["gdi"], "no current mode"))
+            refused.append((e.get("short") or e["gdi"], "no current mode"))
             lines.append("refuse %s: no current mode (an empty DEVMODEW "
                          "answers -2)" % e["gdi"])
             continue
@@ -179,7 +191,8 @@ def apply_layout(entries):
         lines.append("enable %s %dx%d@%d -> %d" % (
             e["gdi"], e["w"], e["h"], e.get("rate") or 0, rc))
         if rc not in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART):
-            refused.append((e["gdi"], "the driver answered %d" % rc))
+            refused.append((e.get("short") or e["gdi"],
+                            RC_WHY.get(rc, "the driver answered %d" % rc)))
     for e in disabled:
         if already(e["gdi"], False):
             continue
@@ -193,10 +206,11 @@ def apply_layout(entries):
                                           | CDS_NORESET, None)
         lines.append("disable %s -> %d" % (e["gdi"], rc))
         if rc not in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART):
-            refused.append((e["gdi"], "the driver answered %d" % rc))
+            refused.append((e.get("short") or e["gdi"],
+                            RC_WHY.get(rc, "the driver answered %d" % rc)))
     rc = u32.ChangeDisplaySettingsExW(None, None, None, 0, None)
     lines.append("commit -> %d" % rc)
-    for gdi, why in refused:
-        lines.append("refused %s: %s (desk left partial)" % (gdi, why))
+    for who, why in refused:
+        lines.append("refused %s: %s (desk left partial)" % (who, why))
     ok = rc in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART)
     return ok and not refused, lines
