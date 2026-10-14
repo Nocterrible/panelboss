@@ -73,24 +73,33 @@ class FakeOverlay:
 
 
 class FakeHookU32:
-    """Records the LL-hook trio (install/unhook/next) and passes every
-    other user32 call to the real library - the lifecycle pin touches
-    ONLY the trio, and so may only shadow it."""
+    """Records the raw-registration pair AND the LL-hook trio (which
+    must NEVER be touched - the shape is gone, the pin keeps it gone).
+    Everything else passes through to the real user32."""
 
     def __init__(self, real):
         self.real = real
-        self.installs = []
-        self.unhooks = []
+        self.registers = []
+        self.unregisters = []
+        self.hook_calls = []           # must stay empty. the point.
 
-    def SetWindowsHookExW(self, hid_type, proc, inst, thread):
-        self.installs.append(hid_type)
-        return len(self.installs)         # distinct fake handles
-
-    def UnhookWindowsHookEx(self, handle):
-        self.unhooks.append(handle)
+    def RegisterRawInputDevices(self, arr, n, size):
+        # read the flags off the caller's array: RIDEV_REMOVE=1 means
+        # this Register IS the unregister (one entry point, this OS)
+        (self.unregisters if (arr and arr[0].flags == 1)
+         else self.registers).append(n)
         return True
 
-    def CallNextHookEx(self, *args):
+    def SetWindowsHookExW(self, *a):
+        self.hook_calls.append(("set",) + a)
+        return 1
+
+    def UnhookWindowsHookEx(self, *a):
+        self.hook_calls.append(("unhook",) + a)
+        return True
+
+    def CallNextHookEx(self, *a):
+        self.hook_calls.append(("next",) + a)
         return 0
 
     def __getattr__(self, name):
@@ -374,31 +383,40 @@ def test_hook_lifecycle():
     disp.watcher = d                          # the pump is called by hand
     try:
         assert m._away_engage() == {}         # stock mode, the default law
+        assert d._pump_pause() == disp.IDLE_PAUSE_SEC, "deaf and noteless"
         d._service_ears()
         d._service_ears()
-        assert fake.installs == [], fake.installs
-        print("ok - mode off NEVER installs the LL ears (no tax, ever)")
+        assert fake.registers == [], fake.registers
+        assert fake.hook_calls == [], "the LL chain is gone for good"
+        print("ok - mode off NEVER registers the ears (no tax, ever)")
         m.cfg["away"] = {"mode": "dim", "monitors": {}, "dim_level": 10}
         m._away_engage()
+        assert d._pump_pause() == disp.ARMED_PAUSE_SEC, \
+            "a note in flight already quickens the pump"
         d._service_ears()
-        assert sorted(fake.installs) == sorted([disp.WH_KEYBOARD_LL,
-                                                disp.WH_MOUSE_LL]), \
-            fake.installs
+        assert d._pump_pause() == disp.ARMED_PAUSE_SEC, \
+            "live ears pump at input latency"
+        assert fake.registers == [2], fake.registers      # mouse+keyboard
         d._service_ears()
         d._service_ears()
-        assert len(fake.installs) == 2, "a steady spell never re-installs"
+        assert len(fake.registers) == 1, \
+            "a steady spell never re-registers"
         assert d._lift_armed is True
         m._away_lift()
         d._service_ears()
-        assert len(fake.unhooks) == 2 and d._hooked is False, fake.unhooks
+        assert fake.unregisters == [2] and d._hooked is False
+        assert d._pump_pause() == disp.IDLE_PAUSE_SEC, \
+            "the lift returns the loop to its deep sleep"
         m._away_engage()
         d._service_ears()
-        assert len(fake.installs) == 4, "a new spell earns new ears"
+        assert len(fake.registers) == 2, "a new spell earns new ears"
         m._away_lift()
         d._service_ears()
-        assert len(fake.unhooks) == 4
-        print("ok - spell installs once, steady no churn, lift unhooks, "
-              "re-spell re-installs")
+        assert len(fake.unregisters) == 2
+        print("ok - spell registers once, steady no churn, lift "
+              "unregisters, re-spell re-registers")
+        print("ok - cadence: armed (or noting) pumps at 20 ms, deaf at "
+              "100 ms - and the LL trio is never touched")
     finally:
         led.undo()
 

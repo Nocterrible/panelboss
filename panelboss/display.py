@@ -13,6 +13,14 @@
   input activity and the camera, and broadcasts are a bonus signal.
 - GetLastInputInfo drives the idle gate (never poll the camera while the
   user is typing)
+- the away-lift ears (a dimmed desk waking on real input): RAWINPUT
+  registrations bound to the watcher's own window, ACTIVE ONLY while
+  a spell lives - WM_INPUT is a posted message for us alone, so an
+  unarmed machine pays nothing and an armed spell costs the parse,
+  never the desktop's input chain (the WH_KEYBOARD_LL/WH_MOUSE_LL
+  era of this feature measured a ~31 ms dispatch quantum on any
+  pumping thread - a 32 Hz mouse for the whole desk; the matrix that
+  killed it is documented at the raw block below)
 - foreground fullscreen detection: exclusive-fullscreen apps swallow the
   broadcast, so the guard skips them
 
@@ -63,17 +71,88 @@ WM_DISPLAYCHANGE = 0x007E      # topology moved: the brightness handles
                                # never hears this broadcast, the
                                # refusal-self-heal is the real law)
 
-# low-level input hooks (the away-lift ears): LL hooks fire on the
-# thread that installed them and that thread already pumps (the
-# watcher's own PeekMessageW loop), so they ride the EXISTING window
-# thread - no second listener anywhere
-WH_KEYBOARD_LL = 13
-WH_MOUSE_LL = 14
-WM_KEYDOWN = 0x0100
-WM_MOUSEMOVE = 0x0200
+WM_KEYDOWN = 0x0100            # the raw keyboard record carries it
 MOUSE_WAKE_PX = 20             # the debounce law: cursor jitter must
                                # not wake a dimmed desk; movement
-                               # counts only past this from its anchor
+                               # counts only past this (displacement
+                               # from the first delta after the arm -
+                               # RAW's relative motion made this law
+                               # honest in a way absolute coords
+                               # never were)
+
+# THE EARS, RAW (36e3214 follow-up, measured): the WH_*_LL shape was
+# first, and the matrix killed it - an LL callback dispatches on its
+# owning thread through a sent-message round-trip that measured
+# QUANTIZED at ~31 ms per event on any pumping thread (injected or
+# hardware, foreground or not), i.e. a 32 Hz stutter for the WHOLE
+# desktop for as long as the spell lives, because the hook chain
+# gates everyone's input. RAWINPUT is the same intelligence without
+# the round-trip: WM_INPUT is a POSTED message for OUR window only,
+# it rides the loop's normal wake (QS_RAWINPUT below), no callback
+# ever runs on anyone else's input path, and the mouse's RELATIVE
+# deltas implement the >20 px jitter law exactly as written.
+WM_INPUT = 0x00FF
+RIDEV_REMOVE = 0x00000001
+RIDEV_INPUTSINK = 0x00000100   # deliver while our window is unfocused
+RID_INPUT = 0x10000003
+RIM_TYPEMOUSE = 0
+RIM_TYPEKEYBOARD = 1
+QS_RAWINPUT = 0x0100
+
+
+class RAWINPUTHEADER(ctypes.Structure):
+    _fields_ = [("dwType", wintypes.UINT), ("dwSize", wintypes.UINT),
+                ("hDevice", ctypes.c_void_p),
+                ("wParam", ctypes.c_ulonglong)]
+
+
+class RAWMOUSE(ctypes.Structure):
+    class _U(ctypes.Union):
+        class _S(ctypes.Structure):
+            _fields_ = [("ulButtons", wintypes.USHORT),
+                        ("buttonFlags", wintypes.USHORT),
+                        ("buttonData", wintypes.ULONG)]
+        _fields_ = [("buttons", _S),
+                    ("rawButtons", wintypes.USHORT),
+                    ("rawButtonData", wintypes.ULONG)]
+    _fields_ = [("flags", wintypes.USHORT), ("_pad", wintypes.USHORT),
+                ("u", _U),
+                ("lastX", wintypes.LONG), ("lastY", wintypes.LONG)]
+
+
+class RAWKEYBOARD(ctypes.Structure):
+    _fields_ = [("makeCode", wintypes.USHORT), ("flags", wintypes.USHORT),
+                ("reserved", wintypes.USHORT), ("vkey", wintypes.USHORT),
+                ("message", wintypes.UINT), ("extraInfo", wintypes.UINT)]
+
+
+class RAWINPUT(ctypes.Structure):
+    _fields_ = [("header", RAWINPUTHEADER),
+                ("mouse", RAWMOUSE), ("keyboard", RAWKEYBOARD)]
+
+
+class RAWINPUTDEVICE(ctypes.Structure):
+    _fields_ = [("usUsagePage", wintypes.USHORT),
+                ("usUsage", wintypes.USHORT),
+                ("flags", wintypes.UINT), ("hwndTarget", ctypes.c_void_p)]
+
+
+class RAWINPUTDEVICELIST(ctypes.Structure):     # only for the unregister
+    _fields_ = [("hDevice", ctypes.c_void_p), ("type", wintypes.UINT)]
+
+# pump cadence, the two faces of the SAME loop: while ANY ear is on
+# duty the wait floor is 20 ms (input itself wakes the wait early -
+# QS_RAWINPUT below - so the floor only bounds _stop/_ear_req
+# service); deaf, the old 100 ms. The cadence lesson that produced
+# these numbers lives at the RAWINPUT block: a SLEEPING thread
+# dispatches no hook callbacks at all (fast-poll measured 33/s for
+# the whole armed phase), and even input-aware waiting could not
+# beat the hook round-trip - the raw shape made the floor irrelevant
+# to latency and this block is what's left of the chase.
+ARMED_PAUSE_SEC = 0.020
+IDLE_PAUSE_SEC = 0.1
+QS_ALLEVENTS = 0x0400          # key, mouse, posted, timer, paint, sent
+MWMO_INPUTAVAILABLE = 0x0004   # and wake NOW on input already queued
 
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x1       # keep the box awake while we poll the camera
@@ -164,32 +243,23 @@ _ACTIVE = []                   # the live Display, one per process: a
                                # through this one-slot list
 
 
-class KBDLLHOOKSTRUCT(ctypes.Structure):         # only the mouse case
-    _fields_ = [("vkCode", wintypes.DWORD),      # reads its struct
-                ("flags", wintypes.DWORD),
-                ("time", wintypes.DWORD),
-                ("extra", ctypes.c_ulonglong)]   # ULONG_PTR, x64-honest
+# (the WH_*_LL era of this file is documented above and in the awaymode
+# lifecycle pin - the KBDLLHOOKSTRUCT/MSLLHOOKSTRUCT twins and the
+# SetWindowsHookExW argtype block were deleted with the callbacks, not
+# left to fossil: dead FFI is a lie about what the module calls)
 
-
-class MSLLHOOKSTRUCT(ctypes.Structure):
-    _fields_ = [("pt", wintypes.POINT), ("mouseData", wintypes.DWORD),
-                ("flags", wintypes.DWORD), ("time", wintypes.DWORD),
-                ("extra", ctypes.c_ulonglong)]
-
-
-HOOKPROTYPE = WINFUNCTYPE(ctypes.c_longlong,     # LRESULT, x64 wide
-                          ctypes.c_int,          # nCode
-                          ctypes.c_ulonglong,    # WPARAM
-                          ctypes.c_longlong)     # LPARAM
-
-u32.SetWindowsHookExW.argtypes = [ctypes.c_int, ctypes.c_void_p,
-                                  ctypes.c_void_p, wintypes.UINT]
-u32.SetWindowsHookExW.restype = ctypes.c_void_p
-u32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int,
-                               ctypes.c_ulonglong, ctypes.c_longlong]
-u32.CallNextHookEx.restype = ctypes.c_longlong
-u32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
-u32.UnhookWindowsHookEx.restype = wintypes.BOOL
+u32.MsgWaitForMultipleObjectsEx.argtypes = [
+    wintypes.UINT, ctypes.POINTER(wintypes.HANDLE), wintypes.DWORD,
+    wintypes.UINT, wintypes.UINT]
+u32.MsgWaitForMultipleObjectsEx.restype = wintypes.DWORD
+u32.RegisterRawInputDevices.argtypes = [ctypes.POINTER(RAWINPUTDEVICE),
+                                        wintypes.UINT, wintypes.UINT]
+u32.RegisterRawInputDevices.restype = wintypes.BOOL
+u32.GetRawInputData.argtypes = [ctypes.c_void_p, wintypes.UINT,
+                                ctypes.c_void_p,
+                                ctypes.POINTER(wintypes.UINT),
+                                wintypes.UINT]
+u32.GetRawInputData.restype = wintypes.UINT
 
 
 def _def_window(h, m, w, l):
@@ -239,19 +309,16 @@ class Display(threading.Thread):
                                           # broadcast we noticed
         self._stop = False
         self._proc = WNDPROTYPE(_def_window)   # keep the callback alive
-        self._hooks = []                       # ditto the hook procs
-        self._hhk = None                       # keyboard lift ear
-        self._hmk = None                       # mouse lift ear
         self._lift_armed = False               # the away engine's flag
-        self._lift_origin = None               # mouse debounce anchor
-        self._ear_req = None                   # pending install/uninstall
+        self._lift_origin = None               # mouse travel accumulator
+        self._ear_req = None                   # pending register/unregister
         self._hooked = False                   # requests are APPLIED on
-        #                                      the pump thread (LL hooks
-        #                                      belong to the thread that
-        #                                      installed them), so the
-        #                                      engine only ever leaves a
-        #                                      note: None = no request,
-        #                                      True/False = want
+        #                                      the pump thread (the raw
+        #                                      registrations bind to
+        #                                      this thread's window),
+        #                                      so the engine only ever
+        #                                      leaves a note: None = no
+        #                                      request, True/False = want
         self._hwnd = None
         self._handle = None
         _ACTIVE[:] = [self]                    # the broadcast ear's route
@@ -326,6 +393,9 @@ class Display(threading.Thread):
         self._hooked = False
         self._ear_req = None
         while not self._stop:
+            # Drain EVERY pending message per cycle (the inner while
+            # is the whole answer: with the input-aware wait below,
+            # bursts arrive between waits and get one dispatch).
             while u32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 1):
                 # WM_DISPLAYCHANGE is NOT handled here: a broadcast
                 # is sent to the window proc (the _def_window ear)
@@ -355,18 +425,28 @@ class Display(threading.Thread):
                     # this branch fires only for stations that DO
                     # queue one - same method, same two duties
                     self._display_moved()
+                elif msg.message == WM_INPUT:
+                    # the raw lift ears: POSTED to our window only -
+                    # no callback ever runs on anyone else's input
+                    # path, which is the whole point of the shape
+                    try:
+                        self._raw_probe(msg.lParam)
+                    except Exception:
+                        log.debug("raw input probe skipped",
+                                  exc_info=True)
                 u32.DefWindowProcW(msg.hWnd, msg.message, msg.wParam,
                                    msg.lParam)
             self._service_ears()               # the engine's arm notes
             #                                  are APPLIED here, on the
-            #                                  pump thread - cadence is
-            #                                  the loop's own sleep, so
-            #                                  a spell waits at most
-            #                                  0.1 s for its ears (and
-            #                                  the desk waits ZERO when
-            #                                  no spell was ever cast)
-            time.sleep(0.1)
-        self._unhook()                         # the lift ears die with
+            #                                  pump thread - and the
+            #                                  wait below wakes on the
+            #                                  raw ears' events
+            #                                  (QS_RAWINPUT) as well
+            #                                  as the pause floor
+            u32.MsgWaitForMultipleObjectsEx(
+                0, None, int(self._pump_pause() * 1000),
+                QS_ALLEVENTS | QS_RAWINPUT, MWMO_INPUTAVAILABLE)
+        self._release_ears()                   # the lift ears die with
         #                                      the thread, cradle to grave
         try:
             u32.UnregisterPowerSettingNotification(self._handle)
@@ -385,74 +465,112 @@ class Display(threading.Thread):
         self.queue.put(("monitor", float(flag), self.last_event))
 
     # -------------------------------------------------------- the lift ears --
+    def _pump_pause(self):
+        """The wait floor (36e3214 follow-up): 20 ms while ANY ear is
+        on duty (registered, or a request in flight - the note's own
+        wait is part of the spell's latency budget), the old 100 ms
+        deaf. With RAWINPUT the wait also WAKES on the input itself
+        (QS_RAWINPUT), so the floor only bounds _stop/_ear_req
+        service; a spell pays CPU nowhere near the stutter the LL
+        round-trip charged. Deaf floor untouched: the mode-off idle
+        profile 36e3214 measured (0.02-0.06 cores) is unchanged."""
+        if self._hooked or self._ear_req is not None:
+            return ARMED_PAUSE_SEC
+        return IDLE_PAUSE_SEC
+
     def _service_ears(self):
         """Apply the engine's pending arm note (called from the pump
-        loop - LL hooks belong to the thread that installs them, so
-        the engine never installs anything itself). Idempotent both
-        ways: an arm over armed ears and a disarm over deaf ears cost
-        nothing, so a steady spell never churns the chain."""
+        loop - the registration is bound to THIS thread's window).
+        Idempotent both ways: an arm over live ears and a disarm
+        over deaf ones cost nothing, so a steady spell never churns."""
         want = self._ear_req
         if want is None or bool(want) == self._hooked:
             self._ear_req = None
             return
         if want:
-            self._install_hooks()
+            self._register_ears()
         else:
-            self._unhook()
+            self._release_ears()
         self._ear_req = None
 
-    def _install_hooks(self):
-        """Both LL ears on THIS pumping thread, and ONLY while a dim
-        spell is alive (the owner's UAT law, Oct 14: an always-on
-        install taxed EVERY input event on the desk - hundreds of
-        ctypes marshals a second for a high-polling mouse, and LL
-        hooks serialize input delivery behind the installing thread's
-        pump, which sleeps 0.1 s - the measured mouse-lag). Procs
-        kept alive exactly like _proc: a collected callback is a call
-        into freed trampolines."""
-        kb = HOOKPROTYPE(self._hook_key)
-        ms = HOOKPROTYPE(self._hook_mouse)
-        self._hooks = [kb, ms]
-        self._hhk = u32.SetWindowsHookExW(WH_KEYBOARD_LL, kb, None, 0)
-        self._hmk = u32.SetWindowsHookExW(WH_MOUSE_LL, ms, None, 0)
-        self._hooked = bool(self._hhk and self._hmk)
+    _DEVICES = ((1, 2), (1, 6))      # generic-desktop pointer, keyboard
+
+    def _device_array(self, remove=False):
+        arr = (RAWINPUTDEVICE * len(self._DEVICES))()
+        for row, (page, usage) in zip(arr, self._DEVICES):
+            row.usUsagePage = page
+            row.usUsage = usage
+            row.flags = RIDEV_REMOVE if remove else RIDEV_INPUTSINK
+            row.hwndTarget = 0 if remove else (self._hwnd or 0)
+        return arr
+
+    def _register_ears(self):
+        """RAWINPUT, not the hook chain (the matrix killed the LL
+        shape: its callback dispatch measured 31 ms-quantized on ANY
+        pumping thread - the hook chain gates EVERY desktop's input
+        through it, so a spell used to mean a 32 Hz mouse). These
+        registrations deliver to our window only, and only while a
+        spell is alive; a mode-off machine never registers anything -
+        invisible by construction, same law as before."""
+        arr = self._device_array()
+        self._hooked = bool(u32.RegisterRawInputDevices(
+            arr, len(arr), ctypes.sizeof(RAWINPUTDEVICE)))
         if not self._hooked:
-            for h in (self._hhk, self._hmk):   # never leak half a pair
-                if h:
-                    u32.UnhookWindowsHookEx(h)
-            self._hhk = self._hmk = None
-            log.warning("input lift ears refused (%s); the dimmed desk "
+            log.warning("raw lift ears refused (%s); the dimmed desk "
                         "wakes on the idle gate alone (one tick slower)",
                         k32.GetLastError())
 
-    def _unhook(self):
-        for h in (self._hhk, self._hmk):
-            if h:
-                u32.UnhookWindowsHookEx(h)
-        self._hhk = self._hmk = None
-        self._hooks = []
+    def _release_ears(self):
+        # RIDEV_REMOVE through the SAME entry point (this OS exports
+        # no UnregisterRawInputDevices at all - measured): flags
+        # RIDEV_REMOVE + null target is the documented un-take.
+        arr = self._device_array(remove=True)
+        if not u32.RegisterRawInputDevices(
+                arr, len(arr), ctypes.sizeof(RAWINPUTDEVICE)):
+            log.debug("raw lift ears unregister was declined (%s)",
+                      k32.GetLastError())
         self._hooked = False
 
-    def _hook_key(self, code, wparam, lparam):
-        # the hook cost law: flag-check, one int compare, straight to
-        # CallNextHookEx - allocation happens only on the one post
-        if self._lift_armed and code == 0 and wparam == WM_KEYDOWN:
-            self._lift_now("key")
-        return int(u32.CallNextHookEx(None, code, wparam, lparam) or 0)
-
-    def _hook_mouse(self, code, wparam, lparam):
-        if self._lift_armed and code == 0 and wparam == WM_MOUSEMOVE:
-            pt = MSLLHOOKSTRUCT.from_address(lparam).pt
-            anchor = self._lift_origin
-            if anchor is None:               # the arm-point anchor:
-                self._lift_origin = (pt.x, pt.y)   # jitter orbits it,
-            elif ((pt.x - anchor[0]) ** 2 +  # movement travels away
-                  (pt.y - anchor[1]) ** 2) > MOUSE_WAKE_PX ** 2:
+    def _raw_probe(self, handle):
+        """One WM_INPUT: posted, ours, zero round-trips. The cheap
+        shield FIRST (unarmed ears read nothing - one int compare
+        per event while a steady spell idles), then the wake laws:
+        any keydown, or mouse travel past MOUSE_WAKE_PX measured as
+        displacement from the first post-arm delta (jitter orbits
+        its anchor and must not wake; the RELATIVE deltas RAW gives
+        are what made that law honest in the first place)."""
+        if not self._lift_armed or not handle:
+            return
+        size = wintypes.UINT(0)
+        if u32.GetRawInputData(handle, RID_INPUT, None,
+                               ctypes.byref(size),
+                               ctypes.sizeof(RAWINPUTHEADER)) != 0 \
+                or not size.value:
+            return
+        buf = (ctypes.c_char * size.value)()
+        if u32.GetRawInputData(handle, RID_INPUT, buf, ctypes.byref(size),
+                               ctypes.sizeof(RAWINPUTHEADER)) != size.value:
+            return
+        raw = bytes(buf) + b"\0" * 64          # short buffers read clean
+        head = RAWINPUTHEADER.from_buffer_copy(raw)
+        base = ctypes.sizeof(RAWINPUTHEADER)
+        if head.dwType == RIM_TYPEKEYBOARD:
+            kb = RAWKEYBOARD.from_buffer_copy(raw, base)
+            if kb.message == WM_KEYDOWN:
+                self._lift_now("key")
+        elif head.dwType == RIM_TYPEMOUSE:
+            mo = RAWMOUSE.from_buffer_copy(raw, base)
+            if mo.flags & 0x02:                # MOUSE_FLAG_ABSOLUTE:
+                return                         # tablets do not count
+            ox, oy = self._lift_origin or (0, 0)
+            ox += mo.lastX
+            oy += mo.lastY
+            self._lift_origin = (ox, oy)       # jitter orbits the anchor
+            if ox * ox + oy * oy > MOUSE_WAKE_PX ** 2:
                 self._lift_now("mouse")
-        return int(u32.CallNextHookEx(None, code, wparam, lparam) or 0)
 
     def _lift_now(self, reason):
-        """One lift per arm (a held key fires tens of WM_KEYDOWNs a
+        """One lift per arm (a held key re-arms the raw stream by the
         second): the ears go quiet until the engine re-arms at the
         next dark, and the engine is the only re-armor."""
         self._lift_armed = False
@@ -475,13 +593,13 @@ class Display(threading.Thread):
 def arm_input_lift(armed):
     """The engine's one word to the lift ears: armed=True wants them
     ON, armed=False sends them home - the word is a NOTE the pump
-    applies on its own thread within one cycle (0.1 s cadence, see
-    _service_ears), because LL hooks belong to the installing thread
-    and the owner's desk pays for them by the EVENT: a mode-off
-    machine never gets the word, so the hooks are never installed and
-    the input path is clean by CONSTRUCTION, not by a flag check.
-    Arming resets the mouse anchor; the flag decides whether installed
-    ears speak at all (one lift per arm)."""
+    applies on its own thread within one pause (20 ms while a note
+    is in flight; the raw registrations bind to the watcher's window,
+    so the engine never touches user32 itself). A mode-off machine
+    never gets the word, so nothing is registered at all and the
+    input path is clean by CONSTRUCTION, not by a flag check.
+    Arming resets the mouse travel accumulator; the flag decides
+    whether registered ears speak at all (one lift per arm)."""
     if watcher is not None:
         watcher._lift_armed = bool(armed)
         watcher._lift_origin = None
