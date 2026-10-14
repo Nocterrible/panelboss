@@ -158,8 +158,31 @@ SHIP-WITH-FIXES-absorbed):
   LAW: an empty board SPEAKS (first engine WARNING surfaced in the UI,
   the veil IS the confession line). Split paid at a real seam:
   watchdog.py (99 lines). 45 commits total since the tag at tip
-  e497815; the wave-E pair (always-on 1 s cadence; create-now/Xbox/
-  gaming-hz/autostart UI batch) lands on top before the new tag.
+  e497815.
+- WAVE E/F (9e178e1..5cfb57e, the second UAT round - owner-driven):
+  the cadence law (always-on reads 1 s dark, floor moved with the
+  counter-argument, lit gate split into its own key so the law
+  couldn't smuggle a change; two timer-card sliders + the
+  "first dark re-poll" relabel killed the README/UI's stale promise),
+  create-now's silent-vanish cured at BOTH layers (missing try/except
+  + the reporter now writes the label that EXISTS on the fresh-store
+  pane), the Xbox toggle verdict WIDGET-BLIND (consumer round-trips;
+  one-sided build paint; both-way paints across _gaming/_general/
+  _power), the gaming hz menus restored for silent drivers, autostart
+  fossil deleted again + the discipline pin (boot can never register
+  fresh; registry is the single truth by design), the switch-family
+  geometry cure (SWITCH_SYNC repaint at show + tab-reveal; the
+  owner's "toggle showed off but the bar was on" root-caused to
+  paint-before-geometry with a permanent thread-census instrument),
+  and the no-window spawn door (every child verb silent; ban v2 with
+  alias coverage + paren-depth flags check; the owner's cmd-strobe
+  attribution settled by their own A/B: Fleet Commander, not the
+  app - the door ships anyway as the structural class-kill).
+  CEREMONY: full runner app-down at 5cfb57e, RUNNER_RC=0, ALL GREEN
+  (complete), 42 suites ZERO skips - the first app-down complete in
+  the cluster's history (the gaming_ui 60-s bracket closed at
+  3 bites/4 greens, blocker named: test's own aborted teardown).
+  TAG MOVED: rc-2026-10-13e @ 5cfb57e.
 
 ## Honest notes (things the gates found in the gates' own infrastructure)
 - Two implementer lanes died at zero writes on multi-delta packets and
