@@ -593,6 +593,22 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   assertions all pass before the hang; third app-down failure ->
   instrument the teardown position.
 
+## Approved scope, tagged-candidate (owner, Oct 13 evening): HDR wave
+Per-monitor HDR joins the profile/power-option controls (per-display
+"hdr": null|true|false applied through wm/_hdr.py's proven type-16
+SET after mode changes, dropdown rendered only on hdr_states()-
+supported panels) + AUTO-SWITCH tiers, opt-in default-off: video-
+ACTIVITY auto-on (PDH GPU-Engine VideoDecode/Processing counters -
+public, unelevated; the RTX-HDR use case: any video stream flips
+HDR on so NVIDIA's SDR->HDR transmute has a canvas; Auto HDR games
+cannot false-trip it while SDR, per MS docs) with hysteresis +
+idle-timeout, and an mpv JSON-IPC HDR-content tier (primaries/
+gamma; loose match per mpv's own warning). WM_DISPLAYCHANGE listener
+syncs state when anyone toggles externally. Verdict research + the
+manifest-verification that killed the ETW-color-space myth: this
+section's commit history; full design: redesign-packet.md amendment
+8 (scratch). Feature wave AFTER tag #2.
+
 ## Redesign (owner law, Oct 13 afternoon): "blow it away"
 The curation UX collapses into ONE flow: the detection tab is gated
 behind a big consent switch (OFF on first boot - no camera opens until
