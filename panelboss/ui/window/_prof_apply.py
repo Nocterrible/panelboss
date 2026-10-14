@@ -1,9 +1,9 @@
 """Profiles tab verbs: mode edits, profile create and
 apply, the noshows dialog, rescue.
-Size law (measured 467, Oct 13 - the claim includes its own lines;
-the amendment-8 per-panel color selector added the last thirty and
-the 2026-10 claim had drifted before that): the apply pipeline is
-one transaction -
+Size law (measured 498, Oct 14 loud-voice wave recount - the claim
+includes its own lines; done()'s flag-before-repaint, the cross-tab
+balloon and the hdr save's confession added the last thirty-one to
+the Oct-13 467): the apply pipeline is one transaction -
 snapshot, layout plan, dialog, rescue - whose halves argue over
 shared state; split cost paid per read beats the split itself here.
 """
@@ -111,6 +111,9 @@ class _ModeMixin:
     def _profile_picked(self, name):
         self._prof_sel = name
         self._prof_msg = ""
+        self._prof_err = False                  # the shout is per-
+        #                               outcome: a fresh selection is a
+        #                               fresh pane (loud-voice wave)
         self._mode_notes = {}                   # stale per-row notes
         self._pin_edit = _fresh_pin_edit()
         self._profiles_render()
@@ -365,12 +368,34 @@ class _ModeMixin:
                 self._apply_buttons("normal")
                 self._applying = False
                 self._prof_msg = text
+                # the loud-voice wave: the flag goes up BEFORE the
+                # repaint - _fill_status reads it on this very render
+                # (the voice lives at the gaze; profiles_ui_test 8c
+                # pins the danger paint and the placement)
+                self._prof_err = not ok
                 if self._prof_sel == self._applied_name:
                     self._profiles_render()
                 else:                            # the user switched
                     self._status_lbl.configure(  # mid-apply: show the
                                                  # outcome, skip the repaint
                     text=self._prof_msg)
+                if not ok:
+                    # the cross-tab voice: the pane may be a hidden tab
+                    # or a trayed window - the failure follows the user
+                    # out of it on the EXISTING seam (cli.py:308 wires
+                    # monitor.notifier to the tray balloon; the tray
+                    # fail-opens: no icon, no balloon, the log still
+                    # holds the truth). The login path owns the doctrine
+                    # this mirrors, cli.py _restore: "the announcement is
+                    # balloons: at logon nobody is watching the window
+                    # yet, and a modal dialog at logon is a hostage."
+                    try:
+                        nf = getattr(self.monitor, "notifier", None)
+                        if nf is not None:
+                            nf(("profile '%s': %s" % (name, text))[:180])
+                    except Exception:
+                        log.debug("apply balloon lost for '%s'", name,
+                                  exc_info=True)
                 if not failed:
                     misses = (info or {}).get("no_shows") or []
                     if misses:
@@ -449,6 +474,8 @@ class _ModeMixin:
         brought = wm.rescue_lost()
         self._prof_msg = ("brought back: %s" % ", ".join(brought)
                           if brought else "nothing was off screen")
+        self._prof_err = False    # rescue speaks for itself; the old
+        #                          shout must not haunt the calm line
         self._profiles_render()
 
 
@@ -458,7 +485,11 @@ class _ModeMixin:
         # tongue directly)
         ask = HDR_BY_LABEL.get(ask, ask)
         self._prof_data["profiles"][self._prof_sel]["hdr"] = ask
-        profiles.save(self._prof_data)
+        if not profiles.save(self._prof_data):
+            # the audit's last silent sibling joins the loud club
+            # (loud-voice wave): a color ask that never reached the
+            # disk must not be believed by the menu that just moved
+            self._mode_fail("the profile could not be written to disk")
 
 
     def _prof_rescan(self):

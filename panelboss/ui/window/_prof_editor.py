@@ -1,9 +1,10 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
 
-SIZE LAW: measured 433 (Oct 13 - the checkbox's both-branch paint
-and the knob-lie sync entry landed here; the claim had drifted from
-~360, corrected in-commit).
+SIZE LAW: measured 440 (Oct 14 loud-voice wave recount - the status
+label's danger paint landed here; the Oct 13 claim - the checkbox's
+both-branch paint and the knob-lie sync entry, corrected in-commit
+after drifting from ~360 - is superseded by this one).
 These are the pane's five section fills plus the
 row builder - one story (what a section looks like when painted),
 split from the VERBS (_prof_pins.py) that mutate them in place, and
@@ -315,17 +316,23 @@ class _EditorMixin:
         """ONE label, idempotent (owner ruling, Oct 12): the first
         fill builds it inside the status section; every later fill -
         every _repaint("status") there is - just configures its text,
-        so a status change repaints ZERO structure."""
+        so a status change repaints ZERO structure. The loud-voice
+        wave (Oct 14): while _prof_err is set the label paints in
+        skin.danger - the COLOR is the shout, the sub font is kept
+        (a red paragraph that still reads as fine print shouts
+        exactly as hard as a red headline)."""
+        style = dict(self.skin.text_style("sub"))
+        if getattr(self, "_prof_err", False):
+            style["text_color"] = self.skin.danger
         lbl = getattr(self, "_status_lbl", None)
         if lbl is not None and lbl.winfo_exists():
-            lbl.configure(text=self._prof_msg,
-                          **self.skin.text_style("sub"))
+            lbl.configure(text=self._prof_msg, **style)
             return
         sec = self._section("status")
         self._status_lbl = ctk.CTkLabel(
             sec, text=self._prof_msg,
             font=self.skin.font(11), wraplength=560, justify="left",
-            anchor="w", **self.skin.text_style("sub"))
+            anchor="w", **style)
         self._status_lbl.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
 

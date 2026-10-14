@@ -1,11 +1,12 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
 
-SIZE LAW: measured 388 lines (the Oct-12 two-column restructure
-cost +36 over the ~340 it claims on its header's birth - the claim
-now states the measurement, per the law's own purpose: headers that
-can be trusted; the restructure also retired the single-column flow
-notes). The _repaint/_section double-buffer pair (_section
+SIZE LAW: measured 412 lines (Oct 14 loud-voice wave recount -
+the flag init and the status label's move under the apply buttons
+landed here; the Oct-12 two-column restructure's +36 and the header-
+trust lesson that restatement was born for both stand; the
+restructure also retired the single-column flow notes). The
+_repaint/_section double-buffer pair (_section
 lives in _widgets.py) is the pane's whole paint pipeline and reads as
 one story here; splitting the fills further would scatter a mechanism
 that is debugged by reading top to bottom. No cover on repaints
@@ -47,6 +48,10 @@ class _ProfilesMixin:
         row = self._row(box, "profile", TIPS["profile_picker"])
         self._prof_data = profiles.load()
         self._prof_msg = ""
+        self._prof_err = False     # the loud-voice wave: the failure
+        #                          flag the status label SHOUTS with
+        #                          (paints danger while set; resets
+        #                          live in _profile_picked/_rescue_now)
         self._prof_live = {}                    # last live_modes() pass
         self._mode_notes = {}                   # per-row last note (R2)
         self._mode_menus = {}                   # per-row res/rate menus
@@ -271,6 +276,13 @@ class _ProfilesMixin:
         # render (stored every paint), so _apply_buttons can lock the
         # real entry buttons instead of only the picker
         self._apply_btns = (btn_last, btn_named)
+        # THE VOICE LIVES AT THE GAZE (loud-voice wave, Oct 14): the
+        # status label is built DIRECTLY UNDER the apply buttons, before
+        # the restore section - the create-new pane's label placement is
+        # the precedent (see the prof-None branch above). profiles_ui_test
+        # 8c pins this geometry against re-basementing the voice below
+        # the gaze where the owner's eyes never travel on a refusal.
+        self._fill_status()
 
         # ---- the pin half lives on its own column (owner sketch,
         # Oct 12): _fill_live/_fill_editor/_fill_pins each re-point
@@ -281,7 +293,6 @@ class _ProfilesMixin:
         # still sits above the seat list it edits, seats below
         # (the reorder note that single-column-era pack order kept).
         self._restore_section(self._prof_detail)
-        self._fill_status()
         self._fill_live()
         self._fill_editor()
         self._fill_pins()
