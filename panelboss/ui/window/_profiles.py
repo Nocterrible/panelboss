@@ -1,11 +1,10 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
 
-SIZE LAW: measured 412 lines (Oct 14 loud-voice wave recount -
-the flag init and the status label's move under the apply buttons
-landed here; the Oct-12 two-column restructure's +36 and the header-
-trust lesson that restatement was born for both stand; the
-restructure also retired the single-column flow notes). The
+SIZE LAW: measured 482 lines (Oct 14 freeze-fix wave recount -
+the hdr-walk arm took the wake walk off the pump; the loud-voice
+412 (same day) moved the status label to the gaze; the Oct-12 +36
+header-trust lesson both restatements were born for stands). The
 _repaint/_section double-buffer pair (_section
 lives in _widgets.py) is the pane's whole paint pipeline and reads as
 one story here; splitting the fills further would scatter a mechanism
@@ -16,12 +15,17 @@ re-paint of its section, never a veil sweep.
 
 from __future__ import annotations
 
+import logging
+import threading
+
 import customtkinter as ctk
 
 from .. import theme
 from ... import profiles, wm
 from ._constants import TIPS, HDR_ASK_LABELS, HDR_MENU_ORDER
 from ._widgets import SkewCombo, _fresh_pin_edit
+
+log = logging.getLogger("ui")
 
 
 class _ProfilesMixin:
@@ -85,7 +89,7 @@ class _ProfilesMixin:
         self._profiles_render()
 
 
-    def _profiles_render(self):
+    def _profiles_render(self, driver=None):
         """Swap a whole freshly built pane in, then callers may repain
         individual sections cheaply (see _section). Rebuilt whole on a
         profile switch because the lists of open windows and live
@@ -97,7 +101,11 @@ class _ProfilesMixin:
         intermediate paints hit an invisible frame; the destroy-old
         pack-new swap is one redraw. BOTH bodies swap in lockstep:
         the left body carries the profile halves, the right body the
-        pin halves - one render, one redraw, no half-mixed pane."""
+        pin halves - one render, one redraw, no half-mixed pane.
+        driver (the freeze-fix wave): None = boot render, the pane's
+        own synchronous walks (today's behavior); a dict = the
+        hdr-walk's payload, painted WITHOUT touching the driver -
+        see _hdr_refresh_async and the hdr_data arm in _runtime."""
         old = self._prof_body
         old_r = self._prof_pins_body
         self._prof_body = ctk.CTkFrame(self._prof_anchor,
@@ -108,13 +116,19 @@ class _ProfilesMixin:
         self._psec = {}
         self._psec_pady = {}           #   _repaint's in-place swaps
         self._psec_old = {}            #   buffers awaiting the swap
+        # the hdr-walk ledger (the freeze-fix wave): initialized at
+        # this site but NEVER reset per render - an in-flight walk and
+        # its coalesced demand belong to the window, not to one body
+        if not hasattr(self, "_hdr_walk"):
+            self._hdr_walk = None
+            self._hdr_due = False
         self._status_lbl = None        # the idempotent fill must
         self._pin_rows = {}            #   rebuild on this fresh body,
         self._pins_inner = None        #   never configure a widget
         self._pins_empty = None        #   the destroyed body held
         self._pins_cols = None         #   (the pins list's sub-columns)
         try:
-            self._profiles_fill()
+            self._profiles_fill(driver)
         finally:
             # re-pin the fill target to the LEFT body no matter how
             # the fills went (gate finding 6): the pin fills retarget
@@ -198,10 +212,12 @@ class _ProfilesMixin:
             host.sync_region()
 
 
-    def _profiles_fill(self):
+    def _profiles_fill(self, driver=None):
         """The pane's content, built into the (still unpacked) fresh
         bodies; self._prof_detail starts as the left body and the
-        pin fills re-point it at the right one (see their heads)."""
+        pin fills re-point it at the right one (see their heads).
+        driver rides through to the mode editor: the hdr-walk's
+        payload, or None for the boot render's own walks."""
         prof = self._prof_data["profiles"].get(self._prof_sel)
         if prof is None:                          # the create-new pane
             line = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
@@ -231,7 +247,7 @@ class _ProfilesMixin:
         # picker (R1-R5). live_modes() is read once inside and handed
         # to every row (R6); every mutation goes through a profiles
         # primitive and repaints the whole pane (R7).
-        self._fill_monitors(mons)
+        self._fill_monitors(mons, driver)
         warn = ctk.CTkLabel(
             self._prof_detail,
             text=(gate + " - applying anyway is a gamble, best "
@@ -299,7 +315,7 @@ class _ProfilesMixin:
         self._prof_detail = self._prof_body
 
 
-    def _fill_monitors(self, mons):
+    def _fill_monitors(self, mons, driver=None):
         """The mode editor (R1-R5): one row per saved panel, each with a
         resolution menu and a refresh menu built from what the LIVE panel
         offers (the saved value is kept when the driver no longer lists
@@ -311,18 +327,29 @@ class _ProfilesMixin:
         gray status line, never a dialog (R8). Each row also carries the
         panel's LIVE hdr state note (on/off/no hdr/?) straight from the
         driver - silent {} on ancient Windows means no note, which is
-        honest, and the power assistant's UI test watches for it."""
+        honest, and the power assistant's UI test watches for it.
+        driver (the freeze-fix wave): None walks the driver here (boot,
+        R6's once-per-pass); a dict takes the hdr-walk thread's payload
+        and touches NO driver - the pump-side walk was the wake freeze,
+        and a re-read inside a payload render would resurrect it."""
         sec = self._section("monitors", pady=(theme.S_ROW, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel)
         if prof is None:                            # the create-new pane
             return
         self._mode_menus = {}        # last render's menus died with
         #                            its old body: start from clean
-        live = profiles.live_modes()                # R6: once per pass
+        if driver is None:
+            live = profiles.live_modes()                # R6: once per pass
+        else:
+            live = driver.get("modes") or {}            # R6 rides the
+            #                                 payload: zero driver calls
         self._prof_live = live
         hdr, cap = {}, {}
         try:
-            rows = wm.hdr_states()          # ONE walk: the live note
+            # ONE walk: the live note (payload render: the walk thread
+            # already did it - the source moves, the honesty does not)
+            rows = (wm.hdr_states() if driver is None
+                    else driver.get("hdr") or [])
             hdr = {r["gdi"]: ("no hdr" if not r.get("supported")
                               else "hdr on"
                               if r.get("state") == "on"
@@ -409,4 +436,46 @@ class _ProfilesMixin:
         if saved_rate:
             rset.add(saved_rate)
         return sorted(rset)
+
+
+    # ------------------------------------------------------------ hdr wake --
+    def _hdr_refresh_async(self):
+        """The hdr_sync ride-up's answer route (the freeze-fix wave,
+        Oct 14): at wake the display driver is COLD, and this pane's
+        walk (live_modes + hdr_states) is the resume class the camera
+        side named at camera.py:56-58 (an OPEN measured 16-27 s, one
+        enumeration 38 s - the lesson 0ffa77e wrote as WARMING). The
+        owner's ~20 s window death at 07:19, back-solved through the
+        idle-gate arithmetic, was the drain arm walking that driver
+        synchronously ON THE TK PUMP; this is the pump's last walk.
+        One walk at a time: an in-flight guard coalesces every later
+        ride-up into _hdr_due, and the landing arm re-runs it ONCE -
+        latest wins, the pane ends on the freshest truth. The answer
+        posts ("hdr_data", payload) through the SAME ui_events queue
+        the ear rides, so it lands on the pump without the pump ever
+        walking. A walk that DIES keeps the pane's LAST truth (the
+        debug line is the confession) - a driver shrug never blanks a
+        pane; the window-closed race swallows the put, a dead window
+        asked for nothing. The flags initialize at the _psec site and
+        survive every render: the walk belongs to the window."""
+        if getattr(self, "_hdr_walk", None) is not None:
+            self._hdr_due = True          # coalesce; the landing arm
+            return                        #   re-runs it once
+        def walk():
+            try:
+                payload = {"modes": profiles.live_modes(),
+                           "hdr": wm.hdr_states()}
+            except Exception:
+                log.debug("hdr walk died; the pane keeps its last "
+                          "truth", exc_info=True)
+                self._hdr_walk = None     # re-arming stays possible
+                return
+            try:
+                self.ui_events.put(("hdr_data", payload))
+            except Exception:
+                log.debug("hdr_data post lost (window closed?)",
+                          exc_info=True)
+        t = threading.Thread(target=walk, name="hdr-walk", daemon=True)
+        self._hdr_walk = t
+        t.start()
 

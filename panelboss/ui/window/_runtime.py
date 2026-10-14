@@ -132,10 +132,37 @@ class _RuntimeMixin:
                 # gaming card refreshes the next time its tab paints;
                 # an unbuilt pane is not an error, it simply has no
                 # row to correct yet
+                # THE FREEZE-FIX WAVE (Oct 14) moved that re-read OFF
+                # the pump: at wake the driver is COLD, and this pane's
+                # walk (live_modes + hdr_states) is the resume class
+                # camera.py:56-58 names for an OPEN (measured 16-27 s,
+                # 38 s for one enumeration - the lesson 0ffa77e wrote
+                # as WARMING on the camera side). The owner's ~20 s
+                # window death at 07:19, back-solved through the idle-
+                # gate arithmetic, was this arm walking a 16-38 s driver
+                # synchronously on the Tk pump - the last pump-side
+                # holdout. The walk now runs on the hdr-walk thread and
+                # answers through the hdr_data arm below; until it lands
+                # the pane keeps its last truth. An unbuilt pane is
+                # still not an error: it simply has no row to correct,
+                # and the walk costs it only two driver reads.
+                self._hdr_refresh_async()
+            if message == "hdr_data":
+                # the walk's answer lands ON THE PUMP and paints FROM
+                # THE PAYLOAD - re-reading the driver here is the exact
+                # freeze this wave buried. The in-flight flag goes down
+                # before the re-run so latest-wins may spawn; ride-ups
+                # that arrived during the walk coalesced into _hdr_due
+                # and re-arm exactly ONE fresh walk here (the storm
+                # law hdrwake_test pins).
                 try:
-                    self._profiles_render()
+                    self._profiles_render(driver=_value)
                 except Exception:
                     pass
+                self._hdr_walk = None
+                if getattr(self, "_hdr_due", False):
+                    self._hdr_due = False
+                    self._hdr_refresh_async()
             if message == "cameras":
                 self._apply_cameras(_value)
                 if hasattr(self, "_sync_consent_switch"):
