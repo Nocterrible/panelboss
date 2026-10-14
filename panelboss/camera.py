@@ -30,13 +30,13 @@ from contextlib import contextmanager
 
 import json
 import logging
-import subprocess
 import threading
 import time
 
 import cv2
 
 from . import config
+from . import _spawn
 # wave D: the join machinery and its budgets moved to watchdog.py the
 # moment the bounding laws grew camera.py past the +40 growth rule
 # (the Rotor-seam debt did NOT apply to a fix that only bounds verbs
@@ -306,13 +306,13 @@ def camera_devices():
     cannot break a line-split parse; a lone device arrives unwrapped.
     CREATE_NO_WINDOW is mandatory: a windowless parent gets a fresh
     VISIBLE console per console-app child (camera_names' successor of
-    the powershell-window incident - the user counted them)."""
+    the powershell-window incident - the user counted them). The
+    verb rides the one no-window door (panelboss/_spawn.py)."""
     cmd = ("(Get-PnpDevice -Class Camera | Select-Object "
            "FriendlyName,InstanceId,Status | ConvertTo-Json -Compress)")
     try:
-        out = subprocess.run(["powershell", "-NoProfile", "-Command", cmd],
-                             capture_output=True, timeout=10,
-                             creationflags=subprocess.CREATE_NO_WINDOW)
+        out = _spawn.run(["powershell", "-NoProfile", "-Command", cmd],
+                         capture_output=True, timeout=10)
         try:
             text = out.stdout.decode("utf-8")
         except UnicodeDecodeError:               # the console encoding is

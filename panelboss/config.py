@@ -14,7 +14,6 @@ import logging
 import os
 import re
 import shutil
-import subprocess
 import sys
 import threading
 import time
@@ -1030,15 +1029,16 @@ def migrate_once():
     # task and Run cleanup run even when the old folder is already
     # gone: orphans outlive folders
     for name in ("ICU-PresenceDetector", "ICU-Presence-PowerRequests"):
-        # 0x08000000 = CREATE_NO_WINDOW: no console flash from pythonw.
-        # A gone task is a silent no-op; anything else (an access wall:
-        # the task is SYSTEM-owned and this process is not elevated)
+        # through the no-window door (_spawn.py): no console flash
+        # from pythonw. A gone task is a silent no-op; anything else
+        # (an access wall: the task is SYSTEM-owned and this process
+        # is not elevated)
         # is worth a warning, never a crash - migration never blocks
         # the boot, and an unscheduled hang of schtasks is a crash.
         try:
-            proc = subprocess.run(["schtasks", "/Delete", "/F", "/TN", name],
-                                  capture_output=True, timeout=30,
-                                  creationflags=0x08000000, text=True)
+            from . import _spawn
+            proc = _spawn.run(["schtasks", "/Delete", "/F", "/TN", name],
+                              capture_output=True, timeout=30, text=True)
             err = (proc.stderr or "").lower()
             if proc.returncode != 0 and "cannot find" not in err:
                 log.warning("migrate: could not delete scheduled task %s: "

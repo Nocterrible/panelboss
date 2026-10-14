@@ -28,18 +28,23 @@ from panelboss import config, power
 from panelboss.state import PresenceMonitor
 
 # 0) silent children: EVERY external helper the windowed app spawns
-#    must carry CREATE_NO_WINDOW. A windowless parent (pythonw) gets a
-#    fresh, VISIBLE console for every console-app child; the user
-#    counted the flashes (powershell for camera names, nvidia-smi for
-#    the gpu probe). A source-level pin: cheap, and it fails the
-#    moment a probe grows without the flag.
+#    must ride the one no-window door (panelboss/_spawn.py: the
+#    CREATE_NO_WINDOW + STARTUPINFO/SW_HIDE belt pair). A windowless
+#    parent (pythonw) gets a fresh, VISIBLE console for every
+#    console-app child; the user counted the flashes (powershell for
+#    camera names, nvidia-smi for the gpu probe - and Oct 13 night's
+#    strobe report is why the door replaced per-site flags: a call
+#    site cannot forget what it never gets to type). A source-level
+#    pin: cheap, and it fails the moment a probe grows without the
+#    door; the bare-call ban itself lives in startup_test/gaming_test.
 import io as _io
-for _f in ("camera.py", "inference.py", "power.py"):
+for _f in ("camera.py", "inference.py", "power.py", "power_plan.py",
+           "config.py"):
     _src = _io.open(os.path.join(os.path.dirname(
         os.path.abspath(__file__)), "..", "panelboss", _f),
         encoding="utf8").read()
-    assert "CREATE_NO_WINDOW" in _src, _f + " would pop a console"
-print("silent children OK (probes carry CREATE_NO_WINDOW)")
+    assert "_spawn.run(" in _src, _f + " spawns outside the no-window door"
+print("silent children OK (probes ride the no-window door)")
 
 SAMPLE = """Power Request Sources:
 

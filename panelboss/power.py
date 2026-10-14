@@ -36,13 +36,14 @@ polling continues, and the error string is what the window shows.
 """
 
 import ctypes
+import logging
 import os
 import re
-import subprocess
 import sys
 import time
 
 TASK_NAME = "PanelBoss-PowerRequests"
+from . import _spawn          # the one no-window door (see its header)
 
 # consent dialogs wait for humans; this is how long we give the task
 # store to reflect a create/delete before calling it a refusal
@@ -410,14 +411,15 @@ def apply_overrides(ops, assistant=True, timeout=120):
 
 
 def _run(args, timeout=15):
-    """CREATE_NO_WINDOW is a PROCESS creation flag - STARTUPINFO
-    .dwFlags knows nothing about it (that wrong slot is exactly why
-    the popups survived the first fix). On Windows 11 25H2 any console
+    """Every task-store and powercfg verb in this module, through the
+    one no-window door (panelboss/_spawn.py - the belt pair;
+    CREATE_NO_WINDOW is a PROCESS creation flag, STARTUPINFO.dwFlags
+    knows nothing about it, and that wrong slot is exactly why the
+    popups survived the first fix. On Windows 11 25H2 any console
     that does get created is hosted by Windows Terminal, which pops
-    AND steals focus, so this flag is load-bearing for the every-couple
-    -seconds probes."""
-    return subprocess.run(args, capture_output=True, timeout=timeout,
-                          creationflags=subprocess.CREATE_NO_WINDOW)
+    AND steals focus, so the pair is load-bearing for the every-
+    couple-seconds probes)."""
+    return _spawn.run(args, capture_output=True, timeout=timeout)
 
 
 def _elevate_ps(body, name="assistant_task.ps1"):

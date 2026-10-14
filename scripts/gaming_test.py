@@ -164,6 +164,32 @@ def run():
     print("ok - vrr: the expiry hands the SIBLING back; the vrr panel "
           "never appears")
 
+    # THE BAN (owner's strobe report, Oct 13 night): every console
+    # verb in the package rides the _spawn door (or an explicitly
+    # creation-flagged declared exception - the updater). Scanned
+    # here too, offline, so the gaming side carries the law without
+    # waiting for the window suite's app-down half.
+    import io as _io, os as _os, re as _re, panelboss as _pb
+    _pkg = _os.path.dirname(_os.path.abspath(_pb.__file__))
+    _bad = []
+    for _root, _dirs, _files in _os.walk(_pkg):
+        _dirs[:] = [d for d in _dirs if d != "__pycache__"]
+        for _fn in _files:
+            if not _fn.endswith(".py") or _fn == "_spawn.py":
+                continue
+            _src = _io.open(_os.path.join(_root, _fn),
+                            encoding="utf8").read()
+            for _m in _re.finditer(
+                    r"subprocess\.(?:run|Popen|call|check_call|"
+                    r"check_output)\s*\(|os\.system\s*\(|os\.popen\s*\(",
+                    _src):
+                if _m.group(0).startswith("os."):
+                    _bad.append("%s: raw %s" % (_fn, _m.group(0)))
+                elif "creationflags" not in _src[_m.start():
+                                                 _m.start() + 300]:
+                    _bad.append("%s: bare %s" % (_fn, _m.group(0)))
+    assert not _bad, "console verbs outside the door: %s" % _bad
+
     print("GAMING TESTS OK")
 
 

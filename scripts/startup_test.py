@@ -147,4 +147,66 @@ t._startup()
 assert t._startup_checked(None) is False, "one click flips, always"
 assert startup.enabled() is None, "and the click cleans up"
 
-print("startup OK (command, frozen, round trip, 2 refusals, tray flip)")
+# 6) THE NO-WINDOW DOOR (the owner's strobe report, Oct 13 night):
+#    every child verb rides panelboss/_spawn.py's belt pair -
+#    CREATE_NO_WINDOW (no console allocated) plus
+#    STARTUPINFO.wShowWindow=SW_HIDE (a shell's own conhost/WT
+#    window is born hidden). The flags are pinned in the
+#    CONSTRUCTION (visible-window behavior is untestable offline,
+#    the flags are the law), and one real verb proves the door
+#    opens: cmd /c ver through it, no elevation, app-agnostic.
+import subprocess as _sp
+from panelboss import _spawn
+flags, si = _spawn.win_flags()
+assert flags == _sp.CREATE_NO_WINDOW == 0x08000000, hex(flags)
+assert si.dwFlags & _sp.STARTF_USESHOWWINDOW
+assert si.wShowWindow == _sp.SW_HIDE
+_r = _spawn.run(["cmd", "/c", "ver"], capture_output=True, timeout=15)
+assert _r.returncode == 0 and b"Windows" in _r.stdout, _r
+
+
+def _spawn_ban(pkg_dir):
+    """no bare console verbs anywhere in the package: a call is
+    legal only inside the door module, or with an explicit
+    creationflags (the updater's declared visible console). The ban
+    scans call sites, not trust - the strobe class dies when
+    FORGETTING is impossible, not when remembering is polite."""
+    import io as _io, re as _re
+    bad = []
+    for root, dirs, files in os.walk(pkg_dir):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for fn in files:
+            if not fn.endswith(".py") or fn == "_spawn.py":
+                continue
+            src = _io.open(os.path.join(root, fn), encoding="utf8").read()
+            for m in _re.finditer(
+                    r"subprocess\.(?:run|Popen|call|check_call|"
+                    r"check_output)\s*\(|os\.system\s*\(|os\.popen\s*\(",
+                    src):
+                if m.group(0).startswith("os."):
+                    bad.append("%s: raw %s" % (fn, m.group(0)))
+                elif "creationflags" not in src[m.start():m.start() + 300]:
+                    bad.append("%s: bare %s" % (fn, m.group(0)))
+    return bad
+
+
+import io as _io
+import re as _re
+import panelboss as _pb
+_banned = _spawn_ban(os.path.dirname(os.path.abspath(_pb.__file__)))
+assert not _banned, "console verbs outside the door: %s" % _banned
+# and exactly ONE declared console-verb opt-out in the package (the
+# updater; its window is the progress UI and it carries the
+# relaunch), marked for the humans:
+_gsrc = _io.open(os.path.join(os.path.dirname(os.path.abspath(_pb.__file__)),
+                              "ui", "window", "_general.py"),
+                 encoding="utf8").read()
+_optouts = _re.findall(r"creationflags=0(?![xX0-9])", _gsrc)
+assert len(_optouts) == 1, "exactly one declared console opt-out " \
+                           "(the updater), found %d" % len(_optouts)
+assert "# CONSOLE: deliberate" in _gsrc, "the opt-out must name itself"
+print("no-window door OK (belt pair pinned, silence proven, verbs banned,"
+      " one declared console exception marked)")
+
+print("startup OK (command, frozen, round trip, 2 refusals, tray flip,"
+      " no-window door)")

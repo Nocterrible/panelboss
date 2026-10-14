@@ -50,16 +50,14 @@ def cuda_gpus():
     sees the cards, so these ids are the device_id the provider option
     expects. Empty list when there is no nvidia-smi (or no NVIDIA
     driver)."""
-    import subprocess
+    from . import _spawn
     try:
-        out = subprocess.run(["nvidia-smi", "-L"], capture_output=True,
-                             timeout=10,
-                             # no console, ever: a windowed parent gets
-                             # a fresh visible terminal for every
-                             # console-app child, and this probe runs
-                             # at window build (measured popping)
-                             creationflags=subprocess.CREATE_NO_WINDOW,
-                             ).stdout.decode("utf-8", "replace")
+        out = _spawn.run(["nvidia-smi", "-L"], capture_output=True,
+                         timeout=10,
+                         # no console, ever: the belt pair lives in
+                         # _spawn.py's header (measured popping at
+                         # window build for this very probe)
+                         ).stdout.decode("utf-8", "replace")
     except Exception:
         return []
     gpus = []

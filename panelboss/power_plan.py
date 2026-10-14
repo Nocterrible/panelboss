@@ -12,7 +12,8 @@ vanished mid-session - reads answer None/[], swaps answer False.
 """
 import logging
 import re
-import subprocess
+
+from . import _spawn
 
 log = logging.getLogger("power_plan")
 
@@ -21,14 +22,12 @@ log = logging.getLogger("power_plan")
 # user's UI language).
 GUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}",
                   re.IGNORECASE)
-CREATE_NO_WINDOW = 0x08000000
 
 
 def _run(args):
     try:
-        p = subprocess.run(["powercfg"] + args,
-                           capture_output=True, timeout=10,
-                           creationflags=CREATE_NO_WINDOW)
+        p = _spawn.run(["powercfg"] + args,
+                       capture_output=True, timeout=10)
         raw = p.stdout or b""
         if raw[:2] in (b"P\x00", b"\xff\xfe"):
             return raw.decode("utf-16", "ignore")

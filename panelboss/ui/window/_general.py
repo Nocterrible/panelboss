@@ -134,10 +134,14 @@ class _GeneralMixin:
 
 
     def _open_log(self):
+        # the door's fallback, not os.system: 'start ""' is cmd's own
+        # verb and cmd brings its window; explorer.exe is a GUI
+        # process and answers the folder request without one
+        from ... import _spawn
         try:
             os.startfile(config.LOG_DIR)
         except Exception:
-            os.system('start "" "%s"' % config.LOG_DIR)
+            _spawn.run(["explorer.exe", config.LOG_DIR])
 
 
     @staticmethod
@@ -169,8 +173,15 @@ class _GeneralMixin:
                                              # never fire again - the
                                              # script reads the FILE
         try:
+            # the package's ONE declared console-verb opt-out: the
+            # updater WANTS its window (the console is the progress
+            # UI and it carries the relaunch past our exit), so it
+            # rides creationflags zero explicitly, never the door's
+            # belt pair. startup_test/gaming_test count this line:
+            # a second bare or bare-flagged spawn fails the build.
             subprocess.Popen(["cmd.exe", "/c", script] + list(extra)
-                             + ["relaunch"], cwd=os.path.dirname(script))
+                             + ["relaunch"], cwd=os.path.dirname(script),
+                             creationflags=0)   # CONSOLE: deliberate
         except Exception:
             log.exception("update refused to start; the app stays up")
             return

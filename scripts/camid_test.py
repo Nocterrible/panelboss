@@ -111,9 +111,25 @@ def fake_run(cmd, **kw):
 
 
 fake_run.payload = b""
-_real_subprocess = cam_mod.subprocess
-cam_mod.subprocess = types.SimpleNamespace(run=fake_run,
-                                           CREATE_NO_WINDOW=0x08000000)
+# the no-window door (wave D): the fake sits UNDER panelboss._spawn's
+# subprocess name, so the door's belt pair still wraps the call - the
+# creationflags assertion below then proves the REAL construction (not
+# a remembered kwarg) reaches the child.
+import panelboss._spawn as _door
+
+
+class _SI:                        # STARTUPINFO stand-in, attrs writable
+    def __init__(self):
+        self.dwFlags = 0
+        self.wShowWindow = 0
+
+
+_real_subprocess = _door.subprocess
+_door.subprocess = types.SimpleNamespace(run=fake_run,
+                                         CREATE_NO_WINDOW=0x08000000,
+                                         STARTUPINFO=_SI,
+                                         STARTF_USESHOWWINDOW=1,
+                                         SW_HIDE=0)
 fake_run.payload = json.dumps(PS_DEV).encode()
 devs = cam_mod.camera_devices()
 assert calls[0].get("creationflags") == 0x08000000, calls
@@ -304,7 +320,7 @@ try:
           " idempotent)")
 finally:
     cam_mod.Camera = _real_camera
-    cam_mod.subprocess = _real_subprocess
+    _door.subprocess = _real_subprocess
 
 DEV_MIX = [{"name": "Ok Cam", "instance": "USB\\OK", "status": "OK"},
            {"name": "Bad Cam", "instance": "USB\\BAD", "status": "Error"},
