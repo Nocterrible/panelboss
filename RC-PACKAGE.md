@@ -202,3 +202,38 @@ SHIP-WITH-FIXES-absorbed):
   currently hidden by MOTION_ROWS). UI taste call, no code risk.
 - Deferred by decision, itemized: _events.py size-law split, overrides
   queue-marshaling, plus the BACKLOG LOWs each with its one-line fix.
+
+## POST-TAG addendum 3 (Oct 14 waves) - re-tag due after the off sub-mode
+Between rc-2026-10-13e and this entry the owner's day-two UAT drove
+five gated/V-receipted waves (loud-voice profiles with the RC_WHY
+translation and the fake-wm test-only-truth correction; the wake
+freeze fixed via async hdr walk, root-caused by idle-gate back-solve;
+dim mode end-to-end - consent-gated [away] config, _bright under the
+READBACK-IS-THE-TRUTH law after this desk's own liar panel, own-
+interpreter black overlays, the away card between Detection and
+Timers with BLACKOUT/DIM rows and the adopt-vs-revert preview, the
+hdr-while-away funeral - shipped via a seven-commit CHERRY-PICK
+RESCUE from a worktree misplacement, conflict fusions preserving
+monitor-first drain order and the DISPLAYCHANGE coexist law; the
+INPUT ORGAN SWAP after the owner's mouse lag - LL hooks floor at a
+~31 ms round-trip on ANY pump shape, RAWINPUT with verified
+INPUTSINK restores 498-1994/s at target and 0.02-0.06 idle cores,
+tombstone pin bans the LL trio; and the cadence laws - dark always-
+on at 1 s with the old floor rationale superseded-with-argument, its
+lit sibling split into its own key, two timers-card sliders and the
+first-dark-re-poll relabel, the README's five default-on promises
+corrected the same day).
+OWNER-CORRECTION PROBE LAW (commit 3ed08ce): scratch-process
+hardware verdicts are contaminated by the probing itself (two
+processes, one flaky DDC bus, zero retries) - capability is UNKNOWN
+until the shipping path asks with its full retry budget;
+unanswered-but-sent is UNVERIFIED-TRUST (this desk's AOC proved the
+class: dimmed on the app's door, NAK'd on mine); "refused" is a
+timestamp about our attempts, not the firmware's soul.
+IN FLIGHT at this entry: the OFF sub-mode over the app's proven DDC
+door (retry budget, trust mode, blackout-fallback confessed), the
+cursor corner-jail (SetCursorPos once at engage; raw motion is the
+waker, jail moves generate none), and the settings-window countdown.
+Tag moves after they gate green; the final-gate submission covers
+the whole 93c9cc3..range in ONE message (verdict, risk, leftover
+ledger - no follow-up harvests upstream).
