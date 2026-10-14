@@ -58,6 +58,9 @@ from ._runtime import \
 from ._detection import \
     _DetectionMixin
 
+from ._away import \
+    _AwayMixin
+
 from ._preview import \
     _CameraMixin
 
@@ -109,6 +112,7 @@ __all__ = [
     "TIMER_SPECS",
     "TIPS",
     "WAIT_CHOICES",
+    "_AwayMixin",
     "_CamEditMixin",
     "_CameraMixin",
     "_DetectionMixin",

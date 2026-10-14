@@ -287,10 +287,6 @@ TIPS = {
                "are the ones being replaced - and the script reopens "
                "it when it finishes. if it stays closed, the update "
                "window says why; run.bat starts it by hand.",
-    "hdr_away": "at screens-off the panels' HDR is turned off and "
-                "exactly what was on per panel is handed back on wake; "
-                "pre-24H2 Windows cannot tell HDR state, so we abstain "
-                "there",
     "gaming": "a fullscreen game is owed its panel's top refresh rate; "
               "the desktop is owed a cooler one. only rates the panel "
               "already lists are ever traded - the watcher asks for no "

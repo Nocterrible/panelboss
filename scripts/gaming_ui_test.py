@@ -314,24 +314,13 @@ def check():
         assert cfg["gaming"]["power_plan"] == "high performance", \
             cfg["gaming"]["power_plan"]
         print("[PASS] power-plan entry commits the fragment")
-        # 7) the HDR-while-away switch round-trips through a config
-        #    rewrite like the gaming switch does
-        before_hdr = bool(cfg["power"].get("hdr_off_when_away"))
-        app.hdr_away_switch.select() if not before_hdr \
-            else app.hdr_away_switch.deselect()
-        app._hdr_away_changed()
-        assert bool(cfg["power"].get("hdr_off_when_away")) is not before_hdr
-        time.sleep(0.5)
-        app.update()
-        assert bool(_disk()["power"]["hdr_off_when_away"]) is not before_hdr
-        app.hdr_away_switch.deselect() if not before_hdr \
-            else app.hdr_away_switch.select()
-        app._hdr_away_changed()
-        assert bool(cfg["power"].get("hdr_off_when_away")) is before_hdr
-        time.sleep(0.5)
-        app.update()
-        assert bool(_disk()["power"]["hdr_off_when_away"]) is before_hdr
-        print("[PASS] hdr-while-away switch round-trips through a config rewrite")
+        # 7) the HDR-while-away switch: RETIRED with its row by the
+        #    dim-mode wave (2026-10-14). The widget left the power tab,
+        #    so its click round-trip retired with it - the config key
+        #    itself still survives (one release, downgrade honesty)
+        #    and awaymode_test covers the migration that replaced the
+        #    switch. Section number kept as a headstone: renumbering
+        #    here would churn every line below for a comment.
         # 8) the Game DVR card: the registry is the truth, so the
         #    round-trip runs against the LIVE registry - "history" is
         #    the low-blast-radius value on this desk and its original

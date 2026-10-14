@@ -53,6 +53,9 @@ class _DetectionMixin:
         left = ctk.CTkFrame(band, width=380, fg_color="transparent")
         left.pack(side="left", fill="y")
         self._build_detect_card(left)
+        # the away card owns the slot between Detection and Timers:
+        # it decides what the timers' dark actually is (see _away.py)
+        self._away_card(left)
         self._build_timers(left)
         self._build_camera_card(band)
         self._sync_consent_switch()              # paint from cfg truth

@@ -1,5 +1,7 @@
 """Power-plan tab: Windows timer hold-overrides, the powercfg
-assistant, the Game DVR card, overrides viewer, hdr-while-away.
+assistant, the Game DVR card, overrides viewer. (The hdr-while-away
+switch lived here until the dim-mode wave retired it into the away
+card's dim sub-mode - detection tab, and config._migrate_away.)
 The gaming rate section lives in _gaming.py beside it: it shares
 this tab's SECOND column (Oct 12, owner: the gaming cards moved
 right) but trades monitor rates, not powercfg flags.
@@ -227,17 +229,10 @@ class _PowerMixin:
             box, text="manage powercfg overrides", width=250,
             command=self._show_overrides, **self.skin.secondary())
         self._assistant_ui(bool(self.cfg["power"]["assistant_task"]))
-        row = self._row(col, "turn HDR off while away (OLED panels)",
-                        TIPS["hdr_away"])
-        self.hdr_away_switch = ctk.CTkSwitch(row, text="",
-                                             font=self.skin.font(12),
-                                             command=self._hdr_away_changed,
-                                             **self.skin.switch_style())
-        self.hdr_away_switch.grid(row=0, column=1, sticky="e")
-        if bool(self.cfg["power"].get("hdr_off_when_away")):
-            self.hdr_away_switch.select()
-        else:
-            self.hdr_away_switch.deselect()
+        # the retired hdr-while-away switch used to stand here: the
+        # dim-mode wave moved that promise into the away card's dim
+        # sub-mode (detection tab; config._migrate_away carries the
+        # consent across). The key stays readable one release.
         self._gaming_section(col2)      # column two (owner request)
         self._dvr_section(col2)
 
@@ -329,12 +324,6 @@ class _PowerMixin:
         # read restore_windows fresh at every off/wake edge
         self.cfg["power"]["restore_windows"] = bool(
             self.restore_switch.get())
-        self._save()
-
-
-    def _hdr_away_changed(self):
-        self.cfg["power"]["hdr_off_when_away"] = bool(
-            self.hdr_away_switch.get())
         self._save()
 
 

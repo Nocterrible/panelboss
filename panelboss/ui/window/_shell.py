@@ -50,6 +50,7 @@ from ._widgets import _SleepPrompt
 from ._widgets import _WidgetsMixin
 from ._runtime import _RuntimeMixin
 from ._detection import _DetectionMixin
+from ._away import _AwayMixin
 from ._preview import _CameraMixin
 from ._camedit import _CamEditMixin
 from ._profiles import _ProfilesMixin
@@ -67,6 +68,7 @@ class SettingsWindow(
     _WidgetsMixin,
     _RuntimeMixin,
     _DetectionMixin,
+    _AwayMixin,
     _CameraMixin,
     _CamEditMixin,
     _ProfilesMixin,
