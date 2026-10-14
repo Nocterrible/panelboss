@@ -8,7 +8,10 @@
   universal word - a witness-tested panel goes DPMS-dark on a
   write its own register refuses to confirm; its preview counts
   the seconds on the settings window, the dark panel cannot carry
-  a digit). A boot belt re-lights any off-row left dark by a
+  a digit). A display sent OFF is retracted at the adapter level and
+  the state survives the app - Windows Settings -> Display brings it
+  back, and Windows itself refuses to disconnect the last active
+  display. A boot belt re-lights any off-row left dark by a
   crash or quit.
 - Loud-voice profiles, the profile apply refusals that speak at
   the gaze, and a chain-teardown fix (full app-down gauntlet

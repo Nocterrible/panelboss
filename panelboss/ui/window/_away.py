@@ -75,7 +75,7 @@ TIP = {
            "click cancels now; a real away arriving mid-preview keeps "
            "the effect and hands it back at the real wake instead); "
            "an off preview counts its seconds on this window - the "
-           "dark panel cannot carry a digit - and a dark panel also cannot prove its own darkness: 'off (unverified)' means the write was accepted and the register (or nothing) disagrees, so the eyes and the physical button remain the honest witnesses.",
+           "dark panel cannot carry a digit - and a dark panel also cannot prove its own darkness: 'off (unverified)' means the write was accepted and the register (or nothing) disagrees, so the eyes and the physical button remain the honest witnesses. an OFF row is a real retraction: the display is disconnected at the adapter, the same act as the re-connect entry in Windows settings, and the state SURVIVES this app - if a panel is left off, Settings -> Display brings it back (windows refuses to disconnect the last active display, so a lone screen can never be stranded).",
     "level": "where dim rows park their brightness while away, 1 to "
               "40 percent - shared by every dim row (per-monitor "
               "levels are a planned follow-up).",
