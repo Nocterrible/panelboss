@@ -267,6 +267,34 @@ def check():
         #     instead of vanishing). Drive it via the picker's NEW row.
         app._profile_picked(PF.NEW)
         app.update_idletasks()
+        # 8b-RAISE (the gate finding): force create() to raise and prove
+        #     the failure lands on _status_lbl (the create pane's OWN
+        #     label), NOT the silent vanish. _mode_fail routes to
+        #     _mode_status, which the create pane never builds - so the
+        #     old guard died into its own except-pass on exactly the
+        #     fresh-store launch the owner hit. Read the label back.
+        _real_create = PF.create
+        def _boom(*a, **k):
+            raise RuntimeError("driver said no")
+        PF.create = _boom
+        try:
+            app._prof_name.delete(0, "end")
+            app._prof_name.insert(0, "willfail")
+            app._profile_create()          # must NOT raise, must report
+            app.update_idletasks()
+        finally:
+            PF.create = _real_create
+        _lbl = str(app._status_lbl.cget("text"))
+        assert "create profile:" in _lbl and "driver said no" in _lbl, _lbl
+        assert "willfail" not in _store()["profiles"], "the raise must not store"
+        print("[PASS] create-now failure reports on the label that EXISTS")
+        # 8b) THE CREATE-NOW BUTTON (defect 1): on the create-new pane
+        #     (empty name -> the entry + "capture this desktop"), a
+        #     click must CREATE one default-filled card, land it in the
+        #     store, and switch the picker to it - the whole
+        #     button -> create -> store -> card-list chain, through the
+        #     real handler (the silent-death guard now reports any raise
+        #     instead of vanishing). Drive it via the picker's NEW row.
         app._prof_name.delete(0, "end")
         app._prof_name.insert(0, "captured")
         app._profile_create()

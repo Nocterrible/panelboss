@@ -1,6 +1,6 @@
 """Profiles tab verbs: mode edits, profile create and
 apply, the noshows dialog, rescue.
-Size law (measured 446, Oct 13 - the claim includes its own lines;
+Size law (measured 467, Oct 13 - the claim includes its own lines;
 the amendment-8 per-panel color selector added the last thirty and
 the 2026-10 claim had drifted before that): the apply pipeline is
 one transaction -
@@ -140,7 +140,14 @@ class _ModeMixin:
             self.profile_menu.set(name)
             self._profile_picked(name)
         except Exception as e:
-            self._mode_fail("create profile: %s" % e)
+            # the create pane builds _status_lbl and NEVER _mode_status
+            # (_fill_monitors early-returns on prof None), so routing
+            # through _mode_fail would die into _mode_fail's own
+            # except-pass - the exact silent vanish this guard exists to
+            # cure. Report on the label that EXISTS here, mirroring the
+            # empty-name branch above (gate finding, the real fix).
+            self._prof_msg = "create profile: %s" % e
+            self._status_lbl.configure(text=self._prof_msg)
 
 
     def _prof_blank(self):

@@ -237,8 +237,6 @@ os.makedirs(_dir7, exist_ok=True)
 _c7 = config.get_config(verbose=False)
 _c7["camera"]["always_fallback_poll_sec"] = 0        # sub-floor, dark gate
 _c7["camera"]["always_fallback_poll_on_sec"] = 2     # sub-floor, lit gate
-_c7["camera"]["always_fallback_poll_on_sec_raw"] = None  # ignore, probe only
-del _c7["camera"]["always_fallback_poll_on_sec_raw"]
 config.write_config(_c7, os.path.join(_dir7, "config.toml"))
 with open(os.path.join(_dir7, "config.toml"), "rb") as f:
     _raw7 = _toml.load(f)

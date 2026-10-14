@@ -3,7 +3,8 @@ assistant, the Game DVR card, overrides viewer, hdr-while-away.
 The gaming rate section lives in _gaming.py beside it: it shares
 this tab's SECOND column (Oct 12, owner: the gaming cards moved
 right) but trades monitor rates, not powercfg flags.
-Size law (~370, measured Oct 12 after the two-column split): this
+Size law (measured 449, Oct 13 after the two-column split and the
+defect-2 knob-from-truth paint): this
 is ONE page's paint-and-refresh
 routine; splitting the cards across files would scatter the tab's
 ordering lessons for zero readability the window/ split already
