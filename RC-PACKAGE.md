@@ -237,3 +237,37 @@ waker, jail moves generate none), and the settings-window countdown.
 Tag moves after they gate green; the final-gate submission covers
 the whole 93c9cc3..range in ONE message (verdict, risk, leftover
 ledger - no follow-up harvests upstream).
+
+## ADDENDUM 4 (Oct 14 evening) - the OFF sub-mode SHIPS; the panel
+## dossier rewrote the day's physics under it
+THE OFF RUNG IS REAL, WITNESSED: DDC/CI VCP 0xD6 actuates on the
+directly-attached IOC912B - owner's eyes saw the blackout and the
+return through the probe's WATCH windows. The panel's power register
+read val=1 ("on") THROUGH the witnessed dark, at +1/+2/+3 s re-reads:
+the register does not track DPMS state on this class. Consequence,
+shipped law (reviewer F4): the universal status word is
+"off (unverified)" - bare "off" retired; the engage buys no register
+lie at the door (no vcp_read on the send path, pinned).
+THE KVM FACT: the AOC2790 sits behind a KVM with partial DDC
+pass-through. Every earlier "deaf/refused" verdict was contaminated
+twice over - by scratch-process contention (probe law, 3ed08ce) AND
+by the switch; the panel's whole rude biography now has a mechanism.
+AOC off-capability ships UNKNOWN-selectable; tonight's instrument is
+the app's own Preview button, KVM parked on this PC.
+DEAD RUNGS, EVIDENCED: (a) monitor devnode disable (pnputil,
+elevated, twice + watched retest): kernel marks, CCD desk unmoved,
+panel unchanged - mark-only on NVIDIA WDDM 3.2. (b) SetDisplayConfig
+path-set (the suspected Settings-Disconnect mechanism, the
+no-elevation hope): ERROR_INVALID_PARAMETER 0x57 at ENTRY on every
+call shape incl. VALIDATE and no-array verbs, on 26220 - the
+"no scriptable API" survey answer, now locally measured. The ladder
+ships: blackout (owned) / dim (works, deaf replies) / off (D6, real,
+unverifiable-by-register) / physical button.
+GATE CHAIN: reviewer pass 1 SHIP-WITH-FIXES (5 findings: boot belt
+for the in-memory-ledger stranded-dark class, degraded-count
+predicate, countdown chain overlap, bare-off demotion, honesty
+one-liners); fixes at 2410e5e applied verbatim; pass 2 SHIP, both
+suites re-greened by the gate itself. V PASS on the wave (deep
+channel). OWED EVIDENCE at tag time: owner-eye AOC preview, live
+armed dim-spell witness, full app-down gauntlet re-witness at this
+tip (tray must be down; scheduled after UAT).
