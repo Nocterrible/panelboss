@@ -164,12 +164,27 @@ def run():
     print("ok - vrr: the expiry hands the SIBLING back; the vrr panel "
           "never appears")
 
-    # THE BAN (owner's strobe report, Oct 13 night): every console
-    # verb in the package rides the _spawn door (or an explicitly
-    # creation-flagged declared exception - the updater). Scanned
-    # here too, offline, so the gaming side carries the law without
-    # waiting for the window suite's app-down half.
+    # ---- SPAWN BAN v2 (LOCKSTEP COPY: scripts/startup_test.py
+    # carries the same scan - change both or neither). v2 closes the
+    # alias holes (findings 3/4): `import subprocess as sp` and
+    # `from subprocess import run[ as alias]` smuggle nothing past
+    # this, and creationflags is required INSIDE the call's own paren
+    # range. Scanned offline here so the gaming side carries the law
+    # without waiting for the window suite's app-down half.
     import io as _io, os as _os, re as _re, panelboss as _pb
+    _VERBS = r"(?:run|Popen|call|check_call|check_output)"
+
+    def _range(src, open_idx):
+        depth = 0
+        for i in range(open_idx, len(src)):
+            if src[i] == "(":
+                depth += 1
+            elif src[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    return src[open_idx:i + 1]
+        return ""                       # unbalanced: treated as no flags
+
     _pkg = _os.path.dirname(_os.path.abspath(_pb.__file__))
     _bad = []
     for _root, _dirs, _files in _os.walk(_pkg):
@@ -179,15 +194,32 @@ def run():
                 continue
             _src = _io.open(_os.path.join(_root, _fn),
                             encoding="utf8").read()
+            _pats = [r"subprocess\." + _VERBS + r"\s*\("]
+            for _m in _re.finditer(r"import\s+subprocess\s+as\s+(\w+)",
+                                   _src):
+                _pats.append(_re.escape(_m.group(1)) + r"\." + _VERBS
+                             + r"\s*\(")
             for _m in _re.finditer(
-                    r"subprocess\.(?:run|Popen|call|check_call|"
-                    r"check_output)\s*\(|os\.system\s*\(|os\.popen\s*\(",
-                    _src):
-                if _m.group(0).startswith("os."):
-                    _bad.append("%s: raw %s" % (_fn, _m.group(0)))
-                elif "creationflags" not in _src[_m.start():
-                                                 _m.start() + 300]:
-                    _bad.append("%s: bare %s" % (_fn, _m.group(0)))
+                    r"from\s+subprocess\s+import\s+([^\n(]+)", _src):
+                for _part in _m.group(1).split(","):
+                    _names = [n.strip() for n in _part.split(" as ")
+                              if n.strip()]
+                    if _names and _names[0] in (
+                            "run", "Popen", "call", "check_call",
+                            "check_output"):
+                        _pats.append(r"(?<![\w.])"
+                                     + _re.escape(_names[-1]) + r"\s*\(")
+            for _pat in _pats:
+                for _m in _re.finditer(_pat, _src):
+                    if "creationflags" not in _range(_src, _m.end() - 1):
+                        _bad.append("%s:%d %s without creationflags"
+                                    % (_fn,
+                                       _src[:_m.start()].count("\n") + 1,
+                                       _m.group(0).strip()))
+            for _m in _re.finditer(r"os\.(?:system|popen)\s*\(", _src):
+                _bad.append("%s:%d raw %s"
+                            % (_fn, _src[:_m.start()].count("\n") + 1,
+                               _m.group(0).strip()))
     assert not _bad, "console verbs outside the door: %s" % _bad
 
     print("GAMING TESTS OK")

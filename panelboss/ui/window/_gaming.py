@@ -1,5 +1,5 @@
 """Gaming refresh-rate section of the power plan tab.
-Size law (measured 384, Oct 13 - the claim includes its own
+Size law (measured 385, Oct 13 - the claim includes its own
 lines; the knob-lie sync entry added the last sixteen, the
 amendment-8 color selector the thirty before): the
 card, its commits and the

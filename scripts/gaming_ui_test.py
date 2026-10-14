@@ -474,6 +474,15 @@ def check():
         _ck.append((cfg["restore"], "enabled"))
         _snap_cfg = {(id(s), k): s.get(k) for s, k in _ck}
         try:
+            # the lever lives in the SELECTED-profile fill (a NEW
+            # selection skips that half of the pane, and this suite's
+            # profile store is scratch-empty): create one first - the
+            # same choreography power_assistant_test and the geometry
+            # probe use - or the flip loop probes a widget that was
+            # never built (the bite, named by the watchdog census)
+            app._prof_name.insert(0, "9b desk")
+            app._profile_create()
+            app._profiles_render()
             for flip in (True, False):
                 cfg["power"]["hold_display"] = flip
                 cfg["power"]["hold_sleep"] = not flip
@@ -536,19 +545,38 @@ def check():
                   "rates shown")
         finally:
             WM.offered_modes = _real_off
-        # the checks are done: end the loop. destroy() alone does not
-        # always work - a half-built second window (the image poison
-        # above) kills the Tk auto-command table, and the mainloop's
-        # window-gone notification runs through those commands.
-        # quit() is a Tcl-level 'break' and always ends the loop.
-        app.destroy()
-        app.quit()
     except Exception:
         _fail("check")
+    finally:
+        # the checks are done: end the loop - ALWAYS. The third
+        # app-down bite (measured, watchdog census in this file):
+        # §9b's aborted check skipped this teardown, the mainloop
+        # outlived the error by 60 s, and the watchdog's rc=1 buried
+        # the real traceback under the bite. destroy+quit belong in
+        # a finally: every exit from check() closes the window and
+        # fails FAST. destroy() alone does not always end the loop
+        # (the half-built second window kills Tk's auto-command
+        # table); quit() is the Tcl-level break that does.
+        try:
+            app.destroy()
+        except Exception:
+            pass
+        try:
+            app.quit()
+        except Exception:
+            pass
 
 
 def _watchdog():
     print("WATCHDOG FIRED after 60 s", flush=True)
+    # the standing bracket's instrument (exit-path hang, three bites):
+    # name every still-alive thread at the bite - the class is a
+    # thread holding the interpreter (or the loop) open past the
+    # [PASS] prints, and a watchdog without a census is a timestamp.
+    print("threads alive at bite:", flush=True)
+    for t in threading.enumerate():
+        print("  %-24s daemon=%s alive=%s" % (t.name, t.daemon,
+                                              t.is_alive()), flush=True)
     FAILED.append("watchdog")
     app.destroy()
 
@@ -562,6 +590,10 @@ def _hard_kill():
     print("HARD KILL after 120 s: the Tk event loop stopped "
           "processing - killing so the sweep cannot hang",
           flush=True)
+    print("threads alive at kill:", flush=True)
+    for t in threading.enumerate():
+        print("  %-24s daemon=%s alive=%s" % (t.name, t.daemon,
+                                              t.is_alive()), flush=True)
     os._exit(3)
 
 

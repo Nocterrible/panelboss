@@ -165,13 +165,33 @@ _r = _spawn.run(["cmd", "/c", "ver"], capture_output=True, timeout=15)
 assert _r.returncode == 0 and b"Windows" in _r.stdout, _r
 
 
+# ---- SPAWN BAN v2 (LOCKSTEP COPY: scripts/gaming_test.py carries the
+# same scan - change both or neither). v2 closes the alias holes the
+# gate caught (findings 3/4): `import subprocess as sp` and
+# `from subprocess import run[, Popen][ as alias]` must not smuggle a
+# bare verb past the module-qualified pattern, and creationflags is
+# required INSIDE the call's own paren range (a flag mentioned in
+# unrelated nearby text is not compliance).
 def _spawn_ban(pkg_dir):
-    """no bare console verbs anywhere in the package: a call is
-    legal only inside the door module, or with an explicit
-    creationflags (the updater's declared visible console). The ban
-    scans call sites, not trust - the strobe class dies when
-    FORGETTING is impossible, not when remembering is polite."""
+    """no bare console verbs anywhere in the package: a call is legal
+    only inside the door module, or with an explicit creationflags
+    (the updater's declared visible console). The ban scans call
+    sites, not trust - the strobe class dies when FORGETTING is
+    impossible, not when remembering is polite."""
     import io as _io, re as _re
+    verbs = r"(?:run|Popen|call|check_call|check_output)"
+
+    def _range(src, open_idx):
+        depth = 0
+        for i in range(open_idx, len(src)):
+            if src[i] == "(":
+                depth += 1
+            elif src[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    return src[open_idx:i + 1]
+        return ""                       # unbalanced: treated as no flags
+
     bad = []
     for root, dirs, files in os.walk(pkg_dir):
         dirs[:] = [d for d in dirs if d != "__pycache__"]
@@ -179,14 +199,29 @@ def _spawn_ban(pkg_dir):
             if not fn.endswith(".py") or fn == "_spawn.py":
                 continue
             src = _io.open(os.path.join(root, fn), encoding="utf8").read()
-            for m in _re.finditer(
-                    r"subprocess\.(?:run|Popen|call|check_call|"
-                    r"check_output)\s*\(|os\.system\s*\(|os\.popen\s*\(",
-                    src):
-                if m.group(0).startswith("os."):
-                    bad.append("%s: raw %s" % (fn, m.group(0)))
-                elif "creationflags" not in src[m.start():m.start() + 300]:
-                    bad.append("%s: bare %s" % (fn, m.group(0)))
+            pats = [r"subprocess\." + verbs + r"\s*\("]
+            for m in _re.finditer(r"import\s+subprocess\s+as\s+(\w+)", src):
+                pats.append(_re.escape(m.group(1)) + r"\." + verbs + r"\s*\(")
+            for m in _re.finditer(r"from\s+subprocess\s+import\s+([^\n(]+)",
+                                  src):
+                for part in m.group(1).split(","):
+                    names = [n.strip() for n in part.split(" as ")
+                             if n.strip()]
+                    if names and names[0] in (
+                            "run", "Popen", "call", "check_call",
+                            "check_output"):
+                        pats.append(r"(?<![\w.])" + _re.escape(names[-1])
+                                    + r"\s*\(")
+            for pat in pats:
+                for m in _re.finditer(pat, src):
+                    if "creationflags" not in _range(src, m.end() - 1):
+                        bad.append("%s:%d %s without creationflags"
+                                   % (fn, src[:m.start()].count("\n") + 1,
+                                      m.group(0).strip()))
+            for m in _re.finditer(r"os\.(?:system|popen)\s*\(", src):
+                bad.append("%s:%d raw %s"
+                           % (fn, src[:m.start()].count("\n") + 1,
+                              m.group(0).strip()))
     return bad
 
 

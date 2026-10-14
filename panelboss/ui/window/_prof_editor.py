@@ -1,7 +1,7 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
 
-SIZE LAW: measured 432 (Oct 13 - the checkbox's both-branch paint
+SIZE LAW: measured 433 (Oct 13 - the checkbox's both-branch paint
 and the knob-lie sync entry landed here; the claim had drifted from
 ~360, corrected in-commit).
 These are the pane's five section fills plus the
