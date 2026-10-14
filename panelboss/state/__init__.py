@@ -41,8 +41,8 @@ import time
 
 from .. import display
 
-from . import (_boot, _cams, _events, _phase, _policy, _power,
-               _preview)
+from . import (_boot, _cams, _events, _hdrwatch, _phase, _policy,
+               _power, _preview)
 
 from ._boot import _BootMixin
 
@@ -53,6 +53,8 @@ from ._power import _PowerMixin
 from ._policy import _PolicyMixin
 
 from ._cams import _CamsMixin
+
+from ._hdrwatch import _HdrWatchMixin
 
 from ._preview import FrameBox, _PreviewMixin
 
@@ -65,8 +67,8 @@ log = logging.getLogger("state")
 # facade is ~135 lines and the bulk IS the contract - the old docstring
 # plus the re-export roster every caller and test-patch site leans on.)
 class PresenceMonitor(_BootMixin, _PhaseMixin, _PowerMixin,
-                      _PolicyMixin, _CamsMixin, _PreviewMixin,
-                      _EventsMixin):
+                      _PolicyMixin, _CamsMixin, _HdrWatchMixin,
+                      _PreviewMixin, _EventsMixin):
     pass
 
 
@@ -76,6 +78,7 @@ __all__ = [
     "_BootMixin",
     "_CamsMixin",
     "_EventsMixin",
+    "_HdrWatchMixin",
     "_PhaseMixin",
     "_PolicyMixin",
     "_PowerMixin",
@@ -83,6 +86,7 @@ __all__ = [
     "_boot",
     "_cams",
     "_events",
+    "_hdrwatch",
     "_phase",
     "_policy",
     "_power",
@@ -96,7 +100,8 @@ __all__ = [
     "time",
 ]
 
-_FANOUT = (_boot, _phase, _power, _policy, _cams, _preview, _events)
+_FANOUT = (_boot, _phase, _power, _policy, _cams, _hdrwatch, _preview,
+           _events)
 
 
 class _StatePackage(type(sys.modules[__name__])):

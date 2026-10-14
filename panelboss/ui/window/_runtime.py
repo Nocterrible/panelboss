@@ -124,6 +124,18 @@ class _RuntimeMixin:
             if message == "startup":
                 from ... import startup
                 self._startup_sync(startup.enabled())
+            if message == "hdr_sync":
+                # amendment 8: a WM_DISPLAYCHANGE ride-up - the color
+                # state moved under us. The profiles pane's hdr notes
+                # and per-row dropdowns are re-read FROM THE DRIVER
+                # (its render walks hdr_states() itself), and the
+                # gaming card refreshes the next time its tab paints;
+                # an unbuilt pane is not an error, it simply has no
+                # row to correct yet
+                try:
+                    self._profiles_render()
+                except Exception:
+                    pass
             if message == "cameras":
                 self._apply_cameras(_value)
                 if hasattr(self, "_sync_consent_switch"):

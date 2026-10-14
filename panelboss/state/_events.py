@@ -30,6 +30,19 @@ class _EventsMixin:
                 log.warning("display queue item %r is not an "
                             "event triple; dropped", item)
                 continue
+            if event == "displaychange":
+                # amendment 8: someone moved the color state or the
+                # topology (this app's own hdr_set included - the
+                # toggle re-enumerates the paths). No screens-off
+                # reading (value 0.0 is a shape holder, not a dark
+                # claim: a color flip says nothing about the lamps);
+                # one ask upward, and the panes re-read the driver.
+                if getattr(self, "ui_events", None) is not None:
+                    try:
+                        self.ui_events.put(("hdr_sync", None))
+                    except Exception:
+                        log.debug("hdr_sync post failed", exc_info=True)
+                continue
             try:
                 self._notice_screens(now, value)
             except Exception:

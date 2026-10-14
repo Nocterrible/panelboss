@@ -50,6 +50,12 @@ MONITOR_OFF = 2                # DPMS standby, same as the power plan
 
 WM_POWER = 0x218
 PBT_POWER = 4                  # lParam points to a POWERBROADCAST_HDR
+WM_DISPLAYCHANGE = 0x7E        # the color/topology broadcast (amendment
+                               # 8): sent when HDR flips, a mode lands
+                               # or a monitor joins - by US or by
+                               # anyone else's hand
+WS_VISIBLE = 0x10000000        # the delivery shape for the above
+WS_EX_TOOLWINDOW = 0x80        # (visible but nowhere to be seen)
 
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x1       # keep the box awake while we poll the camera
@@ -132,7 +138,29 @@ class WNDCLASSEX(ctypes.Structure):
                 ("hIconSm", ctypes.c_void_p)]
 
 
+_ACTIVE = []                   # the live Display, one per process: a
+                               # broadcast is SENT straight to the
+                               # window proc (it never rides the
+                               # queue), and a module-level proc has
+                               # no self - the queue is reached
+                               # through this one-slot list
+
+
 def _def_window(h, m, w, l):
+    if m == WM_DISPLAYCHANGE and _ACTIVE:
+        # amendment 8's ear: WM_DISPLAYCHANGE (HDR flip, mode change,
+        # a monitor joining) is delivered by SEND, so the pump loop's
+        # PeekMessage never sees it - measured Oct 13, twice: an
+        # invisible top-level got nothing at all (the broadcast
+        # enumerator skips hidden windows), and a visible one caught
+        # the message in the PROC, not the queue. WS_VISIBLE +
+        # WS_EX_TOOLWINDOW at -32000 is the shape: on screen
+        # nowhere, in Alt+Tab never.
+        try:
+            _ACTIVE[0].queue.put(("displaychange", 0.0, time.time()))
+        except Exception:
+            pass               # a dying watcher loses an event, not
+                               # the process; state fail-opens anyway
     return int(u32.DefWindowProcW(h, m, w, l) or 0)
 
 
@@ -158,6 +186,7 @@ class Display(threading.Thread):
         self._proc = WNDPROTYPE(_def_window)   # keep the callback alive
         self._hwnd = None
         self._handle = None
+        _ACTIVE[:] = [self]                    # the broadcast ear's route
 
     def run(self):
         try:
@@ -175,6 +204,9 @@ class Display(threading.Thread):
         """Confess any unrequested exit and null the global watcher."""
         if self._handle and not self._stop:
             log.error("display watcher exiting without a stop request")
+        if _ACTIVE[:1] == [self]:
+            del _ACTIVE[0]                 # the ear goes deaf with the
+                                           # window: no event to a corpse
         global watcher
         if watcher is self:
             watcher = None
@@ -194,10 +226,22 @@ class Display(threading.Thread):
             log.error("RegisterClassExW failed (%s); no state tracking",
                       k32.GetLastError())
             return
-        for parent in (ctypes.c_void_p(HWND_MESSAGE),   # -3: message-only
-                       ctypes.c_void_p(0)):            # top level fallback
-            self._hwnd = u32.CreateWindowExW(ctypes.c_void_p(0), CLASS_NAME,
-                                             None, 0, 0, 0, 64, 64, parent,
+        for parent in (ctypes.c_void_p(0),        # the broadcast
+                       ctypes.c_void_p(HWND_MESSAGE)):  # shape, see below
+            # WS_VISIBLE + WS_EX_TOOLWINDOW at a position off every
+            # screen: the shape that measurably RECEIVES
+            # WM_DISPLAYCHANGE (a bare invisible top-level got
+            # nothing, and a message-only window is not top-level at
+            # all - both proven Oct 13 against real hdr_set round
+            # trips). Toolwindow keeps it out of Alt+Tab; off-screen
+            # keeps it out of every screenshot; the power sink
+            # registers identically. HWND_MESSAGE remains the
+            # fallback: a station that refuses top-levels still gets
+            # the power half, just deaf to display broadcasts.
+            self._hwnd = u32.CreateWindowExW(WS_EX_TOOLWINDOW, CLASS_NAME,
+                                             None, WS_VISIBLE,
+                                             -32000, -32000, 64, 64,
+                                             parent,
                                              None, ctypes.c_void_p(0), None)
             if self._hwnd:
                 break
@@ -213,6 +257,10 @@ class Display(threading.Thread):
                         k32.GetLastError())
         while not self._stop:
             while u32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 1):
+                # WM_DISPLAYCHANGE is NOT handled here: a broadcast
+                # is sent to the window proc (the _def_window ear)
+                # and never rides this queue; only the REGISTERED
+                # power notification lands as a queued message
                 if msg.message == WM_POWER and msg.wParam == PBT_POWER:
                     if not msg.lParam:
                         # NULL is an ACCESS VIOLATION, not an exception:

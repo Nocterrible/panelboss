@@ -329,6 +329,14 @@ def _run(cfg, autostart=False):
     threading.Thread(target=gaming_watch.loop,
                      args=(cfg, stop_gaming), daemon=True,
                      name="gaming").start()
+    # the HDR auto-switch watcher (amendment 8): its own thread and
+    # its own cadence - it never rides the duty poll, and the tick
+    # costs one dict read while the tier map is empty (the default:
+    # a virgin desk never loads a counter provider)
+    stop_hdr = threading.Event()
+    threading.Thread(target=monitor.hdr_watch,
+                     args=(stop_hdr,), daemon=True,
+                     name="hdr-watch").start()
 
     from . import tweaks             # fail-open: a denied key is a
     def _mirror_tweaks():            # one boot pass, then the
@@ -358,6 +366,7 @@ def _run(cfg, autostart=False):
         # a window crash must not pin the camera: stop the loop first
         stop_gaming.set()
         stop_taskbar.set()
+        stop_hdr.set()
         monitor.events.put(("stop", True))
         monitor.quit = True        # latch NOW, before icon.stop: the
                                    # pump-exit check reads this flag and
