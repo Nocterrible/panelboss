@@ -12,9 +12,31 @@ TIMER_SPECS = [          # section, key, label, min, max, step, help
     ("timers", "on_poll_sec", "poll while on", 1, 15, 1,
      "how often the camera wakes while the screens are on and "
      "absence is being confirmed"),
-    ("timers", "off_poll_sec", "poll while off", 1, 15, 1,
-     "how often the camera watches for a return while the screens "
-     "are dark (the LED is invisible anyway)"),
+    ("timers", "off_poll_sec", "first dark re-poll", 1, 15, 1,
+     "how long the presence watch waits before its first re-poll after "
+     "the screens go dark (the LED is invisible anyway)"),
+    # THE DEGRADED ALWAYS-ON RE-READ GATES (owner ruling, Oct 13 late;
+    # the split E1 shipped at 8d30a6c): these two ride the same slider
+    # idiom and read as a family with the row above (first re-poll /
+    # dark re-read / lit re-read). The FRESH-eye ~5 Hz read in the dark
+    # is UNCAPPED - the owner answered E1's ceiling question: "the point
+    # of an always on cam is instant recognition, if someone wants 10s
+    # polls they can set 10 sec polls and let the camera sleep". So
+    # these gates only govern the DEGRADED eye (the one whose wear clock
+    # ran out); a held stream still reads as fast as it can. They are
+    # [camera] keys: _timer_changed writes the very dict the policy
+    # reads live at the branch every tick ("writing is applying"), so
+    # these are the only live-in-app-tab rows in the design - no re-arm,
+    # no restart needed.
+    ("camera", "always_fallback_poll_sec", "always-on re-read, screens off",
+     1, 15, 1,
+     "always-on: read once per second while the screens are off (the "
+     "stream stays open; 1 s is the point)"),
+    ("camera", "always_fallback_poll_on_sec", "always-on re-read, screens on",
+     5, 15, 1,
+     "the lit-table twin of the dark gate: how often a degraded always-on "
+     "eye re-reads while the screens are lit - low keeps the eye live, "
+     "high lets the stream rest between reads"),
     ("timers", "present_recheck_sec", "present recheck", 10, 300, 5,
      "how often a confirmed person is re-checked while they sit there"),
     ("timers", "re_off_grace_sec", "re-off grace", 0, 120, 5,

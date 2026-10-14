@@ -204,6 +204,61 @@ residue = glob.glob(_TMP + "/*.tmp.*")
 assert not residue, residue
 _pass("no .tmp residue after the hammer (leftovers cleaned)")
 
+# --- 6) the autostart discipline (defect 4): the Run value is the
+# SINGLE truth; the [ui] section owns NO autostart key, so no
+# config value can re-add the entry (the wave-C fossil was deploy-
+# state, not config-state). "flag false + value present = the flag
+# loses at next save" is enforced in startup.selfheal (see the startup
+# suite's named-line pin), and write_config must NEVER write an
+# autostart key into [ui] - if one crept into DEFAULTS it would make a
+# virgin launch resurrect the entry at the first save.
+cfg_ui = config.get_config(verbose=False)
+assert "autostart" not in cfg_ui["ui"], (
+    "[ui] must hold no autostart key: registry is the single truth, got %r"
+    % (cfg_ui["ui"],))
+config.write_config(cfg_ui, os.path.join(_TMP, "autostart_probe.toml"))
+with open(os.path.join(_TMP, "autostart_probe.toml"), "rb") as f:
+    _au = _toml.load(f)
+assert "autostart" not in _au.get("ui", {}), (
+    "write_config invented an [ui].autostart key: %r" % (_au.get("ui"),))
+_pass("no [ui].autostart key at load or on save (registry owns the flag)")
+
+# --- 7) the cadence floors (defect 5): the two degraded always-on
+# re-read gates get slider rows ("always-on re-read, screens off/on"),
+# so their floors must hold at the LOAD boundary in BOTH directions -
+# a drag-to-min or hand-edited sub-floor value cannot survive the
+# reload the policy reads live. get_config owns the clamp (max(1) on
+# the dark gate, max(5) on the lit gate); write_config only serializes,
+# so the guarantee lands where the value is READ back - the honest
+# slider range (1-15) is the UI's, the floor is config's, and a value
+# above the UI ceiling is permitted to persist (only the row caps it).
+_dir7 = os.path.join(_TMP, "floor7")
+os.makedirs(_dir7, exist_ok=True)
+_c7 = config.get_config(verbose=False)
+_c7["camera"]["always_fallback_poll_sec"] = 0        # sub-floor, dark gate
+_c7["camera"]["always_fallback_poll_on_sec"] = 2     # sub-floor, lit gate
+_c7["camera"]["always_fallback_poll_on_sec_raw"] = None  # ignore, probe only
+del _c7["camera"]["always_fallback_poll_on_sec_raw"]
+config.write_config(_c7, os.path.join(_dir7, "config.toml"))
+with open(os.path.join(_dir7, "config.toml"), "rb") as f:
+    _raw7 = _toml.load(f)
+# write_config does NOT clamp - the raw sub-floor values are what hit
+# the disk; the floor is a load-time guarantee, proven next
+assert _raw7["camera"]["always_fallback_poll_sec"] == 0, _raw7["camera"]
+assert _raw7["camera"]["always_fallback_poll_on_sec"] == 2, _raw7["camera"]
+_f7 = config.get_config(dir=_dir7, verbose=False)    # the real load boundary
+assert _f7["camera"]["always_fallback_poll_sec"] == 1, (
+    "dark gate must floor to 1, got %r" % _f7["camera"])
+assert _f7["camera"]["always_fallback_poll_on_sec"] == 5, (
+    "lit gate must floor to 5, got %r" % _f7["camera"])
+# and the floors are idempotent: reloading the floored config is a
+# fixed point (the row can never march a value down past its floor)
+config.write_config(_f7, os.path.join(_dir7, "config.toml"))
+_f7b = config.get_config(dir=_dir7, verbose=False)
+assert _f7b["camera"]["always_fallback_poll_sec"] == 1
+assert _f7b["camera"]["always_fallback_poll_on_sec"] == 5
+_pass("cadence gates floor at the load boundary, both keys, idempotent")
+
 if FAILED:
     print("CONFIG NORM TEST FAILED in", FAILED)
     sys.exit(1)
