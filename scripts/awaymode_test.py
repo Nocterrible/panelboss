@@ -1,7 +1,10 @@
 """Away mode (dim-mode wave), offline: the migration truth rows, the
 substitution at the off-broadcast site, the refusal degradation, the
-preview adopt-vs-revert law, and the static ban that keeps dim mode
-out of the power verbs. No Tk, no display hardware, no live app.
+preview adopt-vs-revert law, the INPUT-HOOK LIFECYCLE (the owner's
+mouse-lag pin: mode off never installs, a spell installs once, a
+steady spell no churn, the lift unhooks), and the static ban that
+keeps dim mode out of the power verbs. No Tk, no display hardware,
+no live app.
 Run from repo root:
 python scripts/awaymode_test.py
 """
@@ -67,6 +70,31 @@ class FakeOverlay:
 
     def hide_all(self):
         self.calls.append(("hide_all",))
+
+
+class FakeHookU32:
+    """Records the LL-hook trio (install/unhook/next) and passes every
+    other user32 call to the real library - the lifecycle pin touches
+    ONLY the trio, and so may only shadow it."""
+
+    def __init__(self, real):
+        self.real = real
+        self.installs = []
+        self.unhooks = []
+
+    def SetWindowsHookExW(self, hid_type, proc, inst, thread):
+        self.installs.append(hid_type)
+        return len(self.installs)         # distinct fake handles
+
+    def UnhookWindowsHookEx(self, handle):
+        self.unhooks.append(handle)
+        return True
+
+    def CallNextHookEx(self, *args):
+        return 0
+
+    def __getattr__(self, name):
+        return getattr(self.real, name)   # everything else rides real
 
 
 DESK = [
@@ -318,12 +346,70 @@ def test_static_ban():
     print("ok - static ban: the off path reaches the verb only un-dimmed")
 
 
+def test_hook_lifecycle():
+    """The owner's mouse-lag pin (UAT, Oct 14): a mode-off desk must
+    NEVER see SetWindowsHookExW - invisibility by construction, not
+    by a flag check inside the callback. A dim spell installs the
+    pair EXACTLY once; a steady spell never churns the chain; the
+    lift sends the ears home; a new spell re-installs."""
+    import panelboss.display as disp
+    led = Ledger()
+    fake = FakeHookU32(disp.u32)
+    led.keep(disp, "u32", fake)
+    led.keep(disp, "watcher", disp.watcher)
+    led.keep(wm, "monitors", lambda: [dict(m) for m in DESK])
+    led.keep(wm, "hdr_states", lambda: [])
+    led.keep(wm, "hdr_set", lambda gdi, on: "")
+    led.keep(wm, "_bright", FakeBright({"D1": 80, "D2": 70, "D3": 50}))
+    led.keep(wm, "_overlay", FakeOverlay())
+    led.keep(profiles, "hdr_away_restore", lambda off: None)
+    tmp = tempfile.mkdtemp(prefix="pb_away_h")
+    cfg = config.get_config(dir=tmp, verbose=False)
+    cfg["guards"]["fullscreen"] = False
+    cfg["power"]["restore_windows"] = False
+    m = PresenceMonitor(cfg, detector=None)
+    m._off_phase_hold = lambda _keep, _phase: None
+    m._rearm = lambda _table: None
+    d = disp.Display()                        # the thread never runs:
+    disp.watcher = d                          # the pump is called by hand
+    try:
+        assert m._away_engage() == {}         # stock mode, the default law
+        d._service_ears()
+        d._service_ears()
+        assert fake.installs == [], fake.installs
+        print("ok - mode off NEVER installs the LL ears (no tax, ever)")
+        m.cfg["away"] = {"mode": "dim", "monitors": {}, "dim_level": 10}
+        m._away_engage()
+        d._service_ears()
+        assert sorted(fake.installs) == sorted([disp.WH_KEYBOARD_LL,
+                                                disp.WH_MOUSE_LL]), \
+            fake.installs
+        d._service_ears()
+        d._service_ears()
+        assert len(fake.installs) == 2, "a steady spell never re-installs"
+        assert d._lift_armed is True
+        m._away_lift()
+        d._service_ears()
+        assert len(fake.unhooks) == 2 and d._hooked is False, fake.unhooks
+        m._away_engage()
+        d._service_ears()
+        assert len(fake.installs) == 4, "a new spell earns new ears"
+        m._away_lift()
+        d._service_ears()
+        assert len(fake.unhooks) == 4
+        print("ok - spell installs once, steady no churn, lift unhooks, "
+              "re-spell re-installs")
+    finally:
+        led.undo()
+
+
 def main():
     test_migration()
     test_substitution()
     test_stock_path()
     test_refusal_degrades()
     test_preview_adopt_law()
+    test_hook_lifecycle()
     test_static_ban()
     print("AWAYMODE TESTS OK")
 

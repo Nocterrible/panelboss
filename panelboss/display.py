@@ -244,6 +244,14 @@ class Display(threading.Thread):
         self._hmk = None                       # mouse lift ear
         self._lift_armed = False               # the away engine's flag
         self._lift_origin = None               # mouse debounce anchor
+        self._ear_req = None                   # pending install/uninstall
+        self._hooked = False                   # requests are APPLIED on
+        #                                      the pump thread (LL hooks
+        #                                      belong to the thread that
+        #                                      installed them), so the
+        #                                      engine only ever leaves a
+        #                                      note: None = no request,
+        #                                      True/False = want
         self._hwnd = None
         self._handle = None
         _ACTIVE[:] = [self]                    # the broadcast ear's route
@@ -315,7 +323,8 @@ class Display(threading.Thread):
         if not self._handle:
             log.warning("power sink refused (%s); state tracking is a bonus",
                         k32.GetLastError())
-        self._install_hooks()
+        self._hooked = False
+        self._ear_req = None
         while not self._stop:
             while u32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 1):
                 # WM_DISPLAYCHANGE is NOT handled here: a broadcast
@@ -348,6 +357,14 @@ class Display(threading.Thread):
                     self._display_moved()
                 u32.DefWindowProcW(msg.hWnd, msg.message, msg.wParam,
                                    msg.lParam)
+            self._service_ears()               # the engine's arm notes
+            #                                  are APPLIED here, on the
+            #                                  pump thread - cadence is
+            #                                  the loop's own sleep, so
+            #                                  a spell waits at most
+            #                                  0.1 s for its ears (and
+            #                                  the desk waits ZERO when
+            #                                  no spell was ever cast)
             time.sleep(0.1)
         self._unhook()                         # the lift ears die with
         #                                      the thread, cradle to grave
@@ -368,17 +385,42 @@ class Display(threading.Thread):
         self.queue.put(("monitor", float(flag), self.last_event))
 
     # -------------------------------------------------------- the lift ears --
+    def _service_ears(self):
+        """Apply the engine's pending arm note (called from the pump
+        loop - LL hooks belong to the thread that installs them, so
+        the engine never installs anything itself). Idempotent both
+        ways: an arm over armed ears and a disarm over deaf ears cost
+        nothing, so a steady spell never churns the chain."""
+        want = self._ear_req
+        if want is None or bool(want) == self._hooked:
+            self._ear_req = None
+            return
+        if want:
+            self._install_hooks()
+        else:
+            self._unhook()
+        self._ear_req = None
+
     def _install_hooks(self):
-        """Both LL ears on THIS pumping thread (the packet's law: the
-        watcher already owns a window-proc thread, no second listener).
-        Procs kept alive exactly like _proc - a collected callback is
-        a call into freed trampolines."""
+        """Both LL ears on THIS pumping thread, and ONLY while a dim
+        spell is alive (the owner's UAT law, Oct 14: an always-on
+        install taxed EVERY input event on the desk - hundreds of
+        ctypes marshals a second for a high-polling mouse, and LL
+        hooks serialize input delivery behind the installing thread's
+        pump, which sleeps 0.1 s - the measured mouse-lag). Procs
+        kept alive exactly like _proc: a collected callback is a call
+        into freed trampolines."""
         kb = HOOKPROTYPE(self._hook_key)
         ms = HOOKPROTYPE(self._hook_mouse)
         self._hooks = [kb, ms]
         self._hhk = u32.SetWindowsHookExW(WH_KEYBOARD_LL, kb, None, 0)
         self._hmk = u32.SetWindowsHookExW(WH_MOUSE_LL, ms, None, 0)
-        if not (self._hhk and self._hmk):
+        self._hooked = bool(self._hhk and self._hmk)
+        if not self._hooked:
+            for h in (self._hhk, self._hmk):   # never leak half a pair
+                if h:
+                    u32.UnhookWindowsHookEx(h)
+            self._hhk = self._hmk = None
             log.warning("input lift ears refused (%s); the dimmed desk "
                         "wakes on the idle gate alone (one tick slower)",
                         k32.GetLastError())
@@ -388,6 +430,8 @@ class Display(threading.Thread):
             if h:
                 u32.UnhookWindowsHookEx(h)
         self._hhk = self._hmk = None
+        self._hooks = []
+        self._hooked = False
 
     def _hook_key(self, code, wparam, lparam):
         # the hook cost law: flag-check, one int compare, straight to
@@ -429,13 +473,19 @@ class Display(threading.Thread):
 
 
 def arm_input_lift(armed):
-    """The engine's one word to the lift ears: the hooks always run
-    (install/uninstall owns its thread's life), the flag decides
-    whether they SPEAK. Arming resets the mouse anchor, disarming
-    mid-spell is the lift's own courtesy."""
+    """The engine's one word to the lift ears: armed=True wants them
+    ON, armed=False sends them home - the word is a NOTE the pump
+    applies on its own thread within one cycle (0.1 s cadence, see
+    _service_ears), because LL hooks belong to the installing thread
+    and the owner's desk pays for them by the EVENT: a mode-off
+    machine never gets the word, so the hooks are never installed and
+    the input path is clean by CONSTRUCTION, not by a flag check.
+    Arming resets the mouse anchor; the flag decides whether installed
+    ears speak at all (one lift per arm)."""
     if watcher is not None:
         watcher._lift_armed = bool(armed)
         watcher._lift_origin = None
+        watcher._ear_req = bool(armed)
 
 
 watcher = None
