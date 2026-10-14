@@ -83,6 +83,17 @@ _rec.records.clear()
 cfg = config.get_config(dir=VIRGIN, verbose=False)
 check(cfg["camera"]["enabled"] is False,
       "virgin config: camera.enabled lands False")
+check(cfg["power"]["hold_display"] is False
+      and cfg["power"]["hold_sleep"] is False
+      and cfg["power"]["restore_windows"] is False
+      and cfg["power"]["assistant_task"] is False
+      and cfg["guards"]["fullscreen"] is False
+      and cfg["recovery"]["wake_policy"] == "leave_on",
+      "virgin config: the power stock is DARK (wave B, the owner's "
+      "screenshot law: every feature off until its switch is touched)")
+check(cfg["meta"]["defaults"] == 2,
+      "virgin config: the stock file lands STAMPED - the boundary "
+      "reset has no business on a box born after the law")
 check(any("wrote stock defaults" in r for r in _rec.records),
       "virgin config: the stock-defaults INFO speaks (the line whose "
       "ABSENCE proved the 15:19 file predated the boot)")
@@ -102,7 +113,11 @@ ICU = os.path.join(APPD, "ICU-PresenceDetector")
 os.makedirs(ICU)
 with open(os.path.join(ICU, "config.toml"), "w", encoding="utf8") as fh:
     fh.write("[camera]\nindex = 2\n\n[inference]\ndevice_id = 1\n"
-             "\n[gaming]\nenabled = true\n\n[restore]\nenabled = true\n")
+             "\n[gaming]\nenabled = true\n\n[restore]\nenabled = true\n"
+             "\n[power]\nhold_display = true\nhold_sleep = true\n"
+             "restore_windows = true\nassistant_task = true\n"
+             "\n[guards]\nfullscreen = true\n\n[recovery]\n"
+             "wake_policy = \"re_off\"\n")
 os.environ["APPDATA"] = APPD
 new_dir = os.path.join(APPD, "PanelBoss")
 
@@ -122,6 +137,19 @@ check(cfg2["gaming"]["enabled"] is False
       and cfg2["restore"]["enabled"] is False,
       "trap: the default-off law strips the stranger's POWER behaviors "
       "(amendment 2: an upgrade keeps names and the roster, not modes)")
+check(cfg2["power"]["hold_display"] is False
+      and cfg2["power"]["hold_sleep"] is False
+      and cfg2["power"]["restore_windows"] is False
+      and cfg2["power"]["assistant_task"] is False
+      and cfg2["guards"]["fullscreen"] is False
+      and cfg2["recovery"]["wake_policy"] == "leave_on",
+      "trap: the stranger's stock-era POWER FLAGS reset too (wave B: "
+      "the pre-law trues are machine residue, not a man's word)")
+check(all(any(key in r and "resets" in r for r in _rec.records)
+          for key in ("hold_display", "hold_sleep", "restore_windows",
+                      "assistant_task", "fullscreen", "wake_policy")),
+      "trap: every reset names its line (speak when it fires - "
+      "amendment 7's answer to the silence)")
 check(any("enabled absent" in r and "consent honored from file" in r
           for r in _rec.records),
       "trap: the consent migration NAMES its evidence (the silence "
@@ -138,6 +166,9 @@ check(any("wrote stock defaults" in r for r in _rec.records),
       "boot #2: the stock-defaults INFO speaks again")
 check(cfg3["camera"]["index"] == [0],
       "boot #2: no index resurrection (stock [0], not the ghost's 2)")
+check(cfg3["meta"]["defaults"] == 2,
+      "boot #2: every stock write carries the boundary stamp (the "
+      "reset can never need a second hearing on one box)")
 if _appdata_real:
     os.environ["APPDATA"] = _appdata_real
 

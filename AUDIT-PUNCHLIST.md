@@ -775,3 +775,59 @@ resubmission cycle; on RELEASE: merge word to master.
   can be tripped by any decoder user (a browser playing a 4K AV1
   trailer lights the panel too - honest reading of "something is
   playing", the owner can move that monitor to the player tier).
+
+## DEFAULT-OFF LAW - FINISHED (wave B, Oct 13, the owner's virgin-launch screenshot)
+The screenshot said the general/power tabs lit features by default on a TRUE
+virgin boot. Every defect closed, measured, and pinned:
+- POWER STOCK DARK: hold_display/hold_sleep (the card's pair) flipped True ->
+  False; skip_camera_when_blocked flipped with them (a self-running powercfg
+  poll - enabler by the law's own definition); restore_windows and the
+  fullscreen guard flipped (they move windows / withhold the broadcast -
+  behaviors to be wanted). wake_policy judged: the law wins the enum call -
+  re_off is the auto re-off FEATURE in a knob's clothes, stock is leave_on
+  (a virgin box must not re-off what the user never asked it to manage).
+  ui.enabled stays TRUE (named judgment): the settings window is the opt-in
+  ceremony itself, not a background feature.
+- ADOPTION OBEYS THE FLAG (_power.py): the boot's truth thread met a stray
+  task (pre-wipe life) and re-wrote assistant_task=True behind the owner's
+  OFF switch - the consent breach the log confessed ("switch says False,
+  store says True" -> "flag written to disk: True"). Adoption is now
+  one-directional: a gone task un-lights a lying switch (honest), a present
+  task NEVER lights an off flag - "assistant off: adoption silent" logs it
+  and the task rides inert (requests(assistant=False) never consults it;
+  the switch's own click path owns it from there). A state-side belt in
+  _events.py refuses an unsubstantiated True at the last gate before disk.
+- RUN KEY AUDIT (defect 4): no boot path REGISTERS on a fresh profile.
+  migrate_once re-points only an EXISTING legacy value (measured: the
+  "ICU Presence Detector" value is gone - the re-point already spent its
+  one-shot); startup.selfheal re-stamps only an entry that exists and
+  differs from ours by exactly the missing --autostart flag. The stale
+  PanelBoss value on this box predates the wipe and the UI reflected it
+  honestly. Deleted as delivery (reg delete HKCU Run /v PanelBoss /f);
+  the opt-in switch re-creates it instantly when the owner ticks the box.
+- RELEASE-BOUNDARY MIGRATION (the credited catch): the packet's
+  enabled-absent gate would have missed the ONE file this migration
+  exists for - the violation boot's stock write lands camera.enabled =
+  false PRESENT (write_config writes the whole merged cfg). Widened per
+  ruling: consent silent (absent OR explicitly false) AND the key sitting
+  at its OLD stock value -> reset to new stock, every line named in the
+  log. One-shot BY CONSTRUCTION: the new [meta] defaults=2 stamp rides the
+  stock table and lands with the first save, after which the shape is
+  unreachable and the owner's own re-toggles (which re-create the value
+  shape but not the absent stamp) stand forever. assistant_task is on the
+  reset list from the other direction: its stock was already False, so a
+  true on a never-consented file can only be the adoption's artifact.
+- TRUTH ROWS MOVED WHERE THE LAW MOVED: config_norm (stock-shaped power),
+  camdiag section 8 (written-false consent resets; typed values and
+  re-armed gaming stand; the stamp disarms), virgin_boot (dark stock, the
+  stamp, the stranger's power flags stripped WITH every reset naming its
+  line), power_assistant (silent adoption + the belt's rumor refusal + the
+  switch round trips from dark), hold (fossil fixtures stamped - the test
+  pins the fossil, not the boundary), layout (restore's promise inverted).
+RESIDUAL (honest): the owner's on-disk file still carries the old trues -
+the reset fires in memory at the app's NEXT load (no kill/relaunch was in
+this wave's mandate), and the PanelBoss-PowerRequests scheduled task is
+left installed-but-inert (removing it costs a UAC prompt; the switch's
+off-path deletes it whenever the owner next visits the card). README still
+says "default on" in two places and calls re_off the default - docs lane,
+follow-up.

@@ -204,11 +204,15 @@ except OSError:             # shared scratch residue is a false-red
 config.write_config = (
     lambda c, path=None, _w=config.write_config: _w(c, _scratch))
 # virgin defaults (a live file can hold anything - the window suite
-# pins the switch against THAT, so the promise itself is pinned here)
+# pins the switch against THAT, so the promise itself is pinned here).
+# Wave B inverted this promise: window restore defaults DARK under the
+# default-off law (it MOVES the owner's windows; a behavior to be
+# wanted, never a stock). The round trip below drives the switch
+# against the live cfg either way.
 _fresh = os.path.join(os.environ.get("TEMP", "."), "panelboss_fresh_cfg")
 os.makedirs(_fresh, exist_ok=True)
 _virgin = config.get_config(dir=_fresh, verbose=False)
-assert _virgin["power"]["restore_windows"] is True, "the tip's promise"
+assert _virgin["power"]["restore_windows"] is False, "the default-off law (wave B)"
 assert _virgin["ui"]["start_minimized"] is False, "boot opens the window"
 cfg["power"]["restore_windows"] = True
 cfg["power"]["assistant_task"] = False

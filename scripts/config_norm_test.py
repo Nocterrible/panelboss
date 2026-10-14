@@ -106,8 +106,8 @@ _pass("load warnings named every junk key (%d warnings)" % n)
 # --- 2) the scalar section: power = 7 came back stock-shaped ---
 p = cfg["power"]
 assert isinstance(p, dict), p
-assert p["hold_display"] is True, p
-assert p["hold_sleep"] is True, p
+assert p["hold_display"] is False, p
+assert p["hold_sleep"] is False, p
 assert p["poll_sec"] == 5, p
 assert any("power" in w and "int" in w for w in _RECORDER.records), \
     "no warning naming the scalar section: %r" % _RECORDER.records

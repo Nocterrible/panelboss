@@ -138,7 +138,13 @@ DEFAULTS = {
         "re_off_grace_sec": 30,      # budget a monitor gets while it is awake with nobody in front of it
     },
     "recovery": {
-        "wake_policy": "re_off",     # "re_off" | "leave_on": what to do when the display is
+        # the law wins the enum's judgment call (wave B): wake_policy
+        # is the auto re-off FEATURE in a knob's clothes - re_off lets
+        # the app re-darken a screen on its own word, and a virgin box
+        # must not re-off what the user never asked it to manage.
+        # Stock is therefore the hands-off arm; re_off is a choice,
+        # never a default that self-runs.
+        "wake_policy": "leave_on",   # "re_off" | "leave_on": what to do when the display is
                                      # back on (key press, mouse jiggle) but nobody is in front of it
         "leave_on_grace_sec": 180,   # ignored unless wake_policy is "leave_on"
         "wake_burst_count": 2,       # this many unexpected wakes within the window below ...
@@ -146,25 +152,43 @@ DEFAULTS = {
                                        # slipped and is looking at a wall)
     },
     "guards": {
-        "fullscreen": True,     # do not send the off broadcast while a fullscreen game owns the display,
+        # wave B (the owner's virgin launch): a toggle, so off. It
+        # WITHHOLDS the app's core broadcast whenever a fullscreen app
+        # owns the display - a feature the desk must ask for, not a
+        # default that silently suppresses the darkening.
+        "fullscreen": False,    # do not send the off broadcast while a fullscreen game owns the display,
                                 # the message is swallowed by the swapchain
     },
     "power": {
-        "hold_display": True,    # while the app watches a lit desk it holds
+        # the default-off law, wave B (the owner's virgin launch): the
+        # hold pair renders ON in the screenshot because stock says so
+        # - stock is dark now; a fresh box lets Windows own its timers
+        # until the owner touches the switches.
+        "hold_display": False,   # while the app watches a lit desk it holds
                                  # the plan's display timeout off - a still
                                  # person reading a page is never timed out
-        "hold_sleep": True,      # ...and the sleep timeout. The dark watcher
-                                 # needs it too: without it the box sleeps
-                                 # and presence detection only re-arms when
-                                 # the power button is pressed
-        "skip_camera_when_blocked": True,  # if another app already holds the
-                                           # display awake, the camera does not
-                                           # poll to defend it
-        "restore_windows": True,     # monitors that unplug themselves on
+        "hold_sleep": False,     # ...and the sleep timeout. The dark watcher
+                                 # wants it once it runs at all - but the
+                                 # watcher is consent-gated (camera.enabled):
+                                 # a box that never opted in sleeps when its
+                                 # plan says so
+        "skip_camera_when_blocked": False,  # if another app already holds the
+                                            # display awake, the camera does
+                                            # not poll to defend it. Off
+                                            # stock: True makes the duty loop
+                                            # run powercfg on its own every
+                                            # poll_sec - a feature, not a
+                                            # shape (the assistant is already
+                                            # opt-in; this gate stays off
+                                            # beside it and the loop asks
+                                            # nobody)
+        "restore_windows": False,    # monitors that unplug themselves on
                                      # standby make Windows re-lay every
                                      # window when they return: the desk is
                                      # remembered at screens-off and put
-                                     # back after any wake (see wm.py)
+                                     # back after any wake (see wm.py). It
+                                     # MOVES the owner's windows - behavior
+                                     # to be wanted, never to be stock
         "assistant_task": False,   # opt-in: registers an elevated scheduled
                                    # task so powercfg /requests can be read
                                    # without running the app as admin
@@ -285,6 +309,14 @@ DEFAULTS = {
                                 # entry launched - the --autostart stamp
                                 # in the Run key is the proof, never an
                                 # inference; "always" = every app start
+    },
+    # the release-boundary stamp (wave B): the file's own answer for
+    # itself. Its ABSENCE marks a pre-law file to the one-shot load
+    # migration below; the first loop-owned save lands it, which makes
+    # the migration's shape unreachable - the same disarming as the
+    # amendment 2 reset, counted where it can be seen.
+    "meta": {
+        "defaults": 2,           # 1 = the amendment 2 world, 2 = the default-off law, finished
     },
 }
 
@@ -694,6 +726,44 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
                     log.info("[%s] enabled arrived with a pre-consent "
                              "file; the default-off law resets it (the "
                              "switch owns it from now on)", _sec)
+    # the boundary migration (wave B, exactly this release edge): the
+    # flips in DEFAULTS are stock changes, and a stock change does not
+    # touch a file that already speaks - the boot that just ran wrote
+    # the OLD stock trues to disk verbatim. The predicate is widened
+    # from amendment 2's key-absent shape, and the widening is the
+    # credited catch: the violation-era stock write lands EVERY key,
+    # camera.enabled included, so the absent-key gate alone would miss
+    # the one file this migration exists for. The gate is therefore
+    # "this file never opted in": camera.enabled absent OR explicitly
+    # false (a setup file whose consent the migration honored reads
+    # true and answers for itself; a stamped file is post-boundary by
+    # construction). Only keys sitting at their OLD stock values are
+    # reset - a hand-typed true is the owner's word and stands.
+    # assistant_task is on the list from the other direction: its
+    # stock was already False, so a true riding a never-opted-in file
+    # can only be the adoption's boot-time write (the breach the
+    # screenshot caught) - the boundary clears the artifact, the
+    # switch re-creates the task on the owner's click.
+    _meta = config.get("meta")
+    _cam_f = config.get("camera")
+    _cam_f = _cam_f if isinstance(_cam_f, dict) else {}
+    if (not isinstance(_meta, dict) or "defaults" not in _meta) \
+            and _cam_f.get("enabled", False) is False:
+        for _sec, _key, _old in (
+                ("power", "hold_display", True),
+                ("power", "hold_sleep", True),
+                ("power", "skip_camera_when_blocked", True),
+                ("power", "restore_windows", True),
+                ("power", "assistant_task", True),
+                ("guards", "fullscreen", True),
+                ("recovery", "wake_policy", "re_off"),
+        ):
+            _fsec = config.get(_sec)
+            if isinstance(_fsec, dict) and _fsec.get(_key) == _old:
+                merged[_sec][_key] = DEFAULTS[_sec][_key]
+                log.info("[%s] %s arrived with a pre-law stock value; "
+                         "the default-off law resets it (the switch "
+                         "owns it from now on)", _sec, _key)
     normalize_sections(merged)
     return merged
 

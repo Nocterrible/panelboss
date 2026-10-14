@@ -239,13 +239,24 @@ class _EventsMixin:
                 else:
                     self._resume_re_off("manual resume (tray/window)")
             elif action == "power_assistant":
-                self.power_cfg["assistant_task"] = bool(value)
+                want = bool(value)
+                if want:
+                    # the state-side belt (wave B): a True that rides
+                    # to the file needs the task store's backing -
+                    # the flag follows reality, never the other way
+                    # round. This handler cannot tell an adoption
+                    # post from a click post, so it checks the task
+                    # instead; a True with no task behind it is the
+                    # rumor class the screenshot caught.
+                    from .. import power
+                    want = power.task_installed()
+                self.power_cfg["assistant_task"] = want
                 self.blockers_until = 0.0          # the toggle must show
                                                    # its result, not the
                                                    # last week's reading
                 from .. import config
                 config.write_config(self.cfg)
-                log.info("assistant flag written to disk: %s", bool(value))
+                log.info("assistant flag written to disk: %s", want)
             elif action == "camera":
                 # value is either a bare int (one camera, or the IR
                 # sentinels - the historic contract) or the full

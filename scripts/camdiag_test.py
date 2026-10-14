@@ -415,10 +415,47 @@ with open(os.path.join(_kept, "config.toml"), "w", encoding="utf8") as fh:
              '[gaming]\nenabled = true\n')
 assert config.get_config(dir=_kept, verbose=False)["gaming"]["enabled"] \
     is True
+# WAVE B's widened gate (the credited catch, ruling c): the violation
+# boot's stock write lands camera.enabled = false PRESENT, so the
+# absent-key shape alone would miss the one file this migration exists
+# for. Written-false consent still resets the old stock trues; a
+# hand-typed value survives; the stamp disarms; and gaming - amendment
+# 2's own list - does NOT get re-stomped by wave B on an explicit
+# false file (that boundary was the absent key, once, by design).
+_lawb = tempfile.mkdtemp(prefix="panelboss_camdiag_lawb_")
+with open(os.path.join(_lawb, "config.toml"), "w", encoding="utf8") as fh:
+    fh.write('[camera]\nindex = 2\nenabled = false\n\n'
+             '[power]\nhold_display = true\nhold_sleep = true\n'
+             'restore_windows = true\nassistant_task = true\n'
+             'poll_sec = 4\n\n[guards]\nfullscreen = true\n\n'
+             '[recovery]\nwake_policy = "re_off"\n\n'
+             '[gaming]\nenabled = true\n')
+_b = config.get_config(dir=_lawb, verbose=False)
+for _k in ("hold_display", "hold_sleep", "restore_windows",
+           "assistant_task"):
+    assert _b["power"][_k] is False, (_k, _b["power"])   # old trues reset
+assert _b["guards"]["fullscreen"] is False, _b["guards"]
+assert _b["recovery"]["wake_policy"] == "leave_on", _b["recovery"]
+assert _b["power"]["poll_sec"] == 4, _b["power"]   # typed value survives
+assert _b["gaming"]["enabled"] is True, _b["gaming"]   # a click, not a
+                                                       # reset target
+assert _b["meta"]["defaults"] == 2                 # the stamp rides the
+                                                   # merged cfg; the next
+                                                   # save lands it
+# and the stamp disarms for real: the same shape re-presents, the law
+# has already spoken - the switch owns it now
+with open(os.path.join(_lawb, "config.toml"), "w", encoding="utf8") as fh:
+    fh.write('[meta]\ndefaults = 2\n\n[camera]\nindex = 2\n'
+             'enabled = false\n\n[power]\nhold_display = true\n\n'
+             '[recovery]\nwake_policy = "re_off"\n')
+_st = config.get_config(dir=_lawb, verbose=False)
+assert _st["power"]["hold_display"] is True, "the stamp did not disarm"
+assert _st["recovery"]["wake_policy"] == "re_off"
 print("consent migration OK (absent+virgin false, set-up upgrades"
       " true, explicit either way always wins; the default-off law"
       " resets the power side on upgrade and a migrated file answers"
-      " for itself)")
+      " for itself; wave B: written-false consent resets too, typed"
+      " values and re-armed gaming stand, the [meta] stamp disarms)")
 
 _real_camera8 = cam_mod.Camera
 opened8 = []

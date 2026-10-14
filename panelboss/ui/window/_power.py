@@ -298,25 +298,38 @@ class _PowerMixin:
 
     # -------------------------------------------------------- power assistant --
     def _assistant_truth(self, real):
-        """Adopt the task store's answer as the switch state and tell
-        the monitor, so config, UI and reality cannot disagree."""
+        """Reconcile the switch with the task store - one direction
+        only (wave B, the consent law): the store losing the task
+        un-lights a switch that would lie, but the flag is CONSENT
+        and a stray task (this box's twin predates the wipe) gets no
+        vote to flip an OFF switch or re-write True behind the user's
+        back. The task rides inert while the flag is off: the loop
+        never consults it (requests(assistant=False)) and the
+        switch's own click path owns it from there (install re-points
+        with /F, uninstall deletes)."""
         try:
             was = bool(self.power_switch.get())
             log.info("assistant adoption: switch says %s, store says %s",
                      was, real)
             if was != real:
-                self.power_switch.set(real)          # set() is click-free
-                self.cfg["power"]["assistant_task"] = real
-                self.monitor.events.put(("power_assistant", real))
-                self._save()                         # the file learned the
-                # truth too, or a test that scribbled assistant_task=false
-                # over it keeps whispering lies to every future instance
-                # until some unrelated widget change happens to save it
+                if real:
+                    # store True vs a switch saying OFF: the flag
+                    # wins, and the law says so out loud (silent
+                    # ignorance is the bug class this whole wave is)
+                    log.info("assistant off: adoption silent")
+                else:
+                    self.power_switch.set(real)      # set() is click-free
+                    self.cfg["power"]["assistant_task"] = real
+                    self.monitor.events.put(("power_assistant", real))
+                    self._save()                     # the file learned the
+                    # truth too, or a test that scribbled assistant_task=false
+                    # over it keeps whispering lies to every future instance
+                    # until some unrelated widget change happens to save it
         except Exception:
             log.exception("assistant adoption crashed")  # pythonw has no
             # stderr: without this the whole thread's answer evaporated
             # silently, which is exactly how "does not persist" was born
-        self._assistant_ui(real)
+        self._assistant_ui(bool(self.cfg["power"]["assistant_task"]))
 
 
     def _assistant_ui(self, on, gen=None):

@@ -188,6 +188,10 @@ print("assistant-uninstalled path OK:", r["error"][:60], "...")
 #    absence count; clearing them resumes it
 cfg = config.get_config(verbose=False)
 cfg["power"]["assistant_task"] = False
+cfg["power"]["skip_camera_when_blocked"] = True   # the feature under
+                                                  # test; wave B made the
+                                                  # stock False, so the
+                                                  # test opts in by hand
 calls = {"poll": 0, "requests": 0}
 
 
@@ -246,6 +250,7 @@ print("state gate OK (blocked waits, absence resets, throttle, resume)")
 #    assistant-off while the task sat Ready, feeding the pane stale
 #    admin errors). Redirect every write to a scratch file.
 _saved_wc = config.write_config
+_real_ti = power.task_installed
 try:
     os.remove(os.path.join(os.environ.get("TEMP", "."),
                            "panelboss_test_config.toml"))
@@ -253,6 +258,7 @@ except OSError:             # consume fresh, never stale (Oct 12 audit)
     pass
 config.write_config = lambda c, path=None: _saved_wc(
     c, os.path.join(os.environ.get("TEMP", "."), "panelboss_test_config.toml"))
+power.task_installed = lambda: True         # the belt's oracle, faked
 try:
     mon.events.put(("power_assistant", True))
     mon._drain_tray()
@@ -260,9 +266,17 @@ try:
     mon.events.put(("power_assistant", False))
     mon._drain_tray()
     assert cfg["power"]["assistant_task"] is False
+    # the wave-B belt: a True with no task behind it is a rumor, and
+    # rumors do not get written to disk (the adoption breach class)
+    power.task_installed = lambda: False
+    mon.events.put(("power_assistant", True))
+    mon._drain_tray()
+    assert cfg["power"]["assistant_task"] is False, "the belt let a rumor through"
 finally:
     config.write_config = _saved_wc
-print("event persistence OK")
+    power.task_installed = _real_ti
+print("event persistence OK (round trips, and the belt refuses an"
+      " unsubstantiated True)")
 
 # 6) window: blockers text renders; switch round-trips through fakes
 from panelboss.state import FrameBox
@@ -403,12 +417,25 @@ def check():
         # the truth-bridge: a worker thread's answer rides ui_events (its
         # self.after(0) could land BEFORE app.mainloop exists and die with
         # "main thread is not in main loop", pythonw eating the traceback -
-        # the measured root cause of "the assistant does not persist")
+        # the measured root cause of "the assistant does not persist").
+        # WAVE B rewrote this truth: an OFF flag plus a store True is a
+        # SILENT adoption (the flag is consent; the screenshot's breach
+        # was the store re-writing True behind it). The honest direction -
+        # a lying ON switch meeting a gone task - still self-heals OFF.
+        cfg["power"]["assistant_task"] = False
         app.ui_events.put(("assistant_truth", True))
         app._drain_ui_events()
-        assert bool(app.power_switch.get()) is True, "truth did not reach switch"
-        assert cfg["power"]["assistant_task"] is True, "truth did not reach cfg"
-        # the manager button lives and dies with the assistant
+        assert bool(app.power_switch.get()) is False, "silent adoption lit the switch"
+        assert cfg["power"]["assistant_task"] is False, "adoption re-wrote True behind the owner"
+        assert app.overrides_button.winfo_manager() == "", "silent adoption grew the button"
+        cfg["power"]["assistant_task"] = True
+        app.power_switch.select()
+        app.ui_events.put(("assistant_truth", False))
+        app._drain_ui_events()
+        assert bool(app.power_switch.get()) is False, "task gone, switch still claims it"
+        assert cfg["power"]["assistant_task"] is False, "the truth did not reach cfg"
+        assert ("power_assistant", False) in list(fm.events.queue), list(fm.events.queue)
+        app._assistant_ui(True)
         assert app.overrides_button.winfo_manager() != "", "button lost"
         app._assistant_ui(False)
         assert app.overrides_button.winfo_manager() == "", "button off-screen"
@@ -635,10 +662,16 @@ def check():
         assert app.tips.tip.overrideredirect(), "the note grew a titlebar"
         app.tips.kill()
         assert app.tips.tip is None
-        # the hold switches are independent, both default on
+        # the hold switches are independent, and wave B darkened both:
+        # the default-off law (the owner's screenshot) - stock is off,
+        # the round trip still proves each lives alone
         app._show_tab("power plan")
-        assert bool(app.hold_display_switch.get())
-        assert bool(app.hold_sleep_switch.get())
+        assert not bool(app.hold_display_switch.get()), "display hold defaults on"
+        assert not bool(app.hold_sleep_switch.get()), "sleep hold defaults on"
+        app.hold_display_switch.select()
+        app.hold_sleep_switch.select()
+        app._hold_changed()
+        assert cfg["power"]["hold_display"] is True and cfg["power"]["hold_sleep"] is True
         app.hold_sleep_switch.deselect()
         app._hold_changed()
         assert cfg["power"]["hold_sleep"] is False
@@ -646,9 +679,9 @@ def check():
         app.hold_display_switch.deselect()
         app._hold_changed()
         assert cfg["power"]["hold_display"] is False
-        # window restore: default on (the tip's promise), round-trips
-        # the same key the state machine reads at every off/wake edge
-        assert bool(app.restore_switch.get()), "restore defaults on"
+        # window restore: wave B darkens it too (it MOVES the owner's
+        # windows - a behavior to be wanted), same key, same round trip
+        assert not bool(app.restore_switch.get()), "restore defaults on"
         app.restore_switch.deselect()
         app._restore_changed()
         assert cfg["power"]["restore_windows"] is False

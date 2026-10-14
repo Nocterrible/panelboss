@@ -104,13 +104,19 @@ mdir = os.path.join(os.environ.get("TEMP", "."), "panelboss_hold_cfg")
 os.makedirs(mdir, exist_ok=True)
 mpath = os.path.join(mdir, "config.toml")
 with open(mpath, "w", encoding="utf8") as fh:
-    fh.write("[power]\nhold_timers = false\n")
+    fh.write("[meta]\ndefaults = 2\n\n[power]\nhold_timers = false\n")
 c = config.get_config(dir=mdir, verbose=False)
 assert "hold_timers" not in c["power"], c["power"]
 assert c["power"]["hold_display"] is False
 assert c["power"]["hold_sleep"] is False
 with open(mpath, "w", encoding="utf8") as fh:
-    fh.write("[power]\nhold_timers = false\nhold_display = true\n")
+    fh.write("[meta]\ndefaults = 2\n\n"     # stamped: this fixture tests
+                                             # the fossil's seeding, not the
+                                             # wave-B boundary (an unstamped
+                                             # file would answer the reset
+                                             # too, and the two laws would
+                                             # argue in the middle of a test)
+             "[power]\nhold_timers = false\nhold_display = true\n")
 c = config.get_config(dir=mdir, verbose=False)
 assert c["power"]["hold_display"] is True, "the file's own answer wins"
 assert c["power"]["hold_sleep"] is False
