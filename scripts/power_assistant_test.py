@@ -1,16 +1,28 @@
 """Offline checks for the power assistant: parser, fail-open paths,
 state gating, UI wiring. No real UAC: install/uninstall are faked.
+THE DESK LAW (the wave-E red): this suite never reads the owner's
+live toml - PANELBOSS_CONFIG_DIR moves the whole config world into a
+fresh temp dir before panelboss.config is imported (the camdiag/
+virgin_boot idiom), so every scenario seeds from the STOCK defaults
+(the default-off law is what the window section asserts - the LAW,
+not whatever toggles the owner left on the real desk today).
 Run with the tray app CLOSED: its CTk windows poison CTkToplevel in
 any other process (the window section then skips itself, exit 0).
 A wedged Tk loop hard-kills the process at rc=3 - the SAME meaning
 gaming_ui_test and the run_all.ps1 exit-code table give it."""
 import os
 import sys
+import tempfile
 import threading
 import tkinter as tk
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# BEFORE the config import: CONFIG_DIR is read once at module import
+# (config.py:41), so the env redirect must come first - late is never
+SCRATCH = tempfile.mkdtemp(prefix="panelboss_power_")
+os.environ["PANELBOSS_CONFIG_DIR"] = SCRATCH
 
 from panelboss import config, power
 from panelboss.state import PresenceMonitor
@@ -293,6 +305,18 @@ fm.blockers = {"error": None, "display": ["msedgewebview2.exe Video Lock"],
                "other": ["System: AudioSrv AUDIO"]}
 power.install = lambda: (True, "registered (test)")
 power.uninstall = lambda: (True, "assistant removed (test)")
+# the UAC after_install leg runs FAKED ELEVATION: no consent dialog can
+# be clicked headless, so install/uninstall answer from stubs AND the
+# worker's requests() read is canned - the scenario seeds its own truth
+# instead of asking a live task store (whose dump mtime would make the
+# verdict environment-dependent, the same desk-law class as the toml).
+# The marker line says so out loud; the truth-event chain itself still
+# runs end to end.
+power.requests = lambda ignore=(), assistant=False: {
+    "error": None, "display": [], "other": [], "overridden": [],
+    "requests": [], "override_entries": []}
+print("UAC LEG FAKED: after_install runs on stub install/uninstall and a"
+      " canned report (no elevation round trip taken headless)")
 # the window also spawns a truth thread that asks the real task store
 # for this app's own task name; on a box where that (newly named) task
 # is absent the answer is False and _assistant_truth stomps the faked
