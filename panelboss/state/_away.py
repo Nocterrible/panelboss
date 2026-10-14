@@ -9,10 +9,14 @@ policy, phase and camera machines are untouched, because the whole
 point of the feature is that the presence engine keeps working
 exactly as it does while dark.
 
-The laws set here, from the 2026-10-14 probe (wm/_bright.py carries
-the full education): a refused panel - DDC/CI silent, or accepting
-writes and never obeying them - DEGRADES its row to blackout with
-the confession recorded in away_status, never silent. HDR rides the
+The laws set here, from the 2026-10-14 probes (wm/_bright.py carries
+the full education and the two honest halves): a REFUSED row - the
+send failed with the retry budget spent - DEGRADES to blackout with
+the confession recorded in away_status, never silent; an UNVERIFIED
+row - write accepted, readback a stranger - keeps its sub-mode and
+says "(unverified)" on its status word (the PROBE LAW's correction:
+the old blanket readback-law lied about the panels that WORK).
+HDR rides the
 packet's per-row rule (a dim row's own hdr_set(False), remembered as
 {"gdi","model"} rows exactly like the proven pair's snapshot) and
 the handback rides profiles.hdr_away_restore VERBATIM - the
@@ -85,16 +89,18 @@ class _AwayMixin:
             rec["status"] = "blackout"
             return rec
         prior = _bright.get(m["gdi"])
-        say = _bright.set(m["gdi"], level)
+        say, verified = _bright.set(m["gdi"], level)
         if m["gdi"] not in self._away_bright:
             # first question wins: a preview already asked, and its
             # prior is the TRUE one (the value at the leaving moment,
             # not the dimmed value a later engage would read back)
             self._away_bright[m["gdi"]] = prior
         if say:
-            # the refusal law made concrete: the row the user asked
-            # to be DIM goes black under an overlay instead, and the
-            # status word carries the confession the card renders
+            # the refusal law made concrete (the SEND half - a deaf
+            # READBACK is the trust half, worded below): the row the
+            # user asked to be DIM goes black under an overlay
+            # instead, and the status word carries the confession the
+            # card renders
             _overlay.show(m["gdi"], rect)
             rec["status"] = "blackout (%s)" % say
             return rec
@@ -108,7 +114,7 @@ class _AwayMixin:
         except Exception:
             log.debug("away: the HDR read refused on %s, dim continues "
                       "without it", m["short"], exc_info=True)
-        rec["status"] = "dim"
+        rec["status"] = "dim" if verified else "dim (unverified)"
         return rec
 
     # --------------------------------------------------------------- lift --

@@ -1,10 +1,11 @@
-"""Away mode (dim-mode wave), offline: the migration truth rows, the
-substitution at the off-broadcast site, the refusal degradation, the
-preview adopt-vs-revert law, the INPUT-HOOK LIFECYCLE (the owner's
-mouse-lag pin: mode off never installs, a spell installs once, a
-steady spell no churn, the lift unhooks), and the static ban that
-keeps dim mode out of the power verbs. No Tk, no display hardware,
-no live app.
+"""Away mode (dim-mode wave + the off-door corrections), offline: the
+migration truth rows, the substitution at the off-broadcast site, the
+refusal degradation AND the unverified-trust word (the two honest
+halves), the vcp door's retry law, the preview adopt-vs-revert law,
+the INPUT-HOOK LIFECYCLE (the owner's mouse-lag pin: mode off never
+installs, a spell installs once, a steady spell no churn, the lift
+unhooks), and the static ban that keeps dim mode out of the power
+verbs. No Tk, no display hardware, no live app.
 Run from repo root:
 python scripts/awaymode_test.py
 """
@@ -18,8 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import panelboss.wm as wm                                   # noqa: E402
 from panelboss import config, display, profiles             # noqa: E402
 from panelboss.state import PresenceMonitor                 # noqa: E402
-
-REFUSAL = "the monitor refuses brightness (DDC/CI)"
+from panelboss.wm import _bright                            # noqa: E402
+REFUSAL = _bright.REFUSAL        # single-sourced wording - the
+NO_DOOR = _bright.NO_DOOR        # correction's whole point
 
 
 class Recorder(logging.Handler):
@@ -32,15 +34,32 @@ class Recorder(logging.Handler):
 
 
 class FakeBright:
-    """set() returns '' when the panel MOVES, REFUSAL when scripted;
-    get() answers whatever is current (the ledger's honest prior).
-    Appends to the shared call log: the restore-order assertion needs
-    every source's steps in ONE chronology."""
+    """set() rides the two honest halves: ('', True) = MOVED and
+    confirmed; ('', False) = SENT-and-unverified (`stays` - the
+    courtesy/stay class, TRUST territory); (REFUSAL, False) = the
+    SEND failed after the budget (`refuses`). get() answers whatever
+    is current (the ledger's honest prior); `no_door` gdis never
+    reached the handles at all - the only gray class. vcp()/
+    vcp_read()/reachable() answer the off sub-mode's ladder and
+    RECORD every call (the try-counting pins the engage/lift shapes;
+    `vcp_refuses` is the honest-no class, `vcp_deaf` the AOC-class
+    write-ACKed-power-read-deaf). Appends to the shared call log:
+    the restore-order assertion needs every source's steps in ONE
+    chronology."""
 
-    def __init__(self, cur=None, refuses=(), calls=None):
+    def __init__(self, cur=None, refuses=(), stays=(), no_door=(),
+                 vcp_refuses=(), vcp_deaf=(), calls=None):
         self.cur = dict(cur or {})
         self.refuses = set(refuses)
+        self.stays = set(stays)
+        self.no_door = set(no_door)
+        self.vcp_refuses = set(vcp_refuses)
+        self.vcp_deaf = set(vcp_deaf)
+        self.power = {}                         # (gdi, code) -> last value
         self.calls = calls if calls is not None else []
+
+    def reachable(self, gdi):
+        return gdi not in self.no_door
 
     def get(self, gdi):
         self.calls.append(("get", gdi))
@@ -48,14 +67,33 @@ class FakeBright:
 
     def set(self, gdi, pct):
         self.calls.append(("set", gdi, pct))
+        if gdi in self.no_door:
+            return NO_DOOR, False
         if gdi in self.refuses:
-            return REFUSAL
+            return REFUSAL, False
         self.cur[gdi] = pct
-        return ""
+        return ("", False) if gdi in self.stays else ("", True)
 
     def restore(self, gdi, pct):
         self.calls.append(("restore", gdi, pct))
-        self.cur[gdi] = pct
+        if gdi not in self.no_door and gdi not in self.refuses:
+            self.cur[gdi] = pct
+
+    def vcp(self, gdi, code, value, tries=_bright.VCP_TRIES):
+        self.calls.append(("vcp", gdi, code, value, tries))
+        if gdi in self.no_door:
+            return False, NO_DOOR
+        if gdi in self.vcp_refuses:
+            return False, "%s (error 0xC0262582 after %d tries)" % (
+                REFUSAL, tries)
+        self.power[(gdi, code)] = value
+        return True, ""
+
+    def vcp_read(self, gdi, code):
+        self.calls.append(("vcp_read", gdi, code))
+        if (gdi, code) not in self.power or gdi in self.vcp_deaf:
+            return False, None
+        return True, self.power[(gdi, code)]
 
 
 class FakeOverlay:
@@ -338,6 +376,79 @@ def test_preview_adopt_law():
         m._ledger.undo()
 
 
+def test_unverified_trust():
+    """The correction made testable: a write that lands and a
+    readback that stays a stranger is UNVERIFIED-TRUST, not refusal -
+    the row keeps its sub-mode and says so (the class this desk
+    demonstrably has; wm/_bright.py's header carries the education)."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_u")
+    bright = FakeBright({"D1": 80, "D2": 70, "D3": 50}, stays=["D3"])
+    m = make_monitor(tmp, {"mode": "dim", "monitors": {}}, bright=bright)
+    try:
+        m._screens_off(1.0)
+        assert m.away_status["CCC"] == "dim (unverified)", m.away_status
+        assert m.away_status["BBB"] == "dim", m.away_status
+        shows = [c for c in m._fake["calls"] if c[0] == "show"]
+        assert not any(c[1] == "D3" for c in shows), \
+            "an unverified DIM row wears no overlay - it stays DIM"
+        m._away_lift()
+        assert ("restore", "D3", 50) in m._fake["calls"], \
+            "trust mode still owes the honest hand-back"
+        print("ok - a deaf readback is TRUST with a word, not a blackout")
+    finally:
+        m._ledger.undo()
+
+
+def test_vcp_retry_law():
+    """Direct at the door itself (the fake-desk fakes replace _bright
+    wholesale and cannot prove ITS law): a transient NAK is retried
+    with the 0.3 s backoff and takes; a refusal is reported only
+    after the FULL budget, error and try-count in its word."""
+    class FakeTime:
+        def __init__(self):
+            self.slept = []
+
+        def sleep(self, s):
+            self.slept.append(s)
+
+    class FakeK32:
+        def SetLastError(self, _v):
+            pass
+
+        def GetLastError(self):
+            return 0xC0262582
+
+    class ScriptedDX:
+        def __init__(self, answers):
+            self.answers = list(answers)
+            self.calls = []
+
+        def SetVCPFeature(self, _h, code, value):
+            self.calls.append((code, value))
+            return 1 if self.answers.pop(0) else 0
+
+    led = Ledger()
+    pm = type("PM", (), {"hMonitor": 42})()
+    led.keep(_bright, "_phys", lambda gdi: (0, 1, [pm]))
+    led.keep(_bright, "k32", FakeK32())
+    clock = FakeTime()
+    led.keep(_bright, "time", clock)
+    dx = ScriptedDX([False, True])           # the measured class: NAK, then take
+    led.keep(_bright, "dx", dx)
+    sent, why = _bright.vcp("D1", _bright.VCP_POWER, _bright.VCP_POWER_OFF)
+    assert sent and why == "", (sent, why)
+    assert len(dx.calls) == 2, "the transient NAK got its retry"
+    assert clock.slept == [_bright.VCP_RETRY_SEC], clock.slept
+    dx2 = ScriptedDX([False, False, False])
+    _bright.dx = dx2
+    sent, why = _bright.vcp("D1", _bright.VCP_POWER, _bright.VCP_POWER_OFF)
+    assert not sent and "after 3 tries" in why and "0xC0262582" in why, why
+    assert len(dx2.calls) == _bright.VCP_TRIES, "the budget was spent first"
+    led.undo()
+    print("ok - vcp door: transient retried at 0.3 s; refusal only after "
+          "a spent budget, error and count in its word")
+
+
 def test_static_ban():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "panelboss", "state", "_away.py"),
@@ -427,6 +538,8 @@ def main():
     test_substitution()
     test_stock_path()
     test_refusal_degrades()
+    test_unverified_trust()
+    test_vcp_retry_law()
     test_preview_adopt_law()
     test_hook_lifecycle()
     test_static_ban()

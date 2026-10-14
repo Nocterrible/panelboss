@@ -30,17 +30,32 @@ to earn these lines - the education goes verbatim):
   WITH a correct cbSize (the wm docstring's "error 87, never use it"
   was a struct-size bug, not an API truth - corrected there).
 
-THE REFUSAL LAW: refused = SetMonitorBrightness FALSE  UNION  the
-+0.5 s confirmation read failing  UNION  the readback unchanged when
-the write should have moved it. Panels DIVERGE here, measured on
-these very three: DISPLAY2 round-tripped 80 -> 90 -> 80 with the
-readback following every write; DISPLAY3 answered Set(85) TRUE and
-stayed 75 - it accepts brightness writes and never obeys them. A TRUE
-return from such a panel is a courtesy, not a fact; only the readback
-is. So a set that does not move the panel is a refusal, never silent:
-the caller degrades that row to blackout and says so.
-"""
+THE REFUSAL LAW, TWO HONEST HALVES (corrected mid-day 2026-10-14; the
+owner's UAT proved the AOC dims through this door while the morning's
+scratch probes NAK'd it repeatedly - the same fingers, one-shot, zero
+retries, a second process fighting the app for handles on one flaky
+I2C bus; the PROBE LAW in AUDIT-PUNCHLIST.md owns the correction):
 
+* REFUSAL is the SEND: SetMonitorBrightness/SetVCPFeature FALSE after
+  the full retry budget (0.3 s between tries; every failure class
+  rides the budget - a spent budget is the only honest no), or the
+  door never opening at all (NO_DOOR, the gray class). A refusal is a
+  fact about THIS app's attempts, timestamped, not the firmware's soul.
+* An accepted write whose readback never answers - or answers unmoved,
+  or answers a courtesy - is UNVERIFIED-TRUST, never refusal. This
+  desk has the reply-deaf class (the AOC's brightness; the IOC's
+  power-read answering "on" through a fully-ACKed D6-off window is
+  the accepts-and-lies class measured live at the power door,
+  scripts/sdc_off_probe.py - whether the window was dark is the
+  owner's pending eye-half, and the law holds either way: the app
+  cannot resolve it, so it must not pretend to). The caller's status
+  word says "(unverified)"; the preview is the human judge.
+Panels DIVERGE here, re-measured today across these very three:
+DISPLAY2 answers every brightness read; DISPLAY1 replies are selective
+at best (KVM partial pass-through per the dossier); the old law
+("readback unmoved = refused") lived by lying about live panels, and
+its blackout-every-doubt fallback retires to the refusal half.
+"""
 import ctypes
 import logging
 import threading
@@ -55,8 +70,26 @@ dx = ctypes.windll.dxva2
 
 CONFIRM_SLEEP_SEC = 0.5     # the measured settle: slow DDC/CI panels
                             # answer the readback late, not never
-REFUSAL = "the monitor refuses brightness (DDC/CI)"
-
+REFUSAL = ("the monitor will not take the write (DDC/CI send failed "
+           "after the retry budget)")
+NO_DOOR = "no DDC/CI door (physical handles never opened)"
+# THE VCP DOOR (the off sub-mode rides it): 0xD6 per the owner's sheet.
+# The 2026-10-14 probes (scripts/sdc_off_probe.py, the control panel)
+# measured the door's manners: SetVCPFeature TRUE means the bus
+# transaction ACKed - nothing more. The control panel ACKed D6=4
+# (0x04) 4/5 with one transient 0xC0262582, and its own power read
+# answered "on" (val=1) THROUGH the dark window: accepts-and-lies is
+# real for power, on a directly attached panel, so the KVM never
+# needed to explain it. The reply-honest class gets its retrial
+# through this app's door, with retries (the morning verdict's zero-
+# retry budget is the PROBE LAW's named contamination).
+VCP_TRIES = 3               # the budget; a refusal after it is a fact
+                            # about THIS app's attempts, timestamped
+VCP_RETRY_SEC = 0.3         # the flaky I2C's measured demand
+VCP_POWER = 0xD6
+VCP_POWER_ON = 0x01         # 0x66 is the MCCS standard - this desk's
+VCP_POWER_OFF = 0x04        # panels NAK it unsupported (measured);
+                            # vendor-D6 is the power code that exists
 MAX_PATH = 260
 
 
@@ -91,6 +124,13 @@ dx.GetMonitorBrightness.argtypes = [ctypes.c_void_p,
 dx.GetMonitorBrightness.restype = ctypes.c_long                     # BOOL
 dx.SetMonitorBrightness.argtypes = [ctypes.c_void_p, wintypes.UINT]
 dx.SetMonitorBrightness.restype = ctypes.c_long                     # BOOL
+dx.SetVCPFeature.argtypes = [ctypes.c_void_p, ctypes.c_ubyte,
+                             wintypes.DWORD]
+dx.SetVCPFeature.restype = ctypes.c_long                            # BOOL
+dx.GetVCPFeatureAndVCPFeatureReply.argtypes = [
+    ctypes.c_void_p, ctypes.c_ubyte, ctypes.POINTER(ctypes.c_ubyte),
+    ctypes.c_void_p, ctypes.c_void_p]
+dx.GetVCPFeatureAndVCPFeatureReply.restype = ctypes.c_long          # BOOL
 dx.DestroyPhysicalMonitors.argtypes = [wintypes.UINT,
                                        ctypes.POINTER(PHYSICAL_MONITOR)]
 dx.DestroyPhysicalMonitors.restype = ctypes.c_long                  # BOOL
@@ -165,42 +205,137 @@ def get(gdi):
     return seen[0] if seen else None
 
 
+def _send(write, tries):
+    """The retry door that EVERY DDC/CI write rides (the bus demanded
+    it - measured): 0.3 s between tries, the full budget spent on any
+    failure class, and the verdict reports the LAST answer. A refusal
+    out of here is a fact about this loop's attempts, not the
+    firmware's soul: the morning's one-shot scratch NAKs were the
+    probing itself (PROBE LAW, AUDIT-PUNCHLIST, 2026-10-14).
+    (ok, tries_used, last_error)."""
+    err = 0
+    for n in range(1, max(1, tries) + 1):
+        k32.SetLastError(0)
+        if write():
+            return True, n, 0
+        err = k32.GetLastError() & 0xFFFFFFFF
+        if n < tries:
+            time.sleep(VCP_RETRY_SEC)
+    return False, tries, err
+
+
 def set(gdi, pct):
-    """One brightness write under the refusal law. '' = the panel
-    MOVED (readback-confirmed); REFUSAL = enumerate fail, Set FALSE,
-    or the +0.5 s readback unmoved - never silent, the caller owes
-    that row a blackout degradation and a confession."""
+    """One brightness write under the two honest halves (module
+    header). Returns (trouble, verified): trouble "" = the write was
+    SENT - verified True when the +0.5 s readback confirms the move,
+    verified False in UNVERIFIED-TRUST (readback deaf or courtesy,
+    the class this desk demonstrably has - never a refusal);
+    REFUSAL = the send failed after the full budget; NO_DOOR = the
+    handles never opened (the gray class). The caller owes the
+    refusal half a degradation and a confession, and the unverified
+    half an honest status word."""
     px = _phys(gdi)
     if px is None:
-        return REFUSAL
+        return NO_DOOR, False
+    h = px[2][0].hMonitor
     before = _read(px)
-    if before is None:
-        return REFUSAL
-    want = max(before[1], min(before[2], int(pct)))
-    if not dx.SetMonitorBrightness(px[2][0].hMonitor, want):
-        invalidate(gdi)
-        return REFUSAL
-    if want == before[0]:                 # already there: no movement
-        return ""                         # owed, nothing to confirm
+    if before is not None:
+        want = max(before[1], min(before[2], int(pct)))
+    else:
+        want = max(0, min(100, int(pct)))   # no range to clamp by;
+        # the write still rides - a read-refused door is not a
+        # write-refused door (that lie is retired with the old law)
+    sent, _n, err = _send(lambda: dx.SetMonitorBrightness(h, want),
+                          VCP_TRIES)
+    if not sent:
+        invalidate(gdi)                    # stale-handle class: rebuild
+        log.info("bright: %s %d%% send refused (error 0x%X, %d tries)",
+                 gdi, want, err, _n)
+        return REFUSAL, False
+    if before is not None and want == before[0]:
+        return "", True                    # already there: nothing owed
     time.sleep(CONFIRM_SLEEP_SEC)
     after = _read(px)
-    if after is None or (after[0] != want and after[0] == before[0]):
-        invalidate(gdi)                   # stale-handle class: rebuild
-        log.info("bright: %s accepted %d%% and stayed %d%% - a courtesy "
-                 "answer, not a fact", gdi, want, before[0])
-        return REFUSAL
-    return ""
+    verified = after is not None and after[0] == want
+    if not verified:
+        log.info("bright: %s ACKed %d%%, readback says %s - unverified "
+                 "trust, not refusal (PROBE LAW)", gdi, want,
+                 "nothing" if after is None else "%d%%" % after[0])
+    return "", verified
 
 
 def restore(gdi, pct):
     """The lift write: back to the ledger's pct (get refused at the
-    leaving moment? hand back max, the packet's honest default). No
-    refusal return - the handback rides once and the truth is already
-    in the engage-side ledger."""
+    leaving moment? hand back max, the packet's honest default). The
+    same retry door as set() - the hand-back deserves the budget too.
+    No refusal comes back: the truth is already in the engage-side
+    ledger, and a hand-back that cannot land is the panel's answer."""
     px = _phys(gdi)
     if px is None:
         return
-    dx.SetMonitorBrightness(px[2][0].hMonitor, int(pct))
+    sent, _n, err = _send(
+        lambda: dx.SetMonitorBrightness(px[2][0].hMonitor, int(pct)),
+        VCP_TRIES)
+    if not sent:
+        log.info("bright: hand-back of %s%% to %s refused after the "
+                 "budget (error 0x%X); the panel keeps its own answer",
+                 pct, gdi, err)
+
+
+def vcp(gdi, code, value, tries=VCP_TRIES):
+    """One VCP write through the brightness door's CACHED HANDLES -
+    one handle table, one bus, one law. (sent, why): TRUE from
+    SetVCPFeature is the transaction's ACK, not a promise the panel
+    obeyed (the control panel's power read answered "on" through a
+    fully-ACKed D6-off window, scripts/sdc_off_probe.py - the
+    readback half is what vcp_read asks); sent False is REFUSAL with
+    its error and try-count, or NO_DOOR at a panel never reached.
+    A refusal is timestamped by the caller as what it is: this app's
+    spent budget, not the firmware's soul."""
+    px = _phys(gdi)
+    if px is None:
+        return False, NO_DOOR
+    h = px[2][0].hMonitor
+    sent, _n, err = _send(lambda: dx.SetVCPFeature(h, code, int(value)),
+                          tries)
+    if not sent:
+        invalidate(gdi)          # a dead handle and a NAK look alike
+        log.info("vcp: %s 0x%02X=%d refused after %d tries (last error "
+                 "0x%X)", gdi, code, value, tries, err)
+        return False, "%s (error 0x%X after %d tries)" % (REFUSAL, err,
+                                                          tries)
+    return True, ""
+
+
+def vcp_read(gdi, code):
+    """(answered, value): the honest readback of one VCP code. A NO
+    here is UNVERIFIED territory, never a write-verdict (reply-deaf
+    is a demonstrated class, PROBE LAW). All three out-pointers real:
+    NULL pVCPFeature answers 0x57 from this OS (measured this session)
+    - the morning's "D6 read is deaf" was that argument bug, not the
+    panel. type/current/max per the probes' proven shape."""
+    px = _phys(gdi)
+    if px is None:
+        return False, None
+    mtype = ctypes.c_ubyte()
+    val = wintypes.DWORD()
+    mx = wintypes.DWORD()
+    if not dx.GetVCPFeatureAndVCPFeatureReply(px[2][0].hMonitor, code,
+                                              ctypes.byref(mtype),
+                                              ctypes.byref(val),
+                                              ctypes.byref(mx)):
+        return False, None
+    return True, int(val.value)
+
+
+def reachable(gdi):
+    """The gray law, one line and no folklore: gray ONLY panels this
+    app never reached - physical handles that never opened. A panel
+    answering any door proved its bus; the capability state machine
+    (UNKNOWN selectable -> TRIED-IN-APP -> trusted / refused-after-N,
+    timestamped) lives in the row's STATUS WORD, not in a pre-sentence
+    (owner correction, PROBE LAW, 2026-10-14)."""
+    return _phys(gdi) is not None
 
 
 def invalidate(gdi=None):
