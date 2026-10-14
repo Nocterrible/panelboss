@@ -486,7 +486,9 @@ def check():
                 assert bool(app.hold_sleep_switch.get()) is (not flip), \
                     "hold_sleep kept a stale ON"
                 assert bool(app.restore_switch.get()) is flip
-                assert bool(app.hdr_away_switch.get()) is (not flip)
+                # (hdr_while-away's assert retired with its switch -
+                #  dim-mode wave; the away card's rows are painted by
+                #  _away_sync, a different seam with its own truth)
                 assert bool(app.fullscreen_switch.get()) is flip
                 assert bool(app.power_switch.get()) is (not flip)
                 assert bool(app.gaming_switch.get()) is flip

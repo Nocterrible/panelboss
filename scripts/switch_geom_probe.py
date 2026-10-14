@@ -98,7 +98,6 @@ def knob(sw):
 
 LIT = lambda: {"consent": app.consent_switch,
                "hold_display": app.hold_display_switch,
-               "hdr_away": app.hdr_away_switch,
                "fullscreen": app.fullscreen_switch,
                "power": app.power_switch,
                "gaming": app.gaming_switch,

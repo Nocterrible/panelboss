@@ -489,8 +489,12 @@ class _PowerMixin:
             else self.hold_sleep_switch.deselect()
         self.restore_switch.select() if p.get("restore_windows") \
             else self.restore_switch.deselect()
-        self.hdr_away_switch.select() if bool(p.get("hdr_off_when_away")) \
-            else self.hdr_away_switch.deselect()
+        # hdr_away_switch is gone with its row (dim-mode wave): the
+        # fossil key stays readable one release, but a repaint seam
+        # must not touch a widget the card no longer builds - this
+        # line's AttributeError used to kill the TWO switch repaints
+        # below it (V's catch, patch-scale: the merge grew this table
+        # around a widget the wave had buried).
         self.fullscreen_switch.select() \
             if self.cfg["guards"]["fullscreen"] \
             else self.fullscreen_switch.deselect()
