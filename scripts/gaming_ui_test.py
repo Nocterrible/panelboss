@@ -429,6 +429,61 @@ def check():
             tweaks._put(p2, n2, orig)
         print("[PASS] a DVR click repaints its OWN row, never the "
               "neighbour's")
+        # 9) KNOB-FROM-TRUTH at build (defect 2's widget-blind family):
+        #    a switch must be painted from its state at construction,
+        #    BOTH branches - a fresh CTkSwitch defaults off so the
+        #    false case looked right by accident, but the paint must
+        #    come from truth. Drive the real build: point every DVR
+        #    toggle's registry value at its suppression state, rebuild
+        #    the section, and read each knob back. (The gaming enable
+        #    switch uses the same both-branch idiom now - asserted via
+        #    the enabled round-trip in section 2.)
+        import copy as _copy
+        _tog = tweaks.TOGGLES
+        _snap = {t: tweaks._get(_tog[t][1], _tog[t][2]) for t in _tog}
+        try:
+            # ALL on: each suppression value in place -> every knob on
+            for t in _tog:
+                tweaks._put(_tog[t][1], _tog[t][2], _tog[t][3])
+            app._dvr_section(app.pages["power plan"].inner)
+            for t in _tog:
+                assert app.dvr_switches[t].get() == 1, \
+                    "toggle %s built OFF though registry says on" % t
+            # ALL off: values deleted -> every knob MUST be painted
+            # off (the old one-sided build would keep a stale on)
+            for t in _tog:
+                tweaks._put(_tog[t][1], _tog[t][2], None)
+            app._dvr_section(app.pages["power plan"].inner)
+            for t in _tog:
+                assert app.dvr_switches[t].get() == 0, \
+                    "toggle %s kept a stale ON (no deselect at build)" % t
+            print("[PASS] DVR switches paint knob-from-truth both ways")
+        finally:
+            for t in _tog:
+                tweaks._put(_tog[t][1], _tog[t][2], _snap[t])
+        # 10) DESKTOP-HZ / GAME-HZ per panel SURVIVES a silent driver
+        #     (defect 3): a panel whose driver lists no rates (the RDP
+        #     session display, a cable mid-renegotiation) must still
+        #     get both menus - the enforcement reads desktop_hz/game_hz
+        #     regardless of the offered list. Seed a saved rate and
+        #     prove the menu shows it even though the driver offered
+        #     nothing. Junk dies by name at normalize (config_norm 3b);
+        #     here we prove the UI never goes silent.
+        _real_off = WM.offered_modes
+        try:
+            WM.offered_modes = lambda gdi, limit=400: []   # driver mute
+            cfg["gaming"]["desktop_hz"] = {"T1": 100}      # saved, unlisted
+            cfg["gaming"]["game_hz"] = {"T1": 120}
+            cfg["gaming"]["enabled"] = True
+            app._gaming_section(app.pages["power plan"].inner)
+            assert set(app.gaming_menus) >= {"T1", "T2"}, app.gaming_menus
+            g1, d1 = app.gaming_menus["T1"]
+            assert g1.get() == "120", ("saved game rate invisible", g1.get())
+            assert d1.get() == "100", ("saved desktop rate invisible", d1.get())
+            print("[PASS] rate menus render on a silent driver, saved "
+                  "rates shown")
+        finally:
+            WM.offered_modes = _real_off
         # the checks are done: end the loop. destroy() alone does not
         # always work - a half-built second window (the image poison
         # above) kills the Tk auto-command table, and the mainloop's

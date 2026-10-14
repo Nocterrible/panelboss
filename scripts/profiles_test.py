@@ -673,4 +673,41 @@ try:
 finally:
     profiles.wm = real_wm
 print("monitor tagging OK")
+
+# 9) THE create-now PIN (defect 1): a capture into an EMPTY store must
+#    yield EXACTLY ONE loadable, default-filled profile card - the
+#    capture is the bare skeleton the redesign's tri-state hdr guard
+#    could have dropped on reload. Drives the real create->save->load
+#    round-trip on a fake desk; the store is a scratch dir, never the
+#    owner's profiles.json.
+try:
+    class _DeskWM:
+        def monitors(self):
+            return [dict(AAA)]
+        def fingerprint(self):
+            return "FP-AAA"
+        def hdr_states(self):
+            return []                      # silent {} -> hdr_state None
+    profiles.wm = _DeskWM()                # one monitor (AAA), no windows
+    tmp9 = tempfile.mkdtemp()
+    empty = profiles.load(tmp9)
+    assert empty["profiles"] == {}, "expected an empty store to start"
+    profiles.create(empty, "desk1", dir=tmp9)
+    back9 = profiles.load(tmp9)
+    assert list(back9["profiles"]) == ["desk1"], back9["profiles"]
+    card = back9["profiles"]["desk1"]
+    # default-filled: the capture wrote the live panel, tri-state hdr
+    # survived the reload guard (None = hands off, the only legal null)
+    assert card["displays"] and card["displays"][0]["id"] == "MONITOR\\AAA", \
+        card["displays"]
+    assert card["displays"][0].get("hdr", None) in (True, False, None)
+    assert card["hdr"] in ("snap", "on", "off", "leave alone", "toggle"), \
+        card["hdr"]
+    assert card["wins"] == []
+    # a SECOND capture lands beside it, never over the first
+    profiles.create(back9, "desk2", dir=tmp9)
+    assert sorted(profiles.load(tmp9)["profiles"]) == ["desk1", "desk2"]
+finally:
+    profiles.wm = real_wm
+print("create-now OK (empty store -> one loadable default-filled card)")
 print("ALL PROFILES TESTS OK")

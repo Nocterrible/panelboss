@@ -232,8 +232,17 @@ class _PowerMixin:
             sw.configure(command=lambda t=tid, s=sw:
                          self._dvr_toggle(t, s))
             sw.grid(row=0, column=1, sticky="e")
+            # knob-from-truth, BOTH branches (the _sync_consent_switch
+            # idiom): the old build painted only select() on the True
+            # case, so the switch's position came from the widget's
+            # default (off) rather than from what the registry actually
+            # said - a switch that can never show "on" when the value is
+            # absent, and that would keep a stale knob on a reused
+            # widget. Paint the false case explicitly (defect 2).
             if tweaks.is_on(tid):
                 sw.select()
+            else:
+                sw.deselect()
             self.dvr_switches[tid] = sw
         self.dvr_status = ctk.CTkLabel(
             box, text="", font=self.skin.font(11),

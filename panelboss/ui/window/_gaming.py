@@ -48,8 +48,15 @@ class _GamingMixin:
                                            command=self._gaming_changed,
                                            **self.skin.switch_style())
         self.gaming_switch.grid(row=0, column=1, sticky="e")
+        # knob-from-truth at build (both branches, the _sync_consent_switch
+        # idiom): a CTkSwitch defaults off so the false case is
+        # coincidentally right on a FRESH widget, but the switch must be
+        # painted from cfg, not from a default that happens to match -
+        # a rebuild/selection on a reused widget would otherwise lie.
         if g.get("enabled"):
             self.gaming_switch.select()
+        else:
+            self.gaming_switch.deselect()
         # one row per live panel: the game rate first, the rate the
         # desktop gets back second - both only among the rates that
         # panel's driver offers
@@ -62,10 +69,22 @@ class _GamingMixin:
         self.gaming_hdr_menus = {}
         caps = wm.hdr_caps()
         for m in wm.monitors():
+            # the driver's offered rates may be EMPTY (a silent or
+            # fictional driver - the RDP session display lists one
+            # made-up mode at best); the row still renders, because the
+            # enforcement reads desktop_hz/game_hz per panel regardless
+            # of whether the driver lists the rate (wanted_hz falls back
+            # to the panel's current mode). A saved rate rides its menu
+            # even when the driver stopped listing it, so a hand-set or
+            # previously-chosen rate is never invisible; junk entries
+            # die by name at the config normalize boundary (hzmap), the
+            # same law as every other map - the menu only ever shows
+            # what survived that filter.
             hz = self._offered_hz(m)
-            if not hz:
-                continue          # the driver said nothing: nothing
-                                  # to offer this panel
+            gs = (g.get("game_hz") or {}).get(m["short"])
+            ds = (g.get("desktop_hz") or {}).get(m["short"])
+            game_hz = sorted(set(hz) | ({gs} if isinstance(gs, int) else set()))
+            desk_hz = sorted(set(hz) | ({ds} if isinstance(ds, int) else set()))
             row = self._row(box, "%s - game rate" % m["short"],
                             TIPS["gaming_rates"])
             # 'VRR (pin max)' is not a rate: it declares the panel's
@@ -73,13 +92,13 @@ class _GamingMixin:
             # watcher never flips it (and pins it at its max outside
             # games). The card's first entry stays 'auto' - the game
             # menu has no 'keep' (that is the desktop menu's word)
-            game_vals = ["auto", "VRR (pin max)"] + [str(v) for v in hz]
+            game_vals = ["auto", "VRR (pin max)"] + [str(v) for v in game_hz]
             game_menu = SkewCombo(
                 row, values=game_vals, width=120,
                 command=lambda v, s=m["short"]:
                 self._gaming_game_hz(s, v),
                 **self.skin.menu_style())
-            stored = (g.get("game_hz") or {}).get(m["short"])
+            stored = gs
             # a stored 'vrr' shows as its menu label; anything else
             # shows its own string, falling back to the default the
             # same way the desktop menu does
@@ -96,13 +115,13 @@ class _GamingMixin:
             # never agreed to (this exact lie is why the feature
             # looked broken: menus showed 60, cfg said {}, nothing was
             # configured, the watcher correctly held nothing)
-            desk_vals = ["keep"] + [str(v) for v in hz]
+            desk_vals = ["keep"] + [str(v) for v in desk_hz]
             desk_menu = SkewCombo(
                 row, values=desk_vals, width=100,
                 command=lambda v, s=m["short"]:
                 self._gaming_desk_hz(s, v),
                 **self.skin.menu_style())
-            stored = (g.get("desktop_hz") or {}).get(m["short"])
+            stored = ds
             desk_menu.set(str(stored) if stored is not None
                           and str(stored) in desk_vals[1:] else "keep")
             desk_menu.grid(row=0, column=1, sticky="e")

@@ -43,8 +43,15 @@ class _GeneralMixin:
                                         command=self._start_min_changed,
                                         **self.skin.switch_style())
         self.min_switch.grid(row=0, column=1, sticky="e")
+        # knob-from-truth, BOTH branches (the _sync_consent_switch
+        # idiom): painting only select() on the True case let the false
+        # case ride the widget's build default instead of the config -
+        # the consent-switch init family fixed once in _detection; every
+        # switch in this pane now paints from truth at build.
         if self.cfg["ui"].get("start_minimized"):
             self.min_switch.select()
+        else:
+            self.min_switch.deselect()
         # the updater lives here because it is meta: it replaces the
         # app, not anything the app watches. the frozen exe has no
         # repo to pull, so the row hides itself there.

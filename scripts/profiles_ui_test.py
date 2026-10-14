@@ -258,6 +258,34 @@ def check():
             store["profiles"]["profile-1"]
         print("[PASS] remove drops the row (last row, empty profile)")
 
+        # 8b) THE CREATE-NOW BUTTON (defect 1): on the create-new pane
+        #     (empty name -> the entry + "capture this desktop"), a
+        #     click must CREATE one default-filled card, land it in the
+        #     store, and switch the picker to it - the whole
+        #     button -> create -> store -> card-list chain, through the
+        #     real handler (the silent-death guard now reports any raise
+        #     instead of vanishing). Drive it via the picker's NEW row.
+        app._profile_picked(PF.NEW)
+        app.update_idletasks()
+        app._prof_name.delete(0, "end")
+        app._prof_name.insert(0, "captured")
+        app._profile_create()
+        app.update_idletasks()
+        store = _store()
+        assert "captured" in store["profiles"], list(store["profiles"])
+        _cap = store["profiles"]["captured"]
+        assert _cap["displays"] and _cap["displays"][0]["id"] == "MONITOR\\T1", \
+            _cap["displays"]
+        assert app._prof_sel == "captured", app._prof_sel
+        assert "captured" in str(app.profile_menu.cget("values")), \
+            app.profile_menu.cget("values")
+        # leave the window EXACTLY as section 8 found it (selection on
+        # profile-1), or the pin test below renders the wrong profile
+        # and the create-now step reads as a neighbour-breaker
+        app._profile_picked("profile-1")
+        app.update_idletasks()
+        print("[PASS] create-now yields one loadable default-filled card")
+
         # 9) owner sketch (Oct 12): the tab is TWO columns side by
         #    side - whole-desktop profiles + restore on the left,
         #    the pin half on the right. The check runs from an

@@ -117,16 +117,30 @@ class _ModeMixin:
 
 
     def _profile_create(self):
+        # the create-now verb must die LOUD like its blank-profile
+        # sibling, never silent in pythonw: profiles.create() calls
+        # capture() -> wm.monitors(), a real driver read that can raise
+        # mid-enumeration; an unguarded raise lands in the Tk callback
+        # and the event loop swallows it whole - the button looked dead
+        # (the same silent-ignorance class as the consent switch). The
+        # failure goes to the gray status line (R8); nothing raises.
         name = (self._prof_name.get() or "").strip()
         if not name:
             self._prof_msg = "give it a name first"
             self._status_lbl.configure(text=self._prof_msg)
             return
-        profiles.create(self._prof_data, name)
-        self.profile_menu.configure(values=[profiles.NEW] + sorted(
-            self._prof_data["profiles"]))
-        self.profile_menu.set(name)
-        self._profile_picked(name)
+        try:
+            profiles.create(self._prof_data, name)
+            # the primitive returns the dict it stored; a save that
+            # could not write still leaves the in-memory card, so the
+            # picker is rebuilt from the data the store now holds -
+            # exactly one default-filled entry for the fresh name
+            self.profile_menu.configure(values=[profiles.NEW] + sorted(
+                self._prof_data["profiles"]))
+            self.profile_menu.set(name)
+            self._profile_picked(name)
+        except Exception as e:
+            self._mode_fail("create profile: %s" % e)
 
 
     def _prof_blank(self):
