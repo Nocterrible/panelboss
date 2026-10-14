@@ -110,6 +110,57 @@ answered at the receipt.
      its closing commits; BACKLOG items carry file:line + one-line fix
 5. F:\Projects\panelboss-reskin\CHANGELOG.md + version 0.2.0 (6d3edbd)
 
+## POST-RELEASE addendum 2 (owner-UAT waves, same day) - re-tag due at wave-E tip
+The addendum-1 range itself grew past UAT: the owner's live battery
+produced SIX more gated camera commits (4a48efd addendum, 54533bd
+BIND, c21c529 instant-close crash + virtual-flag channel, 05efcd1 the
+naming law end-to-end incl. IR rows, d4000b1 typed-label-only save),
+then THREE themed waves on top of d4000b1, each independently
+V-receipted and reviewer-gated (verdicts all SHIP or
+SHIP-WITH-FIXES-absorbed):
+- CAMDIAG WAVE (2e4c6e1..7289b14): the camera diagnostic record
+  (camera.diag), the THREADED scan-probe (owner law: sequential
+  6x15s unacceptable; opens serialized on the device-tree lock, 15 s
+  budgets overlap), pre-marks/picker suffixes, sticky per-camera
+  show-back, and the HEARTBEAT VEIL (fixed budgets died; veil
+  lifetime = sweep liveness, 35 s dead-man derived from the engine's
+  own open deadline) + the _veil_hold leak close (e69c22c's IR duty
+  card closed the unremovable-sentinel seat).
+- REDESIGN ("blow it away", 61d9137..36ba449, push 6fbb3a0): CONSENT
+  GATE first (camera.enabled stock-false; no camera opens until the
+  user speaks - the tray menu itself was an opener until this wave),
+  the setup screen (_assign.py: cards spawn per settle, snapshots,
+  rename+hide+ADD per card, timeout cards that say so, IR first-class,
+  four-seat ceiling grayed IN the widget), the wizard's funeral
+  (_camid.py -> 257-line _identity.py data module), hidden list on the
+  camera card, and the DEFAULT-OFF LAW (f06da02: power/wake/restore
+  stock-dark, adoption one-directional, release-boundary migration
+  with named reset lines). Root-cause interlude: the "virgin boot"
+  breach was a SILENT migrate_once resurrection of the pre-rename data
+  dir - now retire-on-use + consent decisions announce themselves
+  (3c6ef0c) + virgin_boot_test regression (5188a8a).
+- HDR WAVE (38c1343..0995811): per-monitor type-16 SET wired into
+  profile apply (order-pinned: layout first) + gaming desktop-color
+  sibling + per-panel AUTO-SWITCH tiers - video-ACTIVITY via public
+  unelevated PDH GPU-engine counters (RTX-HDR use case; Auto-HDR
+  games cannot false-trip while SDR) and mpv-IPC content tier -
+  WM_DISPLAYCHANGE ear keeps state honest vs external togglers;
+  hysteresis constants named; live off->on->off round trip on the
+  owner's panel with both broadcasts witnessed.
+- WATCHDOG WAVES (bb38943, e497815): the owner's wedged-desk UAT
+  (DroidCam-class MF door) killed the setup screen three times; the
+  debugger pinned the third death ONE CALL PAST THE FENCE
+  (hello_ir_names -> find_groups, the last unbounded gather verb).
+  camera.py now carries join-watchdogs for enumerate (60 s probe-size,
+  derivation at the constant), IR (20 s, no-cache-on-stall), and the
+  deferred-release drain; the dialog arms at GATHER START, the veil is
+  PHASE-NAMED with an elapsed clock and per-index beats, and the NEW
+  LAW: an empty board SPEAKS (first engine WARNING surfaced in the UI,
+  the veil IS the confession line). Split paid at a real seam:
+  watchdog.py (99 lines). 45 commits total since the tag at tip
+  e497815; the wave-E pair (always-on 1 s cadence; create-now/Xbox/
+  gaming-hz/autostart UI batch) lands on top before the new tag.
+
 ## Honest notes (things the gates found in the gates' own infrastructure)
 - Two implementer lanes died at zero writes on multi-delta packets and
   their content was rebuilt inline (the split/absorb dials of packet law);
