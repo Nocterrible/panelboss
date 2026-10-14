@@ -28,15 +28,19 @@
                 mpv warns its property shapes may gain spellings.
                 MPC-HC's command channel is a documented FOLLOW-UP.
 
-Size law (~150, Oct 13, the claim includes its own lines): the module
+Size law (measured 216, Oct 13, the claim includes its own lines):
+the module
 is the counter/pipe vocabulary plus two probes over it; the state
 machine that ACTS on the verdicts lives in state/_hdrwatch.py (pure,
 fake-clocked tests). The mechanics mirror panelboss/gpu.py (measured
 on this build: fresh query per call, one collect pair, wildcard array
 reads die of heap corruption so every counter is added per-instance);
-the one deliberate difference: PdhAddEnglishCounterPathW, the
-locale-proof door - gpu.py entered through the localized one and
-survives only because this desk speaks English.
+the one deliberate difference: PdhAddEnglishCounterW, the locale-
+proof door - gpu.py entered through the localized one and survives
+only because this desk speaks English. (Measured at first import,
+Oct 13: the packet's "PdhAddEnglishCounterPath" spelling does not
+exist in pdh.dll - the English export's real name has no Path; the
+loader said so and this header remembers.)
 """
 
 import ctypes
@@ -97,8 +101,8 @@ if pdh is not None:
                                         W.DWORD, W.DWORD]
     pdh.PdhOpenQueryW.argtypes = [W.LPCWSTR, W.DWORD,
                                   ctypes.POINTER(W.HANDLE)]
-    pdh.PdhAddEnglishCounterPathW.argtypes = [W.HANDLE, W.LPCWSTR, W.DWORD,
-                                              ctypes.POINTER(W.HANDLE)]
+    pdh.PdhAddEnglishCounterW.argtypes = [W.HANDLE, W.LPCWSTR, W.DWORD,
+                                          ctypes.POINTER(W.HANDLE)]
     pdh.PdhCollectQueryData.argtypes = [W.HANDLE]
     pdh.PdhGetFormattedCounterValue.restype = W.DWORD
     pdh.PdhGetFormattedCounterValue.argtypes = [
@@ -152,8 +156,8 @@ def video_busy():
         handles = []
         for n in inst:
             h = W.HANDLE()
-            if pdh.PdhAddEnglishCounterPathW(q, COUNTER_PATH % n, 0,
-                                             ctypes.byref(h)):
+            if pdh.PdhAddEnglishCounterW(q, COUNTER_PATH % n, 0,
+                                         ctypes.byref(h)):
                 continue          # died mid-enum->add: churn, keep going
             handles.append(h)
         if not handles:

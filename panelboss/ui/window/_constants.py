@@ -334,6 +334,12 @@ HDR_ASK_LABELS = {"snap": "restore as captured (per monitor)",
                   "toggle": "flip it (legacy)"}
 HDR_MENU_ORDER = ("snap", "leave alone", "on", "off")
 HDR_BY_LABEL = {label: ask for ask, label in HDR_ASK_LABELS.items()}
+# the per-PANEL color selector (amendment 8): the stored value is the
+# boolean, and "keep" is the ABSENCE of the key - never a written
+# false-lie (the desktop-rate menu's lesson, inherited). Rendered
+# only where a PRECISE driver read says the panel can do HDR;
+# everywhere else the selector is absent, not gray-lied
+HDR_SET_LABELS = (("keep", None), ("hdr on", True), ("hdr off", False))
 RESTORE_SCOPES = (("full", "the whole desk"),
                   ("monitors", "monitors only (modes + HDR)"),
                   ("windows", "windows only (pinned apps)"))

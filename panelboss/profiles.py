@@ -615,6 +615,28 @@ def hdr_snap_plan(displays, states):
     return out
 
 
+def hdr_display_plan(displays, states):
+    """Pure decision for the EXPLICIT per-panel ask (amendment 8): a
+    display entry carrying hdr true/false commands that panel to
+    that state when the profile applies - the owner said so, in
+    words the driver can execute, per screen. hdr null (or absent)
+    is hands off: the row defers to the profile-wide ask, exactly as
+    it did before this lever existed. A panel that cannot do HDR or
+    will not say is never commanded (the hdr_plan law, inherited);
+    a panel already wearing the asked state owes no call. Returns
+    the same [(id, "on"/"off")] shape the apply loop consumes."""
+    out = []
+    for d in displays:
+        want = d.get("hdr")
+        if want not in (True, False):
+            continue
+        goal = "on" if want else "off"
+        now = states.get(d["id"])
+        if now in ("on", "off") and now != goal:
+            out.append((d["id"], goal))
+    return out
+
+
 def _hdr_now():
     """Driver truth joined to monitor ids: ({id: state}, precise,
     {id: gdi}) - the gdi map rides along because after a topology
@@ -799,11 +821,25 @@ def apply(data, name, best_effort=False, scope="full", login=False,
     # Windows, whose only readable API conflates HDR with wide
     # gamut and measurably lies.
     ask = prof.get("hdr", "leave alone")
-    if layout and ask in ("snap", "on", "off", "toggle"):
+    explicit_rows = [d for d in prof["displays"]
+                     if d.get("hdr") in (True, False)]
+    if layout and (ask in ("snap", "on", "off", "toggle")
+                   or explicit_rows):
         states, precise, gdis = _hdr_now()
         if precise:
-            plan = (hdr_snap_plan(prof["displays"], states)
-                    if ask == "snap" else hdr_plan(ask, states))
+            # amendment 8: an EXPLICIT per-panel color ask outranks
+            # the profile-wide ask (and outranks snap, which is only
+            # a memory of what once was, while true/false is an
+            # instruction); the wide ask still runs over the panels
+            # it did not claim
+            explicit = hdr_display_plan(prof["displays"], states)
+            claimed = {mid for mid, _ in explicit}
+            rest = [d for d in prof["displays"]
+                    if d.get("hdr") not in (True, False)]
+            base = (hdr_snap_plan(rest, states) if ask == "snap"
+                    else hdr_plan(ask, states))
+            plan = explicit + [(mid, goal) for mid, goal in base
+                               if mid not in claimed]
             for mid, goal in plan:
                 trouble = wm.hdr_set(gdis[mid], goal == "on")
                 if trouble:
@@ -827,6 +863,11 @@ def apply(data, name, best_effort=False, scope="full", login=False,
                                for d in prof["displays"]) else
                         "hdr: nothing was captured to restore - "
                         "this profile predates the hdr snapshot")
+                elif ask not in ("snap", "on", "off", "toggle"):
+                    # "leave alone" with explicit rows, and every
+                    # one already in force
+                    say.append("hdr: the explicit panels already wear "
+                               "what the profile asked")
                 else:
                     say.append("hdr: nothing readable to flip"
                                if ask == "toggle" else

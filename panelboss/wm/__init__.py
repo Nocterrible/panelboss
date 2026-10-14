@@ -92,7 +92,8 @@ from ._hdr import (DCI_GET_ADVANCED_COLOR_INFO,
                    DC_TARGET_NAME, ERROR_NOT_SUPPORTED, INPUT_KEYBOARD,
                    KEYBDINPUT, KEYEVENTF_KEYUP, LUID,
                    QDC_ONLY_ACTIVE_PATHS, VK, _dc_targets, _n, _s,
-                   _want, hdr_set, hdr_states, press_keys)
+                   _want, hdr_caps, hdr_set, hdr_set_model,
+                   hdr_states, press_keys)
 
 from ._rescue import GRAB_EDGE, lost, rescue_lost
 

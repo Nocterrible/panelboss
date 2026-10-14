@@ -252,6 +252,34 @@ def _enforce_desktop(ledger, mons, gcfg):
             # that cannot land. Park quietly until the list changes.
             continue
         _set_hz(ledger, m, want, "desktop hold", None, "not gaming")
+    # the color sibling of the desktop-rate law (amendment 8): a
+    # panel with a configured hdr true/false wears that state
+    # outside games, enforced on the same pass - one command per
+    # disagreement (the driver read settles the noise), an entry-less
+    # panel is nobody's business, and a panel that cannot do HDR or
+    # will not say is skipped silent. vrr panels are NOT exempt here:
+    # vrr governs the scanout rate, this governs the color mode, and
+    # the two questions do not overlap
+    hdr_map = gcfg.get("hdr") or {}
+    if isinstance(hdr_map, dict) and hdr_map:
+        try:
+            rows = {r.get("gdi"): r for r in wm.hdr_states()}
+        except Exception:
+            rows = {}
+        for short, want in hdr_map.items():
+            if not isinstance(want, bool):
+                continue
+            m = next((m for m in mons if m["short"] == short), None)
+            r = rows.get(m["gdi"]) if m else None
+            if r is None or not r.get("supported") \
+                    or r.get("state") not in ("on", "off"):
+                continue
+            if (r.get("state") == "on") == want:
+                continue                   # driver agrees: zero calls
+            say = wm.hdr_set(m["gdi"], want)
+            log.info("gaming hdr: %s -> %s%s", short,
+                     "on" if want else "off",
+                     "" if not say else "; refused: " + say)
 
 
 def _adopt_or_hands_off(st, ledger, mons):

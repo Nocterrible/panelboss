@@ -1,6 +1,7 @@
 """Gaming refresh-rate section of the power plan tab.
-Size law (measured ~310, Oct 12 - the claim includes its own
-lines): the card, its commits and the
+Size law (measured 348, Oct 13 - the claim includes its own
+lines; the amendment-8 color selector added the last thirty): the
+card, its commits and the
 exe browse are one story read top-to-bottom when a rate or a list
 misbehaves; the pure list/commit helpers could split, but the
 pair has been the debug surface for every gaming bug this month
@@ -18,7 +19,7 @@ import tkinter as tk
 
 from .. import theme
 from ... import wm
-from ._constants import TIPS
+from ._constants import HDR_SET_LABELS, TIPS
 from ._text import SkewText
 from ._widgets import SkewCombo
 
@@ -53,6 +54,13 @@ class _GamingMixin:
         # desktop gets back second - both only among the rates that
         # panel's driver offers
         self.gaming_menus = {}
+        # the per-panel color selector (amendment 8) rides the
+        # desktop-rate row of every panel a PRECISE driver read says
+        # can do HDR; nowhere else - an absent selector is the
+        # honest answer, a grayed one is a lie awaiting a driver
+        # update
+        self.gaming_hdr_menus = {}
+        caps = wm.hdr_caps()
         for m in wm.monitors():
             hz = self._offered_hz(m)
             if not hz:
@@ -98,6 +106,20 @@ class _GamingMixin:
             desk_menu.set(str(stored) if stored is not None
                           and str(stored) in desk_vals[1:] else "keep")
             desk_menu.grid(row=0, column=1, sticky="e")
+            if caps.get(m["gdi"]):
+                hdr_menu = SkewCombo(
+                    row, values=[lab for lab, _ in HDR_SET_LABELS],
+                    width=90,
+                    command=lambda v, s=m["short"]:
+                    self._gaming_hdr(s, v),
+                    **self.skin.menu_style())
+                stored = (g.get("hdr") or {}).get(m["short"])
+                hdr_menu.set("hdr on" if stored is True
+                             else "hdr off" if stored is False
+                             else "keep")
+                hdr_menu.grid(row=0, column=2, sticky="e",
+                              padx=(theme.S_FIELD, 0))
+                self.gaming_hdr_menus[m["short"]] = hdr_menu
             self.gaming_menus[m["short"]] = (game_menu, desk_menu)
         # the two exe lists: one name per line, and the lines ARE the
         # list - the commit on focus-out is the save
@@ -205,6 +227,23 @@ class _GamingMixin:
             self.cfg["gaming"]["desktop_hz"].pop(short, None)
         else:
             self.cfg["gaming"]["desktop_hz"][short] = int(label)
+        self._save()
+
+
+    def _gaming_hdr(self, short, label):
+        """The desktop-color trinary (amendment 8): 'keep' DELETES the
+        rule (TOML has no null - the absence of the key is the
+        absence of the claim, and a written false would lie about a
+        command), true/false tasks the desktop pass outside games.
+        The write is cfg + _save exactly like the rate menus - the
+        watcher re-reads cfg every tick, so writing the cfg IS
+        applying it."""
+        want = dict(HDR_SET_LABELS).get(label)
+        hdr = self.cfg["gaming"].setdefault("hdr", {})
+        if want is None:
+            hdr.pop(short, None)
+        else:
+            hdr[short] = want
         self._save()
 
 

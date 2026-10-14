@@ -309,17 +309,21 @@ class _ProfilesMixin:
         #                            its old body: start from clean
         live = profiles.live_modes()                # R6: once per pass
         self._prof_live = live
-        hdr = {}
+        hdr, cap = {}, {}
         try:
+            rows = wm.hdr_states()          # ONE walk: the live note
             hdr = {r["gdi"]: ("no hdr" if not r.get("supported")
                               else "hdr on"
                               if r.get("state") == "on"
                               else "hdr off"
                               if r.get("state") == "off"
-                              else "hdr ?")
-                   for r in wm.hdr_states()}
+                              else "hdr ?") for r in rows}
+            # and the dropdown gate (amendment 8): precise supported
+            # only - a selector on incapable hardware is a gray lie
+            cap = {r["gdi"]: bool(r.get("supported")
+                                  and r.get("precise")) for r in rows}
         except Exception:
-            pass
+            pass                            # silent {} is honest
         g_of = {m["id"]: m["gdi"] for m in mons}
         head = ctk.CTkFrame(sec, fg_color="transparent")
         head.pack(fill="x")
@@ -328,7 +332,8 @@ class _ProfilesMixin:
                      **self.skin.text_style()).pack(side="left")
         for d in prof.get("displays") or []:
             self._mode_row(sec, d, live,
-                           hdr.get(g_of.get(d.get("id"), ""), ""))
+                           hdr.get(g_of.get(d.get("id"), ""), ""),
+                           bool(cap.get(g_of.get(d.get("id"), ""))))
         if not (prof.get("displays") or []):
             ctk.CTkLabel(sec, text="no panels yet - add one below",
                          font=self.skin.font(11),

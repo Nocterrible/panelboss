@@ -167,6 +167,15 @@ DCI_GET_TARGET_NAME = 2
 DCI_GET_ADVANCED_COLOR_INFO = 9
 DCI_SET_ADVANCED_COLOR_STATE = 10
 DCI_GET_ADVANCED_COLOR_INFO_2 = 15
+# DCI_SET_HDR_STATE is the ONLY set path this app uses, and that is
+# the 24H2 migration canary: the old enable door (type 10, the legacy
+# ADVANCED_COLOR toggle, HDR and wide-gamut fused) is the path the
+# community tool windows-display-settings broke on when 24H2 landed -
+# its write was accepted and meant something else afterward. Type 16
+# asks for HDR ONLY, on the same device-info call family as the
+# type-15 read that confirms it - no belief, no fused lie. Pinned in
+# scripts/hdrwatch_test.py (the constant AND the call site: the set
+# must reference 16 and must NOT reference 10).
 DCI_SET_HDR_STATE = 16
 ERROR_NOT_SUPPORTED = 50
 u32.GetDisplayConfigBufferSizes.argtypes = [
@@ -274,3 +283,31 @@ def hdr_set(gdi, on):
                 if rc != ERROR_NOT_SUPPORTED
                 else "this monitor cannot do HDR")
     return "no active display path for %s any more" % gdi
+
+
+def hdr_set_model(model, on):
+    """The slot-agnostic twin of hdr_set (amendment 8): the watcher's
+    clocks and the profiles' identity world key on the EDID MODEL,
+    which survives a replug shuffle; the \\.\DISPLAYn slot that
+    hdr_set wants is re-resolved here, from the same fresh walk the
+    set re-enumerates anyway. Trouble strings read like hdr_set's,
+    plus the honest "model is not on the desk"."""
+    for t in _dc_targets():
+        if t["model"] == model and t["model"]:
+            return hdr_set(t["gdi"], on)
+    return "model %s is not on the desk" % (model or "?")
+
+
+def hdr_caps():
+    """{gdi: can this panel do HDR} - the dropdown gate (amendment 8:
+    the selector is ABSENT, not gray-lied, where the answer is no),
+    never raises, {} on any trouble. Only a PRECISE read counts as
+    an answer: the pre-24H2 fusion (type 9) says "supported" to
+    wide-gamut-only panels too - measured, this desk's third monitor
+    - and believing it would offer a selector on hardware that
+    cannot use it."""
+    try:
+        return {r["gdi"]: bool(r.get("supported") and r.get("precise"))
+                for r in hdr_states()}
+    except Exception:
+        return {}

@@ -1,6 +1,9 @@
 """Profiles tab verbs: mode edits, profile create and
 apply, the noshows dialog, rescue.
-Size law (~330, 2026-10): the apply pipeline is one transaction -
+Size law (measured 443, Oct 13 - the claim includes its own lines;
+the amendment-8 per-panel color selector added the last thirty and
+the 2026-10 claim had drifted before that): the apply pipeline is
+one transaction -
 snapshot, layout plan, dialog, rescue - whose halves argue over
 shared state; split cost paid per read beats the split itself here.
 """
@@ -17,19 +20,24 @@ import tkinter as tk
 import customtkinter as ctk
 
 from ... import profiles, wm
-from ._constants import HDR_BY_LABEL
+from ._constants import HDR_BY_LABEL, HDR_SET_LABELS
 from ._widgets import SkewCombo, _fresh_pin_edit
 
 log = logging.getLogger("ui")
 
 
 class _ModeMixin:
-    def _mode_row(self, parent, d, live, hdr_note=""):
+    def _mode_row(self, parent, d, live, hdr_note="", hdr_cap=False):
         """One editable panel row: short name (plus its LIVE hdr state,
         the driver's truth, silent when unknowable), a resolution menu, a
         refresh menu, a remove. A panel not on the live desk offers only
         its saved values and a gray 'panel not live' hint; a UNVERIFIED
-        note from the last edit is painted gray under the row (R2)."""
+        note from the last edit is painted gray under the row (R2).
+        hdr_cap (amendment 8) adds the per-panel color selector between
+        the rate menu and the remove - it renders ONLY where a precise
+        driver read reported the panel capable: a selector on hardware
+        that cannot use it is the gray lie the owner refused, and the
+        absence of the selector is itself the honest answer."""
         mon_id = d.get("id")
         row = ctk.CTkFrame(parent, fg_color="transparent")
         row.pack(fill="x", pady=theme.S_FIELD)
@@ -72,6 +80,18 @@ class _ModeMixin:
         self._set_menu(rate_menu, str(saved_rate) if saved_rate else "?")
         rate_menu.pack(side="left", padx=(theme.S_FIELD, 0))
         self._mode_menus[mon_id] = (res_menu, rate_menu)
+        if hdr_cap:
+            # the per-panel color ask (amendment 8): same row, same
+            # commit-through-primitive law as res and rate
+            hdr_menu = SkewCombo(
+                row, values=[lab for lab, _ in HDR_SET_LABELS],
+                width=90,
+                command=lambda v, m=mon_id: self._mode_hdr(m, v),
+                **self.skin.menu_style())
+            want = d.get("hdr")
+            hdr_menu.set("hdr on" if want is True
+                         else "hdr off" if want is False else "keep")
+            hdr_menu.pack(side="left", padx=(theme.S_FIELD, 0))
         ctk.CTkButton(row, text="remove", width=66,
                       command=lambda m=mon_id: self._mode_remove(m),
                       **self.skin.secondary()).pack(side="left", padx=(theme.S_FIELD, 0))
@@ -182,6 +202,30 @@ class _ModeMixin:
             self._profiles_render()
         except Exception as e:
             self._mode_fail("change resolution: %s" % e)
+
+
+    def _mode_hdr(self, mon_id, label):
+        """Per-panel color ask (amendment 8), same commit-through-
+        primitive law as res and rate: 'keep' DELETES the key (hands
+        off is the absence of a rule, never a written false), true/
+        false store the command. The profile's whole file re-saves
+        and the pane repaints; hdr itself moves at APPLY time -
+        editing the row must not flicker the owner's desk."""
+        try:
+            prof = self._prof_data["profiles"].get(self._prof_sel) or {}
+            row = next((d for d in prof.get("displays") or []
+                        if d.get("id") == mon_id), None)
+            if row is None:
+                return
+            want = dict(HDR_SET_LABELS).get(label)
+            if want is None:
+                row.pop("hdr", None)
+            else:
+                row["hdr"] = want
+            profiles.save(self._prof_data)
+            self._profiles_render()
+        except Exception as e:
+            self._mode_fail("change hdr: %s" % e)
 
 
     def _mode_rate(self, mon_id, rate_text):
