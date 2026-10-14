@@ -574,6 +574,28 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   rc=4 + guard_test (888857c); TclError flags, NIM_ADD anti-vacuous, scratch
   hygiene; PANELBOSS_CONFIG_DIR corrected.
 
+## Wave E1 (cadence law, SHIP @ 8d30a6c) - gate ledger lines
+- OWNER DESK RESIDUE: the violation-era boot wrote stock always_fallback
+  _poll_sec=10 into the live toml BEFORE the law existed; the wave-B
+  resetter predates these keys, so the dark gate reads 10 s on this
+  box until the key is deleted (or hand-set to 1) at next app quit.
+  Card label must not promise 1 s to a desk running 10.
+- CEILING QUESTION for the owner: law shipped as the FLOOR reading
+  (degraded dark eye = 1 s); the FRESH always-on dark eye reads ~5 Hz
+  by the loop's nature (that's what a held stream is for; capping =
+  one re-arm line in _off_phase, costs ~5x wake latency). Say the
+  word if "once per second" was meant as a ceiling too.
+- LABEL HONESTY WORSE-SIBLING: _constants.py:15 timers card still
+  says "poll while off" for off_poll_sec - the README's just-corrected
+  lie lives on the more-read surface. Relabel "first dark re-poll"
+  (folded into E2's audit batch).
+- E2 RELAY (durable home, unwrapped): "always-on: read once per second
+  while the screens are off (the stream stays open; 1 s is the point)"
+  - source from THIS block, not the git-message wrap.
+- STALE-VALUE CLASS (gate note): a value-gated boundary (_meta < 3 +
+  old-stock match) is the structural fix if the "young era" ruling
+  ever hardens - wave-B's stamp disarms before camera keys exist.
+
 ## Wave C ledger lines (gate SHIP @ bb38943, Oct 13 night)
 - find_camera's stall RuntimeError text says "check privacy settings" -
   a wedged driver would confess as a privacy LIE; append "; or a wedged
