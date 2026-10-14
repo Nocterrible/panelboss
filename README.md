@@ -20,12 +20,12 @@ notice the camera blinking and something malicious watching it.
 |---|---|
 | typing | nothing; the camera never runs (`idle_gate_sec`) |
 | idle > `idle_gate_sec` (30 s default) | camera boots per poll, every `on_poll_sec` (3 s) |
-| idle and being watched | the app holds Windows' own display and sleep timers off (`[power] hold_display` + `hold_sleep`, default on, independent) so a plan timeout can never time a still person out; the display hold is released before the app's own off-broadcast, and both are released on pause/snooze |
+| idle and being watched | the app holds Windows' own display and sleep timers off (`[power] hold_display` + `hold_sleep`, default OFF since the default-off law - opt in from the power card, independent) so a plan timeout can never time a still person out; the display hold is released before the app's own off-broadcast, and both are released on pause/snooze |
 | absence confirmed `absent_confirm_sec` (60 s) | `SC_MONITORPOWER(2)` — same standby as the power plan, worst case 90 s after the last keystroke |
 | screens dark | camera held open, polled every `off_poll_sec` (3 s) |
 | `min_hits` (2) consecutive positive frames | camera released **before** the screens wake (the device is exclusive) |
-| screens wake on their own (mouse jiggle) | `wake_policy = "re_off"` (default) turns them off again after `re_off_grace_sec` unless `min_hits` people show up; `"leave_on"` hands them back for `leave_on_grace_sec` |
-| any wake — the app's own, a jiggle, the power button after a sleep | window placement is put back (`[power] restore_windows`, default on): every window's rect and the monitors' hardware IDs were saved before the panels dimmed; after the wake the app waits for the topology to settle (unchanged for 4 s, up to 60 s) and moves everything back — see *Remembering the desk* |
+| screens wake on their own (mouse jiggle) | `wake_policy` (stock `"leave_on"` since the default-off law - re-managing a wake the user never asked about is a feature, not a knob) turns them off again after `re_off_grace_sec` unless `min_hits` people show up when set to `"re_off"`; `"leave_on"` hands them back for `leave_on_grace_sec` |
+| any wake — the app's own, a jiggle, the power button after a sleep | window placement is put back (`[power] restore_windows`, default OFF since the default-off law; opt in below): every window's rect and the monitors' hardware IDs were saved before the panels dimmed; after the wake the app waits for the topology to settle (unchanged for 4 s, up to 60 s) and moves everything back — see *Remembering the desk* |
 | **two** unexpected wakes within `wake_burst_window_sec` (120 s) and nobody ever seen | auto re-off **pauses**: screens stay lit while the desk keeps producing input, a toast says the camera (index N) never saw a person — the slipped-off-the-monitor case; re-arms when a person is confirmed, the policy changes, or `Resume auto re-off` (tray/window) |
 | another app already holds the display awake (video wake lock, a game, a presentation) | camera polling **stops** while the block is active (no point defending a screen someone else owns); the window's power assistant shows who holds it, and polling resumes when they let go |
 | fullscreen app owns the display | the broadcast is skipped (the message never reaches the swap chain) |
@@ -58,7 +58,8 @@ Anything with more to say has a "?" beside it: hover for the story,
 click to pin it. The config file holds the same values.
 
 **Owning the screens (`[power] hold_display`, `hold_sleep`, default
-on — and fully independent).** While the app watches a lit desk it
+OFF since the default-off law — and fully independent).** While the
+app watches a lit desk it
 holds a Windows execution-state request (`SetThreadExecutionState`):
 the plan's own timers do not start while a request lives, so the
 measured tug of war — plan times a still-reading person out, the
@@ -75,7 +76,7 @@ fail open by construction) hands everything back. Only the
 *automatic* timers are affected: your own Sleep button, the lid and
 shutdown are requests no app outvotes.
 
-**Remembering the desk (`[power] restore_windows`, default on).** Some
+**Remembering the desk (`[power] restore_windows`, default OFF since the default-off law).** Some
 monitors unplug themselves from Windows when they sleep: every window
 on them survives in limbo and lands resized on the wrong screen when
 the panel returns. The app owns the off edge — it snapshots every
