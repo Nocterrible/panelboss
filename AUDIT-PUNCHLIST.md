@@ -574,6 +574,19 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   rc=4 + guard_test (888857c); TclError flags, NIM_ADD anti-vacuous, scratch
   hygiene; PANELBOSS_CONFIG_DIR corrected.
 
+## Wave C ledger lines (gate SHIP @ bb38943, Oct 13 night)
+- find_camera's stall RuntimeError text says "check privacy settings" -
+  a wedged driver would confess as a privacy LIE; append "; or a wedged
+  door - see door-join warnings" (one-liner, next camera.py touch).
+- _probe's load-time leg (get_config -> _extend_by_name) is NOT
+  externally bounded - opt-in name_contains + wedged MF door can hang
+  BOOT; join the cycle or narrow the exemption comment (LOW, next touch).
+- camera.py 1283 vs ~1000 grandfather: next wave that grows it pays
+  the named Rotor/AsyncOpener seam FIRST (gate's standing rule).
+- Enum watchdog live-proof pending: the owner's wedged desk (DroidCam
+  index-1 class) is the real harness; bare "testing cameras..." forever
+  must be DEAD behavior at this tip.
+
 ## Fix-wave findings accepted on the ledger (Oct 13, gate SHIP @ 36ba449)
 - EMPTY-ROSTER SPLIT (MED, engine): an all-unchecked setup board posts
   index []; config.normalize_index maps empty -> [0], so the NEXT
