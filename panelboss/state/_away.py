@@ -44,8 +44,12 @@ class _AwayMixin:
             return {}
         from .. import display
         self.away_status = {}
-        self._away_bright = {}
-        self._away_hdr = []
+        # the ledgers ACCUMULATE, never reset: a live preview already
+        # holds the true priors (the value at the leaving moment), and
+        # a reset here would replace them with the dimmed values the
+        # spell itself wrote. _away_lift is the one clear site.
+        self._away_bright = getattr(self, "_away_bright", None) or {}
+        self._away_hdr = getattr(self, "_away_hdr", None) or []
         rows = away.get("monitors") or {}
         for m in _live_desk():
             rec = self._away_apply_row(m, _row_blackout(rows, m),
@@ -82,7 +86,11 @@ class _AwayMixin:
             return rec
         prior = _bright.get(m["gdi"])
         say = _bright.set(m["gdi"], level)
-        self._away_bright[m["gdi"]] = prior
+        if m["gdi"] not in self._away_bright:
+            # first question wins: a preview already asked, and its
+            # prior is the TRUE one (the value at the leaving moment,
+            # not the dimmed value a later engage would read back)
+            self._away_bright[m["gdi"]] = prior
         if say:
             # the refusal law made concrete: the row the user asked
             # to be DIM goes black under an overlay instead, and the
@@ -142,6 +150,14 @@ class _AwayMixin:
         this record, same order as the lift."""
         status = getattr(self, "away_status", None) or {}
         if short in status:
+            # fold the preview's HDR record into the spell's ledger (the
+            # spell's own read already sees the panel dark, so IT cannot
+            # record the hand-back - the preview's record is the only
+            # witness that WE turned it off), and leave the brightness
+            # prior in the shared ledger: the spell hands it back.
+            for e in rec.get("hdr") or []:
+                if e not in (getattr(self, "_away_hdr", None) or []):
+                    self._away_hdr.append(e)
             log.info("away: the preview of %s folds into the real "
                      "dim - the spell hands it back", short)
             return "adopted"
