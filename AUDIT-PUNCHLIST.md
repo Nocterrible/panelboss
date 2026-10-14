@@ -689,3 +689,89 @@ resubmission cycle; on RELEASE: merge word to master.
   (run.py --autostart), so there is no separate installed tree: the
   tip IS the deployment, the kill leg is the process, and the copy
   leg is a no-op. First launch happens on the owner's word.
+
+## HDR WAVE (amendment 8, Oct 13 evening) - CLOSED, four commits
+
+- DATA LAYER: [hdr] auto={} (model -> off|video|content) + mpv_pipe,
+  [gaming].hdr={} (short -> bool, ABSENCE = hands off: TOML has no
+  null, "keep" deletes the key); boolmap/tiermap normalize kinds
+  (bad entry dies by name, survivors stay). profiles.load guards the
+  per-display hdr tri-state. (38c1343)
+- THE PROBE (wm/_videostats.py): PDH GPU Engine \Utilization
+  Percentage over the video-family instances ONLY - VideoDecode(2)+
+  VideoProcessing(4) per the manifest docs (URL in the header);
+  encode excluded (recording is not watching), jpeg/vendor-codec
+  catch-alls excluded. Instance matcher validated against BOTH
+  spellings measured on this box (NVIDIA engtype_VideoDecode, iGPU
+  "video decode 1" with spaces). Mechanics mirror gpu.py's measured
+  law (fresh query per call, collect pair, per-instance adds); the
+  English door is PdhAddEnglishCounterW - the packet's
+  "…CounterPath" name does not exist (measured AttributeError; the
+  fixup rode commit e7616d9). The mpv matcher is pure
+  (bt.2020+pq/hlg, loose spellings); the pipe probe waits bounded.
+  (38c1343, e7616d9)
+- THE WATCHER (state/_hdrwatch.py): pure hysteresis -
+  ENGAGE_SEC=2.0 unbroken busy to light, RELEASE_SEC=30.0 quiet to
+  hand back, both re-anchoring on emit (a held edge commands ONCE);
+  own thread (cli arm, unconditional, zero sense reads while the
+  tier map is empty - the virgin default costs one dict read per
+  tick). NEVER rides the duty _poll. (2cf3b50)
+- THE BROADCAST EAR, measured twice: WM_DISPLAYCHANGE is SENT to
+  the window proc (it never rides the queue - the pump's
+  PeekMessage is structurally blind) and the broadcast enumerator
+  SKIPS hidden windows - the old message-only shape caught nothing
+  while a real hdr_set round trip flew. The watcher's window is
+  now WS_VISIBLE|WS_EX_TOOLWINDOW at -32000 (on screen nowhere,
+  out of Alt+Tab), the queue put lives in _def_window, routed
+  through _ACTIVE (the ear goes deaf when the window dies).
+  displaychange -> _drain_display posts ("hdr_sync", None) and
+  never feeds _notice_screens (a color flip says nothing about the
+  lamps). Live proof printed:
+  "queue: [(displaychange,0.0,ts),(displaychange,0.0,ts)] …
+  ROUND TRIP OK" - one event per real flip, Go2HDR's claim verified
+  here. (2cf3b50)
+- APPLY ORDER: profiles step 3 weaves hdr_display_plan - an
+  explicit per-panel true/false OUTRANKS snap and the wide ask (an
+  instruction beats a memory), the wide ask keeps the unclaimed
+  panels, a leave-alone profile now applies its explicit rows; the
+  plan lands AFTER apply_layout and re-reads to confirm (kept
+  ordering law). Pinned in profiles_test (order via the recorded
+  call list; the fresh-rows lesson: the fake driver keeps the last
+  scenario's memory). (e7616d9)
+- DESKTOP COLOR: gaming_watch._enforce_desktop's color sibling -
+  outside games, a configured panel wears its hdr state, one
+  command per disagreement; vrr panels NOT exempt (rate and color
+  are different questions). (e7616d9)
+- UI, both homes per the owner's words: the profiles row grew the
+  trinary selector between rate and remove (precise-capable only -
+  ABSENT, never gray-lied), the gaming card the same on the
+  desktop-rate row. (e7616d9)
+- RELEASE-NOTE SENTENCE (first-time reader): if you set a monitor's
+  auto-switch to "video", the app watches the GPU's video decoders
+  (Task Manager's own counters) and turns that monitor's HDR on
+  when something starts playing, turning it off again about thirty
+  seconds after playback stops; if you set it to "player", HDR
+  comes on only when an mpv (started with its pipe enabled)
+  reports that the playing video itself is HDR (BT.2020 colour
+  with PQ or HLG transfer). A plain SDR game cannot false-trip
+  the video tier while HDR is off, because Windows' Auto HDR only
+  engages on a monitor that is already HDR-on - the light must be
+  on before the effect can run, so the watcher turns it on and
+  Auto HDR follows on top; and games render through 3D engines,
+  which the decoder-only watch deliberately does not count anyway.
+- TESTS: scripts/hdrwatch_test.py (43 offline pins: path strings,
+  the matcher's exclusions, the mpv truth table, fake-clocked
+  hysteresis incl. the flinch case, the arm over faked senses, the
+  type-16 canary constant+call-site); config_norm 3c rows; the
+  profiles_test weave. scripts/hdr_live_probe.py is COMMITTED as
+  the by-hand live tool and deliberately NOT in run_all (it
+  flickers the owner's desk; the gauntlet never does).
+- FOLLOW-UPS (none owed): MPC-HC's command channel is the named
+  second player tier (probe shape differs); the mpv tier assumes
+  one pipe per desk (multiple players = first answerer wins);
+  hdr_sync repaints the profiles pane only - the gaming card
+  refreshes when its tab next paints (a full-tab rebuild for an
+  out-of-view card was not worth the repaint cost); a video tier
+  can be tripped by any decoder user (a browser playing a 4K AV1
+  trailer lights the panel too - honest reading of "something is
+  playing", the owner can move that monitor to the player tier).

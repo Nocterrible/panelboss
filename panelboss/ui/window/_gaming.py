@@ -1,5 +1,5 @@
 """Gaming refresh-rate section of the power plan tab.
-Size law (measured 348, Oct 13 - the claim includes its own
+Size law (measured 349, Oct 13 - the claim includes its own
 lines; the amendment-8 color selector added the last thirty): the
 card, its commits and the
 exe browse are one story read top-to-bottom when a rate or a list

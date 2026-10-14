@@ -28,7 +28,7 @@
                 mpv warns its property shapes may gain spellings.
                 MPC-HC's command channel is a documented FOLLOW-UP.
 
-Size law (measured 216, Oct 13, the claim includes its own lines):
+Size law (measured 217, Oct 13, the claim includes its own lines):
 the module
 is the counter/pipe vocabulary plus two probes over it; the state
 machine that ACTS on the verdicts lives in state/_hdrwatch.py (pure,

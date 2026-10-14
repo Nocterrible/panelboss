@@ -175,6 +175,9 @@ class FakeWM:
 
     def hdr_set(self, gdi, on):
         self.sets.append((gdi, on))
+        self.calls.append(("hdr", gdi, on))   # ordering is a fact the
+                                               # amendment pins: after
+                                               # layout, never before
         for r in self.hdr:
             if r["gdi"] == gdi:
                 r["state"] = "on" if on else "off"
@@ -322,6 +325,54 @@ try:
                                        dir=tmp6)
     assert ok6 and "never confirmed" in say6, say6
     assert f6.pressed == [] and f6.sets == [(AAA["gdi"], True)]
+
+    # 6a2) THE EXPLICIT PER-PANEL COLOR ASK (amendment 8): a display's
+    # true/false outranks the profile-wide ask AND snap (an
+    # instruction beats a memory); the wide ask keeps running over
+    # the unclaimed panels; the command lands AFTER the layout, never
+    # before (the HDR toggle re-enumerates paths); an all-compliant
+    # desk is silence with an honest sentence, and a leave-alone
+    # profile applies its explicit rows too
+    prof6["hdr"] = "snap"
+    prof6["displays"][0]["hdr_state"] = "on"      # snap wants AAA on...
+    prof6["displays"][0]["hdr"] = False           # ...the row says off
+    prof6["displays"][1]["hdr_state"] = "on"      # BBB: only snap
+    rows = [{"gdi": AAA["gdi"], "supported": True, "state": "off"},
+            {"gdi": BBB["gdi"], "supported": True, "state": "off"}]
+    ok6, say6, f6, _, _ = scenario([TARGET], hdr=rows)
+    assert ok6, say6
+    li = [i for i, c in enumerate(f6.calls) if c[0] == "layout"]
+    hi = [i for i, c in enumerate(f6.calls) if c[0] == "hdr"]
+    assert li and hi and min(li) < min(hi), f6.calls   # order law
+    assert f6.sets == [(BBB["gdi"], True)], \
+        "explicit-off AAA is zero-call (already off), snap still " \
+        "lights BBB: %s" % (f6.sets,)
+    prof6["displays"][0]["hdr"] = True
+    prof6["displays"][1]["hdr"] = True            # both explicit on
+    prof6["displays"][0].pop("hdr_state")
+    prof6["displays"][1].pop("hdr_state")
+    ok6, say6, f6, _, _ = scenario(
+        [TARGET], hdr=[{"gdi": AAA["gdi"], "supported": True,
+                        "state": "off"},
+                       {"gdi": BBB["gdi"], "supported": True,
+                        "state": "off"}])         # fresh rows: the
+                                                  # fake driver keeps
+                                                  # the last scenario's
+                                                  # memory, and a
+                                                  # compliant BBB
+                                                  # owes no command
+    assert sorted(f6.sets) == sorted([(AAA["gdi"], True),
+                                      (BBB["gdi"], True)]), f6.sets
+    assert "AAA on (verified)" in say6 and "BBB on (verified)" \
+        in say6, say6
+    prof6["hdr"] = "leave alone"                  # explicit rows ride
+    rows2 = [{"gdi": AAA["gdi"], "supported": True, "state": "on"},
+             {"gdi": BBB["gdi"], "supported": True, "state": "on"}]
+    ok6, say6, f6, _, _ = scenario([TARGET], hdr=rows2)
+    assert f6.sets == [] and "already wear" in say6, say6
+    prof6["displays"][0].pop("hdr")
+    prof6["displays"][1].pop("hdr")
+    prof6["hdr"] = "on"
 
     # different desk, no mercy: refused, nothing touched
     ok6, say6, f6, _, info6 = scenario(["other fp"],

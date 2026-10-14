@@ -1,6 +1,6 @@
 """Profiles tab verbs: mode edits, profile create and
 apply, the noshows dialog, rescue.
-Size law (measured 443, Oct 13 - the claim includes its own lines;
+Size law (measured 446, Oct 13 - the claim includes its own lines;
 the amendment-8 per-panel color selector added the last thirty and
 the 2026-10 claim had drifted before that): the apply pipeline is
 one transaction -

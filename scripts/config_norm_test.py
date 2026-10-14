@@ -126,6 +126,30 @@ try:
 except AssertionError as e:
     _fail("game_hz second run: %r" % e)
 
+# --- 3c) the amendment-8 maps: bad entries die by name, survivors stay
+_RECORDER.records.clear()
+_write("""\
+[gaming]
+hdr = { NOPE = "yes" }
+
+[hdr]
+auto = { "MONITOR\\\\A" = "blu-ray", "MONITOR\\\\B" = " Video " }
+""")
+cfg3c = config.get_config(verbose=False)
+try:
+    assert cfg3c["gaming"]["hdr"] == {}, cfg3c["gaming"]["hdr"]
+    assert cfg3c["hdr"]["auto"] == {"MONITOR\\B": "video"}, \
+        cfg3c["hdr"]["auto"]
+    assert any("hdr" in w and "yes" in w for w in _RECORDER.records), \
+        _RECORDER.records
+    assert any("blu-ray" in w for w in _RECORDER.records), \
+        _RECORDER.records
+    _pass("hdr maps normalize: the string 'yes' and the 'blu-ray' tier "
+          "die by name; ' Video ' survives lowercased (absent key = "
+          "hands off is the ONLY null this world speaks)")
+except AssertionError as e:
+    _fail("hdr maps: %r" % (e,))
+
 # --- 4) DEFAULTS alias probe: a fresh load's mutations stay local ---
 _RECORDER.records.clear()
 cfg2 = config.get_config(verbose=False)
