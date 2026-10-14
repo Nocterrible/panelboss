@@ -29,10 +29,13 @@ correct placement is respected (same rect = no move).
 
 The monitor side speaks EnumDisplayDevices/EnumDisplaySettings -
 the path proven on this machine by the neighboring monitor_control
-project. GetMonitorInfoW is deliberately untouched: it fails here
-(error 87) for every struct shape tried, and the DEVMODE route also
-carries the EDID identity of the physical panel, which the
-\\.\DISPLAYn slot names do not.
+project. GetMonitorInfoW's old reputation here ("error 87, fails for
+every struct shape") was a struct-size bug, not an API truth: the
+2026-10-14 dxva2 probe drove it green with a cbSize-exact
+MONITORINFOEXW, and wm/_bright.py rides that mapping today; the
+DEVMODE route stays the identity source because it carries the EDID
+identity of the physical panel, which the \\.\DISPLAYn slot names do
+not.
 
 This is the old single-module wm, kept as the same namespace: subject
 parts own their pieces, every old name still resolves here, and the
@@ -49,8 +52,8 @@ import threading
 import time
 from ctypes import wintypes
 
-from . import (_detect, _displaycfg, _hdr, _inspect, _monitors,
-               _rescue, _restore, _winapi)
+from . import (_bright, _detect, _displaycfg, _hdr, _inspect,
+               _monitors, _overlay, _rescue, _restore, _winapi)
 
 from ._winapi import (DEVMODEW, DISPLAY_DEVICEW,
                       DISPLAY_DEVICE_ATTACHED_TO_DESKTOP,
@@ -142,7 +145,7 @@ __all__ = [
 ]
 
 _FANOUT = (_winapi, _inspect, _monitors, _displaycfg, _hdr, _rescue,
-           _restore, _detect)
+           _restore, _detect, _bright, _overlay)
 
 
 class _WmPackage(type(sys.modules[__name__])):
