@@ -39,7 +39,12 @@ class _PowerMixin:
         log.info("%s - sending the harmless power-on", reason)
         self._release_camera()                   # exclusive device, same
         self._away_lift()                        # dance as _wake: a
-                                                 # dim spell never slept,
+        self._away_boot_belt()                   # dim spell never slept,
+        #                                    ... but a killed one left
+        #                                    the ledger dead and a
+        #                                    D6-off panel dark: the
+        #                                    belt asks the CONFIG
+        #                                    (gate finding 1)
         display.wake()                           # but an OS timeout may
                                                  # have blanked the paint
         self._hdr_back()

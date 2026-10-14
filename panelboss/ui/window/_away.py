@@ -154,6 +154,7 @@ class _AwayMixin:
                                      **self.skin.text_style("sub"))
         self._away_cd.pack(anchor="e", pady=(2, 0))
         self._away_cd_left = 0
+        self._away_cd_job = None            # the after-idle of ONE chain
         self._away_sync()
         self.after(900, self._away_poll)
 
@@ -162,17 +163,25 @@ class _AwayMixin:
         covered panel cannot carry them (it is OFF, or painted
         black), the glyph lives where the eyes are (owner decision,
         shipped as this card label). One shared chain: the newest
-        off preview owns it; expiry, cancel and window death stop it.
+        off preview CANCELS its predecessor before re-arming (gate
+        finding 3), expiry/cancel/window-death stop it, and the
+        death-path word goes under the same TclError courtesy the
+        poll uses - one caught exception, no crash at teardown.
         """
-        if getattr(self, "_dying", False) or self._away_cd_left <= 0:
-            set_text(self._away_cd, "")
-            return
-        set_text(self._away_cd, "dark for %d s" % self._away_cd_left)
+        try:
+            if getattr(self, "_dying", False) or self._away_cd_left <= 0:
+                set_text(self._away_cd, "")
+                self._away_cd_job = None
+                return
+            set_text(self._away_cd, "dark for %d s" % self._away_cd_left)
+        except Exception:
+            self._away_cd_job = None
+            return                          # gone mid-tick: fine
         self._away_cd_left -= 1
         try:
-            self.after(1000, self._away_countdown)
+            self._away_cd_job = self.after(1000, self._away_countdown)
         except Exception:
-            pass                          # destroyed mid-tick
+            self._away_cd_job = None        # destroyed mid-tick
 
     # ------------------------------------------------------------ state reads --
     def _away_level(self):
@@ -240,6 +249,14 @@ class _AwayMixin:
             #                    window is where the eyes are (owner
             #                    decision: the countdown ships HERE)
             if rec["status"].startswith("off"):
+                # ONE chain for the shared label (gate finding 3): the
+                # previous preview's chain is cancelled before a new
+                # one is armed, or two counts double-decrement one word
+                if self._away_cd_job is not None:
+                    try:
+                        self.after_cancel(self._away_cd_job)
+                    except Exception:
+                        pass
                 self._away_cd_left = 10
                 self._away_countdown()
         timer = threading.Timer(10.0, lambda: self._away_expiry(short, rec))
@@ -272,8 +289,14 @@ class _AwayMixin:
     def _away_done(self, short, rec, verdict, manual):
         self._away_jobs.pop(short, None)
         self._away_rise(False)
-        self._away_cd_left = 0            # the chain stops at its next
-        set_text(self._away_cd, "")       # tick; the word goes now
+        self._away_cd_left = 0
+        if getattr(self, "_away_cd_job", None) is not None:
+            try:
+                self.after_cancel(self._away_cd_job)
+            except Exception:
+                pass
+            self._away_cd_job = None
+        set_text(self._away_cd, "")       # the word goes now
         r = self._away_rows.get(short)
         if r is not None:
             set_text(r["preview"], "preview")

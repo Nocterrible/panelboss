@@ -311,8 +311,18 @@ def test_substitution():
     away = {"mode": "dim", "monitors": {"AAA": {"blackout": True}},
             "dim_level": 12}
     m = make_monitor(tmp, away)
+    rec = Recorder()
+    slog = logging.getLogger("state")
+    was = slog.level
+    slog.setLevel(logging.INFO)           # root sits at WARNING here
+    slog.addHandler(rec)
     try:
         m._screens_off(1.0)
+        line = [l for l in rec.lines if l.startswith("away: dim")]
+        assert len(line) == 1 and "0 rows blackout-degraded" in line[0], \
+            line        # a CONFIG blackout row is not a degradation
+        #                   (gate finding 2: the predicate counts only
+        #                   refused words, never the honest plain ones)
         calls = m._fake["calls"]
         assert ("turn_off",) not in calls, "dim mode NEVER powers off"
         assert ("arm", True) in calls, "the lift ears armed"
@@ -334,11 +344,13 @@ def test_substitution():
         assert ("restore", "D2", 70) in calls, "prior answer, not a guess"
         hdr_back = [c for c in calls if c[0] == "hdr_restore"][0][1]
         assert hdr_back == [{"gdi": "D2", "model": "MON-B"}], hdr_back
-        print("ok - dim mode substitutes, powers nothing, restores in order")
         m._screens_off(2.0)
         m._away_lift()
+        print("ok - dim mode substitutes, powers nothing, restores in order")
         print("ok - spell, lift, spell again (ledgers clear and refill)")
     finally:
+        slog.removeHandler(rec)
+        slog.setLevel(was)
         m._ledger.undo()
 
 
@@ -494,12 +506,27 @@ def test_off_submode():
                          "BBB": {"mode": "off"},
                          "CCC": {"mode": "off"}}}
     m = make_monitor(tmp, away, bright=bright)
+    rec = Recorder()
+    slog = logging.getLogger("state")
+    was = slog.level
+    slog.setLevel(logging.INFO)           # root sits at WARNING here
+    slog.addHandler(rec)
     try:
         m._screens_off(1.0)
         calls = m._fake["calls"]
         assert ("vcp", "D1", 0xD6, 4, _bright.VCP_TRIES) in calls, calls
-        assert m.away_status["AAA"] == "off", m.away_status       # honest register
+        # THE UNIVERSAL WORD (gate finding 4): the register cannot
+        # certify DPMS state (dossier: it answered "on" through a
+        # witnessed blackout), so no answering readback promotes a
+        # row and the engage does not even traffic the bus for one.
+        assert m.away_status["AAA"] == "off (unverified)", m.away_status
         assert m.away_status["BBB"] == "off (unverified)", m.away_status
+        assert not any(c[0] == "vcp_read" and c[1] in ("D1", "D2")
+                       for c in calls), \
+            "the engage buys no register lie at the door"
+        line = [l for l in rec.lines if l.startswith("away: dim")]
+        assert len(line) == 1 and "3 VCP-off asked" in line[0] \
+            and "1 rows blackout-degraded" in line[0], line
         assert m.away_status["CCC"].startswith(
             "off refused - blackout instead"), m.away_status
         shows = [c for c in calls if c[0] == "show"]
@@ -524,6 +551,34 @@ def test_off_submode():
         assert ("hide_all",) in calls
         print("ok - off sub-mode: trust word by default, refusal confessed, "
               "unconditional hand-back, jail once")
+    finally:
+        slog.removeHandler(rec)
+        slog.setLevel(was)
+        m._ledger.undo()
+
+
+def test_boot_belt():
+    """Gate finding 1: quit/kill mid-spell dies the in-memory ledger,
+    and boot's _force_on asks it nothing. The belt asks the CONFIG:
+    empty ledger, off rows set - every reachable row gets its
+    idempotent D6=1 (full retry budget), never-reached rows stay
+    silent, and nothing raises into boot."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_belt")
+    bright = FakeBright({"D1": 80, "D3": 50}, no_door=["D2"])
+    away = {"mode": "dim",
+            "monitors": {"AAA": {"off": True}, "BBB": {"off": True},
+                         "CCC": {"off": True}}}
+    m = make_monitor(tmp, away, bright=bright)
+    try:
+        assert not getattr(m, "_away_off", None), "dead-ledger boot"
+        m._away_boot_belt()
+        calls = m._fake["calls"]
+        assert ("vcp", "D1", 0xD6, 1, _bright.VCP_TRIES) in calls, calls
+        assert ("vcp", "D3", 0xD6, 1, _bright.VCP_TRIES) in calls, calls
+        assert not any(c[0] == "vcp" and c[1] == "D2" for c in calls), \
+            "no door means a silent belt, not a bus fight"
+        print("ok - boot belt: config rows earn their D6=1 even with a "
+              "dead ledger; unreachable rows stay quiet")
     finally:
         m._ledger.undo()
 
@@ -696,6 +751,12 @@ def test_row_shorthands():
         {"A": {"blackout": True, "off": False}}
     assert n({"mode": "dim", "monitors": {"A": "sideways"}})["monitors"] \
         == {}                      # warned, dropped, dim default
+    assert n({"mode": "dim",
+              "monitors": {"A": {"mode": "sideways"}}})["monitors"] == \
+        {"A": {"blackout": False, "off": False}}    # the dict branch
+    #                                    answers with the SAME honesty
+    #                                    (gate finding 5a): warn, fold
+    #                                    to dim, name the row
     print("ok - row shorthands fold to the pair shape losslessly")
 
 
@@ -708,6 +769,7 @@ def main():
     test_unverified_trust()
     test_vcp_retry_law()
     test_off_submode()
+    test_boot_belt()
     test_jail_moves_cursor()
     test_off_preview_release()
     test_off_selectable_never_pregrayed()

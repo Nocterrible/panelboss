@@ -655,7 +655,15 @@ def normalize_away(value):
             elif isinstance(row, dict) and ("blackout" in row or
                                             "off" in row or "mode" in row):
                 v = str(row.get("mode") or "").strip().lower()
-                if v in AWAY_ROW_MODES:
+                if "mode" in row and v not in AWAY_ROW_MODES:
+                    # the dict branch answers with the SAME honesty the
+                    # string branch shows a bad name (gate finding 5a):
+                    # warn, fold to dim, name the row
+                    log.warning("away monitor %r: mode %r is not a known "
+                                "sub-mode; the monitor keeps the dim "
+                                "default", short, row.get("mode"))
+                    rows[short] = {"blackout": False, "off": False}
+                elif v in AWAY_ROW_MODES:
                     rows[short] = {"blackout": v == "blackout",
                                    "off": v == "off"}
                 else:

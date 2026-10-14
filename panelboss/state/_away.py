@@ -1,7 +1,7 @@
 """The away engine: dim-mode substitution for the display power verb.
 
 SIZE LAW header: this part owns the fake-off ledger and nothing else -
-and at 307 lines the whole is still one law: the ledgers, the door
+and at 348 lines the whole is still one law: the ledgers, the door
 calls and the status words interlock line-for-line, and splitting the
 prose from its call sites (or the lift from the engage) would sell a
 seam for nothing. The off wave's growth is this file's due; the card
@@ -78,7 +78,7 @@ class _AwayMixin:
         # spell itself wrote. _away_lift is the one clear site.
         self._away_bright = getattr(self, "_away_bright", None) or {}
         self._away_hdr = getattr(self, "_away_hdr", None) or []
-        self._away_off = getattr(self, "_away_off", None) or []
+        self._away_off = getattr(self, "_away_off", None) or {}
         rows = away.get("monitors") or {}
         jail = None
         for m in _live_desk():
@@ -86,8 +86,11 @@ class _AwayMixin:
             rec = self._away_apply_row(m, mode, away.get("dim_level", 10))
             self.away_status[m["short"]] = rec["status"]
             self._away_hdr += rec.get("hdr") or []
-            if rec.get("off") and m["gdi"] not in self._away_off:
-                self._away_off.append(m["gdi"])
+            if rec.get("off"):
+                # the ledger carries the MOMENT of the attempt (gate
+                # finding 5b): a refused hand-back at lift logs when
+                # the spell asked, not just that it hurts now
+                self._away_off[m["gdi"]] = rec.get("tried", time.time())
             if jail is None and (mode == "off" or
                                  rec["status"].startswith("blackout")):
                 jail = (m["x"], m["y"], m["w"], m["h"])
@@ -99,7 +102,8 @@ class _AwayMixin:
                  len(self.away_status), len(self._away_hdr),
                  len(self._away_off),
                  sum(1 for s in self.away_status.values()
-                     if s.startswith("blackout")))
+                     if s.startswith("blackout (") or
+                     s.startswith("off refused")))
         return self.away_status
 
     def _away_apply_row(self, m, mode, level):
@@ -145,17 +149,16 @@ class _AwayMixin:
                 rec["status"] = ("off refused - blackout instead (%s)"
                                  % say)
                 return rec
-            time.sleep(_bright.CONFIRM_SLEEP_SEC)
-            answered, val = _bright.vcp_read(m["gdi"], _bright.VCP_POWER)
-            # the trust half - and the DEFAULT word here: the control
-            # panel's power register answered "on" straight through a
-            # fully-ACKed off window (scripts/sdc_off_probe.py), so
-            # on panels like this (unverified) is the ceiling of what
-            # a write can prove, and the preview is the human judge.
-            # Panels with honest registers do earn the plain word.
-            rec["status"] = ("off" if answered and val is not None and
-                             val == _bright.VCP_POWER_OFF
-                             else "off (unverified)")
+            # the UNIVERSAL word (gate finding 4, 2026-10-14): the
+            # control panel's power register answered "on" straight
+            # through a fully-ACKed dark window (DOSSIER UPDATE: the
+            # register cannot track DPMS state), so no readback can
+            # certify the dark - the first pass's bare-"off"
+            # promotion on an answering register is retired, and the
+            # engage does not even TRAFFIC the bus for one. The
+            # preview is the human judge; "(unverified)" is the
+            # ceiling of what this door can ever promise from here.
+            rec["status"] = "off (unverified)"
             return rec
         if mode == "blackout":
             _overlay.show(m["gdi"], rect)
@@ -205,8 +208,8 @@ class _AwayMixin:
         from ..wm import _bright, _overlay
         bright = getattr(self, "_away_bright", None) or {}
         hdr = getattr(self, "_away_hdr", None) or []
-        off = getattr(self, "_away_off", None) or []
-        for gdi in off:
+        off = getattr(self, "_away_off", None) or {}
+        for gdi, tried in off.items():
             # UNCONDITIONAL on every wake reason - the asymmetry note
             # lives at the engage side; the wake can only have come
             # from the LIT panels (ears) or the gates: an offed panel
@@ -216,8 +219,11 @@ class _AwayMixin:
             if not sent:
                 log.warning("away: the power hand-back on %s refused "
                             "(%s) - the panel may sit dark until its "
-                            "own button, and the next spell's probe "
-                            "will say what the bus says", gdi, say)
+                            "own button (the spell asked at %s; the "
+                            "next spell's probe will say what the bus "
+                            "says)", gdi, say,
+                            time.strftime("%Y-%m-%d %H:%M:%S",
+                                          time.localtime(tried)))
         _overlay.hide_all()                       # every cover first:
         #                                   paint dies before the panel
         #                                   underneath changes state
@@ -236,8 +242,38 @@ class _AwayMixin:
         log.info("away: lifted (%d brightness hand-back(s), %d HDR "
                  "panel(s), %d power hand-back(s))", len(bright), len(hdr),
                  len(off))
-        self._away_off = []
+        self._away_off = {}
         return status
+
+    def _away_boot_belt(self):
+        """The boot belt (gate finding 1, 2026-10-14): the ledger is
+        in-memory, so a quit or a kill mid-spell dies with it and a
+        D6-off panel sits DARK forever - the boot's _force_on asks an
+        empty ledger and learns nothing. So boot asks the CONFIG:
+        every row that asks for off gets one idempotent D6=1 on the
+        reachable live desk, full retry budget spent by the door's
+        own law. One log line per row reached; NEVER-reached rows
+        (no door) stay silent; the whole pass never raises into boot
+        - a belt that can break the boot is worse than the dark
+        panel it saves (the physical button remains undefeated)."""
+        from ..wm import _bright
+        away = self.cfg.get("away") or {}
+        rows = away.get("monitors") or {}
+        try:
+            for m in _live_desk():
+                row = rows.get(m["short"])
+                if not (row or {}).get("off"):
+                    continue
+                if not _bright.reachable(m["gdi"]):
+                    continue          # no door: the belt says nothing
+                sent, say = _bright.vcp(m["gdi"], _bright.VCP_POWER,
+                                        _bright.VCP_POWER_ON)
+                log.info("away belt: boot power-on for %s %s",
+                         m["short"], "sent" if sent
+                         else "refused (%s)" % say)
+        except Exception:
+            log.debug("away belt: the boot power-on pass failed",
+                      exc_info=True)
 
     # ---------------------------------------------------------- the preview --
     def _away_release(self, short, rec):
