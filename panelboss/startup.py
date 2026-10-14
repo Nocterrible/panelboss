@@ -56,9 +56,25 @@ def selfheal():
     different path means the app moved, and that difference is
     meaningful (the switch note explains it); it is left alone.
     Returns True after a rewrite, False on a failed one, None when
-    there was nothing to do."""
+    there was nothing to do.
+
+    THE REGISTRATION LAW (defect 4, the wave-C fossil): this is the
+    ONLY boot-path writer of the Run value, and it never REGISTERS a
+    fresh entry - an absent box stays absent, so a virgin launch is
+    dark. A present entry is re-STAMPED (ours, flagless) or re-POINTED
+    by migrate_once (legacy name), never created here. Both branches
+    log by name: 'autostart selfheal: <decision>' is the line to grep
+    when the switch and the registry disagree - if a future change
+    resurrects the entry at boot, this is where it shows."""
     stored = enabled()
-    if stored is None or stored + FLAG != command():
+    if stored is None:
+        log.info("autostart selfheal: no entry, no registration (dark "
+                 "by law; only the opt-in switch writes the Run value)")
+        return None
+    if stored + FLAG != command():
+        log.info("autostart selfheal: entry not ours or already stamped "
+                 "(left alone; a moved path is meaningful, see the switch "
+                 "note)")
         return None
     ok, msg = enable()
     log.info("old autostart entry taught %s: %s", FLAG.strip(), msg)

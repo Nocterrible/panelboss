@@ -68,6 +68,36 @@ assert startup.selfheal() is None
 assert startup.enabled() == "junk", "foreign entry untouched"
 startup.disable()
 
+# 3c) THE DISCIPLINE PIN (defect 4, the wave-C fossil): a boot pass
+#     must NEVER register a fresh Run value when the box is dark - the
+#     value is the opt-in, so absent means absent, and only the switch
+#     may create it. The flag here IS the registry value (this design
+#     keeps no [ui] autostart config key; the registry is the single
+#     truth), so "flag false + value present = the flag loses at next
+#     save" is enforced at the ONE boot writer, startup.selfheal(): it
+#     re-stamps/re-points an EXISTING entry, never creates one. The
+#     named log line proves the decision (grep "autostart selfheal:").
+import io as _io, logging as _lg
+_buf = _io.StringIO()
+_h = _lg.StreamHandler(_buf)
+_h.setLevel(_lg.INFO)
+_slog = logging.getLogger("startup")
+logging.disable(_lg.NOTSET)             # the pin must SEE the line
+_old_level = _slog.level
+_slog.setLevel(_lg.INFO)
+_slog.addHandler(_h)
+startup.disable()                        # guarantee a dark box
+assert startup.enabled() is None
+assert startup.selfheal() is None, "a clean boot must not register"
+assert startup.enabled() is None, "selfheal created a fresh value!"
+_slog.removeHandler(_h)
+_slog.setLevel(_old_level)
+logging.disable()                        # back to quiet for the refusals
+assert "no entry, no registration" in _buf.getvalue(), (
+    "the selfheal decision must be named in the log, got %r"
+    % _buf.getvalue())
+print("startup discipline pin OK (no registration on a dark box, named line)")
+
 # 4a) refusal modes: an unimportable winreg must not crash the app
 sys.modules["winreg"] = None
 ok, msg = startup.enable()
