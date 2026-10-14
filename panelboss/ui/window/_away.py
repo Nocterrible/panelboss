@@ -75,7 +75,7 @@ TIP = {
            "click cancels now; a real away arriving mid-preview keeps "
            "the effect and hands it back at the real wake instead); "
            "an off preview counts its seconds on this window - the "
-           "dark panel cannot carry a digit.",
+           "dark panel cannot carry a digit - and a dark panel also cannot prove its own darkness: 'off (unverified)' means the write was accepted and the register (or nothing) disagrees, so the eyes and the physical button remain the honest witnesses.",
     "level": "where dim rows park their brightness while away, 1 to "
               "40 percent - shared by every dim row (per-monitor "
               "levels are a planned follow-up).",

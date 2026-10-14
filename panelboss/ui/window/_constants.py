@@ -30,8 +30,10 @@ TIMER_SPECS = [          # section, key, label, min, max, step, help
     # no restart needed.
     ("camera", "always_fallback_poll_sec", "always-on re-read, screens off",
      1, 15, 1,
-     "always-on: read once per second while the screens are off (the "
-     "stream stays open; 1 s is the point)"),
+     "always-on: the degraded eye re-reads once per configured second "
+     "while the screens are off (the stream stays open; 1 s is the "
+     "default and the point - a hand-edited [camera] value outranks "
+     "the slider until moved)"),
     ("camera", "always_fallback_poll_on_sec", "always-on re-read, screens on",
      5, 15, 1,
      "the lit-table twin of the dark gate: how often a degraded always-on "
