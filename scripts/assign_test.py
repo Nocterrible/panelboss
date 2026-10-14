@@ -414,6 +414,105 @@ try:
         cam_mod.Camera = _real_cam
         cam_mod.hello_ir_names = _real_irn
 
+    # ---- wave D: the gather fence closes around the IR call, the
+    # veil counts BEFORE the count, and an empty board speaks.
+    # Fake enumerate observes the pump deadline from INSIDE the
+    # walk (arm-at-gather-start is otherwise unfalsifiable from the
+    # pump side - anything non-zero could be the old construction
+    # row math), fake rows beat on_row while the walk lives, and
+    # two empty-board windows check the NEW LAW: with an engine
+    # warning the veil quotes it, without one it still says the
+    # bare honest line. Budget constants shrink to the same
+    # coffee-cup scale as the stall section (patchable = live).
+    import logging as _logging
+    import time as _wt
+    _s2 = (_assign.FRAME_BUDGET, _assign.MARGIN_SEC,
+           cam_mod.ENUMERATE_DOOR_BUDGET_SEC, cam_mod.IR_BUDGET_SEC,
+           cam_mod.OPEN_LOCK_TIMEOUT)
+    cam_mod.ENUMERATE_DOOR_BUDGET_SEC = 0.5     # arm = 8*0.5+0.5+0.2
+    cam_mod.IR_BUDGET_SEC = 0.5                 #    = 4.7 s (live)
+    cam_mod.OPEN_LOCK_TIMEOUT = 0.2             # the row arm re-
+    _assign.FRAME_BUDGET = 0.2                  # arms at n*0.4+0.2 -
+    _assign.MARGIN_SEC = 0.2                    # SMALLER than the
+                                                # live enumerate arm,
+                                                # so the min visibly
+                                                # SHORTENS
+    _arm = {}
+    _veils2 = []
+
+    def _slow_enum(*a, **k):
+        _rows_ = [(2, True, 1280.0, "Dressed")]
+        _wt.sleep(0.05)                     # the ctor's return binds _w4
+        _arm["at"] = _w4._deadline_at - _wt.monotonic()
+        _wt.sleep(1.0)                      # long enough for pump
+        for r_ in _rows_:                   # ticks of enumerating line
+            k["on_row"](r_[:3])             # (item 3 beats, item 1 clock)
+        _wt.sleep(0.4)                      # let the BEAT line live
+                                            # a few ticks before the
+                                            # board closes the phase
+        return [r_[:3] for r_ in _rows_]
+
+    cam_mod.enumerate_cameras = _slow_enum
+    cam_mod.camera_devices = lambda: []
+    cam_mod.hello_ir_names = lambda: []
+    cam_mod.Camera = lambda index=0, **kw: FakeEye(
+        index, alive=(index == 2))          # fake doors only - the
+    _h4 = Host()                            # owner's desk owes us no
+    _w4 = _assign.SetupWindow(_h4)          # LED flicker
+    for _ in range(50):
+        _h4.update()
+        _veils2.append(_w4.veil.cget("text"))
+        _wt.sleep(0.03)
+    check(_arm.get("at") is not None and 4.0 < _arm["at"] < 5.0,
+          "deadline armed at GATHER START, enumerate-sized (observed "
+          "from INSIDE the walk: %.2f s of budget pre-board; the row "
+          "re-arm below may only shorten it)" % _arm.get("at", -1))
+    check(any(t.startswith("enumerating cameras...") and " s" in t
+              for t in _veils2),
+          "the pre-board veil names its phase and COUNTS SECONDS "
+          "(alive-and-counting is honest pre-count)")
+    check(any("last index 2, 1 seen" in t for t in _veils2),
+          "the enumerate beats ride the veil (item 3): the walk "
+          "resolves, the line knows")
+    check(_w4._deadline_at - _wt.monotonic() < 1.0,
+          "the at-return re-arm SHORTENED the arm (min): a late "
+          "gather cannot extend the dialog's patience")
+    _retire(_h4)
+
+    # the NEW LAW, two voices: confessing...
+    def _empty_enum_warn(*a, **k):
+        _logging.getLogger("camera").warning("no enumerator on this desk")
+        return []
+
+    cam_mod.enumerate_cameras = _empty_enum_warn
+    _h5 = Host()
+    _w5 = _assign.SetupWindow(_h5)
+    for _ in range(10):
+        _h5.update()
+        _wt.sleep(0.03)
+    check(_w5.veil.cget("text")
+          == "no cameras answered - no enumerator on this desk",
+          "the empty board SPEAKS with the engine's first warning "
+          "(the log line, where the owner is looking): %r"
+          % _w5.veil.cget("text"))
+    check(_w5.ok_button.winfo_manager() == "pack",
+          "the speaking board still hands out the exit")
+    _retire(_h5)
+    # ...and bare-honest (no warning ever landed)
+    cam_mod.enumerate_cameras = lambda *a, **k: []
+    _h6 = Host()
+    _w6 = _assign.SetupWindow(_h6)
+    for _ in range(10):
+        _h6.update()
+        _wt.sleep(0.03)
+    check(_w6.veil.cget("text") == "no cameras answered",
+          "no cards, no warnings: the bare honest line, never silence")
+    _retire(_h6)
+    _assign.FRAME_BUDGET, _assign.MARGIN_SEC = _s2[0], _s2[1]
+    cam_mod.ENUMERATE_DOOR_BUDGET_SEC = _s2[2]
+    cam_mod.IR_BUDGET_SEC = _s2[3]
+    cam_mod.OPEN_LOCK_TIMEOUT = _s2[4]
+
     # ---- defect 4 (owner UAT): a grayed slider that still took the
     # wheel was a disabled that lied. THE PIN TRAP (measured twice
     # before believing it): event_generate on an UNMAPPED canvas is a

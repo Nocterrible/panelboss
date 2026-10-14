@@ -15,10 +15,15 @@ Offline, fake cv2 only - no real doors, no LED on the owner's desk.
 Fake shape: VideoCapture blocks FOREVER (bounded 30 s for test
 hygiene) on the poisoned index; every other index opens DSHOW-first
 and serves a bright frame (GRAY 128 clears BLACK_CEIL, the
-asyncopen doctrine). DOOR_BUDGET_SEC shrinks to 0.5 s and the whole
-enumeration must still land all rows, in order, inside budget +
-margin of wall time, with the wedged index and every later index
-reading dead and the pre-wedge index honest.
+asyncopen doctrine). ENUMERATE_DOOR_BUDGET_SEC (wave D: the probe's
+own arithmetic, 2*27+5 - pinned as a spec here) shrinks to 0.5 s and
+the whole enumeration must still land all rows, in order, inside
+budget + margin of wall time, with the wedged index and every later
+index reading dead and the pre-wedge index honest - and the on_row
+beats answering once per resolved row. The hello IR bridge (the
+19:33 fingerprint's TRUE home, the call one past the wave-C fence)
+gets the same join at IR_BUDGET_SEC: stalled -> [] UNCACHEd + the
+ONE warning the dialog's empty-board ear is built to repeat.
 """
 import logging
 import os
@@ -96,14 +101,27 @@ fake_cv2.CAP_PROP_FRAME_WIDTH = 3
 fake_cv2.CAP_PROP_FRAME_HEIGHT = 4
 fake_cv2.CAP_PROP_FOURCC = 6
 
-_saved_cv2, _saved_budget = cam_mod.cv2, cam_mod.DOOR_BUDGET_SEC
+_saved_cv2 = cam_mod.cv2
+_saved_budget = cam_mod.ENUMERATE_DOOR_BUDGET_SEC
+_saved_ir = cam_mod.IR_BUDGET_SEC
 cam_mod.cv2 = fake_cv2
-cam_mod.DOOR_BUDGET_SEC = 0.5     # read at CALL time (the camcore (c)
-                                  # doctrine: patchable means live)
 cam_mod._bad_doors.clear()        # no tombstone interference offline
+
+# the derivation itself is a spec (wave D): the enumerate budget is
+# the PROBE's arithmetic (2 x the measured warm-open window + the
+# named margin), not the duty's, and a copy-paste of the old 125
+# would silently re-widen the veil prison this wave exists to kill.
+check(abs(cam_mod.ENUMERATE_DOOR_BUDGET_SEC - (2 * 27.0 + 5.0)) < 1e-9,
+      "the shipped enumerate budget is the debugger's derivation, "
+      "2*27+5: %r" % cam_mod.ENUMERATE_DOOR_BUDGET_SEC)
+cam_mod.ENUMERATE_DOOR_BUDGET_SEC = 0.5   # read at CALL time (the
+                                          # camcore (c) doctrine:
+                                          # patchable means live)
+cam_mod.IR_BUDGET_SEC = 0.5
 try:
+    beats = []
     t0 = time.monotonic()
-    rows = cam_mod.enumerate_cameras(0, 3)
+    rows = cam_mod.enumerate_cameras(0, 3, on_row=beats.append)
     took = time.monotonic() - t0
     check(took < 3.0,
           "the wedged door did NOT eat the board: enumerate returned "
@@ -112,9 +130,12 @@ try:
           "per-index honesty survives the wedge: index 0 answered "
           "true, index 1 (the zombie) AND every later index take the "
           "dead shape for this pass: %r" % (rows,))
+    check(beats == rows,
+          "on_row beats once per RESOLVED index, dead-tail included "
+          "(the veil walks with the sweep): %r" % (beats,))
     check(any("outlived" in m and str(BLOCKED) in m for m in Grab.msgs),
           "the stall confessed in the log (warning, with the index)")
-    # and the shape is STABLE: a fresh pass (the cache/resec logic
+    # and the shape is STABLE: a fresh pass (the cache/rescan logic
     # aside) must answer again, not stay hung: same fake, the wedged
     # index is one Event-wait deeper but the budget again outruns it
     Grab.msgs.clear()
@@ -124,9 +145,49 @@ try:
     check(rows2 == rows and took2 < 3.0,
           "the watchdog is not a one-shot: the next sweep answers the "
           "same honest rows in %.2f s" % took2)
+    # ---- the ROOT FIX (wave D): the hello IR bridge gets the SAME
+    # join. find_groups is MF enumeration - poisonable per process
+    # (the 19:33 fingerprint's true home: one call past enumerate's
+    # fence drowned the wave-C board twice on the dot) - so a find_
+    # groups that blocks forever must answer [] inside the budget,
+    # UNCACHEd: a stall is this round's truth, not the process's.
+    import types as _types
+    _ir_saved_mod = sys.modules.get("whircam")
+    _ir_saved_cache = cam_mod._ir_names_cache
+    hang = threading.Event()
+
+    class _G:
+        name = "IR One"
+
+    fake_ir = _types.ModuleType("whircam")
+    fake_ir.find_groups = lambda: (hang.wait(30.0), [])[1]
+    sys.modules["whircam"] = fake_ir
+    cam_mod._ir_names_cache = None
+    Grab.msgs.clear()
+    t0 = time.monotonic()
+    names = cam_mod.hello_ir_names()
+    took_ir = time.monotonic() - t0
+    check(names == [] and took_ir < 3.0,
+          "the stalled IR bridge answers [] inside its budget (%.2f s)"
+          % took_ir)
+    check(cam_mod._ir_names_cache is None,
+          "the stall is NOT cached - the silent-ignorance sequel to "
+          "the hang would be a permanent blind IR feature")
+    check(any("outlived" in m and "hello IR bridge" in m
+              for m in Grab.msgs),
+          "the IR stall confessed the ONE warning (the dialog's ear "
+          "repeats exactly this class of line)")
+    # and an unstuck bridge answers normally through the same join
+    fake_ir.find_groups = lambda: [_G()]
+    cam_mod._ir_names_cache = None
+    check(cam_mod.hello_ir_names() == ["IR One"],
+          "the next call re-asks and a living bridge answers")
+    sys.modules["whircam"] = _ir_saved_mod
+    cam_mod._ir_names_cache = _ir_saved_cache
 finally:
     cam_mod.cv2 = _saved_cv2
-    cam_mod.DOOR_BUDGET_SEC = _saved_budget
+    cam_mod.ENUMERATE_DOOR_BUDGET_SEC = _saved_budget
+    cam_mod.IR_BUDGET_SEC = _saved_ir
     cam_mod._bad_doors.clear()
 
 print("enumwatch-test: %d failure(s)" % len(fails))

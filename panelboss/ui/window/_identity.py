@@ -54,7 +54,17 @@ def identity_map(devs, found, bindings=None):
         hits.setdefault(str(d["name"]).lower(), []).append(d["instance"])
     out = {}
     for entry in found or []:
-        got = hits.get(str(entry[3] or "").lower(), [])
+        # TWO row shapes feed this map: the scan worker's report
+        # carries a fourth slot (index, opened, width, NAME - the
+        # unique PnP name it matched); the raw enumerate_cameras row
+        # is a THREE-tuple, and the setup dialog feeds exactly those
+        # here (wave D, measured: the 3-tuple IndexErrored on the
+        # old unguarded entry[3], killed the gather thread before
+        # the board post, and the dialog sat at its enumerating veil
+        # to the deadline - the fence would have leaked AGAIN). The
+        # name clue is optional, same len-guard rows_from uses.
+        name = str(entry[3]) if len(entry) > 3 and entry[3] else ""
+        got = hits.get(name.lower(), [])
         if len(got) == 1:
             out[got[0]] = entry[0]
     for inst, idx in (bindings or {}).items():

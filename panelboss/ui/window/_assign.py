@@ -34,9 +34,13 @@ at four checked every unchecked add-box grays (checked boxes never
 do - the exit is to give a seat up), the reason rides the count line.
 The state-side first-four truncation at load stays as the net.
 
-SIZE LAW: measured 696 (Oct 13, fix wave A: the dialog watchdog
-- row beats, the sum-of-budgets deadline, the dead-draw close -
-plus the exit resync) - the split seam is
+SIZE LAW: measured 811 (Oct 13, fix wave D: the enumerate-phase arm,
+the on_row beats, the pre-board stopwatch line, the empty-board ear) -
+the join's own machinery split OUT to watchdog.py at this wave (the
++40 rule, honored as a split not as a truncation); the remaining
+growth is the dialog's own laws. The earlier wave A grew it with the
+dialog watchdog - row beats, the sum-of-budgets deadline, the dead-draw close -
+plus the exit resync. The split seam is
 named: everything
 above the class line (rows_from, card_spec, ok_verbs, add_ceilings)
 is the pure data contract - importable, testable without a display
@@ -94,6 +98,52 @@ def veil_text(done, total, probing=None, waiting=0):
     if waiting:
         return base + "  ·  probing %s, %d waiting" % (probing, waiting)
     return base + "  ·  probing %s" % (probing,)
+
+
+def enum_veil(secs, last=None, seen=0):
+    """The veil BEFORE the board is counted (wave D, items 1+3): the
+    construction line now names its PHASE, and the honest shape of a
+    pre-count wait is a CLOCK - seconds alive-and-counting read as
+    work, bare silence read as the 18:33 dead. Once the
+    enumerate_cameras beats land the line names the last index that
+    RESOLVED and how many rows have answered at all: silence is
+    shapeless, a stopwatch never is."""
+    line = "enumerating cameras...  ·  %d s" % int(secs)
+    if last is not None:
+        line += "  ·  last index %s, %d seen" % (last, seen)
+    return line
+
+
+def gather_budget(n_indexes):
+    """The pre-board deadline (wave D, item 2): every index the sweep
+    may walk at the enumeration's own PROBE budget (the duty/lock
+    terms are the engine's joins to carry, not this dialog's to
+    wait for blind), plus the hello IR bridge's join, plus the named
+    margin. Row arithmetic comes LATER (re-armed on the row count)
+    and can only ever SHORTEN this arm - a gather that spent 400 s
+    wedged must not extend the dialog's patience to cover it."""
+    return (n_indexes * camera.ENUMERATE_DOOR_BUDGET_SEC
+            + camera.IR_BUDGET_SEC + MARGIN_SEC)
+
+
+class _FirstConfession(logging.Handler):
+    """The empty board's ear (wave D, item 7, the NEW LAW): the first
+    WARNING-or-worse from the ENGINE logger, captured for the veil.
+    An empty setup screen that says NOTHING is the silent-ignorance
+    relapse the whole fence exists against: the reason already
+    exists as a log line (watchdog, abstain, the IR stall) - the law
+    is that it must ALSO be readable where the owner is looking."""
+
+    def __init__(self):
+        logging.Handler.__init__(self, level=logging.WARNING)
+        self.first = None
+
+    def emit(self, record):
+        if self.first is None:
+            try:
+                self.first = record.getMessage()
+            except Exception:
+                self.first = "unformattable warning"
 
 
 def rows_from(devs, enumerated, ir_names, cfg_camera):
@@ -281,24 +331,32 @@ class SetupWindow(ctk.CTkToplevel):
         self._results = queue.Queue()              #   entry, var, started
         self._done = 0
         self._total = 0
-        # the dialog watchdog (defect 2, owner UAT): the deadline is
-        # armed the moment the board is counted (and already now,
-        # for the enumerate phase, with the scan ceiling standing in
-        # for the row count - the same arithmetic _gather re-arms
-        # with), and the PUMP owns it: an op that wedges holds the
-        # device-tree lock while it hangs, so a worker cannot be
-        # trusted to report its own death, and a board cannot be
-        # trusted to answer at all. Rows announced, rows settled,
-        # rows beaten - the veil reads all three (defect 2b: silence
-        # gets a shape and a name).
+        # the dialog watchdog (defect 2, owner UAT): the deadline
+        # ARMS AT GATHER START (wave D, item 2) with the ENUMERATE
+        # phase's arithmetic - gather_budget, not the row formula the
+        # construction-era arm carried (the wrong story's clock: it
+        # fired twice on the dot while enumerate was still walking).
+        # The PUMP owns it: an op that wedges holds the device-tree
+        # lock while it hangs, and no worker can be trusted to report
+        # its own death, and a board cannot be trusted to answer.
+        # Rows announced, rows settled, rows BEATEN - the veil reads
+        # all three (defect 2b + wave D item 1: silence gets a shape,
+        # a name, and a stopwatch).
         self._rows = []
         self._settled = set()
         self._started = []
-        self._deadline_at = (time.monotonic() + 8 * (
-            float(getattr(camera, "OPEN_LOCK_TIMEOUT", 30.0))
-            + FRAME_BUDGET) + MARGIN_SEC)
+        self._deadline_at = 0.0                  # armed at gather start
+        self._start_at = time.monotonic()
+        self._seen = 0                           # enumerate beats landed
+        self._seen_last = None                   # ...and the last index
         self._board_seen = False
         self._board_done = False
+        # the empty board's ear (wave D item 7, the NEW LAW): the
+        # first engine warning, repeated on the veil when zero cards
+        # get drawn - a blank scroll is a rumor, a written reason is
+        # an answer
+        self._ear = _FirstConfession()
+        logging.getLogger("camera").addHandler(self._ear)
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         ctk.CTkLabel(head, text="camera setup",
@@ -325,7 +383,7 @@ class SetupWindow(ctk.CTkToplevel):
             text="you can rerun this setup from the rescan button "
                  "any time",
             font=self.skin.font(10), **self.skin.text_style("sub"))
-        self.veil = ctk.CTkLabel(self, text="testing cameras...",
+        self.veil = ctk.CTkLabel(self, text="enumerating cameras...",
                                  font=self.skin.font(13, "bold"),
                                  **self.skin.text_style("sub"))
         self.veil.pack(side="bottom", pady=theme.S_ROW)
@@ -354,19 +412,41 @@ class SetupWindow(ctk.CTkToplevel):
         in its own inner thread and the worker JOINS it with a
         deadline: a timed join CANNOT hang whatever the driver does
         (the packet's named choice - the timeout arg exists but is
-        defeatable, the join is the smallest thing that cannot)."""
+        defeatable, the join is the smallest thing that cannot).
+
+        Wave D closed the fence one call further out: enumerate and
+        hello_ir_names got their own joins engine-side (the 19:33
+        shape drowned HERE, between enumerate's return and the board
+        post), and this thread now arms the pump deadline BEFORE its
+        first verb and passes a beat callback, so the veil walks the
+        indexes with it."""
         import concurrent.futures as cf
+        # arm FIRST, for the phase we are entering (item 2): the
+        # enumerate+IR budget, live from the engine's patched-at-
+        # call-time constants; the row arm arrives below and may
+        # only ever SHORTEN it
+        self._start_at = time.monotonic()
+        self._deadline_at = self._start_at + gather_budget(8)
         try:
             devs = camera.camera_devices()   # never raises: [] on a
         except Exception:                    # dead PnP door (proven
             devs = []                        # in camid section 1)
         cfg_cam = self.app.cfg["camera"]
         try:
-            enumerated = camera.enumerate_cameras()
+            # the beat callback (item 3): one call per RESOLVED
+            # index, marshaled through the queue like every other
+            # worker word - the veil counts the walk instead of
+            # waiting for its end
+            enumerated = camera.enumerate_cameras(
+                on_row=lambda row: self._results.put(("seen", row, None)))
         except Exception:
             log.exception("setup: enumerate failed")
             enumerated = []
         try:
+            # wave D: the IR join is engine-side now (the root fix) -
+            # a stalled bridge returns [] with its own warning in the
+            # ear; the catch stays as the net for an engine that
+            # raises anyway
             ir_names = camera.hello_ir_names()
         except Exception:
             log.exception("setup: the IR bridge never named itself")
@@ -380,17 +460,21 @@ class SetupWindow(ctk.CTkToplevel):
         # wedged door (which HOLDS the device-tree lock while it
         # hangs, silencing every row queued behind it) is caught at
         # its own deadline, not the board's. BOARD deadline: the SUM
-        # of every budget (opens serialize: n rows × one full
+        # of every row's budget (opens serialize: n rows x one full
         # lock-wait each, the frame budget is the one shared tail -
-        # the boot scan's own bound, inherited whole) + margin. Past
-        # the board deadline every un-settled row draws dead and the
+        # the boot scan's own bound, inherited whole) + margin - but
+        # only ever MIN'd against the gather-start arm (wave D item
+        # 2: a gather that spent eight minutes wedged must not
+        # EXTEND the dialog's patience to cover its own lateness).
+        # Past the deadline every un-settled row draws dead and the
         # OK button appears regardless of what the driver is still
         # chewing on (defect 2c).
         lock_wait = float(getattr(camera, "OPEN_LOCK_TIMEOUT", 30.0))
         row_deadline = lock_wait + FRAME_BUDGET + MARGIN_SEC
-        self._deadline_at = (time.monotonic()
-                             + max(1, n) * (lock_wait + FRAME_BUDGET)
-                             + MARGIN_SEC)
+        self._deadline_at = min(
+            self._deadline_at,
+            time.monotonic() + max(1, n) * (lock_wait + FRAME_BUDGET)
+            + MARGIN_SEC)
         self._results.put(("board", None, n))
 
         def one(row):
@@ -464,8 +548,16 @@ class SetupWindow(ctk.CTkToplevel):
                     if not payload:
                         # the empty board is a SETTLED board (defect
                         # 2c): OK appears now, not when a settle
-                        # arrives that will never come
+                        # arrives that will never come - and the
+                        # empty board will SPEAK (item 7, below)
                         self._close_board()
+                    continue
+                if kind == "seen":
+                    # an enumerate index RESOLVED (wave D item 3):
+                    # counted for the pre-board veil line; the row
+                    # itself arrives as a card later, on its settle
+                    self._seen += 1
+                    self._seen_last = row[0]
                     continue
                 if kind == "probing":
                     self._started.append(row["key"])
@@ -483,22 +575,29 @@ class SetupWindow(ctk.CTkToplevel):
                 if self._done >= self._total:
                     self._close_board()
             if not self._board_done:
-                if time.monotonic() >= self._deadline_at:
+                if self._deadline_at and time.monotonic() >= self._deadline_at:
                     # the dialog-level dead-man (defect 2d): the sum
                     # of all budgets passed and the board is still
                     # open - whatever has not reported is DEAD, and
                     # saying so is the dialog's job, not the driver's
-                    log.warning("setup watchdog: %d of %d rows never "
-                                "reported - drawing them dead",
-                                self._total - self._done, self._total)
+                    log.warning("setup watchdog: the board outlived the "
+                                "sum of its budgets (%d rows seen, %d of "
+                                "%d reported) - drawing them dead",
+                                self._seen, self._done, self._total)
                     self._close_board()
+                elif self._board_seen:
+                    self.veil.configure(text=self._progress())
                 else:
-                    if self._board_seen:
-                        # before the board event there is no honest
-                        # count to paint (a 0-of-0 would read
-                        # "done" mid-enumerate): the veil keeps its
-                        # build text until the count lands
-                        self.veil.configure(text=self._progress())
+                    # before the count, the STOPWATCH (wave D item 1):
+                    # alive-and-counting seconds, and the enumerate
+                    # beat truth once the walk has resolved anything.
+                    # The 19:33 veil sat on a bare "testing cameras"
+                    # for the whole lifetime of the bug; a stopwatch
+                    # is honest even when the answer is bad.
+                    self.veil.configure(text=enum_veil(
+                        time.monotonic() - self._start_at,
+                        None if self._seen_last is None
+                        else str(self._seen_last), self._seen))
         except Exception:
             log.exception("setup pump failed; the loop goes on")
         try:
@@ -533,7 +632,19 @@ class SetupWindow(ctk.CTkToplevel):
                 self._add_card(row, "stalled", None)
                 self._done += 1
         self._board_done = True
-        self.veil.configure(text="done")
+        # the NEW LAW (wave D, item 7): the empty board SPEAKS. Zero
+        # cards is a verdict - and it now rides the veil WITH THE
+        # REASON, the engine's first warning-or-worse heard through
+        # the dialog's ear (watchdog, abstain, IR stall: all of them
+        # already say why in the log; the law is the owner must not
+        # have to open the log to learn the setup found nothing).
+        # Fallback when no warning ever landed: the bare honest line.
+        if self._cards:
+            self.veil.configure(text="done")
+        else:
+            self.veil.configure(
+                text="no cameras answered - %s" % self._ear.first
+                if self._ear.first else "no cameras answered")
         self.ok_button.pack(side="left")
         self.rerun_note.pack(side="right")
 
@@ -669,7 +780,11 @@ class SetupWindow(ctk.CTkToplevel):
         resync = getattr(self.app, "_sync_consent_switch", None)
         if resync is not None:
             resync()
-        self.withdraw()
+        try:
+            logging.getLogger("camera").removeHandler(self._ear)
+        except Exception:
+            pass                        # the ear outlives nothing:
+        self.withdraw()                 # one dialog's life, no leak
         try:
             self.after(0, self.destroy)
         except Exception:

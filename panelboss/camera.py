@@ -11,10 +11,11 @@
   back open-yet-frozen forever (measured), so we never close across it,
   and any handle that stops delivering frames is released and reopened
 
-SIZE LAW: measured 1283 (Oct 13, wave C: the door-cycle join
-watchdog lives HERE, beside the lock it guards - a file across the
-seam could not hold the caller-must-hold-the-lock contract) -
-grandfathered ~1000 - Camera (device+warmup) and the
+SIZE LAW: measured 1300 (Oct 13; wave D moved the join machinery and
+the budgets to watchdog.py - a SPLIT, not growth: the gate's rule
+said +40 lines means split, and the split's home is the file that
+holds the caller-must-hold-the-lock contract at its call sites,
+which remain here) - grandfathered ~1000 - Camera (device+warmup) and the
 Rotor (rotation+async opens) share the module-level _open_lock and the
 enumeration cache; splitting now buys two files that must re-declare
 that shared state. The known seam paid its first dividend Oct 12: the
@@ -36,6 +37,14 @@ import time
 import cv2
 
 from . import config
+# wave D: the join machinery and its budgets moved to watchdog.py the
+# moment the bounding laws grew camera.py past the +40 growth rule
+# (the Rotor-seam debt did NOT apply to a fix that only bounds verbs
+# - so the GROWTH itself became the split, and the split says so in
+# the commit). The budget names re-export through this module: the
+# suites patch cam_mod.<BUDGET> and every call site reads it live.
+from .watchdog import (DOOR_BUDGET_SEC, ENUMERATE_DOOR_BUDGET_SEC,
+                       IR_BUDGET_SEC, join_open as _join_open)
 
 log = logging.getLogger("camera")
 
@@ -60,15 +69,10 @@ OPEN_GRACE_SEC = 90
 # worker's, so the tick stall this admits is bounded and rare.
 OPEN_LOCK_TIMEOUT = 30.0
 
-# the join budget for ONE door cycle (wave C, the owner's third
-# virgin boot - the 18:33 fingerprint, byte-for-byte): lock + door +
-# margin, all three published constants: OPEN_LOCK_TIMEOUT is the
-# worst ACQUISITION wait, OPEN_GRACE_SEC is the engine's own ceiling
-# for a LEGITIMATE open ("double the worst real open measured"), and
-# the 5 mirrors the dialog's margin. Read at CALL time by everything
-# below - the suite shrinks it to watch the watchdog fire, which is
-# exactly what the patch proves (the camcore probe (c) doctrine).
-DOOR_BUDGET_SEC = OPEN_LOCK_TIMEOUT + OPEN_GRACE_SEC + 5.0
+# (wave D) the door-cycle join budgets moved to watchdog.py with the
+# join itself; they are imported at the top of this file, so every
+# existing reference (and every suite patch of cam_mod.<BUDGET>)
+# keeps working unchanged.
 
 # the NVIDIA virtual camera driver dies when two threads open devices
 # at the same time (measured: interprocess mutex timeout, then OpenCV
@@ -109,18 +113,23 @@ _deferred_releases = []                # caps whose release found the tree busy
 
 
 def _drain_deferred():
-    """Call with _open_lock held: let go of every release we deferred."""
+    """Call with _open_lock held: let go of every release we deferred.
+
+    Wave D (item 6 - the landmine the debugger left standing): a
+    deferred release is a DEVICE-TREE TOUCH of the same driver class
+    as the opens, and the MF teardown hangs like they do. Drained
+    inline, one wedged cap made the DRAINING THREAD vanish inside the
+    lock - every later holder pays the 30 s abstain forever and the
+    queue never moves: the silent death of a whole subsystem, one
+    cap at a time. Each cap now goes through the join: a wedged
+    let-go becomes the join's LOGGED abstain (warning + zombie keeps
+    that handle), the confession rides the raise path too (never
+    bare pass: an unreleased cap dying to the GC is exactly the
+    unlocked-release shape gate 2c guards), and the queue keeps
+    moving for every other cap in line."""
     while _deferred_releases:
         cap = _deferred_releases.pop()
-        try:
-            cap.release()
-        except Exception:
-            # never bare pass: an unreleased cap dying to the GC is
-            # exactly the unlocked-release shape gate 2c guards, and
-            # re-appending risks a retry loop on a raising release -
-            # so confess, don't swallow and don't spin
-            log.exception("deferred cap release raised; the destructor "
-                          "will have it unlocked")
+        _join_open(cap.release, DOOR_BUDGET_SEC, "deferred release")
 
 
 def _release_cap(cap):
@@ -260,47 +269,6 @@ def _open_door(index, width=None, height=None):
     return cap, "auto"
 
 
-def _join_open(op, budget, what):
-    """THE join watchdog of the engine (owner UAT, wave C: the setup
-    screen re-hung at the byte-for-byte 18:33 fingerprint - one
-    MF-poisoned fallback door, and the whole enumeration vanished
-    with it because the per-index verb is a cv2 call the driver owns,
-    not the deadline loop). THE CALLER MUST HOLD _open_lock across
-    the call: the op touches the device tree under the caller's
-    shield (the RLock is thread-owned; re-acquiring it in the child
-    would deadlock against the join that waits for it). Returns
-    op()'s verdict, or None when the op outlived the budget - the
-    thread is ABANDONED (daemon), keeping its cap: the measured trade
-    wave A named at the dialog level and the c0000374 doctrine
-    already accepts for a wedged driver - you cannot pull a foot off
-    a train, but the BOARD can be pulled out of the station. A
-    stalled child's late release lands in the deferred queue via
-    _release_cap's own busy-check, exactly like every other
-    deferred let-go. THE SWEEP STOPS AT A STALL (callers below): a
-    second open running alongside the zombie is the two-threads
-    device-tree death this lock exists to prevent - measured, at the
-    top of this file - so the dead row is honest for THIS pass and
-    the next enumeration (or the rescan verb) re-asks the rest."""
-    box = []
-
-    def run():
-        try:
-            box.append(op())
-        except Exception:
-            box.append(None)               # the dead-open shape
-
-    t = threading.Thread(target=run, daemon=True,
-                         name="door-join-%s" % (what,))
-    t.start()
-    t.join(budget)
-    if box:
-        return box[0]
-    log.warning("door op for %s outlived its %.0f s join budget - "
-                "reported dead, the zombie keeps the handle",
-                what, budget)
-    return None
-
-
 def _open_probe(index):
     """One index's enumeration verdict as data (wave C factoring, the
     body the enumerate loop used to run inline): open, read the size,
@@ -370,7 +338,7 @@ def camera_names():
     return [d["name"] for d in camera_devices() if d["name"]]
 
 
-def enumerate_cameras(start=0, stop=8):
+def enumerate_cameras(start=0, stop=8, on_row=None):
     """Which indexes can be opened at all. Probed through the same
     DSHOW-first door the real opens use, so a picker index always means
     the device the opener will open: the DSHOW tree is the source of
@@ -381,33 +349,45 @@ def enumerate_cameras(start=0, stop=8):
 
     CANNOT HANG (wave C): each index's door cycle runs behind the
     _join_open watchdog; a wedged driver answers the dead shape and
-    stops the sweep, it never swallows the board."""
+    stops the sweep, it never swallows the board.
+
+    on_row (wave D, item 3): called once per RESOLVED index - the
+    abstain arm, the dead-tail arm, and the verdict arm all beat -
+    with the row tuple, so the setup dialog can dress its veil while
+    the walk is still moving (a board that arrives whole after 40
+    silent seconds reads identical to one that hung at zero).
+    Byte-identical for every existing caller: keyword, defaulted
+    None, and a raising callback is confessed, never fatal."""
     found = []
+
+    def report(row):
+        found.append(row)
+        if on_row is not None:
+            try:
+                on_row(row)
+            except Exception:
+                log.exception("enumerate beat dropped; the row stands")
+
     for index in range(start, stop):
         with _open_timed() as got:       # one open at a time, but with a
             if not got:                  # deadline: a hung holder must not
-                found.append((index, False, 0.0))
+                report((index, False, 0.0))
                 continue                 # wedge the enumeration forever;
                 # the row takes the dead-probe shape (an unopened cap
                 # reports 0.0 too - cli.py:int() would frown at None)
-            # wave C: the ACQUIRE deadline above bounds WAITING, not
-            # WORKING - a wedged fallback door blocks INSIDE the cv2
-            # verb (the 18:33 fingerprint: one "fell back to auto
-            # door" line, then forever), and the caller then never
-            # learns there were ever rows. The door cycle gets the
-            # same join watchdog the dialog's rows carry (DOOR_
-            # BUDGET_SEC, read live so the suite can shrink it): a
-            # stalled index answers the DEAD shape above, never an
-            # exception - and the sweep stops there (a second open
-            # alongside the zombie is the two-threads device-tree
-            # death this lock exists to prevent - measured, top of
-            # file), every later index taking this pass's dead shape
-            # honestly for the next enumeration or the rescan.
+            # wave C bounded this verb; wave D shrinks its budget to
+            # the PROBE's own arithmetic (ENUMERATE_DOOR_BUDGET_SEC,
+            # derived in watchdog.py: the auto-door probe is open+get
+            # only, and NVIDIA's measured warm-open window of 16-27 s
+            # doubled + margin is ~= 60 - the duty ceiling and the
+            # lock term are not this join's to carry) - the 18:33
+            # stall dies at one minute of veil, not two.
             verdict = _join_open(lambda: _open_probe(index),
-                                 DOOR_BUDGET_SEC, "index %d" % index)
+                                 ENUMERATE_DOOR_BUDGET_SEC,
+                                 "index %d" % index)
             if verdict is None:
                 for rest in range(index, stop):
-                    found.append((rest, False, 0.0))
+                    report((rest, False, 0.0))
                 return found
             opened, width, door = verdict
         if opened and door == "auto":
@@ -417,7 +397,7 @@ def enumerate_cameras(start=0, stop=8):
             # size will retry the codec door anyway
             log.info("index %d opened through the auto door only;"
                      " slow door", index)
-        found.append((index, opened, width))
+        report((index, opened, width))
     return found
 
 
@@ -436,25 +416,34 @@ def find_camera(index=-1, name_contains=None, fallback=0):
     if index is not None and index >= 0:
         indexes.insert(0, index)   # the config index comes second
     indexes.append(fallback)       # and we always fall back to something
+    stalled = False
     for idx in indexes:
         with _open_timed() as got:       # one open at a time, but with a
             if not got:                  # deadline: a hung holder must not
                 continue                 # wedge the whole find forever
             # wave C: the same join watchdog as the enumeration - the
             # identical verb shape (open, probe, let go) gets the
-            # identical bound; a stalled door stops the FIND (the
-            # zombie owns the tree now, and the next candidate may
-            # not probe beside it - the measured two-threads death at
-            # the top of this file) and the search's own contract
-            # answers: RuntimeError, the privacy-settings confession.
+            # identical bound (the DUTY budget - find opens real
+            # eyes, wave D keeps its 125); a stalled door stops the
+            # FIND (the zombie owns the tree now, and the next
+            # candidate may not probe beside it - the measured
+            # two-threads death at the top of this file) and the
+            # search's own contract answers: RuntimeError.
             verdict = _join_open(lambda: _open_probe(idx),
                                  DOOR_BUDGET_SEC, "find %d" % idx)
             if verdict is None:
+                stalled = True
                 break
             if verdict[0]:
                 log.debug(f"camera {idx} opens cleanly")
                 return idx
-    raise RuntimeError("no camera opened; check privacy settings")
+    # the ledger's privacy-lie one-liner (wave D disposition (a)): a
+    # find broken by the JOIN budget blames the budget, not the
+    # owner's privacy settings - the two failure stories have always
+    # been different, only the message refused to notice
+    raise RuntimeError("no camera opened; check privacy settings"
+                       + (" - or the door never answered its budget "
+                          "(see the warnings above)" if stalled else ""))
 
 
 HELLO_IR = -2                  # the [camera] index sentinel selecting the
@@ -480,15 +469,43 @@ def hello_ir_names():
     """Display names of IR-capable camera groups; [] when whircam is not
     installed or the platform has none. The result is cached for the
     process: the tray rebuilds its menu on every right click and this
-    spins up WinRT enumeration (~1 s) exactly once."""
+    spins up WinRT enumeration (~1 s) exactly once.
+
+    Wave D, THE ROOT FIX (the 19:33 fingerprint): find_groups is a
+    Media Foundation enumeration - the same poison class as the door
+    that taught this file its join law - and the setup dialog calls
+    it BETWEEN enumerate's return and the board post: one call past
+    the fence and the board never landed, twice on the dot. It runs
+    through the join now (IR_BUDGET_SEC, under the device-tree
+    shield like any other driver touch); a stalled bridge answers
+    [] AND LEAVES THE CACHE EMPTY - a stall is this round's truth,
+    not the process's, and caching it would be the silent-ignorance
+    sequel to the hang the fence exists to kill. One warning only
+    (the join's own, or the lock's abstain line - the empty-board
+    ear in the dialog listens to this logger and repeats the first
+    it hears where the owner can read it)."""
     global _ir_names_cache
     if _ir_names_cache is None:
         try:
             import whircam
-            _ir_names_cache = [g.name for g in whircam.find_groups()]
         except Exception:
             _ir_names_cache = []      # no bridge, no groups, no driver:
-        log.debug("hello IR groups: %s", _ir_names_cache)   # all the same
+        else:
+            with _open_timed() as got:   # MF enumeration IS a device-tree
+                names = None             # touch: same shield the doors
+                if got:                  # pay (a busy tree abstains to
+                    names = _join_open(  # the same dead shape)
+                        lambda: [g.name for g in whircam.find_groups()],
+                        IR_BUDGET_SEC, "hello IR bridge")
+            if names is not None:
+                _ir_names_cache = names
+                log.debug("hello IR groups: %s", _ir_names_cache)
+            else:
+                return []                # the STALL answer: [] this
+                                         # round, cache untouched -
+                                         # never None (callers speak
+                                         # lists), never cached (a
+                                         # stall is not the truth)
     return _ir_names_cache
 
 

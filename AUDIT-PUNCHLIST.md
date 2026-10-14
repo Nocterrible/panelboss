@@ -587,6 +587,42 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   index-1 class) is the real harness; bare "testing cameras..." forever
   must be DEAD behavior at this tip.
 
+## Wave D ledger lines (fence closes around the IR call, Oct 13 night)
+Wave-C dispositions first, as ordered:
+- find_camera privacy-lie: **FIXED** (wave D) - stall raises "no
+  camera opened; check privacy settings - or the door never answered
+  its budget (see the warnings above)".
+- _probe load-probe exemption: **LEFT** - it is the get_config leg,
+  named already in the exemption comment; the boot-hang exposure
+  stays LOW (opt-in name_contains only).
+- camera.py +40 growth rule: **PAID BY SPLIT** - the join machinery
+  and all three budgets moved to watchdog.py (the seam the gate
+  named did not apply to a bounds-only fix, so the growth itself
+  became the module).
+- Enum watchdog live-proof: **RE-MEASURED PENDING** - wave D's live
+  expectation is the ENUMERATING veil counting seconds + naming
+  resolved indexes on this exact desk (the 19:33 shape now has two
+  more fences: IR joined, empty board speaks).
+New findings this wave (found by the own pins, not by the owner):
+- IDENTITY_MAP 3-TUPLE CRASH (MED, fixed in-wave): identity_map read
+  entry[3] unguarded while enumerate's contract row is a 3-tuple -
+  the setup's gather thread died at rows_from BEFORE the board post
+  on every real desk (the suite fakes hid it with 4-tuples). Guarded
+  with the same len-check rows_from uses; the wave-D arm-at-start pin
+  is what caught it (fake returned the CONTRACT row shape).
+- NEW LAW (owner): the empty board speaks - zero cards drawn means
+  the veil reads "no cameras answered" + the camera logger's first
+  warning (fallback bare line); the ear is a per-dialog handler,
+  removed on close.
+- The pre-board veil counts ELAPSED SECONDS (alive-and-counting is
+  honest pre-count); enumerate beats name the last resolved index.
+- Dialog deadline arms at GATHER START with the enumerate-phase
+  arithmetic (gather_budget: 8 indexes x probe budget + IR + margin);
+  the at-return re-arm can only SHORTEN (min).
+- Deferred releases drain through the join now: a wedged MF teardown
+  is a logged abstain (zombie keeps that cap), never a silent death
+  of the draining thread holding the whole tree.
+
 ## Fix-wave findings accepted on the ledger (Oct 13, gate SHIP @ 36ba449)
 - EMPTY-ROSTER SPLIT (MED, engine): an all-unchecked setup board posts
   index []; config.normalize_index maps empty -> [0], so the NEXT
