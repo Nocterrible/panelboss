@@ -81,7 +81,24 @@ DEFAULTS = {
         # this falls back to boot_per_poll ("degraded") and votes at
         # the fallback cadence below until the next re-arm
         "always_timeout_sec": 3600,
-        "always_fallback_poll_sec": 10,
+        # the degraded fallback cadence, SPLIT by table (owner law,
+        # Oct 13 night): while the screens are OFF, an always-on eye
+        # is read like you mean it - one second is the default AND
+        # the floor. A 1 s cadence is strictly cheaper than the
+        # boot-per-poll dance it replaces, because the always_on eye
+        # holds the stream open anyway: the read is a read, not an
+        # open. The old floor of 5 (a 1 s "fallback" would be
+        # always_on with extra steps) is superseded-by-owner: the
+        # extra steps ARE the point while the desk is dark.
+        "always_fallback_poll_sec": 1,
+        # the same gate while the screens are LIT stays where it
+        # always was (10 s, floor 5): the owner's law speaks the dark
+        # hour; the lit desk's cadence is on_poll_sec's story and
+        # the wear guard must not start boot-dancing every second in
+        # front of a witness. One constant used to serve both tables
+        # - the law splits it honestly rather than redefining a key
+        # the dark story named
+        "always_fallback_poll_on_sec": 10,
         # camera identity (v1 wizard): keyed on the PnP InstanceId,
         # NOT the index - indexes drift on replugs (measured Oct 12),
         # the instance path does not. labels maps instance -> the
@@ -134,7 +151,16 @@ DEFAULTS = {
         "absent_confirm_sec": 60,    # screens go dark after absence is confirmed this long
         "on_poll_sec": 3,            # cadence while screens are on and absence is being confirmed
         "present_recheck_sec": 60,   # cadence after a person is confirmed present
-        "off_poll_sec": 3,           # cadence while screens are off (LED is already off, cam stays open)
+        "off_poll_sec": 3,           # arms the FIRST re-poll after the
+                                     # panels go dark; once that deadline
+                                     # is due, _off_phase never re-arms -
+                                     # a held stream is then read every
+                                     # loop tick (~0.2 s), which is the
+                                     # point of paying for the open (LED
+                                     # is already off, cam stays open;
+                                     # the dark-hour cadence a DEGRADED
+                                     # eye obeys is always_fallback_
+                                     # poll_sec, default 1 s)
         "re_off_grace_sec": 30,      # budget a monitor gets while it is awake with nobody in front of it
     },
     "recovery": {
@@ -648,9 +674,16 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
                 log.exception("camera name match failed; running on "
                               "the explicit indexes alone")
         # the per-index mode tables and the wear-guard knobs normalize
-        # here too: in memory the table keys are ints, the fallback
-        # cadence has a floor (a 1 s "fallback" would be always_on
-        # with extra steps), the timeout never goes negative
+        # here too: in memory the table keys are ints, the timeouts
+        # never go negative. THE DARK CADENCE FLOOR MOVED (owner law,
+        # Oct 13 night): the old max(5, ...) kept 1 s illegal because
+        # "a 1 s 'fallback' would be always_on with extra steps" -
+        # superseded: the always_on eye ALREADY holds the stream open
+        # in the dark, so a 1 s read is strictly cheaper than the
+        # boot-per-poll dance it replaces (the old rationale, quoted
+        # where it lived). The LIT cadence keeps the old floor: the
+        # law speaks the dark hour, and an eye degraded while the
+        # panels are lit should still rest in minutes, not seconds
         camera_merged["on"] = normalize_camera_modes(
             camera_merged.get("on"))
         camera_merged["off"] = normalize_camera_modes(
@@ -658,7 +691,10 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
         camera_merged["always_timeout_sec"] = max(
             0, int(camera_merged.get("always_timeout_sec", 3600)))
         camera_merged["always_fallback_poll_sec"] = max(
-            5, int(camera_merged.get("always_fallback_poll_sec", 10)))
+            1, int(camera_merged.get("always_fallback_poll_sec", 1)))
+        camera_merged["always_fallback_poll_on_sec"] = max(
+            5, int(camera_merged.get("always_fallback_poll_on_sec",
+                                     10)))
         indexes = camera_merged["index"]
         if len(indexes) > 4:
             # four open streams is the cap: an always_on index holds

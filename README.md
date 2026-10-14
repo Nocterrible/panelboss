@@ -22,7 +22,7 @@ notice the camera blinking and something malicious watching it.
 | idle > `idle_gate_sec` (30 s default) | camera boots per poll, every `on_poll_sec` (3 s) |
 | idle and being watched | the app holds Windows' own display and sleep timers off (`[power] hold_display` + `hold_sleep`, default OFF since the default-off law - opt in from the power card, independent) so a plan timeout can never time a still person out; the display hold is released before the app's own off-broadcast, and both are released on pause/snooze |
 | absence confirmed `absent_confirm_sec` (60 s) | `SC_MONITORPOWER(2)` — same standby as the power plan, worst case 90 s after the last keystroke |
-| screens dark | camera held open, polled every `off_poll_sec` (3 s) |
+| screens dark | camera held open, read every loop tick (~0.2 s): `_off_phase` re-polls while its deadline is due and nothing re-arms it — `off_poll_sec` (3 s) arms only the FIRST re-poll after the panels go dark. A wear-degraded eye re-boots once per `always_fallback_poll_sec` (1 s default) instead |
 | `min_hits` (2) consecutive positive frames | camera released **before** the screens wake (the device is exclusive) |
 | screens wake on their own (mouse jiggle) | `wake_policy` (stock `"leave_on"` since the default-off law - re-managing a wake the user never asked about is a feature, not a knob) turns them off again after `re_off_grace_sec` unless `min_hits` people show up when set to `"re_off"`; `"leave_on"` hands them back for `leave_on_grace_sec` |
 | any wake — the app's own, a jiggle, the power button after a sleep | window placement is put back (`[power] restore_windows`, default OFF since the default-off law; opt in below): every window's rect and the monitors' hardware IDs were saved before the panels dimmed; after the wake the app waits for the topology to settle (unchanged for 4 s, up to 60 s) and moves everything back — see *Remembering the desk* |
@@ -43,8 +43,12 @@ overrides them per index, so your monitor-mounted cam can rest when the
 screens go dark (`off`) while the door-facing one streams the whole
 dark hour and reports who knocked. Cameras vote one per poll,
 round-robin. A wear guard bounds `always_on`: after `always_timeout_sec`
-(default one hour) of continuous streaming the eye degrades to one boot
-every `always_fallback_poll_sec` (default 10 s) until the next display
+(default one hour) of continuous streaming the eye degrades — and how
+often it re-boots depends on the screens: while they are **dark** it is
+read like you mean it, one boot every `always_fallback_poll_sec`
+(default 1 s; a paid-open stream earns a one-second glance, not ten),
+while they are **lit** it rests in front of a witness at
+`always_fallback_poll_on_sec` (default 10 s) until the next display
 flip re-arms it — no webcam sensor grinds for weeks on end again.
 (Heads-up for hand-edited files: `"off"` in the mode fields used to be
 silently ignored; it is a real choice now — no polling.)

@@ -587,6 +587,29 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   index-1 class) is the real harness; bare "testing cameras..." forever
   must be DEAD behavior at this tip.
 
+## Lane E1 ledger lines (the always-on law, Oct 13 night)
+- always_fallback_poll_sec: default 10 -> 1, floor 5 -> 1 (owner law:
+  the paid-open stream earns one-second reads, not ten-second
+  glances; the old floor rationale marked superseded at the site).
+- The degraded gate was ONE constant shared by both display tables;
+  split honestly per the packet: always_fallback_poll_sec is now the
+  DARK gate, always_fallback_poll_on_sec (default 10, floor 5) the
+  LIT one. _policy._policy names both at the branch.
+- MEASURED TRUTH (the owner's question): with a FRESH always_on eye
+  and screens off there was no cadence at all - _off_phase never
+  re-arms next_poll (_phase.py:113-122, the abstain arm says "the
+  off phase re-polls every tick"), off_poll_sec (3) only arms the
+  FIRST re-poll (_power.py:138, _events.py:66), and the run loop
+  ticks every 0.2 s (_boot.py:121). The README promised "polled
+  every off_poll_sec" - corrected, with the fresh/degraded split
+  spelled out. The card's "3 s" is the LIT phase's on_poll_sec.
+- E2 HANDOFF (the exact card sentence, verbatim):
+  "always-on: read once per second while the screens are off (the
+  stream stays open; 1 s is the point)"
+- No migration: the default flips and stock files pick it up
+  (owner's call; the default-off era is young); config_writer_test
+  round-trips an explicit 10 unchanged (floor 1 permits it).
+
 ## Wave D ledger lines (fence closes around the IR call, Oct 13 night)
 Wave-C dispositions first, as ordered:
 - find_camera privacy-lie: **FIXED** (wave D) - stall raises "no

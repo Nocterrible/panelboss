@@ -70,16 +70,28 @@ class _PolicyMixin:
         it exactly like a switched-off one, and a tick in which no
         eye is due abstains instead of opening devices. Native
         boot_per_poll eyes are never cadence-gated: they vote on the
-        normal cadence, as today."""
+        normal cadence, as today.
+
+        THE CADENCE IS SPLIT BY TABLE (owner law, Oct 13 night): the
+        dark table's degraded eye is read like you mean it - one
+        second, floor one - because holding the stream is the whole
+        point of paying for it, and a 1 s read is strictly cheaper
+        than the boot-per-poll dance it replaces. The LIT table keeps
+        the old 10 s / floor 5 under its own name: an eye degraded in
+        front of a witness rests in minutes, not seconds (the law
+        speaks the dark hour; one constant used to gate both tables,
+        which is why the dark number could never honestly be 1)."""
         table = "off" if self.state == "off" else "on"
         if self._table_mode(index, table) != "always_on":
             return self.effective_mode(index)
         if self.effective_mode(index) == "always_on":
             return "always_on"                # fresh: votes when the
                                               # walk gets to it
+        cadence_key = ("always_fallback_poll_sec" if table == "off"
+                       else "always_fallback_poll_on_sec")
         due = index not in self.last_vote or \
             time.monotonic() - self.last_vote[index] >= \
-            self.camera_cfg["always_fallback_poll_sec"]
+            self.camera_cfg[cadence_key]
         return "boot_per_poll" if due else "off"
 
     def _note_vote(self, index, frame):

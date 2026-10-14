@@ -6,9 +6,10 @@ the 3600 s wear timeout, the degraded cadence gate, the edge re-arm on
 a display flip, the roster cap, the preview lease (opens the off eyes
 the vote walk skips, never a permanently-off one, releases ALL at
 lease end), and the mosaic geometry straight out of the framebox.
-SIZE LAW note: ~270 lines of one scenario chain riding a single
-fake-clock/FakeCam/Det scaffold; splitting per block would clone the
-scaffold eight times, costing more than the one long read it saves.
+SIZE LAW note: measured 371 (Oct 13, lane E1 grew the scenario chain
+with the dark-cadence law): one fake-clock/FakeCam/Det scaffold;
+splitting per block would clone the scaffold eight times, costing
+more than the one long read it saves.
 """
 import logging
 import os
@@ -193,9 +194,11 @@ try:
     assert m.effective_mode(2) == "always_on", "the edge cured the wear"
     print("re-arm OK (the wake edge restarts the wear clock)")
 
-    # 3) the degraded cadence gate: a degraded eye votes only once per
-    #    always_fallback_poll_sec and reads as OFF in between (the
-    #    walk skips it); a NATIVE boot_per_poll eye is never gated
+    # 3) the degraded cadence gate, LIT table: a degraded eye votes
+    #    only once per always_fallback_poll_on_sec (the dark table's
+    #    gate is the owner-law one-second; section 3b) and reads as
+    #    OFF in between (the walk skips it); a NATIVE boot_per_poll
+    #    eye is never gated
     clock.t += 3601
     assert m.effective_mode(2) == "boot_per_poll"
     assert m._policy(2) == "boot_per_poll", "never voted: due at once"
@@ -209,8 +212,41 @@ try:
     m.last_vote[2] = clock.t
     assert m._policy(2) == "boot_per_poll", "native poll is never gated"
     m.state = "counting"
-    print("cadence OK (degraded votes every fallback_poll_sec; the "
+    print("cadence OK (lit-table degraded votes every on_sec; the "
           "native boot_per_poll eye is untouched)")
+
+    # 3b) THE DARK CADENCE IS THE LAW (owner, Oct 13 night): the same
+    #     gate against the off table reads at always_fallback_poll_sec
+    #     - default 1 s, and the floor moved 5 -> 1 WITH it (the old
+    #     reasoning - "a 1 s fallback would be always_on with extra
+    #     steps" - is marked superseded at config.py: the extra steps
+    #     ARE the point while the desk is dark, and the always eye
+    #     holds its stream open anyway; the degraded eye's 1 s read
+    #     is strictly cheaper than the boot-per-poll dance). The
+    #     floors move both directions: a hand-edited 0 now lands on
+    #     1 (it used to land on 5), while the lit sibling still
+    #     refuses anything under 5 s.
+    m3 = fresh_monitor(scratch_cfg('index = 2\n'
+                                   'mode_off = "always_on"\n'))
+    m3.state = "off"
+    assert m3.effective_mode(2) == "always_on", "fresh: streams the dark"
+    clock.t += 3601
+    assert m3.effective_mode(2) == "boot_per_poll", "worn out by the dark hour"
+    assert m3._policy(2) == "boot_per_poll", "never voted: due at once"
+    m3.last_vote[2] = clock.t
+    assert m3._policy(2) == "off", "not due yet"
+    clock.t += 0.9
+    assert m3._policy(2) == "off", "0.9 s of a 1 s law is 0.1 s short"
+    clock.t += 0.1
+    assert m3._policy(2) == "boot_per_poll", "the dark turn: ONE second, like you mean it"
+    cfg6 = scratch_cfg('index = 2\nalways_fallback_poll_sec = 0\n'
+                       'always_fallback_poll_on_sec = 2\n')
+    assert cfg6["camera"]["always_fallback_poll_sec"] == 1, \
+        "the dark floor moved: 0 lands on 1 (it used to land on 5)"
+    assert cfg6["camera"]["always_fallback_poll_on_sec"] == 5, \
+        "the lit floor stayed at 5: the law speaks the dark hour"
+    print("dark cadence OK (off-table degraded eye votes every 1 s; "
+          "floors split 1/5 with the law)")
 
     # 4) the roster cap: five indexes, four on duty, and the drop is
     #    loud in the log
