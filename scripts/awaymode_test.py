@@ -9,6 +9,8 @@ verbs. No Tk, no display hardware, no live app.
 Run from repo root:
 python scripts/awaymode_test.py
 """
+import ctypes
+import ctypes.wintypes
 import logging
 import os
 import re
@@ -45,7 +47,17 @@ class FakeBright:
     `vcp_refuses` is the honest-no class, `vcp_deaf` the AOC-class
     write-ACKed-power-read-deaf). Appends to the shared call log:
     the restore-order assertion needs every source's steps in ONE
+    vcp_refuses is the honest-no class, `vcp_deaf` the AOC-class
+    write-ACKed-power-read-deaf). Appends to the shared call log:
+    the restore-order assertion needs every source's steps in ONE
     chronology."""
+
+    VCP_POWER = _bright.VCP_POWER          # the engine reads the door's
+    VCP_POWER_OFF = _bright.VCP_POWER_OFF  # constants through the
+    VCP_POWER_ON = _bright.VCP_POWER_ON    # fake's surface too
+    VCP_TRIES = _bright.VCP_TRIES
+    CONFIRM_SLEEP_SEC = 0                  # the suite does not sleep
+                                           # through the settle
 
     def __init__(self, cur=None, refuses=(), stays=(), no_door=(),
                  vcp_refuses=(), vcp_deaf=(), calls=None):
@@ -120,6 +132,7 @@ class FakeHookU32:
         self.registers = []
         self.unregisters = []
         self.hook_calls = []           # must stay empty. the point.
+        self.cursor = []               # jail's Get/SetCursorPos calls
 
     def RegisterRawInputDevices(self, arr, n, size):
         # read the flags off the caller's array: RIDEV_REMOVE=1 means
@@ -139,6 +152,16 @@ class FakeHookU32:
     def CallNextHookEx(self, *a):
         self.hook_calls.append(("next",) + a)
         return 0
+
+    def GetCursorPos(self, pt):
+        self.cursor.append(("get",))
+        p = ctypes.cast(pt, ctypes.POINTER(ctypes.wintypes.POINT))[0]
+        p.x, p.y = 777, 431                   # the desk's saved point
+        return True
+
+    def SetCursorPos(self, x, y):
+        self.cursor.append(("set", x, y))
+        return True
 
     def __getattr__(self, name):
         return getattr(self.real, name)   # everything else rides real
@@ -214,6 +237,10 @@ def make_monitor(tmp, away, bright=None, hdrs=None):
     led.keep(display, "wake", lambda *a, **k: led.calls.append(("wake",)))
     led.keep(display, "arm_input_lift",
              lambda armed: led.calls.append(("arm", bool(armed))))
+    led.keep(display, "jail_cursor",
+             lambda rect: led.calls.append(("jail", tuple(rect))))
+    led.keep(display, "unjail_cursor",
+             lambda: led.calls.append(("unjail",)))
     led.keep(display, "set_hold", lambda *a, **k: None)
     led.keep(profiles, "hdr_away_restore",
              lambda off: led.calls.append(
@@ -243,8 +270,10 @@ def test_migration():
             fh.write("[power]\nhdr_off_when_away = true\n")
         c = config.get_config(dir=tmp, verbose=False)
         assert c["away"]["mode"] == "dim", c["away"]
-        assert c["away"]["monitors"] == {"AAA": {"blackout": False},
-                                         "BBB": {"blackout": False}}
+        assert c["away"]["monitors"] == {"AAA": {"blackout": False,
+                                                "off": False},
+                                         "BBB": {"blackout": False,
+                                                "off": False}}
         disk = open(path).read()
         assert "[away]" in disk, "the migration must persist its stamp"
         assert "hdr_off_when_away = true" in disk, "fossil readable"
@@ -352,7 +381,7 @@ def test_preview_adopt_law():
     tmp = tempfile.mkdtemp(prefix="pb_away_p")
     m = make_monitor(tmp, {"mode": "dim", "monitors": {}})
     try:
-        rec = m._away_apply_row(dict(DESK[1]), False, 10)
+        rec = m._away_apply_row(dict(DESK[1]), "dim", 10)
         assert rec["status"] == "dim" and m._fake["bright"].cur["D2"] == 10
         m._screens_off(5.0)                   # the real away arrives
         assert m._away_release("BBB", rec) == "adopted"
@@ -366,7 +395,7 @@ def test_preview_adopt_law():
 
         m2 = make_monitor(tmp, {"mode": "dim", "monitors": {}})
         try:
-            rec2 = m2._away_apply_row(dict(DESK[2]), False, 10)
+            rec2 = m2._away_apply_row(dict(DESK[2]), "dim", 10)
             assert m2._away_release("CCC", rec2) == "reverted"
             assert m2._fake["bright"].cur["D3"] == 50, "revert = the prior"
             print("ok - a preview alone reverts exactly its own record")
@@ -449,12 +478,133 @@ def test_vcp_retry_law():
           "a spent budget, error and count in its word")
 
 
+def test_off_submode():
+    """The three panel classes (owner correction (e): the third is
+    the REPLY-DEAF POWER WRITE ACCEPTED - the owner-class AOC - and
+    UNVERIFIED-TRUST is its DEFAULT word, the shape this desk taught
+    twice; vcp_refuses is the honest-no class, and the timestamped
+    refusal is about this app's attempt, not the firmware's soul):
+    the ladder's call shapes, the blackout fallback's confession,
+    the unconditional D6=1 lift, and the jail."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_off")
+    bright = FakeBright({"D1": 80, "D2": 70, "D3": 50},
+                        vcp_deaf=["D2"], vcp_refuses=["D3"])
+    away = {"mode": "dim",
+            "monitors": {"AAA": {"mode": "off"},
+                         "BBB": {"mode": "off"},
+                         "CCC": {"mode": "off"}}}
+    m = make_monitor(tmp, away, bright=bright)
+    try:
+        m._screens_off(1.0)
+        calls = m._fake["calls"]
+        assert ("vcp", "D1", 0xD6, 4, _bright.VCP_TRIES) in calls, calls
+        assert m.away_status["AAA"] == "off", m.away_status       # honest register
+        assert m.away_status["BBB"] == "off (unverified)", m.away_status
+        assert m.away_status["CCC"].startswith(
+            "off refused - blackout instead"), m.away_status
+        shows = [c for c in calls if c[0] == "show"]
+        assert ("show", "D3", (4480, 0, 1080, 1920)) in shows, \
+            "the refused off row wears the fallback, confessed"
+        assert not any(c[1] in ("D1", "D2") for c in shows), \
+            "no paint on a sent-off row - the panel IS the overlay"
+        assert not any(c[0] == "hdr_set" and c[1] in ("D1", "D2")
+                       for c in calls), \
+            "off rows ride the blackout ledger: no HDR, no brightness"
+        assert not any(c[0] == "set" and c[1] in ("D1", "D2")
+                       for c in calls), calls
+        assert ("jail", (0, 0, 1920, 1080)) in calls, \
+            "the first covered row claims the corner jail, once"
+        assert sum(1 for c in calls if c[0] == "jail") == 1, calls
+        m._away_lift()
+        for gdi in ("D1", "D2", "D3"):
+            assert ("vcp", gdi, 0xD6, 1, _bright.VCP_TRIES) in calls, \
+                "the power hand-back is unconditional - even the " \
+                "refused row gets it (a late NAK can hide a dark panel)"
+        assert ("unjail",) in calls, "the cursor comes home with the spell"
+        assert ("hide_all",) in calls
+        print("ok - off sub-mode: trust word by default, refusal confessed, "
+              "unconditional hand-back, jail once")
+    finally:
+        m._ledger.undo()
+
+
+def test_jail_moves_cursor():
+    """The jail's own user32 pair (the engine tests fake it by
+    record): park at the FAR corner once, restore the saved point,
+    and go quiet afterwards - and the LL trio still never moves."""
+    import panelboss.display as disp
+    led = Ledger()
+    fake = FakeHookU32(disp.u32)
+    led.keep(disp, "u32", fake)
+    try:
+        assert disp.jail_cursor((1920, 0, 2560, 1440)) is True
+        assert disp.jail_cursor((4480, 0, 1080, 1920)) is True  # once
+        assert fake.cursor == [("get",), ("set", 1920 + 2559, 1439)], \
+            fake.cursor
+        disp.unjail_cursor()
+        assert fake.cursor[-1] == ("set", 777, 431), fake.cursor
+        disp.unjail_cursor()                       # quiet now
+        assert len(fake.cursor) == 3, fake.cursor
+        assert fake.hook_calls == [], "jail is not a hook, ever"
+        print("ok - jail: far corner once, saved point home, silent after")
+    finally:
+        led.undo()
+
+
+def test_off_preview_release():
+    """The preview walks the SAME off row: a revert owes its own
+    D6=1; an adopted preview owes none (the spell's lift pays it)."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_op")
+    bright = FakeBright({"D1": 80, "D2": 70, "D3": 50},
+                        vcp_deaf=["D2"], vcp_refuses=["D3"])
+    m = make_monitor(tmp, {"mode": "dim",
+                           "monitors": {"AAA": {"mode": "off"}}},
+                     bright=bright)
+    try:
+        rec = m._away_apply_row(dict(DESK[1]), "off", 10)
+        assert rec["status"] == "off (unverified)" and rec["off"] is True
+        assert m._away_release("BBB", rec) == "reverted"
+        assert ("vcp", "D2", 0xD6, 1, _bright.VCP_TRIES) in m._fake["calls"], \
+            "the preview's own hand-back rides the same law"
+        m._screens_off(5.0)                      # a real spell arrives
+        rec2 = m._away_apply_row(dict(DESK[0]), "off", 10)
+        assert m._away_release("AAA", rec2) == "adopted"
+        offs = [c for c in m._fake["calls"] if c[0] == "vcp" and c[3] == 1
+                and c[1] == "D1"]
+        assert not offs, "an adopted preview never powers its panel back on"
+        m._away_lift()
+        assert ("vcp", "D1", 0xD6, 1, _bright.VCP_TRIES) in m._fake["calls"], \
+            "the spell's lift pays the hand-back the preview skipped"
+        print("ok - off preview: revert pays now, adoption defers to the lift")
+    finally:
+        m._ledger.undo()
+
+
+def test_off_selectable_never_pregrayed():
+    """The AOC must see OFF on its menu (the correction's core: my
+    morning's NAK-studded probes may not pre-sentence the panel);
+    gray is ONLY the never-reached class. No Tk: the card's menu
+    rule is a module function."""
+    from panelboss.ui.window._away import off_choice
+    from panelboss.wm import _bright as _b
+    aoc = FakeBright({"D1": 75})                # answers 0x10: bus proven
+    assert off_choice(aoc, "D1") == ["blackout", "dim", "off"]
+    dead = FakeBright({}, no_door=["DX"])       # the gray class
+    assert off_choice(dead, "DX") == ["blackout", "dim"]
+    assert off_choice(_b, "NO-SUCH-DISPLAY99") in (
+        ["blackout", "dim", "off"], ["blackout", "dim"])  # answers per door
+    print("ok - off selectable everywhere the app reached; gray only "
+          "for the never-reached")
+
+
 def test_static_ban():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "panelboss", "state", "_away.py"),
                encoding="utf8").read()
     assert "display.wake(" not in src and "turn_off(" not in src, \
         "the away engine must not own a power verb"
+    assert "SC_MONITORPOWER" not in src and "0xF170" not in src, \
+        "the off sub-mode's power is the VCP door, never the broadcast"
     pwr = open(os.path.join(root, "panelboss", "state", "_power.py"),
                encoding="utf8").read()
     body = pwr[pwr.index("def _screens_off"):]
@@ -533,13 +683,34 @@ def test_hook_lifecycle():
         led.undo()
 
 
+def test_row_shorthands():
+    """Every accepted row shape folds to the pair (the off key is
+    YOUNG - it migrates by never having needed migration)."""
+    n = config.normalize_away
+    assert n({"mode": "dim", "monitors": {"A": "off"}})["monitors"] == \
+        {"A": {"blackout": False, "off": True}}
+    assert n({"mode": "dim",
+              "monitors": {"A": {"mode": "blackout"}}})["monitors"] == \
+        {"A": {"blackout": True, "off": False}}
+    assert n({"mode": "dim", "monitors": {"A": True}})["monitors"] == \
+        {"A": {"blackout": True, "off": False}}
+    assert n({"mode": "dim", "monitors": {"A": "sideways"}})["monitors"] \
+        == {}                      # warned, dropped, dim default
+    print("ok - row shorthands fold to the pair shape losslessly")
+
+
 def main():
     test_migration()
+    test_row_shorthands()
     test_substitution()
     test_stock_path()
     test_refusal_degrades()
     test_unverified_trust()
     test_vcp_retry_law()
+    test_off_submode()
+    test_jail_moves_cursor()
+    test_off_preview_release()
+    test_off_selectable_never_pregrayed()
     test_preview_adopt_law()
     test_hook_lifecycle()
     test_static_ban()

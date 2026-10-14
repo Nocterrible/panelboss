@@ -95,6 +95,12 @@ config.write_config = (
 # real display right now, and the asserts would be testing the desk,
 # not the code
 cfg["power"]["assistant_task"] = False
+# and the away mode (off wave, Oct 14): the live config carries
+# [away] mode = "dim" since the owner's UAT, and scenario 3 asserts
+# the STOCK off path - without this pin the dim engine correctly eats
+# the turn_off and the assert tests the owner's card setting, not the
+# code (same doctrine as the two pins below: never the desk)
+cfg["away"]["mode"] = "off"
 # same doctrine, second door (unknown_state red, Oct 13 07:21): with
 # skip_camera_when_blocked true, _on_phase consults the REAL powercfg
 # /requests - on a morning desk someone's display blocker answers, the

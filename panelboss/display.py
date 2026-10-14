@@ -23,6 +23,9 @@
   killed it is documented at the raw block below)
 - foreground fullscreen detection: exclusive-fullscreen apps swallow the
   broadcast, so the guard skips them
+- the away dim spell's corner jail: covered rects get the cursor
+  parked (jail_cursor/unjail_cursor) - a SetCursorPos move generates
+  no raw input, so the jail can never wake what it covers
 
 All ctypes, no third-party bindings. Verified recipe: window class atom,
 hidden window and sink all live on the pumping thread, every handle is a
@@ -605,6 +608,47 @@ def arm_input_lift(armed):
         watcher._lift_armed = bool(armed)
         watcher._lift_origin = None
         watcher._ear_req = bool(armed)
+
+
+# the corner jail (away wave, owner request): the cursor parks at a
+# covered rect's far corner while a dim spell covers it, and comes
+# home with the spell. The move generates NO raw input (the ears read
+# the RAW stream only - a SetCursorPos warp is invisible to it,
+# verified against the raw block above), so the jail can never wake
+# what it covers; the far corner is where the pointer stops being a
+# witness on the dark panel.
+_jail_saved = None
+
+
+def jail_cursor(rect):
+    """Park the cursor at the far corner of a covered rect, ONCE per
+    spell (the first covered row claims it; later ones leave the
+    saved point alone). False = the cursor could not be read; the
+    spell proceeds uncuffed."""
+    global _jail_saved
+    if _jail_saved is not None:
+        return True
+    pt = wintypes.POINT()
+    if not u32.GetCursorPos(ctypes.byref(pt)):
+        return False
+    _jail_saved = (pt.x, pt.y)
+    x, y, w, h = rect
+    u32.SetCursorPos(x + max(0, w - 1), y + max(0, h - 1))
+    log.debug("jail: cursor %s,%s -> %s,%s", pt.x, pt.y,
+              x + max(0, w - 1), y + max(0, h - 1))
+    return True
+
+
+def unjail_cursor():
+    """Hand the saved point back - no-op for a spell that never
+    covered anything (the engine calls it on every lift)."""
+    global _jail_saved
+    if _jail_saved is None:
+        return
+    u32.SetCursorPos(_jail_saved[0], _jail_saved[1])
+    log.debug("jail: cursor home to %s,%s", _jail_saved[0],
+              _jail_saved[1])
+    _jail_saved = None
 
 
 watcher = None

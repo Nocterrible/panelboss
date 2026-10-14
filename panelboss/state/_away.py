@@ -1,6 +1,11 @@
 """The away engine: dim-mode substitution for the display power verb.
 
-SIZE LAW header: this part owns the fake-off ledger and nothing else.
+SIZE LAW header: this part owns the fake-off ledger and nothing else -
+and at 307 lines the whole is still one law: the ledgers, the door
+calls and the status words interlock line-for-line, and splitting the
+prose from its call sites (or the lift from the engage) would sell a
+seam for nothing. The off wave's growth is this file's due; the card
+paint lives in ui/window/_away.py.
 The state machine keeps its shape - _power.py calls _away_engage()
 where it used to call the broadcast, _away_lift() where it wakes,
 _events.py arms the two queue messages (away_lift from the input
@@ -25,9 +30,20 @@ preview of a row the real away spell took over mid-way ADOPTS the
 spell instead of reverting: un-dimming a real away is the bug this
 seam exists to kill (the architect's owner-call, 2026-10-14). The
 adopt law lives engine-side so the suite can fake it without a Tk.
+The OFF sub-mode (2026-10-14 growth wave, owner sheet + correction):
+a row may instead ask for the panel's OWN power code through the
+brightness door - no overlay (the panel IS the overlay), the
+refusal falls back to blackout confessed, an unanswered readback
+earns the trust word "(unverified)", the lift's power hand-back is
+UNCONDITIONAL on every wake reason (see the asymmetry law at the
+engage side), and covered rows bring the corner jail. The PROBE LAW
+owns the capability story: off is selectable on every reached
+panel, and the verdict lives in these status words, timestamped -
+never in a pre-sentence about firmware.
 """
 
 import logging
+import time
 
 log = logging.getLogger("state")
 
@@ -39,10 +55,18 @@ class _AwayMixin:
         """Called where the off broadcast used to stand: dim mode
         paints the dark INSTEAD of powering it - the blackout rows
         wear the overlay, the dim rows lose their HDR and drop to
-        dim_level. Returns {} when the mode is the stock off - the
-        caller takes the broadcast path untouched, and the legacy
-        global hdr_off_when_away block stays readable and honored
-        there (downgrade honesty, one release)."""
+        dim_level, and the OFF rows ask the panel's own power code
+        through the brightness door (no overlay - the panel IS the
+        overlay; a refusal degrades that row to blackout, confessed).
+        Covered rows also bring the corner jail (display.jail_cursor:
+        the cursor parks at a covered rect's far corner, ONCE per
+        engage - SetCursorPos generates no raw input, so the jail
+        itself can never wake what it covers; the owner's request,
+        and the off/blackout rows need it equally). Returns {} when
+        the mode is the stock off - the caller takes the broadcast
+        path untouched, and the legacy global hdr_off_when_away block
+        stays readable and honored there (downgrade honesty, one
+        release)."""
         away = self.cfg.get("away") or {}
         if away.get("mode") != "dim":
             return {}
@@ -54,37 +78,86 @@ class _AwayMixin:
         # spell itself wrote. _away_lift is the one clear site.
         self._away_bright = getattr(self, "_away_bright", None) or {}
         self._away_hdr = getattr(self, "_away_hdr", None) or []
+        self._away_off = getattr(self, "_away_off", None) or []
         rows = away.get("monitors") or {}
+        jail = None
         for m in _live_desk():
-            rec = self._away_apply_row(m, _row_blackout(rows, m),
-                                       away.get("dim_level", 10))
+            mode = _row_mode(rows, m)
+            rec = self._away_apply_row(m, mode, away.get("dim_level", 10))
             self.away_status[m["short"]] = rec["status"]
             self._away_hdr += rec.get("hdr") or []
+            if rec.get("off") and m["gdi"] not in self._away_off:
+                self._away_off.append(m["gdi"])
+            if jail is None and (mode == "off" or
+                                 rec["status"].startswith("blackout")):
+                jail = (m["x"], m["y"], m["w"], m["h"])
+        if jail:
+            display.jail_cursor(jail)
         display.arm_input_lift(True)
-        log.info("away: dim mode, %d monitors (%d HDR off, %d rows "
-                 "blackout-degraded on refusal)", len(self.away_status),
-                 len(self._away_hdr),
+        log.info("away: dim mode, %d monitors (%d HDR off, %d VCP-off "
+                 "asked, %d rows blackout-degraded on refusal)",
+                 len(self.away_status), len(self._away_hdr),
+                 len(self._away_off),
                  sum(1 for s in self.away_status.values()
-                     if s.startswith("blackout (")))
+                     if s.startswith("blackout")))
         return self.away_status
 
-    def _away_apply_row(self, m, blackout, level):
+    def _away_apply_row(self, m, mode, level):
         """One monitor's effect, the SAME call the preview walks so a
         preview really tests what away will do - and the single
         footprint stays honest (a preview never dims a NEIGHBOUR's
         HDR). Ledger before write: the honest hand-back needs the
-        prior answer, or max when the read itself refused."""
+        prior answer, or max when the read itself refused. SIZE LAW
+        (owner, 2026-10-14): the off sub-mode lifts this method's
+        effect budget from ≤40 to ≤80 lines - the door's two honest
+        halves and the blackout fallback do not fit in 40 without
+        splitting the law's prose from its call sites."""
         from .. import wm
         from ..wm import _bright, _overlay
         if getattr(self, "_away_bright", None) is None:
             self._away_bright = {}
         rect = (m["x"], m["y"], m["w"], m["h"])
-        rec = {"short": m["short"], "gdi": m["gdi"]}
-        if blackout is None:                      # the row lost its
-            _overlay.hide(m["gdi"])               # panel mid-preview
+        rec = {"short": m["short"], "gdi": m["gdi"], "mode": mode}
+        if mode is None:                      # the row lost its
+            _overlay.hide(m["gdi"])           # panel mid-preview
             rec["status"] = "gone"
             return rec
-        if blackout:
+        if mode == "off":
+            rec["off"] = True                 # even a refused row:
+            # the lift's D6=1 rides UNCONDITIONALLY, on EVERY wake
+            # reason, for every row that ever asked for off - the
+            # raw-input wake asymmetry (the owner's experiment,
+            # 2026-10-14: Windows believes a VCP-offed panel is ON
+            # and reports no input from a dead face, so that panel
+            # can NEVER lift the spell on its own pixels; the write
+            # is the only way back, and a late-NAKing bus may have
+            # darkened it while reporting failure anyway).
+            sent, say = _bright.vcp(m["gdi"], _bright.VCP_POWER,
+                                    _bright.VCP_POWER_OFF)
+            rec["tried"] = time.time()        # a refusal is a fact
+                                              # about THIS attempt -
+                                              # dated at the moment
+                                              # the budget spent
+            if not sent:
+                # blackout fallback, confessed on the word, silent
+                # nowhere (the refusal half of the door's law)
+                _overlay.show(m["gdi"], rect)
+                rec["status"] = ("off refused - blackout instead (%s)"
+                                 % say)
+                return rec
+            time.sleep(_bright.CONFIRM_SLEEP_SEC)
+            answered, val = _bright.vcp_read(m["gdi"], _bright.VCP_POWER)
+            # the trust half - and the DEFAULT word here: the control
+            # panel's power register answered "on" straight through a
+            # fully-ACKed off window (scripts/sdc_off_probe.py), so
+            # on panels like this (unverified) is the ceiling of what
+            # a write can prove, and the preview is the human judge.
+            # Panels with honest registers do earn the plain word.
+            rec["status"] = ("off" if answered and val is not None and
+                             val == _bright.VCP_POWER_OFF
+                             else "off (unverified)")
+            return rec
+        if mode == "blackout":
             _overlay.show(m["gdi"], rect)
             rec["status"] = "blackout"
             return rec
@@ -132,6 +205,19 @@ class _AwayMixin:
         from ..wm import _bright, _overlay
         bright = getattr(self, "_away_bright", None) or {}
         hdr = getattr(self, "_away_hdr", None) or []
+        off = getattr(self, "_away_off", None) or []
+        for gdi in off:
+            # UNCONDITIONAL on every wake reason - the asymmetry note
+            # lives at the engage side; the wake can only have come
+            # from the LIT panels (ears) or the gates: an offed panel
+            # reports nothing, so this write is its only way back.
+            sent, say = _bright.vcp(gdi, _bright.VCP_POWER,
+                                    _bright.VCP_POWER_ON)
+            if not sent:
+                log.warning("away: the power hand-back on %s refused "
+                            "(%s) - the panel may sit dark until its "
+                            "own button, and the next spell's probe "
+                            "will say what the bus says", gdi, say)
         _overlay.hide_all()                       # every cover first:
         #                                   paint dies before the panel
         #                                   underneath changes state
@@ -140,12 +226,17 @@ class _AwayMixin:
             # hand-back (the packet's law)
             _bright.restore(gdi, prior if prior is not None else 100)
         profiles.hdr_away_restore(hdr)            # only what WE offed
+        display.unjail_cursor()                   # the cursor goes home
+        #                                   with the spell (no-op if
+        #                                   the spell never covered)
         display.arm_input_lift(False)
         self.away_status = {}
         self._away_bright = {}
         self._away_hdr = []
         log.info("away: lifted (%d brightness hand-back(s), %d HDR "
-                 "panel(s))", len(bright), len(hdr))
+                 "panel(s), %d power hand-back(s))", len(bright), len(hdr),
+                 len(off))
+        self._away_off = []
         return status
 
     # ---------------------------------------------------------- the preview --
@@ -170,6 +261,17 @@ class _AwayMixin:
         from .. import profiles
         from ..wm import _bright, _overlay
         _overlay.hide(rec["gdi"])
+        if rec.get("off"):
+            # the preview's own D6=1 - same unconditional law as the
+            # lift, this time earned by the preview rather than owed
+            # by a spell (a refused-off preview wore the fallback
+            # overlay instead; the ON is the no-op it deserves)
+            sent, say = _bright.vcp(rec["gdi"], _bright.VCP_POWER,
+                                    _bright.VCP_POWER_ON)
+            if not sent:
+                log.warning("away: the preview's power hand-back on %s "
+                            "refused (%s) - the panel may sit dark "
+                            "until its own button", rec["gdi"], say)
         if rec["gdi"] in (getattr(self, "_away_bright", None) or {}):
             prior = self._away_bright[rec["gdi"]]
             _bright.restore(rec["gdi"], prior if prior is not None
@@ -181,15 +283,20 @@ class _AwayMixin:
         return "reverted"
 
 
-def _row_blackout(rows, m):
-    """The row's answer, absent-defaulted to the dim sub-mode (the
-    packet's rule: a monitor NOT in away.monitors is a dim row in
-    dim mode - the migration promise, and the honest default for a
-    panel that joined after the config was written)."""
+def _row_mode(rows, m):
+    """The row's sub-mode ("blackout" | "dim" | "off"), absent-
+    defaulted to DIM (the packet's rule: a monitor NOT in
+    away.monitors is a dim row in dim mode - the migration promise,
+    and the honest default for a panel that joined after the config
+    was written). normalize ships the pair shape; off beats blackout
+    on a hand-edited file that sets both, since the panel cannot do
+    both."""
     row = rows.get(m["short"])
-    if row is None:
-        return False
-    return bool(row.get("blackout"))
+    if not row:
+        return "dim"
+    if row.get("off"):
+        return "off"
+    return "blackout" if row.get("blackout") else "dim"
 
 
 def _live_desk():

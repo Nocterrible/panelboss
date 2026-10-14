@@ -16,6 +16,10 @@ HERE (this tab's sibling behavior is pack-forget hiding - no gray
 walker existed to reuse), and the preview's dialog-above-the-paint
 uses topmost+raise on the settings window: transient() is not a word
 across Tk interpreters, and the overlay lives on its own thread.
+(Growth, 2026-10-14 off wave: the per-row choice rule, the
+never-reached why-line and the off preview's countdown chain are all
+card paint and stay in this file - splitting the card would scatter
+the away UI to buy nothing.)
 """
 
 from __future__ import annotations
@@ -33,6 +37,18 @@ log = logging.getLogger("ui")
 OFF_TEXT = "monitors off"
 DIM_TEXT = "dim"
 
+
+def off_choice(bright, gdi):
+    """A row's sub-mode menu. OFF is offered on every panel this app
+    REACHED - physical handles opened; the AOC answered brightness
+    at a one-shot probe's NAK-rate all morning and the PROBE LAW
+    says that door works (owner correction: capability verdicts come
+    from in-app attempts with a spent retry budget, so the state
+    machine's UNKNOWN is selectable, unbelieved, and gray was always
+    for never-reached panels only)."""
+    return ["blackout", "dim", "off"] if bright.reachable(gdi) else \
+        ["blackout", "dim"]
+
 TIP = {
     "mode": "off: the displays get the real power broadcast, exactly "
             "as always. dim: the panels STAY AWAKE and the app paints "
@@ -40,15 +56,26 @@ TIP = {
             "class), no driver drama. blackout rows wear an opaque "
             "black cover (a click on it wakes the desk); dim rows "
             "lose their HDR and drop to the brightness below for the "
-            "spell and get it all back on lift. MEASURED ON THIS "
-            "DESK CLASS: some panels accept brightness writes and "
-            "never obey them - those rows degrade to blackout and "
-            "say so on their status word, never silently.",
+            "spell and get it all back on lift; OFF rows ask the "
+            "panel's own power code through the same door the "
+            "brightness rides - the panel itself goes DPMS-dark, no "
+            "paint, and a power write brings it back at the wake (an "
+            "offed panel cannot report input: the desk wakes on the "
+            "lit panels' ears or the idle gate). MEASURED ON THIS "
+            "DESK CLASS: a write accepted and never proven by the "
+            "readback keeps its sub-mode and says (unverified) on the "
+            "row's status word; only a send refused after the retries "
+            "degrades the row to blackout, and it says that too - "
+            "never silent.",
     "row": "blackout = the painted lie; dim = HDR off + the shared "
-           "brightness level. a preview applies THIS row's effect "
-           "for 10 s and reverts it (the second click cancels now; "
-           "a real away arriving mid-preview keeps the effect and "
-           "hands it back at the real wake instead).",
+           "brightness level; off = the panel's own power code (0xD6) "
+           "through the brightness door, blackout as the confessed "
+           "fallback if the send itself refuses. a preview applies "
+           "THIS row's effect for 10 s and reverts it (the second "
+           "click cancels now; a real away arriving mid-preview keeps "
+           "the effect and hands it back at the real wake instead); "
+           "an off preview counts its seconds on this window - the "
+           "dark panel cannot carry a digit.",
     "level": "where dim rows park their brightness while away, 1 to "
               "40 percent - shared by every dim row (per-monitor "
               "levels are a planned follow-up).",
@@ -85,11 +112,20 @@ class _AwayMixin:
                     short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
                     [-1] or "?")
             row = self._row(box, label, TIP["row"], hint_chars=42)
+            vals = off_choice(wm._bright, m["gdi"])
             seg = ctk.CTkSegmentedButton(
-                row, values=["blackout", "dim"], height=26, width=150,
+                row, values=vals, height=26, width=200,
                 command=lambda v, s=short: self._away_submode_changed(s, v),
                 **self.skin.segmented_style())
-            seg.set(self._away_row_blackout(short) and "blackout" or "dim")
+            mode = self._away_row_mode(short)
+            seg.set(mode if mode in vals else "dim")
+            if "off" not in vals:
+                # gray not lie (owner correction): the choice is
+                # ABSENT here because this app never reached the
+                # panel's DDC door - said in one line, in words
+                # about our reach, not the firmware's soul
+                self._away_says[short] = ("off needs a DDC/CI door; "
+                                          "none answered for this monitor")
             seg.grid(row=0, column=1, sticky="e")
             value = ctk.CTkLabel(row, font=self.skin.font(12),
                                  **self.skin.text_style("sub"))
@@ -114,17 +150,47 @@ class _AwayMixin:
                                       "preview": preview, "say": say,
                                       "gdi": m["gdi"]}
             say.pack(anchor="w")
+        self._away_cd = ctk.CTkLabel(box, text="", font=self.skin.font(12),
+                                     **self.skin.text_style("sub"))
+        self._away_cd.pack(anchor="e", pady=(2, 0))
+        self._away_cd_left = 0
         self._away_sync()
         self.after(900, self._away_poll)
+
+    def _away_countdown(self):
+        """The off preview's seconds, on the settings window - the
+        covered panel cannot carry them (it is OFF, or painted
+        black), the glyph lives where the eyes are (owner decision,
+        shipped as this card label). One shared chain: the newest
+        off preview owns it; expiry, cancel and window death stop it.
+        """
+        if getattr(self, "_dying", False) or self._away_cd_left <= 0:
+            set_text(self._away_cd, "")
+            return
+        set_text(self._away_cd, "dark for %d s" % self._away_cd_left)
+        self._away_cd_left -= 1
+        try:
+            self.after(1000, self._away_countdown)
+        except Exception:
+            pass                          # destroyed mid-tick
 
     # ------------------------------------------------------------ state reads --
     def _away_level(self):
         return int((self.cfg.get("away") or {}).get("dim_level", 10))
 
-    def _away_row_blackout(self, short):
+    def _away_row_mode(self, short):
+        """The pair shape normalize ships ({"blackout": b, "off": b});
+        the legacy bare-bool row reads honestly too (one release -
+        the file shape the dim wave wrote)."""
         rows = (self.cfg.get("away") or {}).get("monitors") or {}
         row = rows.get(short)
-        return bool(row and row.get("blackout"))
+        if not row:
+            return "dim"
+        if isinstance(row, bool):
+            return "blackout" if row else "dim"
+        if row.get("off"):
+            return "off"
+        return "blackout" if row.get("blackout") else "dim"
 
     # ------------------------------------------------------------- handlers --
     def _away_mode_changed(self, label):
@@ -137,7 +203,8 @@ class _AwayMixin:
 
     def _away_submode_changed(self, short, label):
         rows = self.cfg.setdefault("away", {}).setdefault("monitors", {})
-        rows.setdefault(short, {})["blackout"] = label == "blackout"
+        rows[short] = {"blackout": label == "blackout",
+                       "off": label == "off"}
         self._away_sync()
         self._save()
 
@@ -163,10 +230,18 @@ class _AwayMixin:
             return
         rec = self.monitor._away_apply_row(
             {"short": short, "gdi": r["gdi"], **self._away_rect(short)},
-            self._away_row_blackout(short), self._away_level())
+            self._away_row_mode(short), self._away_level())
         self._away_says[short] = rec["status"]
-        if rec["status"].startswith("blackout"):
-            self._away_rise(True)        # the dialog above the paint
+        if rec["status"].startswith("blackout") or \
+                rec["status"].startswith("off"):
+            self._away_rise(True)        # the dialog above the paint -
+            #                    and above the DARK: an off row turns
+            #                    the panel itself off, so the settings
+            #                    window is where the eyes are (owner
+            #                    decision: the countdown ships HERE)
+            if rec["status"].startswith("off"):
+                self._away_cd_left = 10
+                self._away_countdown()
         timer = threading.Timer(10.0, lambda: self._away_expiry(short, rec))
         timer.daemon = True              # a quit with a live preview must
         timer.start()                    # never hang the process 10 s
@@ -197,6 +272,8 @@ class _AwayMixin:
     def _away_done(self, short, rec, verdict, manual):
         self._away_jobs.pop(short, None)
         self._away_rise(False)
+        self._away_cd_left = 0            # the chain stops at its next
+        set_text(self._away_cd, "")       # tick; the word goes now
         r = self._away_rows.get(short)
         if r is not None:
             set_text(r["preview"], "preview")
@@ -253,7 +330,9 @@ class _AwayMixin:
                         r[key].configure(state=state)
                     except Exception:
                         pass
-            if self._away_row_blackout(short):
+            if self._away_row_mode(short) != "dim":
+                # blackout hides the paint's level, off the panel's -
+                # only a DIM row has a brightness to speak of
                 r["slider"].grid_forget()
                 r["value"].grid_forget()
             elif dim:

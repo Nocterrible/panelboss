@@ -327,13 +327,25 @@ DEFAULTS = {
                                 # rows get a black overlay, dim rows lose
                                 # HDR and drop to dim_level (no cold ODM
                                 # re-enumeration on wake)
-        "monitors": {},         # EDID short -> {"blackout": bool}. True
-                                # = the overlay; False or absent in dim
-                                # mode = the Dim sub-mode. The rows the
-                                # retired hdr-while-away toggle promised
-                                # arrive here by migration (see
-                                # _migrate_away): that promise read
-                                # honestly IS the dim sub-mode
+        "monitors": {},         # EDID short -> {"blackout": bool, "off":
+                                # bool} (normalize's shape; the loader
+                                # also takes the bare bool and a bare
+                                # "blackout"/"dim"/"off" string). The
+                                # off sub-mode is YOUNG: rows without
+                                # the key simply answer False (no
+                                # migration it must perform). True
+                                # "off" = the real power opcode
+                                # (VCP 0xD6) through wm/_bright.py's
+                                # door - the panel IS the overlay; a
+                                # write refused after the budget
+                                # degrades that row to blackout with
+                                # the confession on its status word
+                                # (the PROBE LAW's two honest halves,
+                                # AUDIT-PUNCHLIST 60121ed). In dim
+                                # mode an absent row is a dim row -
+                                # the migration promise, and the
+                                # honest default for a panel that
+                                # joined after the config was written
         "dim_level": 10,        # brightness %% for the dim rows, clamped
                                 # 1..40 - measured law (wm/_bright.py):
                                 # some panels accept brightness writes
@@ -602,6 +614,7 @@ def normalize_camera_modes(value):
 
 
 AWAY_MODES = ("off", "dim")
+AWAY_ROW_MODES = ("blackout", "dim", "off")   # the per-row sub-modes
 DIM_LEVEL_FLOOR = 1                 # the dim sub-mode never means black
 DIM_LEVEL_CEIL = 40                 # past this the fake-off is a rumor
 
@@ -633,11 +646,23 @@ def normalize_away(value):
             if not short:
                 continue
             if isinstance(row, bool):
-                rows[short] = {"blackout": row}
-            elif isinstance(row, dict) and "blackout" in row:
-                rows[short] = {"blackout": bool(row["blackout"])}
+                rows[short] = {"blackout": row, "off": False}
+            elif isinstance(row, str) and \
+                    row.strip().lower() in AWAY_ROW_MODES:
+                v = row.strip().lower()
+                rows[short] = {"blackout": v == "blackout",
+                               "off": v == "off"}
+            elif isinstance(row, dict) and ("blackout" in row or
+                                            "off" in row or "mode" in row):
+                v = str(row.get("mode") or "").strip().lower()
+                if v in AWAY_ROW_MODES:
+                    rows[short] = {"blackout": v == "blackout",
+                                   "off": v == "off"}
+                else:
+                    rows[short] = {"blackout": bool(row.get("blackout")),
+                                   "off": bool(row.get("off"))}
             else:
-                log.warning("away monitor %r: %r is not a blackout row; "
+                log.warning("away monitor %r: %r is not an away row; "
                             "the monitor keeps the dim default", short,
                             row)
     return {"mode": mode, "monitors": rows, "dim_level": level}

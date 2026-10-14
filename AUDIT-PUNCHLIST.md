@@ -621,6 +621,45 @@ dim 0..N via app door (works on the AOC despite the deaf reply channel)
 path-set (EXPERIMENTAL rung, no-UAC, pending first test) -> the physical
 button, undefeated.
 
+DOSSIER UPDATE (Oct 14 pm, off-wave probe - scripts/sdc_off_probe.py,
+every rc recorded in its output):
+- IDENTITY (owner's word is the only court): the CONTROL panel is the
+  IOC912B row on \.\DISPLAY2, DIRECTLY attached (its friendly name
+  GA27W1Q is a marketing-string artifact - the profiles doctrine
+  applies; the probe joins by gdi SOURCE PATH, never by name). The
+  AW2725Q/DEL-stamped row is out of today's record (stamp and name
+  disagree). The KVM belongs to the AOC2790 / U2790B on \.\DISPLAY1.
+- OFF RUNG WITNESSED (owner's eyes): the IOC "blinked dark" under the
+  D6=4 burst (4/5 ACK, one transient 0xC0262582 - the retry law
+  measured live) and returned under D6=1 (3/3). The rung is REAL on a
+  directly attached panel; the morning's probe-era NO verdict dies
+  here - retry discipline was the missing feature, not the wire.
+- THE POWER REGISTER LIES: the D6 read answered val=1 (on) through
+  the entire dark window (and a clean single write + 1/2/3 s re-reads
+  hold 1). The register does not track DPMS state, so the app can
+  NEVER verify off from it - "off (unverified)" is the machine-side
+  honest word by law, and the preview is the human judge. (Also:
+  NULL pVCPFeature answers 0x57 from this OS - part of the morning's
+  "reads are deaf" was argument shape, not the panel.)
+- RUNG (b) SetDisplayConfig path-set: DEAD AT ENTRY on 26220/NVIDIA.
+  Read leg lives (GBS(2)/Query decode 3 paths/6 modes clean; flags
+  0x1 and 0x0 answer 0x57 - my first pass's "24H2 regression at the
+  READ" was my own wrong flag, corrected in-record), but SetDisplay-
+  Config answers 0x57 for EVERY shape: retracted apply, as-is apply,
+  VALIDATE|USE_SUPPLIED both ways, even no-array TOPO_MIN/TOPO_ACTIVE.
+  The prior-art calls do not survive this stack; closed with evidence.
+- AOC D6 rerun under the full retry law, this session: INCONCLUSIVE
+  from the scratch process - 20/20 calls gle 0xC0262582, the
+  brightness read included, the same door the owner's eyes proved
+  alive hours earlier. The probe cannot address this bus beside the
+  live app (PROBE LAW rule 1); tonight's UAT - app Preview button,
+  off row, KVM parked on this PC - is the instrument.
+- LADDER (current truth): blackout (every panel, owned) -> dim via
+  app door (proven on the AOC) -> off via 0xD6 WITNESSED on the
+  direct panel, register cannot verify, AOC verdict pending the
+  app-door UAT -> [devnode: mark-only, twice-witnessed; SDC path-set:
+  dead-at-entry - both CLOSED] -> the physical button, undefeated.
+
 ## Wave E1 (cadence law, SHIP @ 8d30a6c) - gate ledger lines
 - OWNER DESK RESIDUE: the violation-era boot wrote stock always_fallback
   _poll_sec=10 into the live toml BEFORE the law existed; the wave-B
