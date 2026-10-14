@@ -319,6 +319,27 @@ DEFAULTS = {
                                  # (state-side clamp already covers
                                  # hand-built cfgs)
     },
+    "away": {
+        "mode": "off",          # "off" = the stock SC_MONITORPOWER broadcast
+                                # (today's behavior); "dim" = play dead
+                                # instead of asleep: the panels stay awake
+                                # and the app paints the dark - blackout
+                                # rows get a black overlay, dim rows lose
+                                # HDR and drop to dim_level (no cold ODM
+                                # re-enumeration on wake)
+        "monitors": {},         # EDID short -> {"blackout": bool}. True
+                                # = the overlay; False or absent in dim
+                                # mode = the Dim sub-mode. The rows the
+                                # retired hdr-while-away toggle promised
+                                # arrive here by migration (see
+                                # _migrate_away): that promise read
+                                # honestly IS the dim sub-mode
+        "dim_level": 10,        # brightness %% for the dim rows, clamped
+                                # 1..40 - measured law (wm/_bright.py):
+                                # some panels accept brightness writes
+                                # and never obey them; those degrade to
+                                # blackout with a confession, never silent
+    },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
                                 # profile the app re-applies by itself
@@ -580,6 +601,98 @@ def normalize_camera_modes(value):
     return out
 
 
+AWAY_MODES = ("off", "dim")
+DIM_LEVEL_FLOOR = 1                 # the dim sub-mode never means black
+DIM_LEVEL_CEIL = 40                 # past this the fake-off is a rumor
+
+
+def normalize_away(value):
+    """[away] in its in-memory shape: {mode, monitors, dim_level}. A
+    mode the engine has never heard of warns and falls back to the
+    stock "off" (the file's other answers still stand); dim_level
+    clamps to 1..40 (a 0%% "dim" is a blackout that lied about itself,
+    a 90%% one is nobody dimming anything); monitor rows accept the
+    bare-bool shorthand (A = true means {"blackout": true}) and drop
+    malformed rows with a warning naming them."""
+    value = value if isinstance(value, dict) else {}
+    mode = value.get("mode", "off")
+    if mode not in AWAY_MODES:
+        log.warning("away mode %r is unknown; the screens go off as "
+                    "they always did", mode)
+        mode = "off"
+    try:
+        level = int(value.get("dim_level", 10))
+    except (TypeError, ValueError):
+        level = 10
+    level = max(DIM_LEVEL_FLOOR, min(DIM_LEVEL_CEIL, level))
+    rows = {}
+    raw = value.get("monitors")
+    if isinstance(raw, dict):
+        for short, row in raw.items():
+            short = str(short).strip()
+            if not short:
+                continue
+            if isinstance(row, bool):
+                rows[short] = {"blackout": row}
+            elif isinstance(row, dict) and "blackout" in row:
+                rows[short] = {"blackout": bool(row["blackout"])}
+            else:
+                log.warning("away monitor %r: %r is not a blackout row; "
+                            "the monitor keeps the dim default", short,
+                            row)
+    return {"mode": mode, "monitors": rows, "dim_level": level}
+
+
+def _live_shorts():
+    """The desk's panel shorts, for the migration's rows. A seam on
+    purpose: the suite patches this instead of the Win32 enum, and a
+    desk we cannot read simply gets no rows (the absent-row default is
+    the same dim sub-mode the migration promises anyway)."""
+    from . import wm
+    return [m["short"] for m in wm.monitors()]
+
+
+def _migrate_away(merged):
+    """The retired hdr-while-away toggle (the GLOBAL
+    [power] hdr_off_when_away bool - this codebase never shipped the
+    per-monitor table the feature packet first described) becomes the
+    away.dim sub-mode it already promised: the live desk's monitors
+    appear as blackout-false rows, the mode becomes "dim", and the
+    fossil key STAYS in the file readable for one release (downgrade
+    honesty: an older build finding it finds its switch untouched).
+    E-day law: consent-silent files only - a file whose [power]
+    section never said true is nobody's consent, and a file that
+    already carries an [away] section is stamped and hands off. One
+    named INFO line per migrated row. Persists right away, the way
+    the first-run defaults do, so the truth is told exactly once."""
+    try:
+        power_raw = merged.get("_raw_power")
+        if power_raw is None or power_raw.get("hdr_off_when_away") \
+                is not True:
+            return False
+        away = merged.setdefault("away", {})
+        # copy, never mutate: the shallow default-merge shares this
+        # dict with DEFAULTS, and a row written into the stock section
+        # would poison every later get_config in the process
+        rows = dict(away.get("monitors") or {})
+        away["monitors"] = rows
+        away["mode"] = "dim"
+        for short in _live_shorts():
+            if short not in rows:
+                rows[short] = {"blackout": False}
+            log.info("away migration: %s inherits the hdr-while-away "
+                     "consent as the Dim sub-mode", short)
+        log.info("away migration: the retired hdr_off_when_away toggle "
+                 "is now away.mode=dim (the key stays readable one "
+                 "release); the away card on the detection tab is its "
+                 "headstone")
+        return True
+    except Exception as exc:              # migration never blocks a boot
+        log.warning("away migration failed; the desk stays on the "
+                    "old path: %s", exc)
+        return False
+
+
 def find_config(dir=CONFIG_DIR, config_name="config.toml"):
     """Returns the config path, creating parent directories."""
     if not os.path.exists(dir):
@@ -642,6 +755,25 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
         for key in ("hold_display", "hold_sleep"):
             if key not in loaded:
                 power_merged[key] = bool(legacy)
+    # the away migration (retired hdr-while-away toggle -> dim sub-mode
+    # rows) reads the FILE's own answers, never the default-merged
+    # dict: a stock false is not consent, and a file already holding an
+    # [away] section is stamped and hands off (idempotent by
+    # construction - the migrated file wakes up stamped). The raw power
+    # view rides in on an underscore key (the writer skips those) and
+    # is dropped again before the dict ships.
+    merged["_raw_power"] = config.get("power") if isinstance(config, dict) \
+        else None
+    if "away" not in config and _migrate_away(merged):
+        try:
+            write_config(merged, path)
+            log.info("away migration: the file learned its [away] "
+                     "section in place")
+        except Exception:
+            log.exception("away migration: the rows computed but the "
+                          "write failed; recomputed next boot")
+    merged.pop("_raw_power", None)
+    merged["away"] = normalize_away(merged.get("away"))
     if verbose:
         log.debug(f"using config from {path}")
     # [camera] index and name_contains normalize to one in-memory shape
