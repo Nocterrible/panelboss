@@ -271,3 +271,39 @@ suites re-greened by the gate itself. V PASS on the wave (deep
 channel). OWED EVIDENCE at tag time: owner-eye AOC preview, live
 armed dim-spell witness, full app-down gauntlet re-witness at this
 tip (tray must be down; scheduled after UAT).
+
+## ADDENDUM 5 (Oct 14, late) - FINAL-GATE v1 VERDICT: BLOCK, and it was right
+Three blockers, all process-grade, all accepted without argument:
+(1) GAUNTLET NOT RE-WITNESSED at the tagged tip - the no-honor-system law
+the 13e tag honored; 14b tried to slip. Running after UAT (tray must be
+down): full run_all, app down, ALL GREEN + completeness line as the log
+artifact, header/CHANGELOG version evidence moved to the new tip in the
+same breath (the gate noted version proof stops at 0.2.0/6d3edbd).
+(2) PACKAGE RANGE LIE - header still described 45fcc38..93c9cc3 while the
+submission covered 93c9cc3..14b. Header rewritten + fresh named receipt
+artifacts (range patch, gate logs) before resubmission.
+(3) THE HEADLINE CLAIM FLOATED ON A SCRATCH PROBE - the witnessed IOC
+blackout was real (owner's eyes) but sdc_off_probe.py is exactly the
+contaminated-probe class the probe law bans as a capability witness.
+The law turns on its authors: the IOC off-preview through the SHIPPING
+app (card -> dim -> IOC row -> off -> Preview) is the missing witness;
+one click on a proven-directly-attached panel converts eyes-graded
+folklore into admissible evidence. AOC/KVM leg stays UNKNOWN-selectable
+if inconclusive - the gate explicitly blessed that ship shape.
+NOTES ACCEPTED, LANDED THIS ADDENDUM: (a) boot belt re-light semantics
+SHIPPED AS MEANT - it wakes hand-offed panels at boot; the alternative
+(stranded-dark after a mid-spell quit, reviewer F1) is the worse demon;
+documented in the belt's docstring, no code change. (b) Release note
+"unchecking every camera leaves camera 0 on the next restart" - owed
+sentence, lands in CHANGELOG. (c) Cadence honesty: the config override
+always_fallback_poll_sec=10 on a hand-edited desk outranks the 1 s
+default; the card label must speak the EFFECTIVE number (fix queued
+for the gate-fix's wake - one-line read-through in the label builder).
+(d) camera.py/_events.py size deferrals stand - this range grew neither
+(state/ui/wm/config files only). README staleness was fixed at the
+raw-input commit; the receipt is that commit's message, named here for
+the next submission.
+RESUBMISSION CONTRACT: one message again, this addendum + rewritten
+header + named logs + shipping-path witness lines; the gate's RISK line
+(KVM panel wake-from-off unverifiable by register) is quoted into the
+off-row TIP wording so the product itself confesses the limitation.
