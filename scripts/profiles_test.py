@@ -162,6 +162,8 @@ class FakeWM:
         self.pressed, self.placed, self.rescued = [], [], []
         self.hdr, self.sets = hdr or [], []
         self.launches = []
+        self.commit_rc = 0             # the gate's finding 4 knob:
+        #                    a fake whose FINAL commit died (-3 class)
 
     def monitors(self):
         return self.mons
@@ -191,10 +193,18 @@ class FakeWM:
                 refused.append((e.get("short") or e["gdi"],
                                 DC.RC_WHY.get(rc, "the driver answered %d"
                                               % rc)))
-        lines.append("commit -> 0")
+        lines.append("commit -> %d" % self.commit_rc)
+        if self.commit_rc not in (0, 1):
+            # the engine's finding-4 line, mirrored faithfully (the
+            # fake's whole law since the test-only-truth correction):
+            # a dead commit is REFUSED IN WORDS, named 'commit'
+            lines.append("refused commit: %s (desk left partial)"
+                         % DC.RC_WHY.get(
+                             self.commit_rc,
+                             "the driver answered %d" % self.commit_rc))
         for who, why in refused:
             lines.append("refused %s: %s (desk left partial)" % (who, why))
-        return not refused, lines
+        return self.commit_rc in (0, 1) and not refused, lines
 
     def press_keys(self, combo):
         self.pressed.append(combo)
@@ -459,15 +469,43 @@ try:
     assert " - applied: " not in say6, say6
     assert info6.get("no_shows", []) == [], "refused apply chased windows"
 
-    # THE PARTIAL DESK (the loud-voice wave): AAA died, BBB took the
-    # mode - the sentence owes BOTH halves: WHAT refused (short + the
-    # human rc word) and WHAT DID apply, terse.
+    # THE PARTIAL DESK (the loud-voice wave, then the gate's finding
+    # 1): AAA died, BBB took the mode - and BOTH halves of the
+    # sentence speak PROFILE SHORTS. The old applied clause re-parsed
+    # the enable rows and leaked the raw GDI slot
+    # ("\\.\DISPLAY2 1920x1080@144") into a sentence whose refusal
+    # half correctly shouted shorts: half-lawful. Applied is built
+    # from the entries now - the no-slot pin below is the law's
+    # teeth.
     ok6, say6, f6, _, info6 = scenario([TARGET], ok=[AAA["gdi"]])
     assert not ok6, say6
     assert "layout refused" in say6 and "refused AAA" in say6, say6
     assert "the driver failed the switch" in say6, say6
-    assert " - applied: " in say6 and BBB["gdi"] in say6, say6
+    assert " - applied: BBB" in say6, say6      # the SHORT applies
+    assert r"\\.\DISPLAY" not in say6, say6     # no slot, half or whole
     assert not f6.placed, "a refused apply chased windows"
+
+    # A DEAD COMMIT (the gate's finding 4): every row took its mode
+    # and the final commit answer died (-3, the registry class) -
+    # the numberless truth must ride the refuse-commit row through
+    # the SAME refusal filter (free coverage), and the applied clause
+    # must STAY SILENT: a dead commit applied NOTHING, whatever the
+    # per-panel rows say. The old shape was a bare "commit -> -3":
+    # a number without a word, untestable and unreadable.
+    tmp6 = tempfile.mkdtemp()
+    profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
+                   "last": {}, "profiles": {"p": prof6}}, tmp6)
+    f6 = FakeWM(DESK, [TARGET], True)
+    f6.commit_rc = -3
+    profiles.wm = f6
+    ok6, say6, _info6 = profiles.apply(profiles.load(tmp6), "p",
+                                       dir=tmp6)
+    assert not ok6, say6
+    assert ("refused commit: the registry could not be written"
+            in say6), say6
+    assert " - applied: " not in say6, say6     # dead commit, zero claims
+    assert r"\\.\DISPLAY" not in say6, say6
+    assert not f6.placed, "a dead commit chased windows"
 
     # 6b) the open pin: a seat whose app is not running starts the
     # exe it saved (or the launcher the user browsed to), waits as

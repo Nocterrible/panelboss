@@ -210,6 +210,13 @@ def apply_layout(entries):
                             RC_WHY.get(rc, "the driver answered %d" % rc)))
     rc = u32.ChangeDisplaySettingsExW(None, None, None, 0, None)
     lines.append("commit -> %d" % rc)
+    if rc not in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART):
+        # the gate's finding 4: a bare commit number is a wordless
+        # sentence - the FINAL commit answers through the same
+        # RC_WHY law, named 'commit' (no panel owns it), and the
+        # profiles.py refusal filter covers it for free
+        lines.append("refused commit: %s (desk left partial)"
+                     % RC_WHY.get(rc, "the driver answered %d" % rc))
     for who, why in refused:
         lines.append("refused %s: %s (desk left partial)" % (who, why))
     ok = rc in (DISP_CHANGE_SUCCESSFUL, DISP_CHANGE_RESTART)

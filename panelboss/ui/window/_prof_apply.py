@@ -1,9 +1,9 @@
 """Profiles tab verbs: mode edits, profile create and
 apply, the noshows dialog, rescue.
-Size law (measured 498, Oct 14 loud-voice wave recount - the claim
-includes its own lines; done()'s flag-before-repaint, the cross-tab
-balloon and the hdr save's confession added the last thirty-one to
-the Oct-13 467): the apply pipeline is one transaction -
+Size law (measured 516, Oct 14 fix-round recount - the claim
+includes its own lines; the mid-apply flag formula and the guarded
+rescue added the last eighteen to the loud-voice 498): the apply
+pipeline is one transaction -
 snapshot, layout plan, dialog, rescue - whose halves argue over
 shared state; split cost paid per read beats the split itself here.
 """
@@ -371,8 +371,15 @@ class _ModeMixin:
                 # the loud-voice wave: the flag goes up BEFORE the
                 # repaint - _fill_status reads it on this very render
                 # (the voice lives at the gaze; profiles_ui_test 8c
-                # pins the danger paint and the placement)
-                self._prof_err = not ok
+                # pins the danger paint and the placement). The
+                # gate's finding 2: a user who moved to another
+                # profile MID-APPLY must not inherit stale red on
+                # that pane's next render - the shout belongs to the
+                # profile that was applied, and the balloon below
+                # still carries the moved-on truth (it fires on not
+                # ok, sel-independent).
+                self._prof_err = (not ok) and (
+                    self._prof_sel == self._applied_name)
                 if self._prof_sel == self._applied_name:
                     self._profiles_render()
                 else:                            # the user switched
@@ -471,7 +478,18 @@ class _ModeMixin:
 
 
     def _rescue_now(self):
-        brought = wm.rescue_lost()
+        try:
+            brought = wm.rescue_lost()
+        except Exception as e:
+            # the gate's WORSE-SIBLING finding: rescue walks the
+            # window manager for every off-screen title, and the
+            # create-now silent-death class is verbatim here - an
+            # unguarded raise in a Tk callback dies in the loop's
+            # mouth and the button just looks dead. Confess on the
+            # R8 line instead (the audit's silent-sibling list, one
+            # entry shorter).
+            self._mode_fail("rescue: %s" % e)
+            return
         self._prof_msg = ("brought back: %s" % ", ".join(brought)
                           if brought else "nothing was off screen")
         self._prof_err = False    # rescue speaks for itself; the old

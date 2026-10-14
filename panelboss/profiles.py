@@ -814,18 +814,31 @@ def apply(data, name, best_effort=False, scope="full", login=False,
                 # CONTENT LAW (loud-voice wave): the sentence says
                 # WHAT REFUSED - every refusal line, the panel's
                 # short and the driver's human word - and, on a
-                # partial desk, WHAT DID apply (the enable rows the
-                # driver took). The old lines[-1:] truncation made a
-                # two-dead-panel desk name one of them.
+                # partial desk, WHAT DID apply. The gate's fix round
+                # (finding 1) makes the applied half speak ENTRIES
+                # (short-or-gdi, the SAME expression the refusal
+                # tuples use) - the old enable-row re-parse leaked
+                # raw GDI slots into the human sentence, a half-
+                # lawful violation of the wave's own short-name law.
+                # The enable rows are never reparsed; membership is
+                # decided by whether a refusal line addresses the
+                # panel, the same expression for both halves.
+                def who(e):
+                    return e.get("short") or e["gdi"]
                 refusals = [t for t in lines
                             if t.startswith("refused ")]
-                applied = [t.partition(" -> ")[0][len("enable "):]
-                           for t in lines
-                           if t.startswith("enable ")
-                           and t.rpartition(" -> ")[2] in ("0", "1")]
+                applied = [who(e) for e in entries
+                           if not any(("refused %s:" % who(e)) in t
+                                      for t in refusals)]
                 say = "layout refused: " + "; ".join(
                     refusals or lines[-1:])
-                if refusals and applied:
+                # a DEAD COMMIT applies nothing (the whole staged
+                # change never landed): the refuse-commit row, when
+                # present, silences the applied clause - the sentence
+                # then names only the truth that survives (finding 4)
+                if refusals and applied and not any(
+                        t.startswith("refused commit:")
+                        for t in refusals):
                     say += " - applied: " + ", ".join(applied)
                 return False, say, {}
 
