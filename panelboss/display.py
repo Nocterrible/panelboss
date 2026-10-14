@@ -560,8 +560,9 @@ class Display(threading.Thread):
                 self._lift_now("key")
         elif head.dwType == RIM_TYPEMOUSE:
             mo = RAWMOUSE.from_buffer_copy(raw, base)
-            if mo.flags & 0x02:                # MOUSE_FLAG_ABSOLUTE:
-                return                         # tablets do not count
+            if mo.flags & 0x01:                # MOUSE_MOVE_ABSOLUTE (0x01;
+                return                         # 0x02 is VIRTUAL_DESKTOP -
+                                               # gate finding 2's one-liner)
             ox, oy = self._lift_origin or (0, 0)
             ox += mo.lastX
             oy += mo.lastY

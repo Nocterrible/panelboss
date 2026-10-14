@@ -417,6 +417,7 @@ def test_hook_lifecycle():
               "unregisters, re-spell re-registers")
         print("ok - cadence: armed (or noting) pumps at 20 ms, deaf at "
               "100 ms - and the LL trio is never touched")
+        assert fake.hook_calls == [], "the tombstone: no phase, ever"
     finally:
         led.undo()
 
