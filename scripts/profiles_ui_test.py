@@ -580,9 +580,6 @@ def check_8e():
             print("[teardown TclError tolerated: %s]" % str(why)[:60])
     except Exception:
         _fail("check_8e")
-    print("WATCHDOG FIRED after 60 s", flush=True)
-    FAILED.append("watchdog")
-    app.destroy()
 
 
 # hard backstop (gaming_ui_test.py:449-461 shape): if the Tk event
@@ -595,6 +592,20 @@ def _hard_kill():
           "processing - killing so the sweep cannot hang",
           flush=True)
     os._exit(3)
+
+
+def _watchdog():
+    # the 8c chain replaced the linear runner, and with it the module's
+    # ONLY reference to this name - first app-down run of the whole
+    # file (Oct 14 ceremony) found the scaffold calling a function the
+    # chain had never defined. Defined now, with the census instrument
+    # so a future bite names itself (gaming_ui's model).
+    print("WATCHDOG FIRED after 60 s", flush=True)
+    for t in threading.enumerate():
+        print("  thread:", t.name, "daemon=", t.daemon,
+              "alive=", t.is_alive(), flush=True)
+    print("WINDOW TEST FAILED in ['chain', 'watchdog']", flush=True)
+    os._exit(1)
 
 
 threading.Thread(target=_hard_kill, daemon=True).start()
