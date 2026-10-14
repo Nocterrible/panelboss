@@ -589,6 +589,38 @@ fact about THIS app's attempts, timestamped - not the firmware's soul;
 (4) probes that must run against a live app's hardware say so in their
 own output and their conclusions are labeled PROVISIONAL.
 
+## AOC PANEL DOSSIER (Oct 14, evening - supersedes all earlier AOC verdicts)
+THE PANEL LIVES BEHIND A KVM (owner fact). Everything today's probes saw
+- selective reply-deafness, transient 0xC026258B checksum corruption,
+the panel "vanishing from the desktop" mid-probe, EDID claims that the
+channel cannot deliver - is consistent with DDC lines through a switch
+whose EDID/DDC pass-through is partial. Capability claims about this
+panel are ONLY valid with the KVM parked on this PC; the owner's UAT
+must state the KVM position, or the row label reads "via KVM, partial
+pass-through assumed".
+EXPERIMENTS RUN (elevated, twice + watched retest):
+- MONITOR DEVNODE DISABLE (pnputil /disable-device UID295169): kernel
+  says disabled (status=Error), CCD desk unchanged, PANEL UNCHANGED per
+  owner's eyes both runs. VERDICT: mark-only on this stack. The devnode
+  rung is DEAD for per-monitor off here (literature camp: contested ->
+  settled-skeptical on NVIDIA WDDM 3.2 + KVM).
+- OPEN RUNGS: (a) DDC/CI VCP 0xD6 - already in flight in the off-submode
+  wave, now with the KVM footnote; (b) SetDisplayConfig PATH-SET minus
+  the AOC path (no elevation, prior art: SO 57136638 / MartinGC94
+  Disable-Display / OSR thread; counterweight: 24H2 regression reports
+  - test IN-APP before believing either), the suspected mechanism of
+  Settings' Disconnect; (c) if (b) works: topology churn is the price -
+  Win11's remember-window-positions is the safety net to verify (the
+  survey's observable O3).
+- SECURITY EVENTS 6419/6420 did not fire this session (event filter
+  found 6416-6420 range only if auditing enabled - uninformative run,
+  re-check with auditing if the elevation matrix ever matters).
+LADDER (owner's design, current truth): blackout (every panel, owned) ->
+dim 0..N via app door (works on the AOC despite the deaf reply channel)
+-> off via 0xD6 with retries (UNKNOWN through KVM, in flight) -> off via
+path-set (EXPERIMENTAL rung, no-UAC, pending first test) -> the physical
+button, undefeated.
+
 ## Wave E1 (cadence law, SHIP @ 8d30a6c) - gate ledger lines
 - OWNER DESK RESIDUE: the violation-era boot wrote stock always_fallback
   _poll_sec=10 into the live toml BEFORE the law existed; the wave-B
