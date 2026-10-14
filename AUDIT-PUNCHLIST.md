@@ -574,6 +574,21 @@ byte-probed against the live OS; HANDLE-trap sweep clean)
   rc=4 + guard_test (888857c); TclError flags, NIM_ADD anti-vacuous, scratch
   hygiene; PANELBOSS_CONFIG_DIR corrected.
 
+## PROBE LAW (owner correction, Oct 14): contaminated verdicts are worse
+## than no verdict
+A scratch-process probe sharing a flaky bus (or mutex, or handle table)
+with the LIVE APP measures the COEXISTENCE, not the hardware. Evidence
+today: one-shot DDC/CI writes from probe processes "proved" the AOC's
+DDC dead and its power opcode firmware-refused - the same panel dims
+and restores through the app's own in-process retrying door (owner's
+eyes). Standing rules: (1) hardware capability verdicts are admissible
+ONLY from the shipping code path with its full retry budget; (2) an
+unanswered write after retries = UNVERIFIED-TRUST (reply-deaf panels
+are a documented class), never "refused"; (3) "refused" is only ever a
+fact about THIS app's attempts, timestamped - not the firmware's soul;
+(4) probes that must run against a live app's hardware say so in their
+own output and their conclusions are labeled PROVISIONAL.
+
 ## Wave E1 (cadence law, SHIP @ 8d30a6c) - gate ledger lines
 - OWNER DESK RESIDUE: the violation-era boot wrote stock always_fallback
   _poll_sec=10 into the live toml BEFORE the law existed; the wave-B
