@@ -57,6 +57,24 @@ WM_DISPLAYCHANGE = 0x7E        # the color/topology broadcast (amendment
 WS_VISIBLE = 0x10000000        # the delivery shape for the above
 WS_EX_TOOLWINDOW = 0x80        # (visible but nowhere to be seen)
 
+WM_DISPLAYCHANGE = 0x007E      # topology moved: the brightness handles
+                               # may be stale (see _bright.invalidate;
+                               # honest limit: a message-only window
+                               # never hears this broadcast, the
+                               # refusal-self-heal is the real law)
+
+# low-level input hooks (the away-lift ears): LL hooks fire on the
+# thread that installed them and that thread already pumps (the
+# watcher's own PeekMessageW loop), so they ride the EXISTING window
+# thread - no second listener anywhere
+WH_KEYBOARD_LL = 13
+WH_MOUSE_LL = 14
+WM_KEYDOWN = 0x0100
+WM_MOUSEMOVE = 0x0200
+MOUSE_WAKE_PX = 20             # the debounce law: cursor jitter must
+                               # not wake a dimmed desk; movement
+                               # counts only past this from its anchor
+
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x1       # keep the box awake while we poll the camera
 ES_DISPLAY_REQUIRED = 0x2      # resets the display idle timer (wake fallback)
@@ -146,6 +164,34 @@ _ACTIVE = []                   # the live Display, one per process: a
                                # through this one-slot list
 
 
+class KBDLLHOOKSTRUCT(ctypes.Structure):         # only the mouse case
+    _fields_ = [("vkCode", wintypes.DWORD),      # reads its struct
+                ("flags", wintypes.DWORD),
+                ("time", wintypes.DWORD),
+                ("extra", ctypes.c_ulonglong)]   # ULONG_PTR, x64-honest
+
+
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [("pt", wintypes.POINT), ("mouseData", wintypes.DWORD),
+                ("flags", wintypes.DWORD), ("time", wintypes.DWORD),
+                ("extra", ctypes.c_ulonglong)]
+
+
+HOOKPROTYPE = WINFUNCTYPE(ctypes.c_longlong,     # LRESULT, x64 wide
+                          ctypes.c_int,          # nCode
+                          ctypes.c_ulonglong,    # WPARAM
+                          ctypes.c_longlong)     # LPARAM
+
+u32.SetWindowsHookExW.argtypes = [ctypes.c_int, ctypes.c_void_p,
+                                  ctypes.c_void_p, wintypes.UINT]
+u32.SetWindowsHookExW.restype = ctypes.c_void_p
+u32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int,
+                               ctypes.c_ulonglong, ctypes.c_longlong]
+u32.CallNextHookEx.restype = ctypes.c_longlong
+u32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+u32.UnhookWindowsHookEx.restype = wintypes.BOOL
+
+
 def _def_window(h, m, w, l):
     if m == WM_DISPLAYCHANGE and _ACTIVE:
         # amendment 8's ear: WM_DISPLAYCHANGE (HDR flip, mode change,
@@ -157,7 +203,16 @@ def _def_window(h, m, w, l):
         # WS_EX_TOOLWINDOW at -32000 is the shape: on screen
         # nowhere, in Alt+Tab never.
         try:
-            _ACTIVE[0].queue.put(("displaychange", 0.0, time.time()))
+            _ACTIVE[0]._display_moved()      # the away wave's second
+            #                                duty rides the SAME branch
+            #                                (the merge law): post the
+            #                                event AND invalidate the
+            #                                brightness handles - the
+            #                                topology moving makes the
+            #                                HMONITOR-scoped DDC/CI
+            #                                cache suspect, and the
+            #                                hdrwatch arm reads the
+            #                                queue event
         except Exception:
             pass               # a dying watcher loses an event, not
                                # the process; state fail-opens anyway
@@ -184,6 +239,11 @@ class Display(threading.Thread):
                                           # broadcast we noticed
         self._stop = False
         self._proc = WNDPROTYPE(_def_window)   # keep the callback alive
+        self._hooks = []                       # ditto the hook procs
+        self._hhk = None                       # keyboard lift ear
+        self._hmk = None                       # mouse lift ear
+        self._lift_armed = False               # the away engine's flag
+        self._lift_origin = None               # mouse debounce anchor
         self._hwnd = None
         self._handle = None
         _ACTIVE[:] = [self]                    # the broadcast ear's route
@@ -255,6 +315,7 @@ class Display(threading.Thread):
         if not self._handle:
             log.warning("power sink refused (%s); state tracking is a bonus",
                         k32.GetLastError())
+        self._install_hooks()
         while not self._stop:
             while u32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 1):
                 # WM_DISPLAYCHANGE is NOT handled here: a broadcast
@@ -279,9 +340,17 @@ class Display(threading.Thread):
                             # the bug, one bad lParam must not kill it
                             log.exception("power record failed (lParam=%r); "
                                            "message skipped", msg.lParam)
+                elif msg.message == WM_DISPLAYCHANGE:
+                    # belt, kept honest by the ear's comment: a send
+                    # never rides this queue (measured Oct 13), so
+                    # this branch fires only for stations that DO
+                    # queue one - same method, same two duties
+                    self._display_moved()
                 u32.DefWindowProcW(msg.hWnd, msg.message, msg.wParam,
                                    msg.lParam)
             time.sleep(0.1)
+        self._unhook()                         # the lift ears die with
+        #                                      the thread, cradle to grave
         try:
             u32.UnregisterPowerSettingNotification(self._handle)
             u32.DestroyWindow(self._hwnd)
@@ -298,8 +367,75 @@ class Display(threading.Thread):
         self.last_event = time.monotonic()
         self.queue.put(("monitor", float(flag), self.last_event))
 
+    # -------------------------------------------------------- the lift ears --
+    def _install_hooks(self):
+        """Both LL ears on THIS pumping thread (the packet's law: the
+        watcher already owns a window-proc thread, no second listener).
+        Procs kept alive exactly like _proc - a collected callback is
+        a call into freed trampolines."""
+        kb = HOOKPROTYPE(self._hook_key)
+        ms = HOOKPROTYPE(self._hook_mouse)
+        self._hooks = [kb, ms]
+        self._hhk = u32.SetWindowsHookExW(WH_KEYBOARD_LL, kb, None, 0)
+        self._hmk = u32.SetWindowsHookExW(WH_MOUSE_LL, ms, None, 0)
+        if not (self._hhk and self._hmk):
+            log.warning("input lift ears refused (%s); the dimmed desk "
+                        "wakes on the idle gate alone (one tick slower)",
+                        k32.GetLastError())
+
+    def _unhook(self):
+        for h in (self._hhk, self._hmk):
+            if h:
+                u32.UnhookWindowsHookEx(h)
+        self._hhk = self._hmk = None
+
+    def _hook_key(self, code, wparam, lparam):
+        # the hook cost law: flag-check, one int compare, straight to
+        # CallNextHookEx - allocation happens only on the one post
+        if self._lift_armed and code == 0 and wparam == WM_KEYDOWN:
+            self._lift_now("key")
+        return int(u32.CallNextHookEx(None, code, wparam, lparam) or 0)
+
+    def _hook_mouse(self, code, wparam, lparam):
+        if self._lift_armed and code == 0 and wparam == WM_MOUSEMOVE:
+            pt = MSLLHOOKSTRUCT.from_address(lparam).pt
+            anchor = self._lift_origin
+            if anchor is None:               # the arm-point anchor:
+                self._lift_origin = (pt.x, pt.y)   # jitter orbits it,
+            elif ((pt.x - anchor[0]) ** 2 +  # movement travels away
+                  (pt.y - anchor[1]) ** 2) > MOUSE_WAKE_PX ** 2:
+                self._lift_now("mouse")
+        return int(u32.CallNextHookEx(None, code, wparam, lparam) or 0)
+
+    def _lift_now(self, reason):
+        """One lift per arm (a held key fires tens of WM_KEYDOWNs a
+        second): the ears go quiet until the engine re-arms at the
+        next dark, and the engine is the only re-armor."""
+        self._lift_armed = False
+        self._lift_origin = None
+        self.queue.put(("away_lift", reason, time.monotonic()))
+
+    def _display_moved(self):
+        try:
+            from . import wm
+            wm._bright.invalidate()
+        except Exception:
+            log.debug("brightness cache nudge failed (self-heal rides)",
+                      exc_info=True)
+        self.queue.put(("displaychange", 0.0, time.monotonic()))
+
     def stop(self):
         self._stop = True
+
+
+def arm_input_lift(armed):
+    """The engine's one word to the lift ears: the hooks always run
+    (install/uninstall owns its thread's life), the flag decides
+    whether they SPEAK. Arming resets the mouse anchor, disarming
+    mid-spell is the lift's own courtesy."""
+    if watcher is not None:
+        watcher._lift_armed = bool(armed)
+        watcher._lift_origin = None
 
 
 watcher = None

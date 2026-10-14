@@ -30,6 +30,12 @@ class _EventsMixin:
                 log.warning("display queue item %r is not an "
                             "event triple; dropped", item)
                 continue
+            if event == "monitor":               # the FIRST link is the
+                try:                             # old path, untouched:
+                    self._notice_screens(now, value)  # wake-burst law
+                except Exception:
+                    log.exception("display notice failed on %r", item)
+                continue
             if event == "displaychange":
                 # amendment 8: someone moved the color state or the
                 # topology (this app's own hdr_set included - the
@@ -37,16 +43,33 @@ class _EventsMixin:
                 # reading (value 0.0 is a shape holder, not a dark
                 # claim: a color flip says nothing about the lamps);
                 # one ask upward, and the panes re-read the driver.
+                # The away wave rides the SAME event: the brightness
+                # handles were already invalidated watcher-side (the
+                # ear), and the next engage reads the desk live.
                 if getattr(self, "ui_events", None) is not None:
                     try:
                         self.ui_events.put(("hdr_sync", None))
                     except Exception:
                         log.debug("hdr_sync post failed", exc_info=True)
                 continue
-            try:
-                self._notice_screens(now, value)
-            except Exception:
-                log.exception("display notice failed on %r", item)
+            if event == "away_lift":
+                # a low-level hook (or an overlay click) says real
+                # input arrived while the desk plays dead: that IS
+                # the wake, same door the camera knocks on
+                if self.state == "off":
+                    log.info("away lifted (%s)", value)
+                    self._wake(now, 0.0)
+                continue
+            # unknown events: logged once per name, never silently
+            # dropped - the silent-ignorance class this fleet died on
+            # (HEAD's pass-through-to-notice is preserved one link up:
+            # only "monitor" is named for the screens reading)
+            if getattr(self, "_drain_seen", None) is None:
+                self._drain_seen = set()
+            if event not in self._drain_seen:
+                self._drain_seen.add(event)
+                log.info("display queue: event %r has no arm (ignored)",
+                         event)
 
     def _notice_screens(self, now, value):
         """The screens came up on their own (or went dark)."""
@@ -79,6 +102,11 @@ class _EventsMixin:
                 self._rearm("on")
             return
         if self.state == "off" and value == 1.0:
+            self._away_lift()                # a dim spell ends here too:
+                                             # the desk lit WITHOUT our
+                                             # wake seam (power button),
+                                             # the paint must not stay
+                                             # over somebody's Sunday
             if not self.previewing:          # an unexpected wake re-arms
                                              # the on table's wear clocks
                                              # like any wake - same lease

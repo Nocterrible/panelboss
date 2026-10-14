@@ -83,6 +83,10 @@ class _BootMixin:
         self._hdr_snap = []                   # gdis HDR was on at the
                                               # moment the desk went
                                               # dark (power section)
+        self.away_status = {}                 # the fake-off ledger:
+        self._away_bright = {}                # status words, brightness
+        self._away_hdr = []                   # priors, HDR snapshot
+                                              # (see state/_away.py)
         self.power_cfg = config["power"]
         self.blockers = {"error": "not checked yet", "display": [],
                          "other": []}          # window reads this live

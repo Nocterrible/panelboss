@@ -20,9 +20,11 @@ This is the old single-module state, kept as the same namespace: the
 engine is one class, so the subject parts are mixins over it (_boot:
 construction and the tick, _phase: the lit/dark counting machines,
 _power: the hold policy, the transitions and the wm layout memory,
-_policy: the per-camera vote tables and wear clock, _cams: grab,
+_away: the dim-mode substitution ledger (the fake-off), _policy: the
+per-camera vote tables and wear clock, _cams: grab,
 rotor, holds and releases, _preview: the debug lease and the frame
-slot, _events: watcher queue, wake bursts, tray commands). Every old
+slot, _hdrwatch: the HDR-wake watch arm (the freeze fix's thread),
+_events: watcher queue, wake bursts, tray commands). Every old
 name still resolves here, PresenceMonitor is the composition of the
 mixins, and the module class at the bottom fans attribute WRITES
 through to the parts - camera_policy_test patches state.time and the
@@ -41,10 +43,12 @@ import time
 
 from .. import display
 
-from . import (_boot, _cams, _events, _hdrwatch, _phase, _policy,
-               _power, _preview)
+from . import (_away, _boot, _cams, _events, _hdrwatch, _phase,
+               _policy, _power, _preview)
 
 from ._boot import _BootMixin
+
+from ._away import _AwayMixin
 
 from ._phase import _PhaseMixin
 
@@ -67,7 +71,7 @@ log = logging.getLogger("state")
 # facade is ~135 lines and the bulk IS the contract - the old docstring
 # plus the re-export roster every caller and test-patch site leans on.)
 class PresenceMonitor(_BootMixin, _PhaseMixin, _PowerMixin,
-                      _PolicyMixin, _CamsMixin, _HdrWatchMixin,
+                      _AwayMixin, _PolicyMixin, _CamsMixin, _HdrWatchMixin,
                       _PreviewMixin, _EventsMixin):
     pass
 
@@ -75,6 +79,7 @@ class PresenceMonitor(_BootMixin, _PhaseMixin, _PowerMixin,
 __all__ = [
     "FrameBox",
     "PresenceMonitor",
+    "_AwayMixin",
     "_BootMixin",
     "_CamsMixin",
     "_EventsMixin",
@@ -83,6 +88,7 @@ __all__ = [
     "_PolicyMixin",
     "_PowerMixin",
     "_PreviewMixin",
+    "_away",
     "_boot",
     "_cams",
     "_events",
@@ -100,8 +106,8 @@ __all__ = [
     "time",
 ]
 
-_FANOUT = (_boot, _phase, _power, _policy, _cams, _hdrwatch, _preview,
-           _events)
+_FANOUT = (_boot, _phase, _power, _away, _policy, _cams, _hdrwatch,
+           _preview, _events)
 
 
 class _StatePackage(type(sys.modules[__name__])):

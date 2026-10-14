@@ -38,7 +38,10 @@ class _PowerMixin:
         not deduce. Free insurance, taken once per boot."""
         log.info("%s - sending the harmless power-on", reason)
         self._release_camera()                   # exclusive device, same
-        display.wake()                           # dance as _wake
+        self._away_lift()                        # dance as _wake: a
+                                                 # dim spell never slept,
+        display.wake()                           # but an OS timeout may
+                                                 # have blanked the paint
         self._hdr_back()
         self.state = "active"
         self._rearm("on")                     # the unknown->on edge is a
@@ -64,8 +67,13 @@ class _PowerMixin:
                      now - self.last_present if self.last_present else -1,
                      score)
         self._release_camera()                   # the device is exclusive;
-                                                 # release before the screens
-        display.wake()                           # come back up
+                                                 # release before the paint
+        self._away_lift()                        # comes off the panels
+        display.wake()                           # come back up: a dim
+                                                 # desk never slept and
+                                                 # the ON is a no-op
+                                                 # there (see _force_on),
+                                                 # a timed-out one needs it
         self._hdr_back()
         self.state = "counting"
         self._rearm("on")                     # every on-table always eye
@@ -113,14 +121,23 @@ class _PowerMixin:
         keep = [i for i in self._indexes()
                 if self._table_mode(i, "off") == "always_on"]
         self._off_phase_hold(keep, "before")
-        if self.power_cfg.get("hdr_off_when_away"):
-            from .. import profiles
-            self._hdr_snap = profiles.hdr_away_off()
-            if self._hdr_snap:
-                log.info("hdr: %d display(s) off for the absence, "
-                         "the return will hand them back",
-                         len(self._hdr_snap))
-        display.turn_off()
+        # dim mode plays dead instead of asleep: the away engine owns
+        # the dark and the OFF BROADCAST IS NEVER SENT (the static ban
+        # the awaymode suite pins: no power verb below a dim engage).
+        # Stock mode falls through to today's exact path, fossil HDR
+        # key and all - readable AND honored one release, downgrade
+        # honesty both ways.
+        if self._away_engage():
+            pass
+        else:
+            if self.power_cfg.get("hdr_off_when_away"):
+                from .. import profiles
+                self._hdr_snap = profiles.hdr_away_off()
+                if self._hdr_snap:
+                    log.info("hdr: %d display(s) off for the absence, "
+                             "the return will hand them back",
+                             len(self._hdr_snap))
+            display.turn_off()
         if self.absent_since is None:
             elapsed = 0
         else:
