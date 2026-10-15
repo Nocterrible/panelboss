@@ -8,6 +8,24 @@
   ten seconds. Per-monitor opt-in, default off; wash is a request,
   never a schedule; the app states plainly that it cannot read panel
   wear counters (this desk's registers were caught lying).
+- Background dimmer (OLED tab, third card): an idle desk lowers a
+  dark click-through veil over every background window on opted-in
+  monitors - the window you touch lifts instantly, and so does
+  anything the WASAPI sound sensor HEARS (a just-silent app keeps
+  its brightness four more seconds; the hysteresis is ours, not the
+  API's). The veil geometry reads the DWM frame bounds - the GDI
+  rect lies by eight pixels around every rounded window (measured).
+  When input returns the whole field fades in at most three alpha
+  steps within the ramp (3-60 s): a dimmer that blinks is a
+  screensaver. Exclusions edit in the card; the pause toggle binds
+  press-to-key (owner law: UNBOUND by default, no stolen chords
+  before consent - the app registers the hotkey only while the
+  window's pump lives, binding while headless answers with a dated
+  word and retries once a pump exists, and a taken combo keeps its
+  predecessor and says so). The config writer learned to omit None:
+  TOML has no null, and the first None default would otherwise have
+  made the next launch call the whole file corrupt and reset every
+  setting.
 - Fixed: a stuck morning blackout on the way to this release - the
   cursor jail's Win32 verbs rode the shared user32 handle UNPINNED,
   correct only while some other module pinned them first, and an
