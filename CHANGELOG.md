@@ -3,16 +3,25 @@
 ## Unreleased - 2026-10-14 waves (rc-2026-10-14b)
 
 - Away modes: blackout, DIM (HDR off + brightness dip, honest
-  readback, preview), and OFF (the panel's own power code 0xD6
-  through the retrying brightness door; "off (unverified)" is the
-  universal word - a witness-tested panel goes DPMS-dark on a
-  write its own register refuses to confirm; its preview counts
-  the seconds on the settings window, the dark panel cannot carry
-  a digit). A display sent OFF is retracted at the adapter level and
-  the state survives the app - Windows Settings -> Display brings it
-  back, and Windows itself refuses to disconnect the last active
-  display. A boot belt re-lights any off-row left dark by a
-  crash or quit. Lock-on-away ([away] lock, default off, a checkbox
+  readback, preview), and OFF in two flavors. D6 off sends the
+  panel's own power code 0xD6 through the retrying brightness door;
+  "off (unverified)" is its universal word - a witness-tested panel
+  goes DPMS-dark on a write its own register refuses to confirm
+  (trust, and its preview counts the seconds on the settings window,
+  the dark panel cannot carry a digit). DISCONNECT off ("off
+  (disconnect)") retracts the path at the ADAPTER via
+  SetDisplayConfig - works regardless of firmware (the panel loses
+  its signal, never hears a code), comes back as a replug, and its
+  dark is the one this app can PROVE: the display store is re-queried
+  and the intended target is seen gone ("off (disconnected)"). The
+  retracted state lives in Windows' own display store and SURVIVES
+  THE APP - an uninstall leaves the desk as stored; Settings ->
+  Display is always the recovery door, and the boot belt answers from
+  inside: any row this app configured offdisc is re-raised at the
+  next start (Windows itself refuses to disconnect the last active
+  display; that guard degrades the row to blackout with the dated
+  word, like every refusal). A boot belt also re-lights any D6-off
+  row left dark by a crash or quit. Lock-on-away ([away] lock, default off, a checkbox
   on the away card): a real dim engage that darked at least one row
   also runs LockWorkStation - Windows locks when nobody moves, this
   locks when nobody is HERE. A preview never locks. Behind the lock
