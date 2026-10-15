@@ -19,22 +19,15 @@ log = logging.getLogger("ui")
 
 class _PinMixin:
     def _pin_cols(self, parent, count):
-        """The flow both pin lists obey (owner sketch, Oct 12: break
-        the sections to make them taller and narrower): up to four
-        rows flow in ONE column - a two-row twin-column list looks
-        broken - past four they flow ROW-MAJOR (left, right, left)
-        across two side-by-side sub-columns. The caller packs entry
-        i into cols[i % len(cols)]."""
-        if count <= 4:
-            f = ctk.CTkFrame(parent, fg_color="transparent")
-            f.pack(anchor="w")
-            return [f]
-        cols = []
-        for _ in range(2):
-            f = ctk.CTkFrame(parent, fg_color="transparent")
-            f.pack(side="left", anchor="n")
-            cols.append(f)
-        return cols
+        """The flow both pin lists obey. OWNER ORDER, Oct 15 (UAT):
+        the lists are LISTS - one packed row per entry, full width.
+        The Oct 12 two-sub-column sketch (rows of two chips, taller
+        and narrower) is retired: it read as a grid, not a list. The
+        count argument stays for the call sites' shape; the answer
+        is always ONE column."""
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.pack(anchor="w", fill="x")
+        return [f]
 
 
     def _pin_select(self, key):
@@ -229,16 +222,13 @@ class _PinMixin:
         e = getattr(self, "_pins_empty", None)
         if e is not None and e.winfo_exists():
             e.pack_forget()
-        # the sub-columns _fill_pins laid out: an append that would
-        # CROSS the four-row threshold is a layout change, not a row
-        # - it earns the section swap (owner ruling's carve-out for
-        # bulk verbs; gate finding 1: appending into a frozen 1-col
-        # layout silently violated the flow law until the next full
-        # render). Below the threshold the surgical append stands.
+        # the ONE column _fill_pins laid out: the four-row threshold
+        # used to be a layout change (one column -> two) and earned
+        # the section swap (gate finding 1); the Oct 15 LIST law
+        # retires the second column, so no append crosses a threshold
+        # any more - the surgical append always stands, appended at
+        # the tail of the single column.
         cols = getattr(self, "_pins_cols", None) or [inner]
-        if len(self._pin_rows) + 1 > 4 and len(cols) == 1:
-            self._repaint("pins")
-            return
         self._pin_row(cols[len(self._pin_rows) % len(cols)], w, live)
 
 

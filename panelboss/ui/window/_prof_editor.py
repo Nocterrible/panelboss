@@ -1,7 +1,9 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
 
-SIZE LAW: measured 440 (Oct 14 loud-voice wave recount - the status
+SIZE LAW: measured 419 (Oct 15 LIST-law recount - the two-
+sub-column prose retired with the flow, from the Oct 14 loud-voice
+wave's 440; the status
 label's danger paint landed here; the Oct 13 claim - the checkbox's
 both-branch paint and the knob-lie sync entry, corrected in-commit
 after drifting from ~360 - is superseded by this one).
@@ -30,9 +32,9 @@ class _EditorMixin:
         """The pick-list section: every open window, the chosen one
         highlighted. The row buttons are remembered, so selecting a
         window can re-highlight WITHOUT rebuilding the list at all.
-        Oct 12: lives on the right column; past four windows the
-        rows flow across two sub-columns (taller, narrower - owner
-        sketch) via _pin_cols."""
+        Oct 12: lives on the right column. Oct 15 (owner order, UAT):
+        the list is a LIST - one packed row per window, full width -
+        the two-sub-column flow is retired in _pin_cols itself."""
         self._prof_detail = self._prof_pins_body  # _section's parent
         #                    (each pin fill re-points it, so a solo
         #                    _repaint("live") builds in the right col)
@@ -52,8 +54,8 @@ class _EditorMixin:
         self._live_rows = {}
         live = profiles.windows_now()
         cols = self._pin_cols(lif.inner, len(live))
-        bw = 230 if len(cols) > 1 else 460
-        for i, l in enumerate(live):
+        bw = 460                         # the LIST law: one column,
+        for i, l in enumerate(live):     # so always the wide button
             key = (l["proc"], l["title"])
             picked = ed["pick"] == key
             b = ctk.CTkButton(
@@ -250,9 +252,9 @@ class _EditorMixin:
         ONE ROW EACH - the old pack mixed side="left" head/buttons
         with a top-pack ScrollHost, so the buttons crowded into the
         heading's band and the ScrollHost landed squished right.
-        Oct 12 (owner sketch): the section lives on the right
-        column; past four seats the rows flow across two
-        sub-columns."""
+        Oct 15 (owner order, UAT): the list is a LIST - one row per
+        seat, full width - the Oct-12 two-sub-column sketch is
+        retired where it lives, in _PinMixin._pin_cols."""
         self._prof_detail = self._prof_pins_body  # _section's parent
         sec = self._section("pins", pady=(theme.S_ROW, 0))
         prof = self._prof_data["profiles"].get(self._prof_sel) \
@@ -298,12 +300,13 @@ class _EditorMixin:
             **self.skin.text_style("sub"))
         live_key = {(w["proc"], w["title"]): w
                     for w in profiles.windows_now()}
-        # taller-not-wider flow (owner sketch): _pin_cols returns one
-        # sub-column up to four rows, two past that; _pin_btn_w rides
-        # along so _pin_row_upsert's appends match the layout
+        # the LIST law (owner order, Oct 15): _pin_cols answers ONE
+        # column now, so every row button wears the full width;
+        # _pin_row_upsert's appends match the layout through the same
+        # _pin_btn_w.
         self._pins_cols = cols = self._pin_cols(pinf.inner,
                                                 len(prof["wins"]))
-        self._pin_btn_w = 150 if len(cols) > 1 else 400
+        self._pin_btn_w = 400
         for i, w in enumerate(prof["wins"]):
             self._pin_row(cols[i % len(cols)], w,
                           live_key.get((w["proc"], w["title"])))

@@ -523,11 +523,14 @@ def check_8e():
             (app._prof_left.winfo_rootx(), app._prof_right.winfo_rootx())
         print("[PASS] profile columns managed side by side")
 
-        # 10) pin rows (owner sketch): a PROCESS-matched pin reads as
-        #     the exe basename, a title-matched pin keeps its title,
-        #     and past four seats the list flows across TWO
-        #     sub-columns. Pin through the real PF.pin primitive so
-        #     the row dicts carry the real schema.
+        # 10) pin rows (owner sketch, re-cut by the Oct-15 UAT LIST
+        #     law): a PROCESS-matched pin reads as the exe basename,
+        #     a title-matched pin keeps its title, and the list is a
+        #     LIST - six seats ride ONE full-width column (the old
+        #     two-sub-column flow, asserted here since Oct 12, is
+        #     retired; this pin now guards the LIST law). Pin through
+        #     the real PF.pin primitive so the row dicts carry the
+        #     real schema.
         for i, proc in enumerate(("chrome.exe", "discord.exe",
                                   "steam.exe", "code.exe",
                                   "explorer.exe")):
@@ -551,9 +554,10 @@ def check_8e():
         assert str(_tbtn.cget("text")).startswith("Untitled - Notepad"), \
             _tbtn.cget("text")
         xs = sorted({f.winfo_rootx() for f, _ in app._pin_rows.values()})
-        assert len(xs) >= 2, xs
-        print("[PASS] process pins read as exe basenames; 6 seats "
-              "span two sub-columns")
+        assert len(xs) == 1, xs          # the LIST law: one column,
+        assert int(_btn.cget("width")) == 400   # every row full width
+        print("[PASS] process pins read as exe basenames; 6 seats ride "
+              "ONE full-width column (the LIST law)")
         _done = True                 # teardown noise tolerated ONLY
                                      # past this line, see _done
 

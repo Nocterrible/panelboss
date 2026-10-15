@@ -128,7 +128,7 @@ class _ProfilesMixin:
         self._pin_rows = {}            #   rebuild on this fresh body,
         self._pins_inner = None        #   never configure a widget
         self._pins_empty = None        #   the destroyed body held
-        self._pins_cols = None         #   (the pins list's sub-columns)
+        self._pins_cols = None         #   (the pins list's ONE column
         try:
             self._profiles_fill(driver)
         finally:
