@@ -17,8 +17,11 @@ import logging
 
 import customtkinter as ctk
 
-from ... import hider, wm
+from ... import hider, jog, wm
 from ...config import HOLD_SEC_CEIL, HOLD_SEC_FLOOR, HOLD_SEC_DEFAULT
+from ...config import (JOG_CYCLE_CEIL, JOG_CYCLE_DEFAULT,
+                   JOG_CYCLE_FLOOR, JOG_STEP_CEIL,
+                   JOG_STEP_DEFAULT, JOG_STEP_FLOOR)
 from .. import theme
 from ._widgets import set_text
 
@@ -29,6 +32,30 @@ log = logging.getLogger("ui.oled")
 # WORDS, and the belt between them names itself on a miss.
 REVEAL_BY_LABEL = {"hovered only": "hovered", "every bar": "all"}
 LABEL_BY_REVEAL = {w: s for s, w in REVEAL_BY_LABEL.items()}
+
+TIP_JO = {
+    "on": "static content is what ages an OLED unevenly - the bar "
+          "that never moves prints itself in over months. micro-jog "
+          "nudges the app covers around a small zero-drift ring on "
+          "a timer, so no edge of glass ages permanently; the wash "
+          "briefly lights the whole panel to even out what retention "
+          "has already begun. the app cannot read your panel wear "
+          "counters (the one register this desk ever answered was "
+          "caught lying) - this is prevention, not a diagnosis.",
+    "row": "jog covers on THIS monitor only (the same opt-in law as "
+           "the taskbar strip: burn-in is the OLED problem).",
+    "mode": "micro-jog moves the covers a few pixels every cycle. "
+            "pixel wash is the button below - it never happens on its "
+            "own, by law: a wash is a request, not a schedule.",
+    "step": "how far the covers travel around the ring, in pixels - "
+            "1..8; the ring returns to rest, so the travel never "
+            "accumulates.",
+    "cycle": "how often the ring steps: minutes between nudges.",
+    "wash": "lights this monitor white for ten seconds, once. the "
+            "first opted-in monitor answers the button; if none are "
+            "opted in, the word beside the button says so - nothing "
+            "is silent.",
+}
 
 TIP = {
     "on": "the taskbar is a fixed row of pixels that never moves - on "
@@ -130,7 +157,142 @@ class _OledMixin:
                                      anchor="w",
                                      **self.skin.text_style("sub"))
         self.oled_say.grid(row=0, column=1, sticky="e")
+        self._oled_host = parent
+        self._build_refresh(self._oled_host)   # second card, same tab
         self._oled_sync()
+
+    # ------------------------------------------------------- refresh --
+    JOG_BY_LABEL = {"move pixels": "shuffle", "wash pixels": "wash"}
+
+    def _build_refresh(self, parent):
+        box = self._card(parent, "panel refresh",
+                         "micro-jog moves the covers a few pixels; a "
+                         "wash briefly lights the panel")
+        row = self._row(box, "panel refresh", TIP_JO["on"], hint_chars=42)
+        self.oled_jog_box = ctk.CTkCheckBox(
+            row, text="arm the refresh", command=self._oled_jog_changed,
+            font=self.skin.font(12), checkbox_width=18, checkbox_height=18,
+            border_color=self.skin.border_raised,
+            fg_color=self.skin.accent, hover_color=self.skin.accent,
+            text_color=self.skin.text, text_color_disabled=self.skin.txt3)
+        self.oled_jog_box.set(bool((self.cfg.get("jog") or {}).get("on")))
+        self.oled_jog_box.grid(row=0, column=1, sticky="e")
+
+        self._jog_rows = {}
+        jog_cfg = self.cfg.setdefault("jog", {})
+        base = [m.get("short") or m.get("id") for m in wm.monitors()]
+        dupes = {b for b in base if base.count(b) > 1}
+        for m, short in zip(wm.monitors(), base):
+            label = short
+            if short in dupes:
+                label = "%s (%s)" % (
+                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
+                    [-1] or "?")
+            row = self._row(box, label, TIP_JO["row"], hint_chars=42)
+            box2 = ctk.CTkCheckBox(
+                row, text="jog",
+                command=lambda s=short: self._oled_jog_row_changed(s),
+                font=self.skin.font(12), checkbox_width=18,
+                checkbox_height=18,
+                border_color=self.skin.border_raised,
+                fg_color=self.skin.accent, hover_color=self.skin.accent,
+                text_color=self.skin.text, text_color_disabled=self.skin.txt3)
+            box2.set(bool((jog_cfg.get("monitors") or {}).get(short)))
+            box2.grid(row=0, column=1, sticky="e")
+            self._jog_rows[short] = box2
+
+        row = self._row(box, "refresh mode", TIP_JO["mode"], hint_chars=42)
+        self.oled_jog_mode = ctk.CTkSegmentedButton(
+            row, values=list(self.JOG_BY_LABEL), height=26, width=190,
+            command=self._oled_jog_mode_changed,
+            **self.skin.segmented_style())
+        self.oled_jog_mode.set(self.JOG_BY_LABEL.get(
+            jog_cfg.get("mode", "shuffle"), "move pixels"))
+        self.oled_jog_mode.grid(row=0, column=1, sticky="e")
+
+        row = self._row(box, "jog step", TIP_JO["step"], hint_chars=42)
+        self.oled_step_label = ctk.CTkLabel(row, font=self.skin.font(12),
+                                            **self.skin.text_style("sub"))
+        slider = ctk.CTkSlider(row, from_=JOG_STEP_FLOOR, to=JOG_STEP_CEIL,
+                               number_of_steps=JOG_STEP_CEIL
+                                               - JOG_STEP_FLOOR,
+                               width=180, command=self._oled_step_changed,
+                               **self.skin.slider_style())
+        slider.set(int(jog_cfg.get("step_px", JOG_STEP_DEFAULT)))
+        slider.grid(row=0, column=1, sticky="e")
+        self.oled_step_label.configure(
+            text="%s px" % int(jog_cfg.get("step_px", JOG_STEP_DEFAULT)))
+        self.oled_step_label.grid(row=0, column=2, sticky="e",
+                                  padx=(theme.S_FIELD, 0))
+
+        row = self._row(box, "every", TIP_JO["cycle"], hint_chars=42)
+        self.oled_cycle_label = ctk.CTkLabel(row, font=self.skin.font(12),
+                                             **self.skin.text_style("sub"))
+        slider = ctk.CTkSlider(row, from_=JOG_CYCLE_FLOOR,
+                               to=JOG_CYCLE_CEIL,
+                               number_of_steps=(JOG_CYCLE_CEIL
+                                                - JOG_CYCLE_FLOOR) // 5,
+                               width=180, command=self._oled_cycle_changed,
+                               **self.skin.slider_style())
+        slider.set(int(jog_cfg.get("cycle_min", JOG_CYCLE_DEFAULT)))
+        slider.grid(row=0, column=1, sticky="e")
+        self.oled_cycle_label.configure(
+            text="%s min" % int(jog_cfg.get("cycle_min",
+                                            JOG_CYCLE_DEFAULT)))
+        self.oled_cycle_label.grid(row=0, column=2, sticky="e",
+                                   padx=(theme.S_FIELD, 0))
+
+        row = self._row(box, "pixel wash", TIP_JO["wash"], hint_chars=42)
+        self.oled_wash_btn = ctk.CTkButton(
+            row, text="run wash now", height=26, width=120,
+            command=self._oled_wash_now, **self.skin.secondary())
+        self.oled_wash_btn.grid(row=0, column=1, sticky="e")
+        self.oled_say2 = ctk.CTkLabel(row, font=self.skin.font(11),
+                                      wraplength=200, justify="left",
+                                      anchor="e",
+                                      **self.skin.text_style("sub"))
+        self.oled_say2.grid(row=0, column=2, sticky="e",
+                            padx=(theme.S_FIELD, 0))
+
+    def _oled_jog_changed(self):
+        self.cfg.setdefault("jog", {})["on"] = bool(
+            self.oled_jog_box.get())
+        self._save()
+
+    def _oled_jog_row_changed(self, short):
+        box = self._jog_rows.get(short)
+        if box is None:
+            return
+        self.cfg.setdefault("jog", {}).setdefault("monitors", {})[short] = \
+            bool(box.get())
+        self._save()
+
+    def _oled_jog_mode_changed(self, label):
+        word = self.JOG_BY_LABEL.get(label)
+        if word is None:                     # the word-seam belt again
+            log.warning("oled refresh choice %r is not in the map; "
+                        "move pixels stands", label)
+            word = "shuffle"
+        self.cfg.setdefault("jog", {})["mode"] = word
+        self._save()
+
+    def _oled_step_changed(self, value):
+        self.cfg.setdefault("jog", {})["step_px"] = int(round(value))
+        self.oled_step_label.configure(text="%s px" % round(value))
+        self._save()
+
+    def _oled_cycle_changed(self, value):
+        self.cfg.setdefault("jog", {})["cycle_min"] = int(round(value))
+        self.oled_cycle_label.configure(text="%s min" % round(value))
+        self._save()
+
+    def _oled_wash_now(self):
+        rows = (self.cfg.get("jog") or {}).get("monitors") or {}
+        short = next((s for s, on in rows.items() if on), None)
+        if short is None:
+            set_text(self.oled_say2, jog.wash("AOC2790", self.cfg))
+            return
+        set_text(self.oled_say2, jog.wash(short, self.cfg))
 
     def _oled_sync(self):
         if getattr(self, "oled_say", None) is None:

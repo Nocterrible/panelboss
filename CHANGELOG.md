@@ -2,6 +2,12 @@
 
 ## 0.4.0 (in development)
 
+- Panel refresh (OLED tab, second card): micro-jog steps the app's
+  covers around a zero-drift ring every 5-180 minutes (1-8 px), and a
+  manual 'run wash now' button lights one opted-in monitor white for
+  ten seconds. Per-monitor opt-in, default off; wash is a request,
+  never a schedule; the app states plainly that it cannot read panel
+  wear counters (this desk's registers were caught lying).
 - Fixed: a stuck morning blackout on the way to this release - the
   cursor jail's Win32 verbs rode the shared user32 handle UNPINNED,
   correct only while some other module pinned them first, and an
