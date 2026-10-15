@@ -660,6 +660,115 @@ every rc recorded in its output):
   app-door UAT -> [devnode: mark-only, twice-witnessed; SDC path-set:
   dead-at-entry - both CLOSED] -> the physical button, undefeated.
 
+DOSSIER UPDATE (Oct 14 night, SDC RUNG (b) RE-TRIAL - the sibling
+scripts/sdc_off_probe2.py; every rc/gle/desk-row in its output; the
+pm block's "dead at entry" is SUPERSEDED by this one):
+- THE DEATH WAS SELF-INFLICTED (MARSHAL-BUG, corrected in dossier
+  style): sdc_off_probe.py:52-53 defined SDC_APPLY=0x1 and
+  SDC_USE_SUPPLIED=0x2, but those bits are SDC_TOPOLOGY_INTERNAL and
+  SDC_TOPOLOGY_CLONE (winuser.h: SDC_APPLY=0x80,
+  SDC_USE_SUPPLIED_DISPLAY_CONFIG=0x20). The pm run's flag-argument
+  0x3 was therefore a topology ask with NO verb - the illegal-
+  combination class that answers 0x57 at entry, driver untouched.
+  The pm probe's own GBS(2)/Query(2) leg (3 paths/6 modes) proves
+  the structs were innocent all along: the 72/64 layouts were
+  right, the verb constants were not. A contaminated-by-illegal-
+  shape verdict - rung (b) was EXECUTED-TO-FALSITY, not
+  dead-on-merit; the probe law turned fully around and bit its own
+  authors' first experiment.
+- MEASURED SHAPES (26220/NVIDIA, app live, rc/gle every line):
+  AS-IS active (0x80|0x20) rc=0x0 gle=0 - the must-return-0 gate,
+  rung credibility RESURRECTED; SANITY SDC_APPLY|SDC_TOPOLOGY_EXTEND
+  (NULL arrays, SO 57136638 shape) rc=0x0 - the family verbs answer
+  0, no split verdict; the pm's "even no-array TOPO answers 0x57"
+  was the same bug.
+- SDC_ALLOW_PATH_ORDER_CHANGES (0x2000) is REJECTED 0x57 paired
+  with USE_SUPPLIED on this stack, under VALIDATE and under APPLY
+  (the lineage combo measured here, falsified as-is); the pairing
+  the docs give it (TOPOLOGY_SUPPLIED) measured 0x57 too - and the
+  glass-silent `check` mode re-confirmed both at VALIDATE with zero
+  applies (sdc2-check.log). The retraction shape that WORKS:
+  PATH-MINUS (drop the target's paths from the array, NOT merely
+  zero its flags) with
+  SDC_APPLY|SDC_USE_SUPPLIED|SDC_SAVE_TO_DATABASE|SDC_ALLOW_CHANGES
+  = 0x6A0 - VALIDATE rc=0x0 then APPLY rc=0x0.
+- THE pm's second self-inflicted error: ZERO-FLAGS retraction
+  (the path kept in the set with flags=0) is ACCEPTED at every
+  verb set tried (0xA0, 0x6A0) AND its VALIDATE answers 0x0 -
+  validation checks set consistency, NOT which path survives - but
+  it disconnects the WRONG panel: DELA283 left the desk and the
+  retracted AOC survived, re-slotted to DISPLAY3, twice. The shape
+  reads self-inconsistent to the CCD and it re-normalizes by its
+  own taste; ALLOW_CHANGES did not save it. PATH-MINUS hit the
+  right target.
+- RETRACTION MEASURED, authoritative view: mid rows 2 at +0.5 s;
+  EnumDisplayDevices showed a plausible-but-LYING
+  ('AOC2790','\\.\\DISPLAY3') row, but the CCD's own QDC(2)
+  mid-window view answers active = {IOC912B@DISPLAY2,
+  DELA283@DISPLAY3} - THE AOC TARGET IS GONE FROM THE ACTIVE PATH
+  SET and the surviving pair keeps its true slots; the GDI row is
+  the KVM's emulated EDID ghosting a detached slot. The desk
+  restored to the original 3 rows/slots (restore = saved arrays
+  with the SAME verb set, 0x6A0, SAVE included, so the CCD store is
+  written back to the current state, not left saying
+  "disconnected"); post-restore CCD: all 3 active, verified True.
+- PERSISTENCE (the second door's price, named): SAVE_TO_DATABASE
+  writes the disconnect into the HKLM Connectivity store - it
+  survives the process, and would survive a REBOOT with the AOC
+  dark, if the restore did not carry SAVE (the named footgun).
+  Tonight's state is answered WITHOUT another reboot or another
+  twitch: the last store writer was the restore's own
+  APPLY(full-set, SAVE) at rc=0x0 - the API's contract is that that
+  write IS the stored profile, so the store reads connected now by
+  attestation. What remains UNVERIFIED is blob-level (some other
+  combo's row could have flipped): reg.exe /s on Connectivity
+  answers Access-denied at medium integrity (the filtered token is
+  Administrators-Deny-Only), and a /rl highest task CANNOT even be
+  registered from medium (measured: schtasks create -> access
+  denied). Elevation owed for one read; it is a witness, not the
+  door itself.
+- OWNER STROBE LAW (the complaint, earned): six ladder runs before
+  the word arrived = ~30 applies on a live desk, six dark windows.
+  The desk is the owner's. The tool now enforces it: VALIDATE gates
+  every APPLY (a refused shape costs no glass; its rc is the whole
+  evidence), proven shapes run their VALIDATE twin instead of
+  re-applying (as-IS applied 0x0 four times, SANITY EXTEND three -
+  retired to validate-only), ONE physical retraction cycle per
+  session on the AOC, and `check` mode gives the validate-delta
+  table with ZERO applies. Attribution for the record: the visible
+  toggles were the six retraction windows (target dark + reflow)
+  and the SANITY EXTEND applies (topology re-asserts DO flicker);
+  the as-IS round-trips on this stack were reported neither way -
+  if the owner saw strobing NOT in 6-7 s blocks, the NVIDIA CCD's
+  as-is no-op re-validation is the suspect and SDC_NO_OPTIMIZATION
+  is its cure, one flag, next touch.
+- OWNER EVIDENCE (same day, quoted): Settings' Disconnect on the
+  AOC (KVM panel) DOES black the panel - "it doesn't care what's
+  downstream of the adapter" - Windows stops driving the output and
+  the panel falls to standby on signal loss; and Windows refuses to
+  disconnect the LAST active display, so single-screen desks are
+  OS-guarded (the app inherits that as the tested refuse->blackout
+  path, no new code).
+- UAT (owner, same day, quoted): off WITNESSED on both OLEDs via
+  the shipping path - admissible; AOC stays lit - firmware-
+  attributed since brightness proved the same bus alive.
+- VERDICT CLASS: RESURRECTED at the code level (the retraction
+  applied clean and the AOC's path is gone from the active CCD
+  set); whether the physical panel blinked dark is EYE evidence -
+  the mid-window GDI ghost makes row data unable to tell
+  dark-but-asserted from lit, so the owner's answer to "did the
+  AOC go dark for the 6 s window?" is the missing half. If eyes
+  say dark: rung (b) is the off rung's second door, and the good
+  one - no firmware cooperation, no elevation, KVM-indifferent (it
+  stops the signal at the adapter), persistent by design.
+- LADDER (current truth, supersedes the pm line): blackout (all
+  panels, owned) -> dim via app door (proven on the AOC) -> off
+  via the shipping path WITNESSED on both OLEDs, register cannot
+  verify -> off via SDC path-set REOPENED (retraction measured
+  clean; AOC-dark pending eyes; elevation owed only for the
+  store-blob diff, not the door) -> [devnode: mark-only,
+  twice-witnessed; CLOSED] -> the physical button, undefeated.
+
 ## Wave E1 (cadence law, SHIP @ 8d30a6c) - gate ledger lines
 - OWNER DESK RESIDUE: the violation-era boot wrote stock always_fallback
   _poll_sec=10 into the live toml BEFORE the law existed; the wave-B
