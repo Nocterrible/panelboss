@@ -8,6 +8,7 @@ import time
 
 from .. import display
 from .. import hider
+from .. import jog
 from ._preview import FrameBox
 
 log = logging.getLogger("state")
@@ -129,6 +130,7 @@ class _BootMixin:
                 self._release_camera()     # the honest word is a
                                            # release NOW, cooloff or not
             time.sleep(0.2 if d is None else d)
+        jog.teardown()                     # the ring forgets its place
         hider.teardown()                   # the orderly half of the same
                                            # promise, on every exit path
 
@@ -140,6 +142,12 @@ class _BootMixin:
                                            # every sleep
         self._drain_tray()
         self._drain_display(now)
+        jog.tick_with_cfg(self.cfg, now)   # the refresh ring steps
+                                           # BEFORE the strips read
+                                           # their offset (one tick of
+                                           # latency at most, and the
+                                           # ring's zero is the resting
+                                           # pose either way)
         hider.tick(self.cfg)               # the shell's own ears stay
                                            # outside the camera's pause:
                                            # a paused watch must still

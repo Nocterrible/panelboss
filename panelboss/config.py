@@ -385,6 +385,19 @@ DEFAULTS = {
                                   # default ALL off (burn-in is the OLED
                                   # problem; even OLED rows are opt-in)
     },
+    "jog": {
+        "on": False,              # panel refresh is consent, like the
+                                   # hider: absent section = dark, nothing
+                                   # nudges or washes until opted in
+        "monitors": {},           # {short: bool} - per-panel opt-in,
+                                   # default ALL off (the same law as the
+                                   # hider's rows)
+        "step_px": 2,             # micro-jog nudge size in px; clamped 1..8
+        "cycle_min": 30,          # minutes between ring steps; clamped 5..180
+        "mode": "shuffle",        # "shuffle" | "wash"; a word this app has
+                                   # not heard warns and folds to shuffle
+                                   # (normalize_hider's honesty, mirrored)
+    },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
                                 # profile the app re-applies by itself
@@ -791,6 +804,75 @@ def normalize_hider(value):
             "monitors": rows}
 
 
+JOG_MODES = ("shuffle", "wash")     # the refresh's two legs
+JOG_STEP_FLOOR = 1                  # one pixel is the smallest honest nudge
+JOG_STEP_CEIL = 8                   # past eight it is a window manager, not a jog
+JOG_STEP_DEFAULT = 2
+JOG_CYCLE_FLOOR = 5                 # below five minutes a shift is a flicker
+JOG_CYCLE_CEIL = 180                # past three hours the edge has already aged
+JOG_CYCLE_DEFAULT = 30
+
+
+def normalize_jog(value):
+    """[jog] in its in-memory shape: {on, monitors, step_px, cycle_min,
+    mode}. normalize_hider's honesty laws, mirrored exactly: a bad on
+    warns and folds to False (the default-off law - nothing moves until a
+    user says otherwise), a bad mode word warns naming itself and folds to
+    shuffle (the label-vs-word lesson: a word this app has not heard never
+    silently selects a leg), step_px and cycle_min clamp to the rails, and
+    monitor rows are plain bools - unknown shorts warn but KEEP (they name
+    panels that may come back; the jog for an absent panel is simply never
+    applied).
+
+    One documented divergence from normalize_hider, on purpose: the
+    non-bool row warning names its OWN section ("jog monitor"), never
+    hider's sentence - the belt must say which feature dropped the row.
+    """
+    value = value if isinstance(value, dict) else {}
+    on = value.get("on", False)
+    if not isinstance(on, bool):
+        log.warning("jog on %r is not a bool; the panels keep their "  
+                    "pixels exactly where Windows left them", on)
+        on = False
+    mode = value.get("mode", "shuffle")
+    if mode not in JOG_MODES:
+        log.warning("jog mode %r is not one of %s; the refresh will "
+                    "micro-jog instead", mode, ", ".join(JOG_MODES))
+        mode = "shuffle"
+    try:
+        step = int(value.get("step_px", JOG_STEP_DEFAULT))
+    except (TypeError, ValueError):
+        step = JOG_STEP_DEFAULT
+    step = max(JOG_STEP_FLOOR, min(JOG_STEP_CEIL, step))
+    try:
+        cyc = int(value.get("cycle_min", JOG_CYCLE_DEFAULT))
+    except (TypeError, ValueError):
+        cyc = JOG_CYCLE_DEFAULT
+    cyc = max(JOG_CYCLE_FLOOR, min(JOG_CYCLE_CEIL, cyc))
+    rows = {}
+    raw = value.get("monitors")
+    if isinstance(raw, dict):
+        try:
+            live = set(_live_shorts())
+        except Exception:            # a desk that cannot enumerate keeps
+            live = None              # every saved row silently
+        for short, row in raw.items():
+            short = str(short).strip()
+            if not short:
+                continue
+            if isinstance(row, bool):
+                if live is not None and short not in live:
+                    log.info("jog monitor %r names no panel on this "
+                             "desk; the row is kept for when it returns",
+                             short)
+                rows[short] = row
+            else:
+                log.warning("jog monitor %r: %r is not a bool; the "
+                            "row is dropped", short, row)
+    return {"on": on, "monitors": rows, "step_px": step,
+            "cycle_min": cyc, "mode": mode}
+
+
 def _live_shorts():
     """The desk's panel shorts, for the migration's rows. A seam on
     purpose: the suite patches this instead of the Win32 enum, and a
@@ -923,6 +1005,7 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
     merged.pop("_raw_power", None)
     merged["away"] = normalize_away(merged.get("away"))
     merged["hider"] = normalize_hider(merged.get("hider"))
+    merged["jog"] = normalize_jog(merged.get("jog"))
     if verbose:
         log.debug(f"using config from {path}")
     # [camera] index and name_contains normalize to one in-memory shape

@@ -108,14 +108,16 @@ def _bars():
             found.append((r.l, r.t, r.r - r.l, r.b - r.t))        # API call
 
     rows = wm.monitors()
-    out = []
-    for rect in found:
-        x, y, w, h = rect
+    from . import jog            # the ring's resting pose is (0,0),
+    out = []                     # so an unarmed jog never moves a
+    for rect in found:           # strip; lazy import keeps the two
+        x, y, w, h = rect        # modules acyclic in either direction
         cx, cy = x + w // 2, y + h // 2
         for r in rows:
             if (r["x"] <= cx < r["x"] + r["w"]
                     and r["y"] <= cy < r["y"] + r["h"]):
-                out.append((r["short"], rect))
+                dx, dy = jog.shift(r["short"])
+                out.append((r["short"], (x + dx, y + dy, w, h)))
                 break
     return out
 
