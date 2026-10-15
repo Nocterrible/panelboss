@@ -91,6 +91,10 @@ check(cfg["power"]["hold_display"] is False
       and cfg["recovery"]["wake_policy"] == "leave_on",
       "virgin config: the power stock is DARK (wave B, the owner's "
       "screenshot law: every feature off until its switch is touched)")
+check(cfg.get("hider", {}).get("on") is False
+      and cfg.get("hider", {}).get("monitors") == {},
+      "virgin config: the taskbar hider is stock-DARK (default-off law "
+      "for the OLED tab: no strip on a stranger's desk until opted in)")
 check(cfg["meta"]["defaults"] == 2,
       "virgin config: the stock file lands STAMPED - the boundary "
       "reset has no business on a box born after the law")

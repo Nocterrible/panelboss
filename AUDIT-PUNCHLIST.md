@@ -1187,3 +1187,18 @@ would slip and land as a preview-time KeyError, loud but UI-thread);
 >=0.3s (<=1.2s serial worst in the lift loop) - same tax _gone
 already imposed since the wave, recorded so the number is known
 when someone times a lift.
+DOSSIER AMENDMENT (taskbar block - the leg-one build caught two of my
+own errors, same day): (1) 'ABM_GETTASKBARPOS verb 0x05 rc 1 edge 3' -
+that probe ran THROUGH ctypes' SHAppBarMessage, and the repo's own
+measured law (docs/taskbar-findings.md, bisected Oct 2026) says the
+export ACCESS-VIOLATES from this process family; the successful-looking
+answer was luck on that call shape, and the profiles_ui chain watchdog
+fired exactly as the AV class predicts once a NEW caller entered the
+window-build path. The hider's eyes moved to GetWindowRect +
+taskbar.flag_note() (StuckRects3 byte 8, read-only): zero shell API
+calls, chain suite green in-sequence again. (2) 'byte 8 semantics
+drifted' caution: RESOLVED - taskbar.py already documents them
+(2=shown, 3=autohide); the morning's hex window was sliced at the
+wrong offset, the folklore was mine, the codebase was right. Lesson
+filed once more: bounded-recon packets must include the prior-art
+search; the audit trail exists for a reason.

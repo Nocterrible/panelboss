@@ -53,7 +53,8 @@ TIMER_SPECS = [          # section, key, label, min, max, step, help
 DEVICE_KEYS = [("auto", "auto"), ("cpu", "CPU"), ("cuda", "CUDA GPU")]
 DEVICE_BY_LABEL = dict((label, key) for key, label in DEVICE_KEYS)
 
-TABS = ("detection", "monitor profiles", "power plan", "general")
+TABS = ("detection", "monitor profiles", "power plan", "general",
+        "oled")
 
 PERSON_ROWS = ("device", "cuda gpu id", "confidence", "min hits")
 MOTION_ROWS = ("frame changes", "pixel delta", "motion hold")

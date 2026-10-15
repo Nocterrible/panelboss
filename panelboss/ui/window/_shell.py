@@ -51,6 +51,7 @@ from ._widgets import _WidgetsMixin
 from ._runtime import _RuntimeMixin
 from ._detection import _DetectionMixin
 from ._away import _AwayMixin
+from ._oled import _OledMixin
 from ._preview import _CameraMixin
 from ._camedit import _CamEditMixin
 from ._profiles import _ProfilesMixin
@@ -69,6 +70,7 @@ class SettingsWindow(
     _RuntimeMixin,
     _DetectionMixin,
     _AwayMixin,
+    _OledMixin,
     _CameraMixin,
     _CamEditMixin,
     _ProfilesMixin,
@@ -275,6 +277,7 @@ class SettingsWindow(
         self._build_profiles(self.pages["monitor profiles"].inner)
         self._build_power(self.pages["power plan"].inner)
         self._build_general(self.pages["general"].inner)
+        self._build_oled(self.pages["oled"].inner)
         # The layer law (owner, Oct 12: "tabbing just reveals them
         # instead of fully redrawing them each time"): every page is
         # placed ONCE into the body and stays mapped and painted for

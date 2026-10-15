@@ -61,6 +61,9 @@ from ._detection import \
 from ._away import \
     _AwayMixin
 
+from ._oled import \
+    _OledMixin
+
 from ._preview import \
     _CameraMixin
 
@@ -113,6 +116,7 @@ __all__ = [
     "TIPS",
     "WAIT_CHOICES",
     "_AwayMixin",
+    "_OledMixin",
     "_CamEditMixin",
     "_CameraMixin",
     "_DetectionMixin",

@@ -1,5 +1,20 @@
 # PanelBoss changelog
 
+## 0.4.0 (in development)
+
+- Taskbar hider (new `oled` tab): a painted black strip over each
+  opted-in monitor's taskbar - the OLED burn-in defense. Hover bares
+  the bar you reached for (or every bar, your choice); it returns
+  after a settled pause, held indefinitely while a caret sits in the
+  search box. Per-monitor opt-in, default all-off. Windows' own
+  auto-hide WRITE (ABM_SETSTATE) is a no-op on 24H2+ - measured, not
+  folklore - which is why the app paints its own strip: it lands
+  instantly, dies with the process, and cannot strand a taskbar.
+  Known limit, said plainly on the card: apps that queried the work
+  area do not learn the bar is covered, so a fullscreen may slip
+  behind the strip.
+
+
 ## 0.3.0 - 2026-10-14 (rc-2026-10-14b, UAT build ec02a76)
 
 - Away modes: blackout, DIM (HDR off + brightness dip, honest
