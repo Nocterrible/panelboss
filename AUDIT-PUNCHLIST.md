@@ -1354,3 +1354,18 @@ correlation is with load, not the diff. Owed: give the suite a bounded
 retry (a real pump walk needs its window) or pin WHY it can miss once.
 Until then the gauntlet's one-word verdicts must be read, never
 inferred - the log named the file, so I went and looked.
+
+## VEIL BUG 2, THE HONEST SPLIT (Oct 15)
+Bug 1 (veil rode first-show state) is FIXED: _show_first now veils
+every UNMAPPED manual open and leaves the already-mapped raise plain.
+Bug 2 (the already-mapped raise redraws the button family) is NOT in
+the map branch - that branch is three lines (deiconify/lift) and the
+commit above proves it. The redraw rides the after(0,
+_repaint_switches) every map schedules: it re-selects every switch
+through CTk's own _draw, so the switches flash on the raise. It is
+load-bearing for a window that was BUILT hidden (its knobs drew at
+zero geometry) and pure waste for one already mapped. The fix is to
+fire the resync only on the map that actually needed it, and that
+touches the ordering the geometry probe pins - so it ships with the
+next touch, not as a drive-by. Recorded here so the dossier does not
+read as one bug half-fixed twice.
