@@ -179,27 +179,42 @@ class SettingsWindow(
 
 
     def _show_first(self, manual=False):
-        """Every map up to the first MANUAL open is veiled; later maps
-        are plain deiconifies: DWM still holds the drawn surface,
-        Electron's actual trick, available free. The veil rides each
-        of those maps, not just one: the budget belongs to the owner,
-        not the process. A launch that shows its window at boot
-        mapped (and swept) without being asked; the ceremony the
-        owner sees is THEIR first tray-open, and yesterday's
-        one-map-evers rule let the unasked boot map eat it (owner:
-        "both skip the veil" - they opened a window that had already
-        been shown at boot by someone else's relaunch ritual). deiconify
-        marks the window for mapping; the veil is placed before the
-        first update() so the first COMPOSITE carries the veil, not
-        the half-drawn UI. The real widgets paint behind it
-        clipped-cheap; the timed lift (300 ms) lands after the burst -
-        tk cannot pre-paint a withdrawn window (documented trap), so
-        the veil covers the burst itself instead. The veil watchdog
-        in _tick_inner caps any stuck veil at 3 s. The veil lands on
-        the UNMAPPED window (audit INFO: the old deiconify-then-veil
-        left a raise window open between the map and the cover - an
-        un-veiled half-paint frame): _veil reads no map state, so the
-        swap is safe."""
+        """The veil's owner is the USER's first real open, and it is
+        the UNMAPPED map that needs the cover - not the first one of
+        the session.
+
+        The Oct-12 law (owner: "first open is not hiding my monitor
+        switching any more", veil_test.py's header): an unasked boot
+        map must not spend the ceremony the first REAL open is owed,
+        so only a manual open consumes the budget. The Oct-15 UAT
+        (the owner's close-X-and-reopen repro) showed the other half:
+        after a close the next tray-open drew the full UI with no
+        cover, because the rule had hardened into "manual open #1 is
+        veiled, every later open is plain".
+
+        The seam that actually decides is mapping state, not a
+        session counter. An UNMAPPED window maps fresh and paints the
+        whole UI in one burst - DWM holds a drawn surface only while
+        the window stays alive, and a close destroys it - so that
+        burst wants the cover whether it is the birth map or the
+        ninth. An ALREADY-MAPPED open is the pixel-instant reopen the
+        owner chose: it takes the plain deiconify/lift and no veil
+        (veil_test's "later opens stay pixel-instant" pins exactly
+        this). The first MANUAL open also sets the budget flag, so an
+        unasked boot map can never eat the owner's ceremony.
+
+        Mechanics: deiconify only MARKS for mapping, so the veil goes
+        up before the first update() and the first COMPOSITE carries
+        it; tk cannot pre-paint a withdrawn window (documented trap),
+        so the veil covers the burst itself. The timed lift (300 ms)
+        lands after the burst; the watchdog in _tick_inner caps any
+        stuck veil at 3 s. The veil lands on the UNMAPPED window
+        (audit INFO: the old deiconify-then-veil order left a frame
+        of un-veiled half-paint between map and cover - _veil reads
+        no map state, so the current order is the safe one)."""
+        # mapping state BEFORE anything else: deiconify and the
+        # deferred resync below both read this verdict
+        was_mapped = self.state() != "withdrawn"
         if not self._manual_open_done:
             self._veil("PanelBoss", full=True)
             self._unveil_job = self.after(300, self._unveil)
@@ -207,17 +222,6 @@ class SettingsWindow(
                 self._manual_open_done = True
             self.deiconify()
         else:
-            # the veil rides EVERY manual open, not just the first
-            # (owner UAT, Oct 15): after a close, the next tray-open
-            # drew the full UI with no cover, so the reveal looked
-            # like a redraw and the tray's own raise looked like a
-            # rebuild. DWM keeps the surface painted only while the
-            # window stays alive; a close destroys it and the next
-            # map is a fresh paint burst that wants the veil as much
-            # as the birth map did. The raise for an ALREADY-mapped
-            # window takes the plain path - the burst there is the
-            # widget repaint below, not a first composite.
-            was_mapped = self.state() != "withdrawn"
             if manual and not was_mapped:
                 self._veil("PanelBoss", full=True)
                 self._unveil_job = self.after(300, self._unveil)
@@ -228,7 +232,13 @@ class SettingsWindow(
         # its knob at zero geometry - the deferred resync re-arms the
         # same truth paint once the map and its <Configure> have
         # landed (see _repaint_switches; the probe pins the ordering).
-        self.after(0, self._repaint_switches)
+        # An already-mapped raise skips it: those knobs settled long
+        # ago and the re-select is the visible button redraw the
+        # owner reported. The exception is a veil we just armed -
+        # behind a cover the same repaint is free, and hide/show is
+        # exactly the cycle where the geometry claim is unverified.
+        if not was_mapped or getattr(self, "_veil_lbl", None) is not None:
+            self.after(0, self._repaint_switches)
 
 
     # -------------------------------------------------- switch repaint --

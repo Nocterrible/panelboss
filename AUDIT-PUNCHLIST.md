@@ -1391,3 +1391,26 @@ moves to 90 s so a slow drain cannot be read as a stuck pump. The law this
 records: in a suite with live background threads, every expected value must
 be frozen at spawn time - a number read from a moving counter is not an
 expectation, it is a race with a label.
+
+## VEIL BUG 2 CLOSED, AND THE PIN THAT BLOCKED IT (Oct 15)
+The raise-resync packet was going out to a coder lane when veil_test
+went red inside the gauntlet: 'later opens stay pixel-instant', an Oct-12
+pin. It stopped the dispatch - the right call - because it is not a
+regression report, it is a LAW CONFLICT, and the two laws had been
+silently incompatible since the Oct-15 fix:
+  Oct-12 law: only the first manual open is veiled; later opens are
+              pixel-instant (DWM holds the surface).
+  Oct-15 UAT: after a close, the next open drew the whole UI uncovered.
+Resolution, MEASURED at the pin rather than argued: Tk's withdraw is a
+real destroy (state() -> "withdrawn") but the HWND NUMBER IS REUSED on
+the next map, so winfo_id() proves nothing either way - which is
+exactly how the old law survived an afternoon of being wrong. The
+surface does not survive; the number does. A withdrawn window's next
+map is a fresh composite and rides the cover; the ONLY pixel-instant
+path left is the already-mapped raise, and that raise now skips the
+knob resync too - the owner's button-redraw on tray-open. (The resync
+still fires behind a freshly armed veil: free under a cover, and
+hide/show geometry is precisely where the doubt lives.)
+Packet PACKET-RAISE-RESYNC.md died unsent: the seam it dictated turned
+out to be the conflict itself, and adjudicating a law conflict is not
+typist-class work.

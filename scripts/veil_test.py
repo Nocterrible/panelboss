@@ -116,13 +116,39 @@ late.destroy()
 time.sleep(0.4)
 app.update()
 
-# every later open is the pixel-instant reopen the owner chose
+# The reopen law, corrected by the owner's own UAT (Oct 15).
+# MEASURED AT THIS PIN, not assumed: withdraw is a real destroy
+# (state() answers "withdrawn"), yet Tk REUSES the HWND number on the
+# next map - winfo_id() is stable across the cycle, so the handle
+# tells you nothing about whether the surface survived. What the
+# owner's eye settled is the question the handle cannot answer: after
+# a close, the next open draws the full UI with no cover. The window
+# is reborn with a fresh composite regardless of which handle number
+# it lands on, so a reopen after a close rides the cover exactly like
+# the birth map. The pixel-instant ideal survives ONLY on the
+# already-mapped raise path, asserted below.
 app._hide()
 time.sleep(0.2)
 events.put(("open", None))
 app._drain_ui_events()
-check(app._veil_lbl is None, "later opens stay pixel-instant")
+check(app._veil_lbl is not None,
+      "a reopen after a close takes the cover (the owner's UAT: the "
+      "reopen drew the whole UI; withdraw is a real destroy, and the "
+      "reused HWND number hides it)")
 check(app.state() == "normal", "and the window is up")
+time.sleep(0.4)
+app.update()                             # pump the 300 ms lift
+check(app._veil_lbl is None, "the reopen veil lifts on its own budget")
+
+# the other half of the same law, and the ONLY pixel-instant path
+# left: an open while the window is already mapped takes no cover and
+# no resync (the raise is a raise).
+events.put(("open", None))
+app._drain_ui_events()
+check(app._veil_lbl is None,
+      "an already-mapped raise stays pixel-instant (no cover, and the "
+      "knob resync that used to redraw the button family is skipped)")
+check(app.state() == "normal", "and the window is still up")
 
 # (Oct 12 re-cut, owner: "tabbing just reveals them") the switch half
 # moved to layer law: no cover is BORN for a switch any more, and the
