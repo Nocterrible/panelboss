@@ -1162,3 +1162,12 @@ harmless defensive, correct the comment or drop the branch.
 patience (CCD moves inside a tick, measured) - a 300ms-slow
 reactivation would false-warn 'never came back'; give restore the
 same VERIFY_TRIES.
+FAUX-HIDE SCOPE (owner addendum): one strip per monitor taskbar
+(Shell_TrayWnd + Shell_SecondaryTrayWnd rects from the app's own
+monitor enumeration). REVEAL SCOPED CHOICE on the tab: 'hovered'
+(default) = withdrawing only the strip whose zone the cursor entered;
+'all' = entering any zone withdraws every strip (owner case: apps
+live on their windows' monitor, hovering one bar wants all bars
+visible). Caret-hold is GLOBAL (typing in any bar's search holds all
+returns); return timers stay PER STRIP once the hold releases - peek
+at everything, restore what is not being touched.
