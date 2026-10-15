@@ -94,10 +94,17 @@ TIP = {
                "app), so Settings -> Display is ALWAYS the recovery "
                "door, and the app's boot belt re-raises rows it "
                "configured before it died. The row's word 'off "
-               "(disconnected)' is the ONE dark this app can PROVE: "
-               "the display store itself is re-queried and the "
-               "intended target is seen gone (the GDI row list is "
-               "not believed - through a KVM it keeps lying). A "
+               "(disconnected)' is the ONE dark this app can PROVE, "
+               "and note what 'gone' names here: gone from the "
+               "display store - what got cut is the signal, and "
+               "through your cable that IS the dark. A hub that "
+               "latches its last frame can keep showing a picture "
+               "the store no longer believes, so the app asks the "
+               "store, never the row list (through exactly that "
+               "latch the rows keep lying); and when the store's "
+               "slot and the panel's own EDID name disagree about "
+               "which screen this row is, the row refuses with the "
+               "dated word instead of darkening the wrong panel. A "
                "refused retraction (Windows guards the last active "
                "display) degrades the row to blackout with the dated "
                "word, exactly like a refused power code.",
@@ -190,8 +197,12 @@ class _AwayMixin:
             # reaches through this seam)
             try:
                 seg._canvas.bind(
-                    "<Enter>", lambda e=None: self.tips._schedule(
-                        TIP["offdisc"], seg), add="+")
+                    "<Enter>", lambda e=None, w=seg: self.tips._schedule(
+                        TIP["offdisc"], w), add="+")   # w= default-captures
+                #                    the loop var (gate fix 4 - the
+                #                    file's own s=short idiom: late
+                #                    binding would anchor every row's
+                #                    paragraph to the LAST picker)
                 seg._canvas.bind("<Leave>",
                                  lambda e=None: self.tips._hide_soon(),
                                  add="+")

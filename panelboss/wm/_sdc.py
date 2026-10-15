@@ -28,7 +28,8 @@ disconnect the last active display - that guard arrives as an
 ordinary nonzero rc and the caller degrades to blackout like every
 other refusal, no new code.
 
-SIZE LAW: pure CCD at ~150 - the ctypes core of the flavor; the row
+SIZE LAW: pure CCD at ~240 (post gate fixes) - the ctypes core of
+the flavor; the row
 ledger, the status words and the belt live in state/_away.py, the
 paint in ui/window/_away.py. Test seams: _capture, _names and
 _apply_cfg are the FFI trio the suite replaces wholesale; everything
@@ -134,18 +135,30 @@ def _rows(flags):
 
 
 def _victim(rows, row):
-    """The target key(s) this app-row names: the gdi-source join
-    FIRST (exact slot, the probe's way), the EDID model token as the
-    fallback identity - never the friendly name. A token match over
-    several twins without a slot join is ambiguous: no victim, no
-    gamble (retract reports, the row degrades confessed)."""
+    """The target key(s) this app-row names, as (keys, why). The
+    gdi-slot join and the EDID-token join are CROSS-CHECKED (gate
+    fix 2): when both answer and name DIFFERENT targets the answer
+    is NO victim - a slot that re-normalized behind our back must
+    never dark the wrong panel with the witness nodding, so we
+    refuse and say so. One join answering alone carries the row
+    (the ghost's dark slot answers nothing in the active view; a
+    hand-built row names no slot); twins the token cannot single
+    out stay the no-gamble class. why is the honest refusal word
+    when the keys come back empty."""
     gdi = str(row.get("gdi") or "").upper()
-    keys = {r[1] for r in rows if gdi and r[3] == gdi}
-    if not keys:
-        tok = str(row.get("short") or "").upper()
-        found = {r[1] for r in rows if r[4] == tok}
-        keys = found if len(found) == 1 else set()
-    return keys
+    tok = str(row.get("short") or "").upper()
+    slot = {r[1] for r in rows if gdi and r[3] == gdi}
+    token = {r[1] for r in rows if r[4] == tok}
+    token = token if len(token) == 1 else set()
+    if slot and token and not (token <= slot):
+        return set(), ("the gdi slot names one panel, the EDID token "
+                       "another (no gamble)")
+    keys = slot or token
+    if keys:
+        return keys, ""
+    if tok and any(r[4] == tok for r in rows):
+        return set(), "several twins answer the token; no slot names one"
+    return set(), "no CCD path answers this row"
 
 
 def _drop(pb, rows, keys):
@@ -171,39 +184,53 @@ def _raise(pb, rows, keys):
 
 
 def _gone(victim, tries=VERIFY_TRIES):
-    """The ONLY honest post-apply truth: the CCD's active view no
-    longer carries the victim. The GDI rows are not asked (the KVM
+    """The ONLY honest post-apply truth, THREE-valued (gate fix 1):
+    True = the active view no longer carries the victim (verified
+    gone); False = a view answered and the victim is STILL THERE
+    (the wrong-victim class - accepted, nothing dropped as asked);
+    None = BLIND: every re-query refused (gate fix 1's split - the
+    retraction's fate is UNKNOWN, and an unknown must never be
+    sentenced as either class). The GDI rows are not asked (the KVM
     ghost keeps them lying through the retraction)."""
+    blind = True
     for _ in range(tries):
         time.sleep(VERIFY_WAIT_SEC)
         view = _rows(QDC_ACTIVE)
-        if view is not None and not (victim & {r[1] for r in view[2]}):
+        if view is None:
+            continue
+        blind = False
+        if not (victim & {r[1] for r in view[2]}):
             return True
-    return False
+    return None if blind else False
 
 
 def retract(row):
     """Disconnect this row's panel at the adapter. Returns
     (True, saved) only when the CCD RE-QUERY proves the intended
     target left the active set (or found it already retracted - the
-    same verified word), else (False, why) with the desk untouched:
-    a validate-refusal applies nothing, and a wrong-victim (the
-    accepted-but-different-panel class) restores its own damage
-    before reporting. `saved` is the restore record - the full
-    captured arrays with the victim ACTIVE - the lift hands it back
-    through restore()."""
+    same verified word), else (False, why) with the desk honest: a
+    validate-refusal applies nothing; a wrong-victim or a blind
+    verify restores its own damage before reporting, and the word
+    names WHICH happened and WHETHER the restore took (gate fix 1:
+    'no-drop rc 0x0 (wrong victim; restored)' / '(...; NOT RESTORED:
+    <say>)' / '(verify refused; restored unverified (blind re-query))'
+    - three classes, no misattribution). `saved` is the restore
+    record - the full captured arrays with the victim ACTIVE - the
+    lift hands it back through restore()."""
     act = _rows(QDC_ACTIVE)
     if act is None:
         return False, "the CCD query refused (rc unreadable)"
     pb, mb, rows = act
-    keys = _victim(rows, row)
+    keys, why = _victim(rows, row)
     if not keys:
         al = _rows(QDC_ALL)                       # the ghost's shape:
         if al is None:                            # GDI row lies, the
             return False, "no CCD answer at all"  # target exists dark
-        keys = _victim(al[2], row)
-        if not keys:
-            return False, "no CCD path answers this row"
+        keys, why = _victim(al[2], row)           # the ALL view gets
+        if not keys:                              # the same cross-
+            return False, why                     # check; a
+            #                                     # disagreement
+                                                  # outranks mercy
         return True, {"paths": _raise(al[0], al[2], keys), "modes": al[1],
                       "victim": keys, "at": time.time()}
     minus, _n = _drop(pb, rows, keys)
@@ -213,45 +240,72 @@ def retract(row):
     rc, gle = _apply_cfg(minus, mb, RETRACT_FLAGS)
     if rc:
         return False, "rc 0x%X gle=%d" % (rc, gle)
-    if _gone(keys):
+    gone = _gone(keys)
+    if gone is True:
         return True, {"paths": pb, "modes": mb, "victim": keys,
                       "at": time.time()}
-    restore({"paths": pb, "modes": mb, "victim": keys, "at": time.time()})
-    return False, "no-drop rc 0x0 gle=%d (wrong victim; restored)" % gle
+    r_ok, r_why = restore({"paths": pb, "modes": mb, "victim": keys,
+                           "at": time.time()})
+    reason = "wrong victim" if gone is False else "verify refused"
+    if r_ok:
+        back = "restored"
+    elif gone is None and r_why == "the re-query stayed blind":
+        # blind inside blind: the restore's WRITE took the same rc
+        # the retraction's took - it is the CHECK that cannot see,
+        # so the word says restored-unverified, never NOT RESTORED
+        # (gate fix 1: the misattribution class, one clause deep)
+        back = "restored unverified (blind re-query)"
+    else:
+        back = "NOT RESTORED: %s" % r_why
+    return False, "no-drop rc 0x0 (%s; %s)" % (reason, back)
 
 
 def restore(saved):
     """Hand the panel back: re-apply the saved arrays WITH the SAVE
     bit (a restore without it leaves the store rebooting the panel
     dark - the footgun, closed at every write). (True, "") only when
-    the re-query sees the target active again."""
+    the re-query sees the target active again; the why names WHICH
+    failure answered (still-dark vs blind - gate fix 1's honesty
+    travels every verify seam)."""
     rc, gle = _apply_cfg(saved["paths"], saved["modes"], RETRACT_FLAGS)
     if rc:
         return False, "restore rc 0x%X gle=%d" % (rc, gle)
-    if _victim_active(saved["victim"]):
+    came = _victim_active(saved["victim"])
+    if came is True:
         return True, ""
-    return False, "restore rc 0x0 but the target never came back"
+    if came is False:
+        return False, "the target never came back"
+    return False, "the re-query stayed blind"
 
 
 def revive(row):
     """The boot belt's door, no in-memory record needed: re-query the
     ALL view, and when this row's target sits there INACTIVE, raise
     its path back with the SAVE bit. None = nothing to do (the row
-    is lit, or no path answers it - an unplugged panel is the
-    belt's silent class, same religion as the D6 door); else
-    (ok, why) - the belt already logged the act either way."""
+    is lit, twins the token cannot single out, or no path answers it
+    - the belt's silent classes, same religion as the D6 door);
+    (ok, why) = the belt already logged the act either way - and a
+    slot/token DISAGREEMENT is loud on purpose (gate fix 2): the
+    belt must not silently skip a row whose identity the store
+    disputes."""
     al = _rows(QDC_ALL)
     if al is None:
         return None
     pb, mb, rows = al
-    keys = _victim(rows, row)
-    if not keys or any(r[1] in keys and r[2] & SDC_PATH_ACTIVE
-                       for r in rows):
-        return None                               # lit, or unreachable
+    keys, why = _victim(rows, row)
+    if keys and any(r[1] in keys and r[2] & SDC_PATH_ACTIVE for r in rows):
+        return None                               # lit: silence
+    if not keys:
+        return (False, why) if "no gamble" in why else None
     rc, gle = _apply_cfg(_raise(pb, rows, keys), mb, RETRACT_FLAGS)
-    return (rc == 0 and _victim_active(keys)), "rc 0x%X gle=%d" % (rc, gle)
+    return (rc == 0 and _victim_active(keys) is True), \
+        "rc 0x%X gle=%d" % (rc, gle)
 
 
 def _victim_active(keys):
+    """True/False for an answering view; None = BLIND (no verdict
+    about the glass, only about the check)."""
     view = _rows(QDC_ACTIVE)
-    return view is not None and bool(keys & {r[1] for r in view[2]})
+    if view is None:
+        return None
+    return bool(keys & {r[1] for r in view[2]})

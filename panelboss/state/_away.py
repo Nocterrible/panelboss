@@ -390,6 +390,13 @@ class _AwayMixin:
                 log.info("away belt: boot power-on for %s %s",
                          m["short"], "sent" if sent
                          else "refused (%s)" % say)
+        except Exception:
+            log.debug("away belt: the boot power-on pass failed",
+                      exc_info=True)
+        # the second door keeps its OWN try-block (gate fix 3): a
+        # raising D6 row must not skip the disconnect pass - one
+        # belt, two doors, each dying alone
+        try:
             for short, row in rows.items():
                 if not (row or {}).get("offdisc"):
                     continue
@@ -403,7 +410,7 @@ class _AwayMixin:
                              "sent" if verdict[0]
                              else "refused (%s)" % verdict[1])
         except Exception:
-            log.debug("away belt: the boot power-on pass failed",
+            log.debug("away belt: the boot disconnect pass failed",
                       exc_info=True)
 
     # ---------------------------------------------------------- the preview --
@@ -489,20 +496,16 @@ def _row_mode(rows, m):
 
 def _row_went_dark(status):
     """Did this row's dark get APPLIED (the lock-on-away predicate)?
-    A plain blackout (worn or configured - the paint IS the effect),
-    a dim of any honesty, an off the door took, a disconnect the CCD
-    witnessed: dark. A DEGRADED refusal - "blackout (word)", "off
-    refused - blackout instead", "offdisc refused (...)" - is the
-    summary line's degradation count, not an applied sub-mode, and
-    an all-refused engage must not yank the session on a dark every
-    door refused. A "gone" row (the panel left the enum mid-engage)
-    darked nothing."""
-    if status == "blackout":
-        return True
-    if status.startswith("dim"):
-        return True
-    return (status.startswith("off") and
-            not status.startswith(("off refused", "offdisc")))
+    A WHITELIST of the exact applied words (gate fix 5), not a
+    prefix pattern: a future status word must be an explicit
+    decision at this table, never a silent yank of the session (or
+    a silent skip) by sharing someone else's prefix. The degraded
+    refusals ("blackout (word)", "off refused - blackout instead",
+    "offdisc refused (...)") and the "gone" row are absent - the
+    summary line's degradation count is not an applied dark, and
+    an all-refused engage must not yank the session."""
+    return status in ("blackout", "dim", "dim (unverified)",
+                      "off (unverified)", "off (disconnected)")
 
 
 def _live_desk():

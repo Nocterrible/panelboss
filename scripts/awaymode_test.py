@@ -12,8 +12,10 @@ spell; the lock edge says nothing), the TWO OFF FLAVORS (the D6
 trust word vs the disconnect's PROVEN word; the marshal exact on a
 fake CCD - PATH-MINUS, validate-gated, the measured 0x6A0, SAVE on
 every write, wrong-victim self-restore, EDID-token join over the
-lying gdi slot - and the boot belt's second door), and the static
-ban that keeps
+lying gdi slot - and the boot belt's second door; the gate-fix
+words: wrong-victim vs verify-blind vs slot/token DISAGREEMENT as
+three honest classes, the belt's two try-blocks, and the lock
+predicate as a WHITELIST), and the static ban that keeps
 dim mode out of the power
 verbs. No Tk, no display hardware, no live app.
 Run from repo root:
@@ -158,7 +160,7 @@ class FakeSDC:
             return False, "no CCD path answers this row"
         if key == "WRONG":
             self.restores.append({"selfrestore": m["short"]})
-            return False, "no-drop rc 0x0 gle=0 (wrong victim; restored)"
+            return False, "no-drop rc 0x0 (wrong victim; restored)"
         self.active.discard(key)
         return True, {"paths": b"P" * 72, "modes": b"", "victim": {key},
                       "at": 1.0}
@@ -875,16 +877,29 @@ class FakeDesk:
     DELA283/AOC2790/IOC912B). The supplied array IS the new active
     set (what USE_SUPPLIED means); `refuse` answers VALIDATE with an
     rc (the last-display guard's door); `wrong` plays the dossier's
-    trap - the retraction lands on the PRIMARY while the victim stays.
+    trap - the retraction lands on the PRIMARY while the victim stays;
+    `gdi_of` RENUMBERS slots (gate fix 2's shape: the token names one
+    panel, the live slot names another -> the cross-check refuses);
+    `blind_after` goes the re-query dark (every capture answers None
+    after the first write - the verify-blind class must not be
+    sentenced as wrong-victim).
     apply log: (flags, supplied target ids) per call, in order."""
-    NAMES = {11: (r"\\.\DISPLAY1", r"\\?\DISPLAY#DELA283#1&2&0#{guid}"),
-             12: (r"\\.\DISPLAY2", r"\\?\DISPLAY#AOC2790#1&2&1#{guid}"),
-             13: (r"\\.\DISPLAY3", r"\\?\DISPLAY#IOC912B#1&2&2#{guid}")}
+    TARGETS = {11: r"\\?\DISPLAY#DELA283#1&2&0#{guid}",
+               12: r"\\?\DISPLAY#AOC2790#1&2&1#{guid}",
+               13: r"\\?\DISPLAY#IOC912B#1&2&2#{guid}"}
 
-    def __init__(self, live=(11, 12, 13), refuse=0, wrong=False):
+    def __init__(self, live=(11, 12, 13), refuse=0, wrong=False,
+                 gdi_of=None, blind_after=False):
         self.live = set(live)
         self.refuse = refuse
         self.wrong = wrong
+        self.blind_after = blind_after
+        self.blinded = False
+        slots = {11: r"\\.\DISPLAY1", 12: r"\\.\DISPLAY2",
+                 13: r"\\.\DISPLAY3"}
+        slots.update(gdi_of or {})
+        self.NAMES = {tid: (slots[tid], path)
+                      for tid, path in self.TARGETS.items()}
         self.applied = []
 
     def _path(self, tid):
@@ -899,6 +914,8 @@ class FakeDesk:
 
     def capture(self, flags):
         from panelboss.wm import _sdc as sdc_mod
+        if self.blinded:
+            return None                             # the blind class
         ids = ({11, 12, 13} if flags == sdc_mod.QDC_ALL
                else {i for i in (11, 12, 13) if i in self.live})
         paths = [self._path(i) for i in sorted(ids)]
@@ -922,7 +939,9 @@ class FakeDesk:
         if self.wrong and 12 not in ids:                    # the victim
             self.live = (self.live - {11}) | {12}           # stayed; the
             #                                    primary left (dossier)
-        return 0, 0
+        if self.blind_after:
+            self.blinded = True         # the write took; the eyes go
+        return 0, 0                     # dark after it (blind class)
 
 
 sdc_V = None                      # the VALIDATE verb set, captured at
@@ -983,21 +1002,64 @@ def test_sdc_marshal():
         print("ok - validate refusal: no apply follows, rc in the word")
 
         # the wrong-victim trap: accepted, the PRIMARY left, the victim
-        # stayed - the module restores its own damage before reporting
+        # stayed - the module restores its own damage BEFORE reporting,
+        # and the word names the class exactly (gate fix 1)
         desk2 = FakeDesk(wrong=True)
         led.keep(sdc_mod, "_capture", desk2.capture)
         led.keep(sdc_mod, "_apply_cfg", desk2.apply)
         ok, why = sdc_mod.retract(row)
-        assert not ok and why.startswith("no-drop rc 0x0"), why
+        assert not ok and why == "no-drop rc 0x0 (wrong victim; restored)", \
+            why
         assert desk2.applied[-1] == (sdc_mod.RETRACT_FLAGS, (11, 12, 13)), \
             "the self-restore rode the same SAVE flags"
         assert 11 in desk2.live, "the wrong victim came home too"
-        print("ok - wrong victim: self-restored with SAVE, refused word")
+        print("ok - wrong victim: self-restored with SAVE, the exact word")
+
+        # the VERIFY-BLIND class (gate fix 1's split): the writes take,
+        # every re-query after them answers None - the fate is UNKNOWN,
+        # and the word must not sentence it as wrong-victim. The
+        # self-heal still runs (restore rides the same SAVE flags), and
+        # the honest shade is restored-UNVERIFIED, not NOT RESTORED
+        desk2b = FakeDesk(blind_after=True)
+        led.keep(sdc_mod, "_capture", desk2b.capture)
+        led.keep(sdc_mod, "_apply_cfg", desk2b.apply)
+        ok, why = sdc_mod.retract(row)
+        assert not ok and why == "no-drop rc 0x0 (verify refused; " \
+            "restored unverified (blind re-query))", why
+        assert len(desk2b.applied) == 3, desk2b.applied  # validate,
+        #                              retract, restore - the heal rode
+        assert desk2b.applied[-1][0] == sdc_mod.RETRACT_FLAGS, \
+            "blind or not, the restore carries SAVE"
+        print("ok - verify blind: its own word, self-healed, unverified "
+              "not misattributed")
+
+        # the DISAGREEMENT (gate fix 2): the slot renumbered behind us -
+        # DISPLAY2 now carries the IOC's path while the AOC sits on
+        # DISPLAY3. The token says key 12, the live slot says key 13:
+        # NO victim, NO glass, the refuse word names the dispute
+        desk2c = FakeDesk(gdi_of={12: r"\\.\DISPLAY3",
+                                  13: r"\\.\DISPLAY2"})
+        led.keep(sdc_mod, "_capture", desk2c.capture)
+        led.keep(sdc_mod, "_names", desk2c.names)   # the RENUMBERED
+        #                              slot map must reach the joins
+        #                              (every desk brings its own trio)
+        led.keep(sdc_mod, "_apply_cfg", desk2c.apply)
+        ok, why = sdc_mod.retract({"short": "AOC2790",
+                                   "gdi": r"\\.\DISPLAY2"})
+        assert not ok and why == "the gdi slot names one panel, the EDID " \
+            "token another (no gamble)", why
+        assert desk2c.applied == [], "a disputed identity spends ZERO glass"
+        ok, saved = sdc_mod.retract({"short": "AOC2790", "gdi": ""})
+        assert ok and desk2c.applied[-1][1] == (11, 13), \
+            "slot unnamed (the belt's shape): the token alone carries"
+        print("ok - disagreement: slot vs token -> refuse, zero glass; "
+              "token alone still carries")
 
         # the ghost: the gdi slot LIES (DISPLAY99 answers nothing in
         # the CCD), the EDID token carries the victim
         desk3 = FakeDesk()
         led.keep(sdc_mod, "_capture", desk3.capture)
+        led.keep(sdc_mod, "_names", desk3.names)
         led.keep(sdc_mod, "_apply_cfg", desk3.apply)
         ok, _saved = sdc_mod.retract({"short": "AOC2790",
                                       "gdi": r"\\.\DISPLAY99"})
@@ -1008,6 +1070,7 @@ def test_sdc_marshal():
         # carries the dark path - verified word, ZERO glass spent
         desk4 = FakeDesk(live=(11, 13))
         led.keep(sdc_mod, "_capture", desk4.capture)
+        led.keep(sdc_mod, "_names", desk4.names)
         led.keep(sdc_mod, "_apply_cfg", desk4.apply)
         n0 = len(desk4.applied)
         ok, saved = sdc_mod.retract(row)
@@ -1177,8 +1240,29 @@ def test_offdisc_belt():
                 "no offdisc rows = the CCD door is never reached"
         finally:
             m3._ledger.undo()
+        # TWO DOORS, TWO TRY-BLOCKS (gate fix 3): a D6 row whose bus
+        # catches fire must not skip the disconnect pass
+        class Boom(FakeBright):
+            def vcp(self, *a, **k):
+                raise RuntimeError("the bus is on fire")
+        sdc4 = FakeSDC(victim={"CCC": "T-C"}, active=set())  # stored dark
+        m4 = make_monitor(tmp, {"mode": "dim",
+                                "monitors": {"AAA": {"mode": "off"},
+                                             "CCC": {"mode": "offdisc"}}},
+                          bright=Boom({"D1": 80}), sdc=sdc4)
+        try:
+            m4._away_boot_belt()
+            assert len(sdc4.revives) == 1 and "T-C" in sdc4.active, \
+                "the disconnect door ran DESPITE the D6 row's raise"
+            line = [l for l in rec.lines
+                    if "boot disconnect-restore for CCC" in l]
+            assert len(line) == 1, rec.lines
+        finally:
+            m4._ledger.undo()
         print("ok - lit/unreachable/no-rows: all silence (fresh desks "
               "never touch the door)")
+        print("ok - two doors, two try-blocks: a raising D6 row cannot "
+              "skip the disconnect pass")
     finally:
         slog.removeHandler(rec)
         slog.setLevel(was)
@@ -1192,6 +1276,23 @@ def test_static_ban():
         "the away engine must not own a power verb"
     assert "SC_MONITORPOWER" not in src and "0xF170" not in src, \
         "the off sub-mode's power is the VCP door, never the broadcast"
+    ui = open(os.path.join(root, "panelboss", "ui", "window", "_away.py"),
+              encoding="utf8").read()
+    assert "lambda e=None, w=seg:" in ui, \
+        "the tip anchor DEFAULT-CAPTURES the loop var (gate fix 4: " \
+        "late binding would anchor every row's paragraph to the last " \
+        "picker) - pinned statically; the live build is hdrwake's job"
+    from panelboss.state._away import _row_went_dark
+    assert _row_went_dark("off (disconnected)") and \
+        _row_went_dark("off (unverified)") and _row_went_dark("blackout") \
+        and _row_went_dark("dim") and _row_went_dark("dim (unverified)"), \
+        "the five applied words all earn the lock"
+    for w in ("off refused - blackout instead (rc 0x57)",
+              "offdisc refused (no-drop rc 0x0 (wrong victim; restored) "
+              "- blackout instead)",
+              "blackout (send refused after 3 tries)", "gone",
+              "off (some future word)", "dim (a future shade)"):
+        assert not _row_went_dark(w), w
     pwr = open(os.path.join(root, "panelboss", "state", "_power.py"),
                encoding="utf8").read()
     body = pwr[pwr.index("def _screens_off"):]
@@ -1201,6 +1302,8 @@ def test_static_ban():
     assert guard < verb, "the power verb sits behind the engage guard"
     assert re.search(r"if self\._away_engage\(\):", body), "guard pinned"
     print("ok - static ban: the off path reaches the verb only un-dimmed")
+    print("ok - the lock predicate is a WHITELIST: refusals, gone, and "
+          "future words never yank the session (gate fix 5)")
 
 
 def test_hook_lifecycle():
