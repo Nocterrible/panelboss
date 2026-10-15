@@ -1237,3 +1237,22 @@ Stage B (later wave): optimistic around-content dim - DDA motion eye
 (ACCESS_LOST re-Duplicate law, PrintWindow PW_RENDERFULLCONTENT
 fallback - both measured) dims the window AROUND the detected motion
 rect; wrong guesses die on the hotkey or any input.
+
+## MSI WAVE REQUIREMENTS (owner addenda, Oct 15 - the fresh-install
+## trial is the RELEASE gate, nothing ships until it passes)
+1. Per-user install, no elevation ambush (tray app; the app's own
+   task/consent model assumes a normal user).
+2. START MENU ITEM (owner aside, Oct 15): a proper app entry (name +
+   icon, launches the GUI; the Run-key autostart stays as the app's
+   own opt-in - the Start Menu entry is the discoverability half).
+3. Uninstall MUST clean: the power-assistant scheduled task, the Run
+   key entry, and the CCD stored-disconnect state the boot belt can
+   no longer reclaim once the belt is gone (restore-before-kill or
+   at minimum a loud dialog naming the disconnected display).
+4. The camera/onnx/model/customtkinter data files ride inside the
+   package (PyInstaller/Nuitka class problem; measure the bundle).
+5. Virgin trial on a fresh Windows user: consent screen -> camera
+   consent -> away cards -> hider -> refresh -> dimmer, then
+   uninstall and a residue sweep (registry, tasks, AppData).
+6. The veil redraw bugs (logged above) close BEFORE the trial; the
+   first impression is the trial.
