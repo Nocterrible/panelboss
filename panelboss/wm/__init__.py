@@ -53,7 +53,7 @@ import time
 from ctypes import wintypes
 
 from . import (_bright, _detect, _displaycfg, _hdr, _inspect,
-               _monitors, _overlay, _rescue, _restore, _winapi)
+               _monitors, _overlay, _rescue, _restore, _sdc, _winapi)
 
 from ._winapi import (DEVMODEW, DISPLAY_DEVICEW,
                       DISPLAY_DEVICE_ATTACHED_TO_DESKTOP,
@@ -145,7 +145,7 @@ __all__ = [
 ]
 
 _FANOUT = (_winapi, _inspect, _monitors, _displaycfg, _hdr, _rescue,
-           _restore, _detect, _bright, _overlay)
+           _restore, _detect, _bright, _overlay, _sdc)
 
 
 class _WmPackage(type(sys.modules[__name__])):
