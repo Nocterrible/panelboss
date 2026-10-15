@@ -1171,3 +1171,10 @@ live on their windows' monitor, hovering one bar wants all bars
 visible). Caret-hold is GLOBAL (typing in any bar's search holds all
 returns); return timers stay PER STRIP once the hold releases - peek
 at everything, restore what is not being touched.
+FAUX-HIDE PER-MONITOR ENABLE (owner addendum 2): the hider has a
+per-monitor row switch (the away card's row pattern), default ALL off
+(owner's rationale: burn-in is the OLED problem - the IPS bar never
+needs hiding; even on OLEDs it is opt-in per the law). Only enabled
+monitors get a strip painted at all; the reveal-scope choice and
+return-timer seconds are GLOBAL (one behavior, per-monitor targets -
+not a settings matrix).
