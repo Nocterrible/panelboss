@@ -1096,11 +1096,24 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
             config = {}
             # the defaults will be written back at the first save and
             # swallow a hand-edit with a typo in it - move the
-            # wreckage aside first so the edit stays fixable
+            # wreckage aside first so the edit stays fixable. KEEP THE
+            # ORIGINAL IN PLACE TOO (owner lesson, Oct 15): the first
+            # save after the reset rewrites path, and an
+            # os.replace-style quarantine leaves no second copy - the
+            # user's last good state rides on one renamed file with a
+            # timestamp no human can read. Two dated, hand-named
+            # copies cost 2 KB and buy the restore story.
             try:
+                stamp = time.strftime("%Y%m%d-%H%M%S")
                 bad = "%s.corrupt-%d" % (path, int(time.time()))
                 os.replace(path, bad)
                 log.error(f"unparsable config kept aside as {bad}")
+                with open(bad, "rb") as f:
+                    raw = f.read()
+                keep = "%s.saved-%s.bak" % (path, stamp)
+                with open(keep, "wb") as f:
+                    f.write(raw)
+                log.error(f"a readable-dated copy rests at {keep}")
             except OSError:
                 log.exception("could not move %s aside", path)
     merged = {}

@@ -1439,3 +1439,24 @@ typist-class work.
   (rc=0, ALL GREEN, tip 916d5ea, 14:37) covers the gap; the receipt is
   that log, and V's independent re-run stays cheap belt work for the
   MSI wave rather than owed here.
+
+## CONFIG LOSS, MY FAULT, RECORDED PLAIN (Oct 15 ~14:16)
+The owner's settings went stock-default because an AGENT edited the
+LIVE config file with a one-off regex script while the app was up.
+Chain: my script's line-matcher wrote a second `bound` into [dimmer]
+(plus clobbering the section layout), the TOML parse refused the
+duplicate, the loader's honest recovery quarantined the file and
+booted dark-by-law defaults, and the first autosave rewrote the file
+from the rebuilt in-memory dict. The corrupt copy survived but carried
+only the section my regex had mangled readable - the rest of the
+owner's file was gone under the rewrite. The rebuild path itself is
+EXONERATED by its own law (loud stop: dated quarantine, log lines,
+defaults, no crash-loop); the mistake was mine, twice over: no backup
+before scripted surgery, and scripting surgery at all when the UI
+owns the file while running. A hand-edit with a typo gets the same
+lesson by the loader's own comment - this is that class, agent-sized.
+Belts shipped this wave: the quarantine now ALSO leaves a readable
+dated .bak copy beside the .corrupt-<epoch> file (2 KB, human
+timestamp, restorable by name), and scripts/backup_config.py is the
+standing agent-side rule: back up first, edit through the running
+app's UI or a restart, never a regex against a live file.
