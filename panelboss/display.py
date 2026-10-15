@@ -380,6 +380,16 @@ class Display(threading.Thread):
         self._lift_armed = False               # the away engine's flag
         self._lift_origin = None               # mouse travel accumulator
         self._ear_req = None                   # pending register/unregister
+        self._hotkey_req = None                # the dimmer's pending
+        #                                      # (op, mods, vk,
+        #                                      # done_event, result) note
+        #                                      # set AFTER __init__: the
+        #                                      # pump reads it in
+        #                                      # _pump_pause, and a field
+        #                                      # born only at run() time
+        #                                      # AttributeError'd the
+        #                                      # away-suite's pre-run
+        #                                      # pause probe (Oct 15)
         self._hooked = False                   # requests are APPLIED on
         #                                      the pump thread (the raw
         #                                      registrations bind to
