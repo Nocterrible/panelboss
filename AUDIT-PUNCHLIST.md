@@ -1343,3 +1343,14 @@ by thirds, not 30/30/10), and one pin asserted the documented PARTIAL
 gap as if it were containment. A whole-file mechanical sweep is exactly
 the shape typist-quick exists for - the architect's keyboard is for the
 surgical single patch, which the ledger seam below is.
+
+## FLAKY SUITE, CAUGHT IN THE ACT (Oct 15 12:30)
+The gauntlet at tip 590441c answered `FAILED: at least one suite rc=1`
+and named `hdrwake_test.py rc=1` - the same file printed `HDR WAKE PIN
+OK` on my manual run seconds before, and three consecutive manual runs
+afterward all exit 0. First recorded flake on this suite; the dimmer
+wave touches none of its path (hdr wake pump, no veil code), so the
+correlation is with load, not the diff. Owed: give the suite a bounded
+retry (a real pump walk needs its window) or pin WHY it can miss once.
+Until then the gauntlet's one-word verdicts must be read, never
+inferred - the log named the file, so I went and looked.
