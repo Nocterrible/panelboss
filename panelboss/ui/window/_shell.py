@@ -207,6 +207,20 @@ class SettingsWindow(
                 self._manual_open_done = True
             self.deiconify()
         else:
+            # the veil rides EVERY manual open, not just the first
+            # (owner UAT, Oct 15): after a close, the next tray-open
+            # drew the full UI with no cover, so the reveal looked
+            # like a redraw and the tray's own raise looked like a
+            # rebuild. DWM keeps the surface painted only while the
+            # window stays alive; a close destroys it and the next
+            # map is a fresh paint burst that wants the veil as much
+            # as the birth map did. The raise for an ALREADY-mapped
+            # window takes the plain path - the burst there is the
+            # widget repaint below, not a first composite.
+            was_mapped = self.state() != "withdrawn"
+            if manual and not was_mapped:
+                self._veil("PanelBoss", full=True)
+                self._unveil_job = self.after(300, self._unveil)
             self.deiconify()
             self.lift()
         # knob-lie belt (second corpse, the owner's bar-was-on catch):
