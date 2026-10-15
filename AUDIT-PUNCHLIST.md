@@ -1120,3 +1120,27 @@ left installed-but-inert (removing it costs a UAC prompt; the switch's
 off-path deletes it whenever the owner next visits the card). README still
 says "default on" in two places and calls re_off the default - docs lane,
 follow-up.
+
+## TASKBAR DOSSIER (Oct 14, late - for the OLED tab's leg one)
+ABM_SETSTATE RETRIAL, CLEAN CONDITIONS (owner closed their third-party
+taskbar hider first; contention class cleared): rc=1 ACCEPTED, state
+unmoved (GETSTATE stayed 1), StuckRects3 blob unmoved - the morning's
+'silently ignored on 26220' survives retrial; it was never the hider
+app's fault. But the desk arrived ALREADY auto-hidden with the hider
+closed: that app persisted via the STORE (registry), and its effect
+outlived its process - the registry route is empirically alive on this
+build, proven by forensic residue, no experiment needed.
+CAUTION FOR THE PACKET: the folklore 'byte 8' of the Settings blob
+showed 0x02 while auto-hide was ON - the old forum values have drifted
+across builds; leg one re-derives the offset/semantics from a
+before/after diff, not from lore.
+LEG-ONE FORK, pre-settled: (a) pen the store + Explorer re-read
+(logon/restart to land - hostile UX for a tray toggle), or (b) FAUX
+HIDE: the app paints its own edge strip over the taskbar, zero shared
+state, vanishes with the process, cannot be broken by any other hider.
+For a burn-in tab (purpose: keep pixels from sitting still) (b) is the
+front-runner; the hider relocates to the OLED tab as faux-by-default,
+with the store route behind a labeled 'make it permanent' affordance
+if the owner ever wants it to survive logout. Coexist law either way:
+conflict with foreign hider residue CONFESSES on the row, never
+last-writer-wins in silence.
