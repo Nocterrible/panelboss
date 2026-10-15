@@ -138,8 +138,7 @@ def check():
         #    tab (no fifth tab - the card joins that tab's column)
         assert set(app.pages) == set(W.TABS), app.pages
         for attr in ("gaming_switch", "gaming_menus", "games_box",
-                     "ignore_box", "plan_entry", "add_fg_button",
-                     "dvr_status"):
+                     "ignore_box", "plan_entry", "add_fg_button"):
             assert hasattr(app, attr), attr + " missing from the build"
         print("[PASS] window builds (gaming card on the power-plan tab)")
         app._show_tab("power plan")
@@ -321,20 +320,19 @@ def check():
         #    and awaymode_test covers the migration that replaced the
         #    switch. Section number kept as a headstone: renumbering
         #    here would churn every line below for a comment.
-        # 8) the Game DVR card: the registry is the truth, so the
-        #    round-trip runs against the LIVE registry - "history" is
-        #    the low-blast-radius value on this desk and its original
-        #    entry is restored no matter what happens in between. This
-        #    exercises tweaks.apply/revert/_put VERBATIM: the old 6-arg
-        #    SetValueEx crash (TypeError, the provider-era myth) is gone,
-        #    so no shim stands between the test and the code that ships.
-        #    (Oct 12, owner: the gaming cards moved to column two, the
-        #    profiles law extended - the law is asserted: the DVR
-        #    switch sits in a column whose x is the LEFT card column's
-        #    x plus that column's width, i.e. beside, not below.)
-        _sw0 = next(iter(app.dvr_switches.values()))
-        _anc = []                        # the DVR switch's ancestor
-        _w = _sw0                        # chain, up to the window
+        # 8) THE SECOND COLUMN (Oct 12, owner: the gaming cards moved
+        #    right, the profiles law extended). The Game DVR card died
+        #    by owner order Oct 15 ("the state line lies; not worth the
+        #    hassle") - its switch anchors and its live-registry
+        #    round-trip retired with it (tweaks_test.py §6 still owns
+        #    the apply/revert verb against the real registry). The
+        #    column law survives, re-anchored on the gaming card that
+        #    remains: the gaming switch sits in a column whose x is
+        #    the LEFT card column's x plus that column's width, i.e.
+        #    beside, not below.
+        _sw0 = app.gaming_switch          # the gaming card's own switch
+        _anc = []                        # its ancestor chain, up to
+        _w = _sw0                        # the window
         while _w is not None and _w is not app:
             _anc.append(_w)
             _w = _w.master
@@ -366,7 +364,7 @@ def check():
                         if c.winfo_manager()],
                        key=lambda c: c.winfo_rootx())
         assert len(_cols) == 2, "power plan carries two columns now"
-        assert _cols[1] in _anc, "the DVR card lives in the RIGHT column"
+        assert _cols[1] in _anc, "the gaming card lives in the RIGHT column"
         assert _sw0.winfo_rootx() > _cols[0].winfo_rootx() + 400, \
             "the right column starts a column-width to the right - " \
             "beside, not below [dbg leftx=%s rightx=%s swx=%s innerw=%s " \
@@ -374,82 +372,12 @@ def check():
                           _cols[1].winfo_rootx(), _sw0.winfo_rootx(),
                           _inner.winfo_width(), app.winfo_width())
         print("[PASS] gaming cards live in the second column (side by side)")
-        from panelboss import tweaks
-        tid = "history"
-        path, name = tweaks.TOGGLES[tid][1], tweaks.TOGGLES[tid][2]
-        orig = tweaks._get(path, name)             # capture
-        try:
-            ok, err = tweaks.apply(tid)
-            assert ok, err
-            assert tweaks.is_on(tid) is True
-            ok, err = tweaks.revert(tid)
-            assert ok, err
-            assert tweaks.is_on(tid) is False
-        finally:
-            tweaks._put(path, name, orig)          # restore (None deletes)
-        print("[PASS] dvr toggle apply/revert round-trips against the "
-              "live registry")
-        # 8b) THE closure trap itself: clicking one switch must repaint
-        #     THAT row from registry truth. The late-binding bug made
-        #     every lambda paint the LAST switch in the loop - invisible
-        #     unless a bystander row is watched. "capture" clicks,
-        #     "session" watches, and the bystander must not flinch.
-        cap = app.dvr_switches["capture"]
-        ses = app.dvr_switches["session"]
-        p2, n2 = (tweaks.TOGGLES["capture"][1],
-                  tweaks.TOGGLES["capture"][2])
-        orig = tweaks._get(p2, n2)
-        ses_was, cap_was = ses.get(), cap.get()
-        try:
-            cap.cget("command")()      # CTkSwitch has no invoke():
-            #                            cget("command") fires EXACTLY
-            #                            the bound closure under test
-            app.update_idletasks()
-            assert ses.get() == ses_was, "clicking capture painted session"
-            assert cap.get() != cap_was
-            assert tweaks.is_on("capture") == bool(cap.get())
-            assert app.dvr_status.cget("text") in ("", None)
-            cap.cget("command")()
-            app.update_idletasks()
-            assert ses.get() == ses_was, "clicking capture painted session"
-            assert cap.get() == cap_was
-            assert tweaks.is_on("capture") == bool(cap.get())
-        finally:
-            tweaks._put(p2, n2, orig)
-        print("[PASS] a DVR click repaints its OWN row, never the "
-              "neighbour's")
-        # 9) KNOB-FROM-TRUTH at build (defect 2's widget-blind family):
-        #    a switch must be painted from its state at construction,
-        #    BOTH branches - a fresh CTkSwitch defaults off so the
-        #    false case looked right by accident, but the paint must
-        #    come from truth. Drive the real build: point every DVR
-        #    toggle's registry value at its suppression state, rebuild
-        #    the section, and read each knob back. (The gaming enable
-        #    switch uses the same both-branch idiom now - asserted via
-        #    the enabled round-trip in section 2.)
-        import copy as _copy
-        _tog = tweaks.TOGGLES
-        _snap = {t: tweaks._get(_tog[t][1], _tog[t][2]) for t in _tog}
-        try:
-            # ALL on: each suppression value in place -> every knob on
-            for t in _tog:
-                tweaks._put(_tog[t][1], _tog[t][2], _tog[t][3])
-            app._dvr_section(app.pages["power plan"].inner)
-            for t in _tog:
-                assert app.dvr_switches[t].get() == 1, \
-                    "toggle %s built OFF though registry says on" % t
-            # ALL off: values deleted -> every knob MUST be painted
-            # off (the old one-sided build would keep a stale on)
-            for t in _tog:
-                tweaks._put(_tog[t][1], _tog[t][2], None)
-            app._dvr_section(app.pages["power plan"].inner)
-            for t in _tog:
-                assert app.dvr_switches[t].get() == 0, \
-                    "toggle %s kept a stale ON (no deselect at build)" % t
-            print("[PASS] DVR switches paint knob-from-truth both ways")
-        finally:
-            for t in _tog:
-                tweaks._put(_tog[t][1], _tog[t][2], _snap[t])
+        # 8b/9) THE GAME DVR CARD, BURIED (owner UAT, Oct 15): the
+        #     click-repaints-its-own-row closure pin and the
+        #     knob-from-truth both-ways pin retired with the card;
+        #     the registry round-trip they drove belongs to
+        #     tweaks_test. Section numbers kept as headstones:
+        #     renumbering would churn every line below for a comment.
         # 9b) THE REST OF THE SWITCH FAMILY (the widget-blind class the
         #     owner personally caught): every knob the power/restore/
         #     editor panes build must paint BOTH branches from cfg

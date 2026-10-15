@@ -1460,3 +1460,17 @@ dated .bak copy beside the .corrupt-<epoch> file (2 KB, human
 timestamp, restorable by name), and scripts/backup_config.py is the
 standing agent-side rule: back up first, edit through the running
 app's UI or a restart, never a regex against a live file.
+
+## GAME DVR CARD, BURIED (Oct 15 UAT, owner order)
+Killed by owner order: "Game dvr overlay enabled or not still lies and
+does not tell the current state or enable/disable. let's kill this
+section honestly it's not worth the hassle." The card's state line
+could not promise an honest read (a Settings page may rewrite the
+values at any time, and the live answer needed the registry
+archaeology we were not going to fund), so the card died rather than
+kept lying: the section, its switch bookkeeping, its TIPS entry, its
+registry-truth repaint row, and the suite's three pins retired with
+it. ENGINE SIDE SURVIVES WHOLE: panelboss.tweaks, its registry values,
+and tweaks_test's apply/revert round-trip all stand - only the face
+is gone. The power tab's column-two law stayed (re-anchored on the
+gaming card, the column's remaining tenant).

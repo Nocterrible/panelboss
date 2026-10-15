@@ -1,12 +1,17 @@
 """Power-plan tab: Windows timer hold-overrides, the powercfg
-assistant, the Game DVR card, overrides viewer. (The hdr-while-away
-switch lived here until the dim-mode wave retired it into the away
-card's dim sub-mode - detection tab, and config._migrate_away.)
+assistant, overrides viewer. (The hdr-while-away switch lived here
+until the dim-mode wave retired it into the away card's dim
+sub-mode - detection tab, and config._migrate_away. The Game DVR
+card stood in column two until Oct 15: owner UAT killed it -
+the state line lied and the registry archaeology was not worth
+the hassle; the tweaks module and its registry values survive.)
 The gaming rate section lives in _gaming.py beside it: it shares
 this tab's SECOND column (Oct 12, owner: the gaming cards moved
 right) but trades monitor rates, not powercfg flags.
-Size law (measured 511, Oct 13 after the widget-blind family's
-both-branch paint and the knob-lie sync entry landed - the
+Size law (measured 420, Oct 15 - the Game DVR card's honest
+burial took the last 93 from the Oct 13's 511, taken after the
+widget-blind family's both-branch paint and the knob-lie sync
+entry landed - the
 two-column split and the defect-2
 knob-from-truth paint came before it): this
 is ONE page's paint-and-refresh
@@ -41,11 +46,12 @@ class _PowerMixin:
         col = ctk.CTkFrame(page, width=560, fg_color="transparent")
         col.pack(side="left", fill="y")
         # the profiles tab's two-column law, extended here on the
-        # owner's word (Oct 12): the gaming refresh-rates card and
-        # the Game DVR card move to column two - they are the
-        # page's rare-visit knobs, not its timer story, and the
-        # single-column page had grown into the owner's "too long"
-        # complaint by exactly the distance their cards add
+        # owner's word (Oct 12): the gaming refresh-rates card (and,
+        # until its Oct-15 burial, the Game DVR card) move to column
+        # two - they are the page's rare-visit knobs, not its timer
+        # story, and the single-column page had grown into the
+        # owner's "too long" complaint by exactly the distance their
+        # cards add
         col2 = ctk.CTkFrame(page, width=520, fg_color="transparent")
         col2.pack(side="left", fill="y")
         box = self._card(col, "override Windows' own timers",
@@ -234,66 +240,6 @@ class _PowerMixin:
         # sub-mode (detection tab; config._migrate_away carries the
         # consent across). The key stays readable one release.
         self._gaming_section(col2)      # column two (owner request)
-        self._dvr_section(col2)
-
-
-    def _dvr_section(self, col):
-        """The Game DVR card: one switch per registry tweak the
-        gaming pack can promise (docs/apack-findings.md). The
-        registry is the truth - a Settings page may rewrite the
-        values at any time - so the switches read their state
-        from the registry at render and hand it back after
-        every click, and a failed write is reported in the
-        status line instead of a dialog."""
-        from ... import tweaks
-        box = self._card(col, "Game DVR", TIPS["dvr"])
-        self.dvr_switches = {}
-        for tid, (label, _path, _name, _data, _timing) in tweaks.TOGGLES.items():
-            row = self._row(box, label)
-            sw = ctk.CTkSwitch(row, text="",
-                               font=self.skin.font(12),
-                               **self.skin.switch_style())
-            # bind BOTH via defaults, after sw exists: binding
-            # only tid left every lambda painting the LAST switch
-            # from registry truth (the classic late-binding trap -
-            # the clicked switch kept its raw state, repaint lied)
-            sw.configure(command=lambda t=tid, s=sw:
-                         self._dvr_toggle(t, s))
-            sw.grid(row=0, column=1, sticky="e")
-            # knob-from-truth, BOTH branches (the _sync_consent_switch
-            # idiom): the old build painted only select() on the True
-            # case, so the switch's position came from the widget's
-            # default (off) rather than from what the registry actually
-            # said - a switch that can never show "on" when the value is
-            # absent, and that would keep a stale knob on a reused
-            # widget. Paint the false case explicitly (defect 2).
-            if tweaks.is_on(tid):
-                sw.select()
-            else:
-                sw.deselect()
-            self.dvr_switches[tid] = sw
-        self.dvr_status = ctk.CTkLabel(
-            box, text="", font=self.skin.font(11),
-            **self.skin.text_style("sub"))
-        self.dvr_status.pack(anchor="w")
-
-
-    def _dvr_toggle(self, tid, sw):
-        """The registry decides, not the click: apply when off,
-        revert when on, then repaint the switch from the
-        registry again (the user's click may have lost to a
-        Settings page) and surface the error in the status
-        line - no dialogs."""
-        from ... import tweaks
-        if tweaks.is_on(tid):
-            ok, err = tweaks.revert(tid)
-        else:
-            ok, err = tweaks.apply(tid)
-        if tweaks.is_on(tid):
-            sw.select()
-        else:
-            sw.deselect()
-        self.dvr_status.configure(text="" if ok else err)
 
 
     def _policy_changed(self, label):

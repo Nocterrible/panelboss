@@ -401,10 +401,10 @@ all verified on this 25H2 build - the folklore pile stayed out):
   background capture, record-what-happened, session detection -
   all HKCU, read live so Settings and us never disagree) and the
   machine-wide policy attempt that honestly reports "admin needed".
-  The **Game DVR card** on the power tab drives exactly those four:
-  every switch paints itself from the registry, not from wishful
-  memory, and a failed write says so in the status line instead of
-  lying with a flipped toggle.
+  The **Game DVR card** that drove those four on the power tab was
+  killed by owner order Oct 15 (the state line lied; the registry
+  archaeology was not worth the hassle) - the module and its values
+  survive, the switches do not.
 
 ## Taskbar hover-reveal
 
