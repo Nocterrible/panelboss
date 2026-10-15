@@ -301,6 +301,15 @@ _WINDOW_READY = threading.Event()
 PAINTER_READY_TIMEOUT_SEC = 10.0
 
 
+def wait_for_window():
+    """The painters' contract, public side: block until the settings
+    window's root has claimed the process default (or the floor
+    expires - a headless boot claims on timeout). Any thread that is
+    about to birth a Tk() that must NOT win the default race calls
+    this BEFORE its own tk.Tk()."""
+    _WINDOW_READY.wait(PAINTER_READY_TIMEOUT_SEC)
+
+
 def window_ready():
     """The settings window calls this the moment its Tk is born: the
     default root is the window's now, so the painter's interpreter can

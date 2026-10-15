@@ -249,10 +249,15 @@ class SettingsWindow(
         if m <= self._poke_seen:
             return
         self._poke_seen = m
+        self._show_first(manual=True)       # the map FIRST (gate
+        self.focus_force()                  # finding 2): an ack before
+                                            # a raise would bless a
+                                            # poke that produced no
+                                            # window - the ack's whole
+                                            # purpose was to name the
+                                            # silent case
         with open(self._poke_ack, "a"):
             os.utime(self._poke_ack, None)
-        self._show_first(manual=True)
-        self.focus_force()
 
     def _repaint_switches(self, pane=None):
         """Re-paint the truth switches at settled geometry. WHY: a
