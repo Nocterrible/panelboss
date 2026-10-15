@@ -67,8 +67,8 @@ one word was swallowing 87s and 1400s into a lie about a chord that
 was never actually taken. One press pauses, one resumes (toggle,
 not hold).
 
-SIZE LAW: the file runs ~660 and the seam is real, not cosmetic -
-Veils (the FSM, ~150) and the stratum below it (census + pins,
+SIZE LAW: the file runs 817 and the seam is real, not cosmetic -
+Veils (the FSM, ~180) and the stratum below it (census + pins,
 painter, hotkey arm) are already three files wearing one name; when
 the veil set needs card-side state, the stratum moves out as
 _dimwin.py and the seam opens on its own. The pinning table is
@@ -490,12 +490,16 @@ def _covered(veils, hwnd, rect):
     CONTAINS this new one. Two stacked Tk windows each at the level
     darken the intersection past either - the seam reads as a stale
     veil. The covering veil already darkens that whole field, so the
-    contained window gets no window of its own; when the covering
-    app loses its veil, the contained window's next paint request
-    births it normally. The INVERSE (a live veil sitting inside a
-    bigger newcomer) is deliberately left: the discrepancy dies the
-    tick the underlying window moves, and a general rectangle-
-    subtraction painter is a rewrite the owner has not asked for."""
+    contained window gets no window of its own. Suppression is not
+    forgettable: the pump records every refused hwnd (the `suppressed`
+    ledger, gate finding 1) and the covering "gone" re-emits its
+    contained rows - the FSM has NO re-paint request for a still-
+    qualified unmoved window, so a birth-time-only suppression strands
+    the bright window in a dimmed field until it happens to move. The
+    INVERSE (a live veil sitting inside a bigger newcomer) is
+    deliberately left: the discrepancy dies the tick the underlying
+    window moves, and a general rectangle-subtraction painter is a
+    rewrite the owner has not asked for."""
     for h, w in veils.items():
         if h == hwnd:
             continue
@@ -509,6 +513,38 @@ def _covered(veils, hwnd, rect):
     return False
 
 
+def _contains(outer, inner):
+    """True when the outer rect fully contains the inner one - the
+    geometry the suppression ledger speaks (rects are (x, y, w, h))."""
+    return (outer[0] <= inner[0] and outer[1] <= inner[1]
+            and inner[0] + inner[2] <= outer[0] + outer[2]
+            and inner[1] + inner[3] <= outer[1] + outer[3])
+
+
+def _ledged_birth(suppressed, veils, hwnd, rect, alpha):
+    """The pump's birth decision, named so the suite can drive it
+    without a Tk (gate finding 1): a covered hwnd is RECORDED, not
+    forgotten - the FSM will never ask again for a window that stays
+    still and qualified - and returns None. An uncovered hwnd's ledger
+    row is cleared and the ("veil"...) item it belongs to is returned:
+    the pump owns the Toplevel, this seam owns the memory."""
+    if _covered(veils, hwnd, rect):
+        suppressed[hwnd] = (rect, alpha)
+        return None
+    suppressed.pop(hwnd, None)
+    return ("veil", hwnd, rect, alpha)
+
+
+def _reclaim(suppressed, dead_rect):
+    """The other half of the ledger: the covering "gone" re-emits every
+    row its death un-conceals. The re-emitted items re-ask _covered
+    against the REMAINING live set, so a second cover still owns its
+    field."""
+    freed = [h for h, (r, _a) in suppressed.items()
+             if _contains(dead_rect, r)]
+    return [suppressed.pop(h) + (h,) for h in freed]
+
+
 def _run_painter():
     import tkinter as tk
     from . import hider
@@ -518,6 +554,11 @@ def _run_painter():
     root.withdraw()
     _q.root = root
     veils = {}
+    # the suppression ledger (gate finding 1): hwnd -> (rect, alpha)
+    # for every birth the composite refused. The FSM has no re-paint
+    # request for a still-qualified UNMOVED window, so the covering
+    # "gone" is the ONLY event that can ever birth the suppressed row.
+    suppressed = {}
 
     def pump():
         while True:
@@ -530,13 +571,25 @@ def _run_painter():
                 act, hwnd, rect, alpha = item
                 if act == "gone":
                     w = veils.pop(hwnd, None)
+                    suppressed.pop(hwnd, None)
+                    if rect is None and w is not None:
+                        rect = getattr(w, "_pb_rect", None)
                     if w is not None:
                         w.withdraw()
                         w.after(150, w.destroy)
+                    if rect is not None:   # the cover died: everything
+                        #                      it was concealing
+                        #                      re-emits as fresh veil
+                        #                      items (the seams below
+                        #                      own the geometry)
+                        for r, a, h in _reclaim(suppressed, rect):
+                            _q.put(("veil", h, r, a))
                     continue
                 w = veils.get(hwnd)
                 if w is None:
-                    if _covered(veils, hwnd, rect):
+                    item2 = _ledged_birth(suppressed, veils, hwnd,
+                                          rect, alpha)
+                    if item2 is None:
                         continue         # the covering veil owns it
                     w = veils[hwnd] = tk.Toplevel(root)
                     w.overrideredirect(True)
@@ -561,6 +614,12 @@ def _run_painter():
                 log.exception("dimmer: one veil item failed; the "
                               "pump survives")
                 w = veils.pop(hwnd, None)
+                if act == "veil":
+                    suppressed.pop(hwnd, None)   # a half-applied
+                    #                            refusal must not
+                    #                            sit in the ledger
+                    #                            with no cover left
+                    #                            to free it
                 if w is not None:
                     try:
                         w.destroy()

@@ -1318,3 +1318,28 @@ same-class suspect (it sat two minutes after a wash-era boot).
   and an overlapping veil that later dies can strand its suppressed
   window undimmed until the next move. General rect subtraction stays
   a rewrite nobody asked for.
+
+## THE SUITE-REWRITE LESSON (Oct 15, mine, recorded against repetition)
+Gate finding 2 (the test helper's level default hid the shipped
+default) was a ONE-LINE ask and I spent six commands on it: a regex
+`cfg\(([^()]*)\)` ate the helper's own signature (the inserted
+`level=20` became a named parameter and the kw-based body went blind),
+nested-brace kwargs hid from `[^()]*`, the repair scratch ran with the
+wrong cwd, and half the call sites rode `level=` spellings I had not
+audited first. For a mechanical sweep across a whole file the verbs
+are the balanced-paren scan, THEN an explicit audit of what got
+rewritten, THEN a run - not a regex on a guess. (The sweep's real
+product was smaller than the doctrine implied: rename the helper, or
+keep its default and pin the shipped one bare-dict once - one line,
+as the gate said.)
+
+## GATE-FINDING REPAIR, MINE (Oct 15, same session)
+Two of the gate's four findings were one-liners; I took them inline and
+the honest note is the cost: finding 2 ("the suite helper's level=45
+default hides the shipped 20") took SIX commands. A one-line regex on
+`cfg(...)` ate its own definition, the nested-brace kwargs were invisible
+to `[^()]*`, the fraction ladder I rewrote was the wrong ladder (30/20/10
+by thirds, not 30/30/10), and one pin asserted the documented PARTIAL
+gap as if it were containment. A whole-file mechanical sweep is exactly
+the shape typist-quick exists for - the architect's keyboard is for the
+surgical single patch, which the ledger seam below is.

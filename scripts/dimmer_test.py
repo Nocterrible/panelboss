@@ -52,7 +52,13 @@ def w(hwnd, pid=1, exe="notepad.exe", monitor="AOC2790",
 
 
 def cfg(on=True, monitors=None, apps=None, idle_sec=120, ramp_sec=8,
-        level=45, always=None):
+        always=None, **kw):
+    # NO level default here (gate finding 2): the helper's old 45 was
+    # the retired default wearing an honest face, and a regression of
+    # the shipped 20 would have ridden under it. Every call names its
+    # level; the bare-dict pin at SHIPPED-DEFAULT owns the one truth.
+    level = kw.pop("level")
+    assert not kw, "unknown cfg kwargs: %r" % (sorted(kw),)
     return {"dimmer": {"on": on,
                        "monitors": monitors if monitors is not None
                        else {"AOC2790": True},
@@ -79,21 +85,21 @@ class World:
 
 # default-off law, plus the lazy painter the no-boot promise means
 dimmer._veils = None
-dimmer.tick(cfg(on=False), 100)
+dimmer.tick(cfg(level=30, on=False), 100)
 assert dimmer._veils is not None and dimmer._q is None
 ok("no boot: the veil painter does not exist until a veil is born")
 
 W = World([w(1)])
-W.tick(cfg(on=False), 100)
+W.tick(cfg(level=30, on=False), 100)
 assert W.rec.painted == {} and W.rec.gone == []
 ok("an unarmed dimmer paints nothing and promises nothing")
 
 # opt-in is per-monitor, and un-arming every row tears the field down
 W = World([w(1, monitor="AOC2790"), w(2, monitor="IOC912B")])
-W.tick(cfg(monitors={"AOC2790": True, "IOC912B": False}), 100)
+W.tick(cfg(level=30, monitors={"AOC2790": True, "IOC912B": False}), 100)
 assert 1 in W.rec.painted and 2 not in W.rec.painted
 ok("a false row dims nothing: the opt-in law, per panel")
-W.tick(cfg(monitors={"AOC2790": False, "IOC912B": False}), 101)
+W.tick(cfg(level=30, monitors={"AOC2790": False, "IOC912B": False}), 101)
 assert W.rec.painted == {} and 1 in W.rec.gone
 ok("un-arming every row takes the whole field down with it")
 
@@ -106,65 +112,65 @@ W = World([w(1),
            w(6, exe="chrome.exe"),
            w(7, rect=(0, 0, 0, 400)),
            w(8, pid=555)], audio=[555])
-W.tick(cfg(apps={"chrome.exe": True}), 100)
+W.tick(cfg(level=30, apps={"chrome.exe": True}), 100)
 assert set(W.rec.painted) == {1}
-assert W.rec.painted[1][1] == 0.45
+assert W.rec.painted[1][1] == 0.3
 ok("the skip list is law (fg, cloaked, iconic, own, excluded, zero, "
    "audible) and the veil's alpha IS the level")
 
 # foreground change un-veils on the tick it is seen (the ~0.2 s law)
 W = World([w(1), w(2)])
-W.tick(cfg(), 100)
+W.tick(cfg(level=30), 100)
 assert set(W.rec.painted) == {1, 2}
 W.wins = [w(1, fg=True), w(2)]
-W.tick(cfg(), 101)
+W.tick(cfg(level=30), 101)
 assert 1 not in W.rec.painted and 1 in W.rec.gone
 ok("the foreground change un-veils on the tick it is seen")
 
 # the settle boundary, walked from both sides
 W = World([w(9, pid=99)], audio=[99])
-W.tick(cfg(), 100)
+W.tick(cfg(level=30), 100)
 assert 9 not in W.rec.painted
 W.audio = set()
-W.tick(cfg(), 103.999)
+W.tick(cfg(level=30), 103.999)
 assert 9 not in W.rec.painted
-W.tick(cfg(), 104.0)
+W.tick(cfg(level=30), 104.0)
 assert 9 in W.rec.painted
 ok("a silent app stays exempt until the 4.0 s settle, to the tick")
 
 # and back to audible is instant, not another settle away
 W.rec.gone.clear()
 W.audio = {99}
-W.tick(cfg(), 104.5)
+W.tick(cfg(level=30), 104.5)
 assert 9 not in W.rec.painted and 9 in W.rec.gone
 ok("a window that starts making sound un-dims the tick we learn it")
 
 # the ramp: hold, two more steps, bare by ramp_sec - never a blink
 W = World([w(1), w(2)])
-W.tick(cfg(), 100)
+W.tick(cfg(level=30), 100)
 W.idle = 0.0
-W.tick(cfg(), 100)
-assert set(W.rec.painted) == {1, 2} and W.rec.painted[1][1] == 0.45
-W.tick(cfg(), 103)
-assert W.rec.painted[1][1] == 0.3
-W.tick(cfg(), 106)
-assert W.rec.painted[1][1] == 0.15
-W.tick(cfg(), 108)
+W.tick(cfg(level=30), 100)
+assert set(W.rec.painted) == {1, 2} and W.rec.painted[1][1] == 0.3
+W.tick(cfg(level=30), 103)
+assert W.rec.painted[1][1] == 0.2     # step one of three, at 30%%
+W.tick(cfg(level=30), 106)
+assert W.rec.painted[1][1] == 0.1     # step two, bare by ramp_sec
+W.tick(cfg(level=30), 108)
 assert W.rec.painted == {} and 1 in W.rec.gone and 2 in W.rec.gone
 ok("the fade holds, steps twice more, and the desk is bare at ramp")
 
 # a moved window drags its veil; a second stillness re-lights mid-fade
 W = World([w(1)])
-W.tick(cfg(), 100)
+W.tick(cfg(level=30), 100)
 W.wins = [w(1, rect=(50, 60, 640, 480))]
-W.tick(cfg(), 101)
+W.tick(cfg(level=30), 101)
 assert W.rec.painted[1][0] == (50, 60, 640, 480)
 ok("a moved window drags its veil along")
 W.idle = 0.0
-W.tick(cfg(), 102)
+W.tick(cfg(level=30), 102)
 W.idle = 999.0
-W.tick(cfg(), 103)
-assert W.rec.painted[1][1] == 0.45
+W.tick(cfg(level=30), 103)
+assert W.rec.painted[1][1] == 0.3
 ok("a second stillness re-lights the fade mid-step")
 
 
@@ -177,7 +183,7 @@ _raw_desk = [w(1, cls="Progman", rect=(0, 0, 2560, 1440)),
              w(2, cls="WorkerW", rect=(0, 0, 2560, 1440)),
              w(3, cls="Chrome_WidgetWin_1")]
 W = World(dimmer._veil_rows(_raw_desk))    # the REAL filter, named
-W.tick(cfg(), 100)
+W.tick(cfg(level=30), 100)
 assert set(W.rec.painted) == {3}, "a desktop view reached paint"
 ok("Progman and WorkerW never reach paint: the wallpaper is not a "
    "window you are not using")
@@ -291,11 +297,11 @@ dimmer._clickthrough = lambda win: None
 sys.modules["tkinter"] = _tk
 try:
     dimmer._q = None
-    dimmer._paint(1, (10, 10, 800, 600), 0.45)       # live veil
-    dimmer._paint(2, (20, 20, 400, 300), 0.45)       # CONTAINED birth
-    dimmer._paint(3, (1200, 10, 900, 700), 0.45)     # disjoint birth
-    dimmer._paint(9, (5, 5, 2000, 1000), 0.45)       # the DEAD hwnd
-    dimmer._paint(3, (0, 0, 700, 500), 0.45)         # grows: overlaps
+    dimmer._paint(1, (10, 10, 800, 600), 0.3)       # live veil
+    dimmer._paint(2, (20, 20, 400, 300), 0.3)       # CONTAINED birth
+    dimmer._paint(3, (1200, 10, 900, 700), 0.3)     # disjoint birth
+    dimmer._paint(9, (5, 5, 2000, 1000), 0.3)       # the DEAD hwnd
+    dimmer._paint(3, (0, 0, 700, 500), 0.3)         # grows: overlaps
     _deadline = _time_mod.time() + 10.0
     while not JOBS:
         assert _time_mod.time() < _deadline, "the fake painter died"
@@ -328,6 +334,26 @@ assert not dimmer._covered({1: type("V", (), {"_pb_rect":
 ok("a contained birth is refused; a partial overlap still births "
    "(the inverse containment is the documented, deliberate gap)")
 
+# the suppression ledger (gate finding 1): a refused birth is NOT
+# forgotten - when the covering veil dies, its contained rows re-emit.
+_live1 = {1: type("V", (), {"_pb_rect": (10, 10, 800, 600)})()}
+_ledger = {}
+assert dimmer._ledged_birth(_ledger, _live1, 2,
+                            (20, 20, 400, 300), 0.3) is None
+assert _ledger.get(2) == ((20, 20, 400, 300), 0.3), \
+    "the refused birth was dropped, not remembered"
+assert dimmer._reclaim(_ledger, (10, 10, 800, 600)) \
+    == [((20, 20, 400, 300), 0.3, 2)], "the cover's death freed nothing"
+assert not _ledger, "reclaim left a row behind"
+assert dimmer._ledged_birth({}, _live1, 3, (20, 20, 900, 300), 0.3) \
+    == ("veil", 3, (20, 20, 900, 300), 0.3)   # PARTIAL overlap still
+    #                                         births: the documented
+    #                                         deliberate gap
+assert dimmer._ledged_birth(_ledger, {}, 3, (20, 20, 400, 300), 0.3) \
+    == ("veil", 3, (20, 20, 400, 300), 0.3)   # no cover: born at once
+ok("the pump remembers every refusal; the cover's death re-emits "
+   "exactly its contained rows")
+
 
 # --- RULING 3 (Oct-15): the per-monitor always sub-mode. An opted
 # --- row that also says always dims WITHOUT the idle clock - but the
@@ -335,7 +361,7 @@ ok("a contained birth is refused; a partial overlap still births "
 # --- app or mouse isn't on that monitor"), the audible exemption
 # --- rides, and the pause clears everything. dimming is a SET.
 _AOC = {"AOC2790": True, "IOC912B": True}
-_c = cfg(monitors=_AOC, always={"IOC912B": True})
+_c = cfg(level=30, monitors=_AOC, always={"IOC912B": True})
 W = World([w(9, fg=True, monitor="AOC2790"),      # focus on AOC
            w(1, monitor="AOC2790"),
            w(2, monitor="IOC912B")], idle=0.0)    # desk NOT idle
@@ -347,7 +373,7 @@ assert set(W.rec.painted) == {2}, \
 W.wins = [w(9, fg=True, monitor="IOC912B"), w(1, monitor="AOC2790"),
           w(2, monitor="IOC912B")]
 W.tick(_c, 101)
-assert W.rec.painted[2][1] == 0.45       # the edge holds, no blink
+assert W.rec.painted[2][1] == 0.3       # the edge holds, no blink
 W.tick(_c, 109)                          # a whole ramp later: bare
 assert W.rec.painted == {} and 2 in W.rec.gone
 ok("an always panel dims without the idle wait and fades the tick "
@@ -358,7 +384,7 @@ _dlg.addHandler(_cap)
 W.wins = [w(9, fg=True, monitor=None), w(1, monitor="AOC2790"),
           w(2, monitor="IOC912B")]
 W.tick(_c, 110)
-assert W.rec.painted[2][1] == 0.45       # re-lit: the blind word says why
+assert W.rec.painted[2][1] == 0.3       # re-lit: the blind word says why
 before = len(_cap.lines)
 W.tick(_c, 111)
 W.tick(_c, 112)
@@ -378,7 +404,7 @@ assert set(W.rec.painted) == {2}
 ok("a window the sensor hears keeps its brightness on an always panel")
 dimmer.set_paused(True)
 W.tick(_c, 105)                          # the pause edge holds, soft
-assert W.rec.painted[2][1] == 0.45
+assert W.rec.painted[2][1] == 0.3
 W.tick(_c, 113)                          # the whole ramp: bare
 assert W.rec.painted == {} and 2 in W.rec.gone
 dimmer.set_paused(False)
@@ -387,13 +413,13 @@ assert set(W.rec.painted) == {2}
 ok("the pause outranks the always row and the field returns with it")
 # an always that never opted in dims nothing (sub-mode, not a bypass)
 W = World([w(2, monitor="IOC912B")], idle=0.0)
-W.tick(cfg(monitors={"IOC912B": False}, always={"IOC912B": True}), 100)
+W.tick(cfg(level=30, monitors={"IOC912B": False}, always={"IOC912B": True}), 100)
 assert W.rec.painted == {}
 ok("always is a SUB-MODE of the opt-in: an un-armed row never dims")
 # a dimming always panel does NOT freeze a returning panel's veil:
 # input back with BOTH panels always - the focus lands on IOC, so
 # IOC fades down its own ramp while AOC never blinks
-_c2 = cfg(monitors=_AOC, always={"AOC2790": True, "IOC912B": True})
+_c2 = cfg(level=30, monitors=_AOC, always={"AOC2790": True, "IOC912B": True})
 W = World([w(1, monitor="AOC2790"), w(2, monitor="IOC912B")],
           idle=999.0)
 W.tick(_c2, 100)                         # idle: both panels full
@@ -402,12 +428,12 @@ W.idle = 0.0
 W.wins = [w(9, fg=True, monitor="IOC912B"), w(1, monitor="AOC2790"),
           w(2, monitor="IOC912B")]
 W.tick(_c2, 101)                         # IOC owns the focus now
-assert W.rec.painted[2][1] == 0.45       # still full at the edge...
+assert W.rec.painted[2][1] == 0.3       # still full at the edge...
 W.tick(_c2, 104)                         # ...three seconds down the ramp
-assert W.rec.painted[2][1] == 0.3
-assert W.rec.painted[1][1] == 0.45       # AOC never blinked
+assert W.rec.painted[2][1] == 0.2       # step one of three, at 30%%
+assert W.rec.painted[1][1] == 0.3       # AOC never blinked
 W.tick(_c2, 110)
-assert 2 in W.rec.gone and W.rec.painted[1][1] == 0.45
+assert 2 in W.rec.gone and W.rec.painted[1][1] == 0.3
 ok("the panel that stopped dimming fades on its own edge while an "
    "always panel keeps duty")
 
@@ -416,26 +442,26 @@ ok("the panel that stopped dimming fades on its own edge while an "
 # --- tick. (The clamp rails are pinned in the normalize block above,
 # --- the card's range in the UI pin below - floor 0, ceiling 60.)
 W = World([w(1), w(2)])
-W.tick(cfg(ramp_sec=0), 100)
+W.tick(cfg(level=30, ramp_sec=0), 100)
 assert set(W.rec.painted) == {1, 2}
 W.idle = 0.0
-W.tick(cfg(ramp_sec=0), 100)
+W.tick(cfg(level=30, ramp_sec=0), 100)
 assert W.rec.painted == {} and 1 in W.rec.gone and 2 in W.rec.gone
 ok("ramp 0 is the instant drop - no division, no step, this tick")
 # and a mid-fade re-stillness at ramp 0 re-lights like any other ramp
 W = World([w(1)])
-W.tick(cfg(ramp_sec=0), 100)
+W.tick(cfg(level=30, ramp_sec=0), 100)
 W.idle = 0.0
-W.tick(cfg(ramp_sec=0), 101)
+W.tick(cfg(level=30, ramp_sec=0), 101)
 W.idle = 999.0
-W.tick(cfg(ramp_sec=0), 102)
-assert W.rec.painted[1][1] == 0.45
+W.tick(cfg(level=30, ramp_sec=0), 102)
+assert W.rec.painted[1][1] == 0.3
 ok("stillness at ramp 0 re-lights the field like any other ramp")
 
 # --- RULING 5: the level DEFAULT is 20 (OLED). The rails are pinned
 # --- untouched in the normalize block; here the bare dict (no level
 # --- key at all) must paint 0.2, and an explicit level still rules.
-_nolvl = cfg()
+_nolvl = cfg(level=30)
 del _nolvl["dimmer"]["level"]
 W = World([w(1)])
 W.tick(_nolvl, 100)
@@ -531,27 +557,27 @@ finally:
 # --- the pause switch is a SOFT stop: it fades like activity does and
 # --- comes back the tick the pause lifts - no blink, no re-arming walk
 W = World([w(1)])
-W.tick(cfg(), 100)                      # veil at full, unpaused
-assert W.rec.painted[1][1] == 0.45
+W.tick(cfg(level=30), 100)                      # veil at full, unpaused
+assert W.rec.painted[1][1] == 0.3
 dimmer.set_paused(True)
 assert dimmer.paused() is True
-W.tick(cfg(), 101)                      # paused: the fade clock starts
-assert W.rec.painted[1][1] == 0.45      # hold, not blink
-W.tick(cfg(), 109)                      # the whole ramp: bare, not killed
+W.tick(cfg(level=30), 101)                      # paused: the fade clock starts
+assert W.rec.painted[1][1] == 0.3      # hold, not blink
+W.tick(cfg(level=30), 109)                      # the whole ramp: bare, not killed
 assert W.rec.painted == {} and 1 in W.rec.gone
 dimmer.set_paused(False)
-W.tick(cfg(), 110)
-assert W.rec.painted[1][1] == 0.45      # back at full, the next tick
+W.tick(cfg(level=30), 110)
+assert W.rec.painted[1][1] == 0.3      # back at full, the next tick
 ok("the pause switch fades the field within ramp and lifts it back")
 
 # --- one press pauses, one resumes (the toggle, not the hold)
 dimmer.set_paused(False)
 dimmer._veils = None
 dimmer.hotkey_press()
-dimmer.tick(cfg(on=False), 100)
+dimmer.tick(cfg(level=30, on=False), 100)
 assert dimmer.paused() is True
 dimmer.hotkey_press()
-dimmer.tick(cfg(on=False), 101)
+dimmer.tick(cfg(level=30, on=False), 101)
 assert dimmer.paused() is False
 ok("a WM_HOTKEY press toggles: one pauses, one resumes")
 
