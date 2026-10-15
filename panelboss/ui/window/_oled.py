@@ -622,6 +622,14 @@ class _OledMixin:
     def _oled_dim_capture(self, event):
         if not getattr(self, "_dim_pending", False):
             return
+        if event.keysym in ("Control_L", "Control_R", "Shift_L",
+                            "Shift_R", "Alt_L", "Alt_R",
+                            "Super_L", "Super_R"):
+            # the ordering truth the mask pins cannot see (gate, F4):
+            # a modifier's OWN keydown carries state=0 - disarming
+            # here would refuse the first half of every real chord
+            # before its letter ever arrived. keep waiting.
+            return "break"
         self._oled_dim_disarm()
         dim = self.cfg.setdefault("dimmer", {})
         if event.keysym == "Escape":

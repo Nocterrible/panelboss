@@ -465,14 +465,14 @@ def _sync_hotkey(want):
     if _register(hwnd, HOTKEY_ID, want[0] | MOD_NOREPEAT, want[1]):
         _hk, _hk_tried, _hk_note = want, want, ""
         return
-    back = ""
-    if old and _register(hwnd, HOTKEY_ID, old[0] | MOD_NOREPEAT,
-                         old[1]):
-        _hk = old
-        back = ("; the old binding stands (clear and rebind to "
-                "retry once the other app lets go)")
-    _hk_tried = want
-    _hk_note = _dated("that combo is taken on this desk" + back)
+    back = (" (clear and rebind to retry once the other app lets "
+            "go)")                       # the advice belongs on the
+    if old and _register(hwnd, HOTKEY_ID, old[0] | MOD_NOREPEAT,   # bare
+                         old[1]):                                   # word
+        _hk = old                                                   # too:
+        back = "; the old binding stands" + back                    # first
+    _hk_tried = want                                                # binds
+    _hk_note = _dated("that combo is taken on this desk" + back)    # hit
 
 
 # the Tk modifier mask -> the RegisterHotKey flag (event.state order):

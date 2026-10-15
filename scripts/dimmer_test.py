@@ -318,3 +318,31 @@ assert "self._oled_dim_disarm()" in cap and \
 ok("FocusOut cancels a pending capture; every completion disarms")
 
 print("\nDIMMER TESTS OK (%d)" % len(OK))
+
+
+# the ordering truth (gate F4): a modifier's OWN keydown carries
+# state=0 - the capture must KEEP WAITING through Control/Shift/Alt/
+# Super keydowns, only the chord's letter (state already lit) decides
+class _Ev:
+    def __init__(self, keysym, state, keycode):
+        self.keysym, self.state, self.keycode = keysym, state, keycode
+
+class _Say:
+    def __init__(self): self.text = ""
+    def configure(self, text=None): self.text = text
+
+class _Self:
+    pass
+
+s = _Self()
+s._dim_pending = True
+s.cfg = {"dimmer": {"bound": [2, 123]}}          # old binding stands
+s.oled_say3 = _Say()
+import panelboss.ui.window._oled as O
+ev_ctrl = _Ev("Control_L", 0, 162)               # the FIRST keydown
+O._OledMixin._oled_dim_capture(s, ev_ctrl)
+assert s._dim_pending is not False or getattr(s, "_dim_pending", False), \
+    "Control_L keydown disarmed the capture - chords unbindable"
+assert s.cfg["dimmer"]["bound"] == [2, 123]      # old binding intact
+ok("a modifier keydown keeps the capture waiting (chords "
+   "bindable in the natural order)")
