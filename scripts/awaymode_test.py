@@ -15,7 +15,10 @@ every write, wrong-victim self-restore, EDID-token join over the
 lying gdi slot - and the boot belt's second door; the gate-fix
 words: wrong-victim vs verify-blind vs slot/token DISAGREEMENT as
 three honest classes, the belt's two try-blocks, and the lock
-predicate as a WHITELIST), and the static ban that keeps
+predicate as a WHITELIST; the PREVIEW WORD SEAM (menu labels map
+to engine words, the fall-through confesses, and the restore's
+verify earned the same patience the retract's won against a slow
+store), and the static ban that keeps
 dim mode out of the power
 verbs. No Tk, no display hardware, no live app.
 Run from repo root:
@@ -889,12 +892,16 @@ class FakeDesk:
                13: r"\\?\DISPLAY#IOC912B#1&2&2#{guid}"}
 
     def __init__(self, live=(11, 12, 13), refuse=0, wrong=False,
-                 gdi_of=None, blind_after=False):
+                 gdi_of=None, blind_after=False, slow_views=0):
         self.live = set(live)
         self.refuse = refuse
         self.wrong = wrong
         self.blind_after = blind_after
         self.blinded = False
+        # slow_views = the dossier follow-up shape: the ACTIVE view
+        # lags N looks before surfacing a REACTIVATED target (the
+        # restore patience pin - _victim_active must re-look)
+        self.slow_views = slow_views
         slots = {11: r"\\.\DISPLAY1", 12: r"\\.\DISPLAY2",
                  13: r"\\.\DISPLAY3"}
         slots.update(gdi_of or {})
@@ -918,6 +925,12 @@ class FakeDesk:
             return None                             # the blind class
         ids = ({11, 12, 13} if flags == sdc_mod.QDC_ALL
                else {i for i in (11, 12, 13) if i in self.live})
+        if flags != sdc_mod.QDC_ALL and self.slow_views > 0 \
+                and 12 in self.live:
+            self.slow_views -= 1
+            ids = ids - {12}              # the store is slow to
+            #                             surface a REACTIVATION -
+            #                             an absence never lags
         paths = [self._path(i) for i in sorted(ids)]
         pb = b"".join(bytes(bytearray(p)) for p in paths)
         return pb, b"\0" * 64, paths
@@ -1032,6 +1045,35 @@ def test_sdc_marshal():
             "blind or not, the restore carries SAVE"
         print("ok - verify blind: its own word, self-healed, unverified "
               "not misattributed")
+
+        # the SLOW-REACTIVATION patience (dossier follow-up 1): the
+        # store takes two looks to surface the restored target -
+        # _victim_active re-looks within the same VERIFY budget
+        # _gone earned, and the verdict is WON, not a false
+        # 'never came back'
+        desk5 = FakeDesk(slow_views=2)
+        led.keep(sdc_mod, "_capture", desk5.capture)
+        led.keep(sdc_mod, "_names", desk5.names)
+        led.keep(sdc_mod, "_apply_cfg", desk5.apply)
+        ok, saved = sdc_mod.retract(row)
+        assert ok, saved          # _gone is unaffected: an ABSENCE
+        #                          never lags, only a reactivation
+        ok, why = sdc_mod.restore(saved)
+        assert ok is True, why
+        assert desk5.slow_views == 0, desk5.slow_views   # both lagged
+        #                              looks spent, then the truth
+        # a store too slow for the whole budget gets the HONEST
+        # still-dark word - patience has a floor, not a shrug:
+        desk6 = FakeDesk(slow_views=99)
+        led.keep(sdc_mod, "_capture", desk6.capture)
+        led.keep(sdc_mod, "_names", desk6.names)
+        led.keep(sdc_mod, "_apply_cfg", desk6.apply)
+        ok, saved = sdc_mod.retract(row)
+        assert ok, saved
+        ok, why = sdc_mod.restore(saved)
+        assert not ok and why == "the target never came back", why
+        print("ok - slow store: patience wins the restore verdict; an "
+              "exhausted budget still says 'never came back'")
 
         # the DISAGREEMENT (gate fix 2): the slot renumbered behind us -
         # DISPLAY2 now carries the IOC's path while the AOC sits on
@@ -1190,6 +1232,66 @@ def test_offdisc_flavors():
         slog.removeHandler(rec)
         slog.setLevel(was)
         m._ledger.undo()
+
+
+def test_offdisc_preview_word_seam():
+    """The debugger's root cause pinned at the seam (offdisc-preview
+    fix): the row-menu answers LABELS, the engine dispatches on
+    WORDS. (a) the REAL card method, driven unbound on a fake self
+    (no Tk): the triple reads to the LABEL; (b) the LABEL->WORD map
+    is EXHAUSTIVE against the menu it maps (the two must move
+    together or a preview yanks the wrong leg); (c) the mapped word
+    walks the real engine into the real door: retracted, PROVEN
+    word, and ZERO brightness entries (the silent dim leg never
+    ran); (d) the fall-through confession: a label aimed straight
+    at the engine (the pre-fix card's exact call) still defaults to
+    dim - and SAYS so, naming the word and the row."""
+    from panelboss.ui.window._away import (
+        _AwayMixin as UIM, DISC_TEXT, MODE_BY_LABEL, off_choice)
+    tmp = tempfile.mkdtemp(prefix="pb_away_seam")
+    stub = type("S", (), {"cfg": {"away": {
+        "mode": "dim",
+        "monitors": {"AOC2790": {"blackout": False, "off": False,
+                                 "offdisc": True}}}}})()
+    assert UIM._away_row_mode(stub, "AOC2790") == DISC_TEXT
+    assert MODE_BY_LABEL[DISC_TEXT] == "offdisc"
+    assert set(MODE_BY_LABEL) == set(off_choice(FakeBright({"D1": 1}),
+                                                "D1")), \
+        "the menu and the map moved apart - the preview would guess"
+    sdc = FakeSDC(victim={"AOC2790": "T-A"}, active={"T-A"})
+    m = make_monitor(tmp, {"mode": "dim", "monitors": {}}, sdc=sdc)
+    try:
+        rec = m._away_apply_row({"short": "AOC2790", "gdi": "DX",
+                                 "x": 0, "y": 0, "w": 1, "h": 1},
+                                MODE_BY_LABEL[DISC_TEXT], 10)
+        assert rec["status"] == "off (disconnected)", rec
+        assert sdc.retracts == ["AOC2790"], sdc.retracts
+        assert not any(c[0] in ("get", "set", "restore")
+                       for c in m._fake["calls"]), \
+            "the wrong leg touched no brightness at all"
+        print("ok - word seam: the mapped label reaches the real door, "
+              "the menu and the map are exhaustive together")
+    finally:
+        m._ledger.undo()
+    rec = Recorder()
+    slog = logging.getLogger("state")
+    was = slog.level
+    slog.setLevel(logging.WARNING)           # root sits at WARNING here
+    slog.addHandler(rec)
+    m2 = make_monitor(tmp, {"mode": "dim", "monitors": {}})
+    try:
+        r2 = m2._away_apply_row({"short": "AAA", "gdi": "D1", "x": 0,
+                                 "y": 0, "w": 1, "h": 1}, DISC_TEXT, 10)
+        assert r2["status"] == "dim", r2      # the default stands...
+        line = [l for l in rec.lines if "unknown sub-mode" in l
+                and "off (disconnect)" in l and "AAA" in l]
+        assert len(line) == 1, rec.lines      # ...and now confesses
+        print("ok - fall-through: the dim default stands, the unknown "
+              "word names itself and its row (silent-wrong-leg is dead)")
+    finally:
+        slog.removeHandler(rec)
+        slog.setLevel(was)
+        m2._ledger.undo()
 
 
 def test_offdisc_belt():
@@ -1431,6 +1533,7 @@ def main():
     test_session_unlock_ear()
     test_sdc_marshal()
     test_offdisc_flavors()
+    test_offdisc_preview_word_seam()
     test_offdisc_belt()
     test_hook_lifecycle()
     test_static_ban()

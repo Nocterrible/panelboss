@@ -37,6 +37,13 @@ log = logging.getLogger("ui")
 OFF_TEXT = "monitors off"
 DIM_TEXT = "dim"
 DISC_TEXT = "off (disconnect)"
+# the row-menu LABEL -> the engine WORD (the offdisc-preview fix:
+# the picker answers labels, _away_apply_row dispatches on words;
+# an unmapped label used to fall through the engine's chain to the
+# silent dim leg - the confession added engine-side, the map made
+# EXHAUSTIVE here and pinned in awaymode_test):
+MODE_BY_LABEL = {"blackout": "blackout", "dim": "dim",
+                 "off": "off", DISC_TEXT: "offdisc"}
 
 
 def off_choice(bright, gdi):
@@ -333,7 +340,7 @@ class _AwayMixin:
             return
         rec = self.monitor._away_apply_row(
             {"short": short, "gdi": r["gdi"], **self._away_rect(short)},
-            self._away_row_mode(short), self._away_level())
+            MODE_BY_LABEL[self._away_row_mode(short)], self._away_level())
         self._away_says[short] = rec["status"]
         if rec["status"].startswith("blackout") or \
                 rec["status"].startswith("off"):

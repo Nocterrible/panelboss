@@ -253,6 +253,16 @@ class _AwayMixin:
             _overlay.show(m["gdi"], rect)
             rec["status"] = "blackout"
             return rec
+        if mode != "dim":
+            # the silent-wrong-leg class, confessed (the offdisc-preview
+            # fix): a word this dispatch does not know used to fall
+            # through to the dim leg with a shrug - the dim default
+            # stands (harmless to the real spells, which are worded),
+            # but a caller sending labels instead of words must say so
+            # at the point of fall-through, not in a bug report later
+            log.warning("away: unknown sub-mode %r on %s - the dim leg "
+                        "is the default; check the caller's label "
+                        "mapping", mode, m["short"])
         prior = _bright.get(m["gdi"])
         say, verified = _bright.set(m["gdi"], level)
         if m["gdi"] not in self._away_bright:
@@ -402,7 +412,11 @@ class _AwayMixin:
                     continue
                 # gdi unknown for a retracted row (no desk slot to
                 # name): the token join carries it, and an ambiguous
-                # twin answers None = silent, never a gamble
+                # twin answers None = silent, never a gamble - and
+                # at THIS call shape a slot/token dispute cannot even
+                # form (no gdi to cross-check): disputes stay silent
+                # by design on the belt's road, the loud refusal
+                # belongs to the gdi-naming callers (engage side)
                 verdict = _sdc.revive({"short": short, "gdi": ""})
                 if verdict is not None:
                     log.info("away belt: boot disconnect-restore for "
