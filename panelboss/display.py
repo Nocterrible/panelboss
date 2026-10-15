@@ -48,6 +48,11 @@ from ctypes import WINFUNCTYPE
 log = logging.getLogger("display")
 
 u32 = ctypes.windll.user32
+
+u32.GetCursorPos.restype = ctypes.c_int            # pin law, Oct 15:
+u32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]   # self-
+u32.SetCursorPos.restype = ctypes.c_int                         # pinned,
+u32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]       # no order luck
 k32 = ctypes.windll.kernel32
 wts = ctypes.windll.wtsapi32     # the session-event ear's door
                                  # (WTSRegisterSessionNotification);
@@ -691,16 +696,31 @@ def jail_cursor(rect):
     """Park the cursor at the far corner of a covered rect, ONCE per
     spell (the first covered row claims it; later ones leave the
     saved point alone). False = the cursor could not be read; the
-    spell proceeds uncuffed."""
+    spell proceeds uncuffed.
+
+    PIN LAW, learned the hard way (owner's frozen morning blackout,
+    Oct 15): this site used unpinned calls on the shared u32 handle -
+    safe only while some other module happened to pin them first, and
+    the import ORDER decided. An argumentless GetCursorPos read the
+    stack as a bad POINT; the raise fired BETWEEN overlay-paint and
+    the lift arms, so the black stuck and every retry re-raised. No
+    unpin restorable defaults either - a failed verb returns False,
+    it never escapes into the spell."""
     global _jail_saved
     if _jail_saved is not None:
         return True
     pt = wintypes.POINT()
-    if not u32.GetCursorPos(ctypes.byref(pt)):
+    try:
+        if not u32.GetCursorPos(ctypes.byref(pt)):
+            return False
+        _jail_saved = (pt.x, pt.y)
+        x, y, w, h = rect
+        u32.SetCursorPos(int(x + max(0, w - 1)), int(y + max(0, h - 1)))
+    except Exception:
+        log.warning("jail: cursor verb failed; the spell proceeds "
+                    "uncuffed")
+        _jail_saved = None
         return False
-    _jail_saved = (pt.x, pt.y)
-    x, y, w, h = rect
-    u32.SetCursorPos(x + max(0, w - 1), y + max(0, h - 1))
     log.debug("jail: cursor %s,%s -> %s,%s", pt.x, pt.y,
               x + max(0, w - 1), y + max(0, h - 1))
     return True

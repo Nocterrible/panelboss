@@ -2,6 +2,17 @@
 
 ## 0.4.0 (in development)
 
+- Fixed: a stuck morning blackout on the way to this release - the
+  cursor jail's Win32 verbs rode the shared user32 handle UNPINNED,
+  correct only while some other module pinned them first, and an
+  import-order shift made `GetCursorPos` read the stack as garbage.
+  The raise fired between overlay-paint and the lift arms, so the
+  black never lifted. The verbs are now self-pinned and the jail
+  degrades to a bool instead of raising into the spell. The hider's
+  bar census got the same soft-fail. If a spell ever sticks again:
+  Win-key exposes the tray, right-click quits, the strips are
+  ordinary windows and die with the process.
+
 - Boot fix (owner UAT, Oct 15 night): the settings window died at
   birth on every launch since the hiders boot hooks - the hiders
   painter Tk raced the windows for tkinters process-global default

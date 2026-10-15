@@ -158,7 +158,15 @@ class Strips:
 
     def tick(self, cfg):
         h = (cfg.get("hider") or {})
-        bars = dict(self._eyes()) if h.get("on") else {}
+        try:
+            bars = dict(self._eyes()) if h.get("on") else {}
+        except Exception:
+            log.warning("hider: the bar census failed this tick; the "
+                        "strips hold position")   # the pin-law lesson,
+            return                                # applied to my own
+                                                  # eyes: a hiccup is
+                                                  # no tick, not a dead
+                                                  # loop
         if not bars:
             self.teardown()
             return
