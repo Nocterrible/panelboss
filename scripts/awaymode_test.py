@@ -2,9 +2,14 @@
 migration truth rows, the substitution at the off-broadcast site, the
 refusal degradation AND the unverified-trust word (the two honest
 halves), the vcp door's retry law, the preview adopt-vs-revert law,
-the INPUT-HOOK LIFECYCLE (the owner's mouse-lag pin: mode off never
+the LL-hook lifecycle (the owner's mouse-lag pin: mode off never
 installs, a spell installs once, a steady spell no churn, the lift
-unhooks), and the static ban that keeps dim mode out of the power
+unhooks), the LOCK-ON-AWAY law (the real engage locks the session
+once rows went dark; the preview, the default, and an all-refused
+engage never do; a refused lock warns and stands) and its
+lock-aware wake (the watcher's session-unlock ear lifts a live
+spell; the lock edge says nothing), and the static ban that keeps
+dim mode out of the power
 verbs. No Tk, no display hardware, no live app.
 Run from repo root:
 python scripts/awaymode_test.py
@@ -125,14 +130,22 @@ class FakeOverlay:
 class FakeHookU32:
     """Records the raw-registration pair AND the LL-hook trio (which
     must NEVER be touched - the shape is gone, the pin keeps it gone).
-    Everything else passes through to the real user32."""
+    LockWorkStation is the lock-on-away recorder (this wave's
+    extension): every call logs its answer, `lock=False` plays the
+    refused class. Everything else passes through to the real user32."""
 
-    def __init__(self, real):
+    def __init__(self, real, lock=True):
         self.real = real
         self.registers = []
         self.unregisters = []
         self.hook_calls = []           # must stay empty. the point.
         self.cursor = []               # jail's Get/SetCursorPos calls
+        self.locks = []                # lock-on-away: one entry per call
+        self._lock = bool(lock)        # the answer it gives from here
+
+    def LockWorkStation(self):
+        self.locks.append(self._lock)
+        return self._lock
 
     def RegisterRawInputDevices(self, arr, n, size):
         # read the flags off the caller's array: RIDEV_REMOVE=1 means
@@ -652,6 +665,146 @@ def test_off_selectable_never_pregrayed():
           "for the never-reached")
 
 
+def test_lock_on_away():
+    """lock-on-away (owner-ruled, 2026-10-14): a REAL engage that darked
+    at least one applied row locks the workstation ONCE at its end; a
+    preview, the default (no lock key), and an all-refused engage never
+    do; a refused lock is a warning, never a raise into the spell."""
+    import panelboss.display as disp
+    tmp = tempfile.mkdtemp(prefix="pb_away_lk")
+    rec = Recorder()
+    slog = logging.getLogger("state")
+    was = slog.level
+    slog.setLevel(logging.INFO)           # root sits at WARNING here
+    slog.addHandler(rec)
+    try:
+        # the ON shape: dim desk, lock on - and the preview half of
+        # the law first: the very same row applied as a preview must
+        # leave the session alone (a yank at setup time is hostility)
+        m = make_monitor(tmp, {"mode": "dim", "monitors": {},
+                               "lock": True})
+        fake = FakeHookU32(disp.u32)
+        m._ledger.keep(disp, "u32", fake)
+        try:
+            m._away_apply_row(dict(DESK[1]), "dim", 10)
+            assert fake.locks == [], "a preview never locks"
+            m._screens_off(1.0)
+            assert fake.locks == [True], fake.locks
+            line = [l for l in rec.lines
+                    if l == "away: workstation locked (lock-on-away)"]
+            assert len(line) == 1, rec.lines
+            m._away_lift()
+        finally:
+            m._ledger.undo()
+        print("ok - lock on: a real engage darking rows locks once, "
+              "the preview never")
+
+        # the default-off law: key absent = silence, no call at all
+        m = make_monitor(tmp, {"mode": "dim", "monitors": {}})
+        fake = FakeHookU32(disp.u32, lock=False)
+        m._ledger.keep(disp, "u32", fake)
+        try:
+            m._screens_off(1.0)
+            assert fake.locks == [], "default-off never reaches the door"
+        finally:
+            m._ledger.undo()
+        print("ok - lock off (the default): the spell never grabs the "
+              "session")
+
+        # the all-refused engage (the shape's honest pin): every dim
+        # send refused = every row DEGRADED - the painted fallback is
+        # a confession, not an applied dark, so nobody locks
+        bright = FakeBright({"D1": 80, "D2": 70, "D3": 50},
+                            refuses=["D1", "D2", "D3"])
+        m = make_monitor(tmp, {"mode": "dim", "monitors": {}, "lock": True},
+                         bright=bright)
+        fake = FakeHookU32(disp.u32)
+        m._ledger.keep(disp, "u32", fake)
+        try:
+            m._screens_off(1.0)
+            assert all(s.startswith("blackout (")
+                       for s in m.away_status.values()), m.away_status
+            assert fake.locks == [], "an all-refused engage locks nothing"
+        finally:
+            m._ledger.undo()
+        print("ok - all-refused engage: no applied dark, no lock")
+
+        # a refused lock (Win32 said False): warn once, stand unlocked,
+        # and the spell itself is untouched (never raises)
+        m = make_monitor(tmp, {"mode": "dim", "monitors": {}, "lock": True})
+        fake = FakeHookU32(disp.u32, lock=False)
+        m._ledger.keep(disp, "u32", fake)
+        try:
+            m._screens_off(1.0)
+            assert fake.locks == [False], fake.locks
+            warn = [l for l in rec.lines
+                    if l.startswith("away:") and "lock refused" in l]
+            assert len(warn) == 1, rec.lines
+            assert m.away_status, "the spell stands, unlocked, honest"
+            m._away_lift()
+        finally:
+            m._ledger.undo()
+        print("ok - refused lock: warned once, the spell stands unlocked")
+    finally:
+        slog.removeHandler(rec)
+        slog.setLevel(was)
+
+
+def test_session_unlock_ear():
+    """The lock-aware wake's second eye (3b landed): the watcher's
+    WM_WTSSESSION_CHANGE arm IGNORES the lock edge and posts
+    session_unlock on the unlock edge; the state machine's arm lifts a
+    LIVE dim spell on that word, with its own log line, and goes quiet
+    for a desk that is not under a spell (the stock dark answers to
+    the idle gate alone)."""
+    import panelboss.display as disp
+    led = Ledger()
+    d = disp.Display()                    # the thread never runs
+    led.keep(disp, "watcher", d)          # the ears are fed by hand
+    try:
+        d._session_change(0x07)                       # WTS_SESSION_LOCK
+        assert d.queue.empty(), "locking under a dark spell says nothing"
+        d._session_change(disp.WTS_SESSION_UNLOCK)
+        ev = d.queue.get_nowait()
+        assert ev[0] == "session_unlock" and ev[1] == 1.0, ev
+        print("ok - the ear: lock edge silent, unlock edge posts")
+        m = make_monitor(tempfile.mkdtemp(prefix="pb_away_su"),
+                         {"mode": "dim", "monitors": {}})
+        m._ledger.keep(disp, "watcher", d)
+        rec = Recorder()
+        slog = logging.getLogger("state")
+        was = slog.level
+        slog.setLevel(logging.INFO)       # root sits at WARNING here
+        slog.addHandler(rec)
+        try:
+            m._screens_off(1.0)
+            assert m.state == "off" and m.away_status
+            m._drain_display(1.5)         # the queue holds nothing yet
+            assert m.away_status, "no word, no lift"
+            d.queue.put(("session_unlock", 1.0, 1.5))
+            m._drain_display(1.6)
+            assert not m.away_status, "the unlock lifted the spell"
+            named = [l for l in rec.lines
+                     if l == "away: lifted on session unlock"]
+            assert len(named) == 1, rec.lines
+            assert ("wake",) in m._fake["calls"], "the wake seam ran"
+            d.queue.put(("session_unlock", 1.0, 1.7))
+            m._drain_display(1.8)         # no spell now: the word passes
+            assert [l for l in rec.lines
+                    if l == "away: lifted on session unlock"], "one word"
+            assert len([l for l in rec.lines
+                        if l == "away: lifted on session unlock"]) == 1, \
+                "an unspelled desk takes the word without a lift"
+            print("ok - the arm: a live spell lifts on unlock, a bare "
+                  "desk ignores the word")
+        finally:
+            slog.removeHandler(rec)
+            slog.setLevel(was)
+            m._ledger.undo()
+    finally:
+        led.undo()
+
+
 def test_static_ban():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "panelboss", "state", "_away.py"),
@@ -774,6 +927,8 @@ def main():
     test_off_preview_release()
     test_off_selectable_never_pregrayed()
     test_preview_adopt_law()
+    test_lock_on_away()
+    test_session_unlock_ear()
     test_hook_lifecycle()
     test_static_ban()
     print("AWAYMODE TESTS OK")

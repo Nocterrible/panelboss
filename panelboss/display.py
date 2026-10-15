@@ -49,6 +49,11 @@ log = logging.getLogger("display")
 
 u32 = ctypes.windll.user32
 k32 = ctypes.windll.kernel32
+wts = ctypes.windll.wtsapi32     # the session-event ear's door
+                                 # (WTSRegisterSessionNotification);
+                                 # its absence is a warning, never a
+                                 # boot-killer - the camera path is
+                                 # the load-bearing lift
 
 WM_SYSCOMMAND = 0x112
 SC_MONITORPOWER = 0xF170
@@ -75,6 +80,19 @@ WM_DISPLAYCHANGE = 0x007E      # topology moved: the brightness handles
                                # refusal-self-heal is the real law)
 
 WM_KEYDOWN = 0x0100            # the raw keyboard record carries it
+WM_WTSSESSION_CHANGE = 0x02A2  # wParam is the session STATE change -
+                               # the lock-aware lift's one honest
+                               # knock: raw input is per-desktop, so
+                               # the away-lift ears go deaf while
+                               # Winlogon owns the desk; this message
+                               # rides the window's thread queue from
+                               # the session itself either way
+WTS_SESSION_UNLOCK = 0x08      # wtsapi3.h (its sibling LOCK is 0x07;
+                               # the names are the numbers' only
+                               # source worth trusting at this FFI)
+NOTIFY_FOR_THIS_SESSION = 0    # the register flag: a tray app lives
+                               # in the owner's session and needs no
+                               # other one's news
 MOUSE_WAKE_PX = 20             # the debounce law: cursor jitter must
                                # not wake a dimmed desk; movement
                                # counts only past this (displacement
@@ -213,6 +231,18 @@ u32.GetForegroundWindow.restype = ctypes.c_void_p
 u32.UnregisterPowerSettingNotification.argtypes = [ctypes.c_void_p]
 u32.UnregisterPowerSettingNotification.restype = ctypes.c_long   # BOOL
 
+# the session-unlock ear's pair (lock-on-away wave): the hwnd slot is
+# c_void_p on both, so the 64-bit window handle survives the way IN
+# exactly like the power-sink pin above demanded
+wts.WTSRegisterSessionNotification.argtypes = [ctypes.c_void_p,
+                                               wintypes.DWORD]
+wts.WTSRegisterSessionNotification.restype = wintypes.BOOL
+# the W capital in UnRegister is the OS's own typo (probed at import:
+# WTSUnregisterSessionNotification does not exist on wtsapi32; ctypes
+# raises, and the suite is what caught it here)
+wts.WTSUnRegisterSessionNotification.argtypes = [ctypes.c_void_p]
+wts.WTSUnRegisterSessionNotification.restype = wintypes.BOOL
+
 
 class _GUID(ctypes.Structure):
     _fields_ = [("b", ctypes.c_char * 16)]
@@ -324,6 +354,11 @@ class Display(threading.Thread):
         #                                      request, True/False = want
         self._hwnd = None
         self._handle = None
+        self._wts_reg = False                  # the session-unlock ear's
+        #                                      own life: refused or
+        #                                      message-only means no
+        #                                      word, and the camera
+        #                                      path stands alone
         _ACTIVE[:] = [self]                    # the broadcast ear's route
 
     def run(self):
@@ -364,8 +399,8 @@ class Display(threading.Thread):
             log.error("RegisterClassExW failed (%s); no state tracking",
                       k32.GetLastError())
             return
-        for parent in (ctypes.c_void_p(0),        # the broadcast
-                       ctypes.c_void_p(HWND_MESSAGE)):  # shape, see below
+        for parent, top_level in ((ctypes.c_void_p(0), True),   # the broadcast
+                                  (ctypes.c_void_p(HWND_MESSAGE), False)):  # shape, see below
             # WS_VISIBLE + WS_EX_TOOLWINDOW at a position off every
             # screen: the shape that measurably RECEIVES
             # WM_DISPLAYCHANGE (a bare invisible top-level got
@@ -393,6 +428,21 @@ class Display(threading.Thread):
         if not self._handle:
             log.warning("power sink refused (%s); state tracking is a bonus",
                         k32.GetLastError())
+        # the session-unlock ear (lock-on-away wave): the TOP-LEVEL
+        # shape only - a message-only window hangs off no desktop, and
+        # its WTS registration is the answering-nothing class (silent
+        # ignorance pre-confessed instead). If this ear's delivery ever
+        # proves a lie, the camera eye still lifts the spell through
+        # the lock - the feature never leans on this knock alone.
+        if top_level and wts.WTSRegisterSessionNotification(
+                self._hwnd, NOTIFY_FOR_THIS_SESSION):
+            self._wts_reg = True
+        elif not top_level:
+            log.info("watcher is message-only; the session-unlock ear "
+                     "stays deaf, the camera carries the lift")
+        else:
+            log.warning("session-unlock ear refused (%s); the camera "
+                        "carries the lift", k32.GetLastError())
         self._hooked = False
         self._ear_req = None
         while not self._stop:
@@ -437,6 +487,10 @@ class Display(threading.Thread):
                     except Exception:
                         log.debug("raw input probe skipped",
                                   exc_info=True)
+                elif msg.message == WM_WTSSESSION_CHANGE:
+                    # the lock-aware lift (lock-on-away): posted by
+                    # the session itself, deaf-desk or not
+                    self._session_change(msg.wParam)
                 u32.DefWindowProcW(msg.hWnd, msg.message, msg.wParam,
                                    msg.lParam)
             self._service_ears()               # the engine's arm notes
@@ -452,6 +506,8 @@ class Display(threading.Thread):
         self._release_ears()                   # the lift ears die with
         #                                      the thread, cradle to grave
         try:
+            if self._wts_reg:
+                wts.WTSUnRegisterSessionNotification(self._hwnd)
             u32.UnregisterPowerSettingNotification(self._handle)
             u32.DestroyWindow(self._hwnd)
         except Exception:
@@ -466,6 +522,17 @@ class Display(threading.Thread):
         self.state = float(flag)
         self.last_event = time.monotonic()
         self.queue.put(("monitor", float(flag), self.last_event))
+
+    def _session_change(self, wparam):
+        """One WM_WTSSESSION_CHANGE: the UNLOCK word lifts the spell
+        through the locked desktop - the raw ears are per-desktop and
+        deaf behind Winlogon, so this is the one knock the locked
+        desk can still make (the camera eye makes another; the spell
+        answers to neither the mouse nor the faith). LOCK is ignored:
+        the spell is already dark, and re-darking a dark desk is
+        noise."""
+        if wparam == WTS_SESSION_UNLOCK:
+            self.queue.put(("session_unlock", 1.0, time.monotonic()))
 
     # -------------------------------------------------------- the lift ears --
     def _pump_pause(self):

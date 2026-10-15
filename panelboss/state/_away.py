@@ -1,15 +1,17 @@
 """The away engine: dim-mode substitution for the display power verb.
 
 SIZE LAW header: this part owns the fake-off ledger and nothing else -
-and at 348 lines the whole is still one law: the ledgers, the door
-calls and the status words interlock line-for-line, and splitting the
-prose from its call sites (or the lift from the engage) would sell a
-seam for nothing. The off wave's growth is this file's due; the card
-paint lives in ui/window/_away.py.
+and at ~410 lines (post lock-on-away) the whole is still one law: the
+ledgers, the door calls and the status words interlock line-for-line,
+and splitting the prose from its call sites (or the lift from the
+engage) would sell a seam for nothing. The off wave's and the lock
+wave's growth are this file's due; the card paint lives in
+ui/window/_away.py.
 The state machine keeps its shape - _power.py calls _away_engage()
 where it used to call the broadcast, _away_lift() where it wakes,
-_events.py arms the two queue messages (away_lift from the input
-hooks and the overlay click) and the unexpected-wake lift; the
+_events.py arms the queue lifts (away_lift from the input ears and
+the overlay click, and the session_unlock knock the locked desk
+still makes, and the unexpected-wake lift); the
 policy, phase and camera machines are untouched, because the whole
 point of the feature is that the presence engine keeps working
 exactly as it does while dark.
@@ -39,7 +41,9 @@ UNCONDITIONAL on every wake reason (see the asymmetry law at the
 engage side), and covered rows bring the corner jail. The PROBE LAW
 owns the capability story: off is selectable on every reached
 panel, and the verdict lives in these status words, timestamped -
-never in a pre-sentence about firmware.
+never in a pre-sentence about firmware. LOCK-ON-AWAY (owner-ruled,
+2026-10-14): the same engage may end by locking the workstation -
+see _away_lock for the law and the lock-aware wake it commits to.
 """
 
 import logging
@@ -104,7 +108,50 @@ class _AwayMixin:
                  sum(1 for s in self.away_status.values()
                      if s.startswith("blackout (") or
                      s.startswith("off refused")))
+        self._away_lock(away.get("lock"))   # the spell's last chore:
+        #                                   rows, jail, THEN the lock -
+        #                                   a locked desktop with a
+        #                                   parked cursor is harmless
         return self.away_status
+
+    def _away_lock(self, lock_on):
+        """lock-on-away (owner-ruled, 2026-10-14): a real engage that
+        darked at least one row locks the workstation, so the dark
+        belongs to the LOCK SCREEN and a returning face gets their own
+        desk back, never somebody else's. The law's edges, all the
+        owner's: a PREVIEW NEVER LOCKS (this rides the engage only -
+        the preview walks _away_apply_row, not here; the mid-preview
+        handoff locks when the REAL engage fires); a zero-row or an
+        all-refused engage locks nothing (a dark that is only the
+        degradation the summary line counts is nobody's applied
+        effect); the corner jail ran first (a locked desktop with a
+        parked cursor is harmless, the reverse is a hunt); and a
+        refused lock is a WARNING, never a raise into the spell - the
+        dark stands, unlocked, honest.
+        THE LOCK-AWARE WAKE this commits to: raw input is per-desktop,
+        so while Winlogon owns the desk the lift EARS are deaf by
+        construction. The lift path answers to input NOT at all (it is
+        queue-driven): the spell comes off from the camera's presence
+        eye, which keeps its stream through the lock (VERIFIED in the
+        phase machine: the off-phase polls and _wake lifts without
+        ever consulting an input event - and GetLastInputInfo counts
+        the locked session as idle, README's own note, so the absence
+        logic stays honest the whole spell), and from the watcher's
+        session-unlock ear, which posts the same away_lift the overlay
+        click rides."""
+        if not lock_on or not any(_row_went_dark(s)
+                                  for s in self.away_status.values()):
+            return
+        from .. import display
+        try:
+            ok = bool(display.u32.LockWorkStation())
+        except Exception:
+            ok = False
+        if ok:
+            log.info("away: workstation locked (lock-on-away)")
+        else:
+            log.warning("away: the workstation lock refused; the spell "
+                        "stays dark, unlocked")
 
     def _away_apply_row(self, m, mode, level):
         """One monitor's effect, the SAME call the preview walks so a
@@ -317,6 +364,23 @@ class _AwayMixin:
         log.info("away: preview of %s reverted (%s)", short,
                  rec["status"])
         return "reverted"
+
+
+def _row_went_dark(status):
+    """Did this row's dark get APPLIED (the lock-on-away predicate)?
+    A plain blackout (worn or configured - the paint IS the effect),
+    a dim of any honesty, an off that the door took: dark. A DEGRADED
+    refusal - "blackout (word)", "off refused - blackout instead" -
+    is the summary line's degradation count, not an applied sub-mode,
+    and an all-refused engage must not yank the session on a dark
+    every door refused. A "gone" row (the panel left the enum
+    mid-engage) darked nothing."""
+    if status == "blackout":
+        return True
+    if status.startswith("dim"):
+        return True
+    return (status.startswith("off")
+            and not status.startswith("off refused"))
 
 
 def _row_mode(rows, m):

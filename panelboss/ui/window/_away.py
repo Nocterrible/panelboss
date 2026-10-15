@@ -79,6 +79,17 @@ TIP = {
     "level": "where dim rows park their brightness while away, 1 to "
               "40 percent - shared by every dim row (per-monitor "
               "levels are a planned follow-up).",
+    "lock": "Windows locks when nobody MOVES; this locks when nobody "
+            "is HERE - the presence verdict, not a screensaver clock. "
+            "A returning face gets the lock screen, never somebody "
+            "else's desktop. Behind the lock the dark spell answers "
+            "the camera and the session unlock, NOT the mouse: raw "
+            "input is per-desktop and the lift ears go deaf while "
+            "Winlogon owns the desk (the camera stream is ours and "
+            "keeps running through the lock). A preview never locks - "
+            "yanking the session at setup time would be hostile; the "
+            "lock lands only with a real away that darked at least "
+            "one row, after the corner jail.",
 }
 
 
@@ -98,6 +109,19 @@ class _AwayMixin:
             DIM_TEXT if (self.cfg.get("away") or {}).get("mode") == "dim"
             else OFF_TEXT)
         self.away_mode_button.grid(row=0, column=1, sticky="e")
+        # lock-on-away, beside the mode pick: it only speaks for a dim
+        # spell (the stock broadcast owns its own dark), so _away_sync
+        # gates its state with the rows - consent and dim mode both,
+        # never a live-looking box on a mode that never locks
+        self.away_lock_box = ctk.CTkCheckBox(
+            row, text="lock when away starts", command=self._away_lock_changed,
+            font=self.skin.font(12), checkbox_width=18, checkbox_height=18,
+            border_color=self.skin.border_raised,
+            fg_color=self.skin.accent, hover_color=self.skin.accent,
+            text_color=self.skin.text, text_color_disabled=self.skin.txt3)
+        self.away_lock_box.set(bool((self.cfg.get("away") or {})
+                                    .get("lock")))
+        self.away_lock_box.grid(row=0, column=2, sticky="e", padx=(10, 0))
 
         # one row per live panel, the profile list's idiom
         self._away_rows = {}
@@ -207,6 +231,14 @@ class _AwayMixin:
         # next _screens_off already engages (or doesn't) the new mode
         self.cfg.setdefault("away", {})["mode"] = \
             "dim" if label == DIM_TEXT else "off"
+        self._away_sync()
+        self._save()
+
+    def _away_lock_changed(self):
+        # the same write-is-applying law: the flag rides the live
+        # away dict, the next real engage reads it at its own end
+        self.cfg.setdefault("away", {})["lock"] = \
+            bool(self.away_lock_box.get())
         self._away_sync()
         self._save()
 
@@ -338,6 +370,14 @@ class _AwayMixin:
             bool(self.cfg["camera"].get("enabled"))
         dim = consent and \
             (self.cfg.get("away") or {}).get("mode") == "dim"
+        # the lock box rides the same gate as the rows: a lock with no
+        # dim spell is a checkbox that cannot speak (the stock path
+        # owns its own dark), and gray-not-lie is this card's law
+        try:
+            self.away_lock_box.configure(state="normal" if dim
+                                         else "disabled")
+        except Exception:
+            pass                          # rebuilt mid-toggle: fine
         for short, r in self._away_rows.items():
             state = "normal" if dim else "disabled"
             gated = False

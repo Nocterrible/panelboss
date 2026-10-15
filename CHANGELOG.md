@@ -12,7 +12,15 @@
   the state survives the app - Windows Settings -> Display brings it
   back, and Windows itself refuses to disconnect the last active
   display. A boot belt re-lights any off-row left dark by a
-  crash or quit.
+  crash or quit. Lock-on-away ([away] lock, default off, a checkbox
+  on the away card): a real dim engage that darked at least one row
+  also runs LockWorkStation - Windows locks when nobody moves, this
+  locks when nobody is HERE. A preview never locks. Behind the lock
+  the spell lifts on the camera's presence eye (the stream is ours
+  and runs through the lock) and on the watcher's WTS session-unlock
+  ear, not on the mouse (raw input is per-desktop and deaf behind
+  Winlogon); a returning face gets the lock screen, never somebody
+  else's desktop.
 - Loud-voice profiles, the profile apply refusals that speak at
   the gaze, and a chain-teardown fix (full app-down gauntlet
   green).

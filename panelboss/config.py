@@ -351,6 +351,13 @@ DEFAULTS = {
                                 # some panels accept brightness writes
                                 # and never obey them; those degrade to
                                 # blackout with a confession, never silent
+        "lock": False,          # lock-on-away: a REAL dim engage (never
+                                # a preview) also runs LockWorkStation
+                                # once at least one row went dark -
+                                # the panels wake to the LOCK SCREEN,
+                                # not to somebody's desktop. False is
+                                # the law's floor: a spell that grabs
+                                # the session needs asking first
     },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
@@ -620,11 +627,14 @@ DIM_LEVEL_CEIL = 40                 # past this the fake-off is a rumor
 
 
 def normalize_away(value):
-    """[away] in its in-memory shape: {mode, monitors, dim_level}. A
-    mode the engine has never heard of warns and falls back to the
+    """[away] in its in-memory shape: {mode, monitors, dim_level, lock}.
+    A mode the engine has never heard of warns and falls back to the
     stock "off" (the file's other answers still stand); dim_level
     clamps to 1..40 (a 0%% "dim" is a blackout that lied about itself,
-    a 90%% one is nobody dimming anything); monitor rows accept the
+    a 90%% one is nobody dimming anything); lock is a bool with the
+    mode key's honesty (a bad value warns naming short and value, and
+    folds to False - the default-off law: a spell that locks the
+    session is consent, not a rumor); monitor rows accept the
     bare-bool shorthand (A = true means {"blackout": true}) and drop
     malformed rows with a warning naming them."""
     value = value if isinstance(value, dict) else {}
@@ -633,6 +643,11 @@ def normalize_away(value):
         log.warning("away mode %r is unknown; the screens go off as "
                     "they always did", mode)
         mode = "off"
+    lock = value.get("lock", False)
+    if not isinstance(lock, bool):
+        log.warning("away lock %r is not a bool; the away spell will "
+                    "not lock the workstation", lock)
+        lock = False
     try:
         level = int(value.get("dim_level", 10))
     except (TypeError, ValueError):
@@ -673,7 +688,8 @@ def normalize_away(value):
                 log.warning("away monitor %r: %r is not an away row; "
                             "the monitor keeps the dim default", short,
                             row)
-    return {"mode": mode, "monitors": rows, "dim_level": level}
+    return {"mode": mode, "monitors": rows, "dim_level": level,
+            "lock": lock}
 
 
 def _live_shorts():

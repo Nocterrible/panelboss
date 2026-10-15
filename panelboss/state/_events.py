@@ -60,6 +60,16 @@ class _EventsMixin:
                     log.info("away lifted (%s)", value)
                     self._wake(now, 0.0)
                 continue
+            if event == "session_unlock":
+                # the lock-aware lift (lock-on-away): behind the lock
+                # the raw ears are deaf by DESKTOP law, so the session
+                # itself posts the wake. A stock (unpainted) dark needs
+                # nothing here - unlocking IS input, and the idle gate
+                # hands that one back to the old path untouched.
+                if getattr(self, "away_status", None):
+                    log.info("away: lifted on session unlock")
+                    self._wake(now, 0.0)
+                continue
             # unknown events: logged once per name, never silently
             # dropped - the silent-ignorance class this fleet died on
             # (HEAD's pass-through-to-notice is preserved one link up:
