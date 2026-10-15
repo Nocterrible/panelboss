@@ -44,12 +44,19 @@ The painter's pump wraps EVERY item: a paint for a destroyed hwnd
 raises inside Tk, and an escaped raise left that veil alive, dark
 and un-clickable over a dead app (Oct-15 UAT, the random darker
 box). On a raise the window is dropped and destroyed, and the pump
-keeps draining - the jog pump's lesson, matched. And the pump is
-where the SET is composed before it is painted: a birth whose rect
-is fully CONTAINED in a live veil's rect is refused (two stacked
-alphas paint a darker seam than either; the covering veil already
-darkens that field). The inverse containment is deliberately left
-to the next move - see _covered.
+keeps draining - the jog pump's lesson, matched. Layering is a Z-
+PIN, not topmost (gate finding 1): every paint SetWindowPos's the
+veil immediately above its OWN window - against the target's
+GW_HWNDNEXT neighbour, band-matched so a topmost owner still gets
+a topmost veil. Topmost was the bug: every veil lived in the
+topmost band above every non-topmost window, so overlapping
+backgrounds STACKED their alphas (45, 69.75, 83.4 percent at one,
+two, three veils) - the seam the containment ledger used to
+suppress at birth. With the pin each veil sits in its owner's
+stratum and stacking is arithmetic-impossible, so the ledger
+(_covered/_ledged_birth/_reclaim) is retired whole. A refused pin
+(UIPI-elevated target, vanished anchor) is a cosmetic one-tick
+miss: skip, never straggle.
 
 THE HOTKEY LAW (owner): unbound by DEFAULT - no stolen chord before
 consent. The card captures a press and stores [mods, vk]; THIS module
@@ -67,7 +74,7 @@ one word was swallowing 87s and 1400s into a lie about a chord that
 was never actually taken. One press pauses, one resumes (toggle,
 not hold).
 
-SIZE LAW: the file runs 817 and the seam is real, not cosmetic -
+SIZE LAW: the file runs ~795 and the seam is real, not cosmetic -
 Veils (the FSM, ~180) and the stratum below it (census + pins,
 painter, hotkey arm) are already three files wearing one name; when
 the veil set needs card-side state, the stratum moves out as
@@ -98,8 +105,12 @@ WS_EX_TRANSPARENT = 0x20
 WS_EX_TOOLWINDOW = 0x80
 WS_EX_NOACTIVATE = 0x08000000
 GA_ROOT = 2
+GW_HWNDNEXT = 2
+WS_EX_TOPMOST = 0x8
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _FADE_LEVELS = (1.0, 2.0 / 3.0, 1.0 / 3.0)   # THREE steps, then gone
+_SWP_ZPIN = 0x213   # NOSIZE | NOMOVE | NOACTIVATE | NOOWNERZORDER: a
+                    # z-move that moves nothing, touches nothing else
 
 _u32 = ctypes.WinDLL("user32", use_last_error=True)   # the pin law is
 _u32.SetWindowLongW.restype = ctypes.c_long            # self-pinned
@@ -128,6 +139,14 @@ _u32.GetClassNameW.restype = ctypes.c_int
 _u32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
 _u32.GetWindowRect.restype = ctypes.c_int
 _u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+_u32.IsWindow.restype = ctypes.c_int        # the z-pin's guard: a dead
+_u32.IsWindow.argtypes = [ctypes.c_void_p]  # anchor skips, it never raises
+_u32.GetWindow.restype = ctypes.c_void_p
+_u32.GetWindow.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+_u32.SetWindowPos.restype = ctypes.c_int
+_u32.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
+                              ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                              ctypes.c_int, ctypes.c_uint]
 _u32.RegisterHotKey.restype = ctypes.c_int
 _u32.RegisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_uint,
                                 ctypes.c_uint, ctypes.c_uint]
@@ -168,6 +187,9 @@ DESKTOP_VIEWS = frozenset(("Progman", "WorkerW"))
 # here; the pins above stay the real verbs)
 _register = _u32.RegisterHotKey
 _unregister = _u32.UnregisterHotKey
+_iswindow = _u32.IsWindow
+_getwindow = _u32.GetWindow
+_setwindowpos = _u32.SetWindowPos
 
 
 class _RECT(ctypes.Structure):
@@ -426,15 +448,28 @@ def _veil_rows(rows):
     and named, so the suite can drive the fake census through the
     real door. The settings window answers through the same door as
     any other app; own-process skip covers our own veils, strips,
-    and wash."""
-    return [f for f in rows if f["cls"] not in DESKTOP_VIEWS]
+    and wash. The exception the gate's fg fix adds: a desktop row
+    THAT HOLDS THE FOREGROUND FLAG rides through - dropping it
+    before the flag is consulted threw away the focus attribution
+    (a WorkerW/Progman focus became "the foreground sits on no
+    panel", dimming the always rows blind), and the FSM's own fg
+    skip still refuses it a veil, so the wallpaper law stands: the
+    row passes the door precisely when it can never reach paint."""
+    return [f for f in rows
+            if f["cls"] not in DESKTOP_VIEWS or f["fg"]]
 
 
 def _census():
     """Every visible top-level window as veil facts, minus the
-    desktop's own shell views (_veil_rows)."""
+    desktop's own shell views (_veil_rows). The foreground is
+    resolved to its root ancestor (gate finding 2): a focus that is
+    a CHILD or owned popup (a UWP CoreWindow child, a dropdown, a
+    devtools popup) must mark its TOP-LEVEL as foreground, or the
+    whole app stays qualified and the focused window keeps a veil
+    the owner is actively typing into."""
     from . import wm
-    fg = _u32.GetForegroundWindow()
+    fg = _u32.GetAncestor(_u32.GetForegroundWindow(), GA_ROOT) \
+        or _u32.GetForegroundWindow()
     by_short = {m["short"]: (m["x"], m["y"], m["w"], m["h"])
                 for m in wm.monitors()}
     rows = []
@@ -484,65 +519,31 @@ def _clickthrough(win):
         pass                             # click-through degrades
 
 
-def _covered(veils, hwnd, rect):
-    """The pump's composite, consulted ONLY at a birth (Oct-15 UAT,
-    the random-darker-box): True when some live veil's rect FULLY
-    CONTAINS this new one. Two stacked Tk windows each at the level
-    darken the intersection past either - the seam reads as a stale
-    veil. The covering veil already darkens that whole field, so the
-    contained window gets no window of its own. Suppression is not
-    forgettable: the pump records every refused hwnd (the `suppressed`
-    ledger, gate finding 1) and the covering "gone" re-emits its
-    contained rows - the FSM has NO re-paint request for a still-
-    qualified unmoved window, so a birth-time-only suppression strands
-    the bright window in a dimmed field until it happens to move. The
-    INVERSE (a live veil sitting inside a bigger newcomer) is
-    deliberately left: the discrepancy dies the tick the underlying
-    window moves, and a general rectangle-subtraction painter is a
-    rewrite the owner has not asked for."""
-    for h, w in veils.items():
-        if h == hwnd:
-            continue
-        lr = getattr(w, "_pb_rect", None)
-        if lr is None:
-            continue                     # a veil from before the law
-        if (lr[0] <= rect[0] and lr[1] <= rect[1]
-                and rect[0] + rect[2] <= lr[0] + lr[2]
-                and rect[1] + rect[3] <= lr[1] + lr[3]):
-            return True
-    return False
-
-
-def _contains(outer, inner):
-    """True when the outer rect fully contains the inner one - the
-    geometry the suppression ledger speaks (rects are (x, y, w, h))."""
-    return (outer[0] <= inner[0] and outer[1] <= inner[1]
-            and inner[0] + inner[2] <= outer[0] + outer[2]
-            and inner[1] + inner[3] <= outer[1] + outer[3])
-
-
-def _ledged_birth(suppressed, veils, hwnd, rect, alpha):
-    """The pump's birth decision, named so the suite can drive it
-    without a Tk (gate finding 1): a covered hwnd is RECORDED, not
-    forgotten - the FSM will never ask again for a window that stays
-    still and qualified - and returns None. An uncovered hwnd's ledger
-    row is cleared and the ("veil"...) item it belongs to is returned:
-    the pump owns the Toplevel, this seam owns the memory."""
-    if _covered(veils, hwnd, rect):
-        suppressed[hwnd] = (rect, alpha)
-        return None
-    suppressed.pop(hwnd, None)
-    return ("veil", hwnd, rect, alpha)
-
-
-def _reclaim(suppressed, dead_rect):
-    """The other half of the ledger: the covering "gone" re-emits every
-    row its death un-conceals. The re-emitted items re-ask _covered
-    against the REMAINING live set, so a second cover still owns its
-    field."""
-    freed = [h for h, (r, _a) in suppressed.items()
-             if _contains(dead_rect, r)]
-    return [suppressed.pop(h) + (h,) for h in freed]
+def _zpin(win, target_hwnd):
+    """The layering law (gate finding 1): the veil sits IMMEDIATELY
+    ABOVE ITS OWN WINDOW, band-matched - never in the topmost band,
+    where stacked veils over overlapping apps add alphas into a
+    seam darker than either. The pin reads the target's neighbour
+    (GW_HWNDNEXT), then SetWindowPos's OUR veil's root ancestor
+    under it: the first argument is ours, never the owner's, which
+    is what keeps the call from yanking the user's window forward -
+    the trap this whole fix must not fall into. Band-match first
+    (a topmost owner still gets a topmost veil, an ordinary one an
+    ordinary veil), and a dead anchor is a SKIP, not a raise: a
+    refused pin (UIPI-elevated target, a window that vanished this
+    tick) costs one cosmetic beat and the next paint follows the
+    window anyway."""
+    try:
+        if not _iswindow(target_hwnd):
+            return                       # dead anchor: skip, never straggle
+        ex = _u32.GetWindowLongW(target_hwnd, GWL_EXSTYLE)
+        win.attributes("-topmost", bool(ex & WS_EX_TOPMOST))
+        win.update_idletasks()
+        h = _u32.GetAncestor(win.winfo_id(), GA_ROOT) or win.winfo_id()
+        above = _getwindow(target_hwnd, GW_HWNDNEXT)
+        _setwindowpos(h, above, 0, 0, 0, 0, _SWP_ZPIN)
+    except Exception:                    # the veil still dims; only
+        pass                             # the layering degrades
 
 
 def _run_painter():
@@ -554,11 +555,6 @@ def _run_painter():
     root.withdraw()
     _q.root = root
     veils = {}
-    # the suppression ledger (gate finding 1): hwnd -> (rect, alpha)
-    # for every birth the composite refused. The FSM has no re-paint
-    # request for a still-qualified UNMOVED window, so the covering
-    # "gone" is the ONLY event that can ever birth the suppressed row.
-    suppressed = {}
 
     def pump():
         while True:
@@ -571,37 +567,25 @@ def _run_painter():
                 act, hwnd, rect, alpha = item
                 if act == "gone":
                     w = veils.pop(hwnd, None)
-                    suppressed.pop(hwnd, None)
-                    if rect is None and w is not None:
-                        rect = getattr(w, "_pb_rect", None)
                     if w is not None:
                         w.withdraw()
                         w.after(150, w.destroy)
-                    if rect is not None:   # the cover died: everything
-                        #                      it was concealing
-                        #                      re-emits as fresh veil
-                        #                      items (the seams below
-                        #                      own the geometry)
-                        for r, a, h in _reclaim(suppressed, rect):
-                            _q.put(("veil", h, r, a))
                     continue
                 w = veils.get(hwnd)
                 if w is None:
-                    item2 = _ledged_birth(suppressed, veils, hwnd,
-                                          rect, alpha)
-                    if item2 is None:
-                        continue         # the covering veil owns it
                     w = veils[hwnd] = tk.Toplevel(root)
                     w.overrideredirect(True)
                     w.configure(bg="#000000")
-                    w.attributes("-topmost", True)
                     w.protocol("WM_DELETE_WINDOW", lambda: None)
                 w._pb_rect = rect
                 w.geometry("%dx%d+%d+%d" % (rect[2], rect[3],
                                             rect[0], rect[1]))
                 w.attributes("-alpha", alpha)
                 w.deiconify()
-                w.lift()
+                _zpin(w, hwnd)           # the layering law: ours sits
+                #                      under the target's next-up, in
+                #                      the target's band - never the
+                #                      topmost band (gate finding 1)
                 _clickthrough(w)
             except Exception:
                 # the dead-hwnd law (Oct-15 UAT, the stale dark box):
@@ -614,12 +598,6 @@ def _run_painter():
                 log.exception("dimmer: one veil item failed; the "
                               "pump survives")
                 w = veils.pop(hwnd, None)
-                if act == "veil":
-                    suppressed.pop(hwnd, None)   # a half-applied
-                    #                            refusal must not
-                    #                            sit in the ledger
-                    #                            with no cover left
-                    #                            to free it
                 if w is not None:
                     try:
                         w.destroy()

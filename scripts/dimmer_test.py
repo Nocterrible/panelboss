@@ -198,17 +198,61 @@ assert "GetClassNameW.restype" in SRC and \
     #                                   verb (the GetCursorPos class)
 ok("the filter is in the census stratum, not the FSM, and the class "
    "lookup is pinned")
-_cold = [f["cls"] for f in dimmer._census()]
-assert all(c not in dimmer.DESKTOP_VIEWS for c in _cold), _cold
-ok("the live census on this desk answers no Progman/WorkerW row")
+_cold = dimmer._census()
+assert all(f["cls"] not in dimmer.DESKTOP_VIEWS or f["fg"]
+           for f in _cold), _cold
+ok("the live census on this desk answers no un-fg'd Progman/WorkerW "
+   "row (an fg desktop view rides the filter, the FSM's fg skip "
+   "still refuses it paint)")
 
+
+# --- the foreground fix (gate finding 2): a focus that is a CHILD
+# --- (UWP CoreWindow, dropdown, devtools popup) must mark its TOP-
+# --- LEVEL. This desk answers a REAL child to lean on: SHELLDLL_-
+# --- DefView, the desktop's own view window, whose GA_ROOT is the
+# --- Progman/WorkerW row. Fake the foreground as that child and the
+# --- real census must flag the ROOT row (and only it): the old raw
+# --- compare flagged nothing (the child is no row at all), which is
+# --- how a foreground UWP app stayed qualified and the desktop focus
+# --- dimmed the always rows blind. Through the REAL _census, and the
+# --- flagged row drops the same tick in the WORLD drive below:
+# --- desktop view with the fg flag rides _veil_rows (attribution!)
+# --- but the FSM's fg skip refuses it a veil (wallpaper law intact).
+_Progman = ctypes.windll.user32.FindWindowW("Progman", None)
+assert _Progman, "this desk answers no Progman"
+_DefView = ctypes.windll.user32.FindWindowExW(_Progman, 0, None, None)
+assert _DefView, "this Progman answers no child to lean on"
+_root = ctypes.windll.user32.GetAncestor(_DefView, dimmer.GA_ROOT)
+_real_fg = dimmer._u32.GetForegroundWindow
+dimmer._u32.GetForegroundWindow = lambda: _DefView
+try:
+    _fixed = dimmer._census()                    # the REAL door
+finally:
+    dimmer._u32.GetForegroundWindow = _real_fg
+_fgged = [f for f in _fixed if f["fg"]]
+assert len(_fgged) == 1 and _fgged[0]["hwnd"] == _root \
+    and _fgged[0]["cls"] in dimmer.DESKTOP_VIEWS, \
+    "the child focus did not resolve to the top-level that owns it: " \
+    "%r vs %r" % (_fgged, _root)
+assert all(not f["fg"] for f in _fixed
+           if f["cls"] in dimmer.DESKTOP_VIEWS and f["hwnd"] != _root), \
+    "the sibling desktop view rode the filter un-flagged"
+W = World(_fixed)                                # every live desk row
+W.tick(cfg(level=30, monitors={f["monitor"]: True
+                               for f in _fixed if f["monitor"]}), 100)
+assert _root not in W.rec.painted, \
+    "the fg'd desktop view reached paint (wallpaper law broken)"
+ok("a focus on a child marks its TOP-LEVEL through the real census "
+   "(GA_ROOT at the door); the desktop row carries attribution yet "
+   "never reaches paint - the same-tick drop rides the fg flag")
 
 # --- Oct-15 UAT bug 2a: a paint for a destroyed hwnd raises inside
 # --- Tk; the item must die alone, not take the pump - and its veil
 # --- must leave the dict. Driven with a fake tkinter through the
-# --- REAL painter thread. Bug 2b rides the same drive: a birth
-# --- contained in a live veil's rect is refused (stacked alphas
-# --- paint a darker seam), while a partial overlap still births.
+# --- REAL painter thread. The z-pin (gate finding 1) rides the same
+# --- drive: every birth goes through _zpin with a fake hwnd the real
+# --- IsWindow refuses (dead anchor: skip, never raise) - the drive
+# --- proves the pin costs the pump nothing on anchors it cannot read.
 import time as _time_mod
 import types as _types
 
@@ -241,8 +285,11 @@ class _DeadWin:
     def deiconify(self):
         pass
 
-    def lift(self):
+    def update_idletasks(self):
         pass
+
+    def winfo_id(self):
+        return 0x4242
 
     def destroy(self):
         self.calls.append("destroy")
@@ -284,7 +331,14 @@ class _Root:
 
 #                                   # is driven by hand below
 _dead, _live = _DeadWin(), _LiveWin()
-_wl = iter([_live, _live, _dead])   # births: veil1, veil3, veil9-dead
+_wl = iter([_live, _live, _live, _dead])   # births: veil1, veil2,
+#                                          # veil3, veil9-dead - the
+#                                          # ledger is gone, so EVERY
+#                                          # qualified birth takes a
+#                                          # widget (the 0x4242 fake
+#                                          # winfo_id + real IsWindow
+#                                          # refuse every z-pin: the
+#                                          # dead-anchor path rides)
 _tk = _types.SimpleNamespace(Toplevel=lambda *a, **k: _wl.__next__(),
                              Tk=lambda: _Root())
 _saved_modules = dict(sys.modules)
@@ -298,10 +352,13 @@ sys.modules["tkinter"] = _tk
 try:
     dimmer._q = None
     dimmer._paint(1, (10, 10, 800, 600), 0.3)       # live veil
-    dimmer._paint(2, (20, 20, 400, 300), 0.3)       # CONTAINED birth
+    dimmer._paint(2, (20, 20, 400, 300), 0.3)       # contained too:
+    #                                               # it BIRTS now,
+    #                                               # z-pinned below
+    #                                               # its own target
     dimmer._paint(3, (1200, 10, 900, 700), 0.3)     # disjoint birth
     dimmer._paint(9, (5, 5, 2000, 1000), 0.3)       # the DEAD hwnd
-    dimmer._paint(3, (0, 0, 700, 500), 0.3)         # grows: overlaps
+    dimmer._paint(3, (0, 0, 700, 500), 0.3)         # grows: re-pins
     _deadline = _time_mod.time() + 10.0
     while not JOBS:
         assert _time_mod.time() < _deadline, "the fake painter died"
@@ -322,37 +379,79 @@ assert any("one veil item failed" in l for l in _cap.lines), \
 _dlg.removeHandler(_cap)
 ok("one dead hwnd kills ONE veil (dropped from the dict, destroyed, "
    "LOGGED) and the pump survives to drain the rest")
-# the containment was judged at birth (2 got no Toplevel: the iterator
-# proves it - three paints-to-birth, three widgets, and the dead one
-# was the THIRD). Pin the pump's own helper both ways:
-assert dimmer._covered({1: type("V", (), {"_pb_rect":
-                                         (10, 10, 800, 600)})()},
-                       2, (20, 20, 400, 300))
-assert not dimmer._covered({1: type("V", (), {"_pb_rect":
-                                              (10, 10, 800, 600)})()},
-                           2, (20, 20, 900, 300))
-ok("a contained birth is refused; a partial overlap still births "
-   "(the inverse containment is the documented, deliberate gap)")
 
-# the suppression ledger (gate finding 1): a refused birth is NOT
-# forgotten - when the covering veil dies, its contained rows re-emit.
-_live1 = {1: type("V", (), {"_pb_rect": (10, 10, 800, 600)})()}
-_ledger = {}
-assert dimmer._ledged_birth(_ledger, _live1, 2,
-                            (20, 20, 400, 300), 0.3) is None
-assert _ledger.get(2) == ((20, 20, 400, 300), 0.3), \
-    "the refused birth was dropped, not remembered"
-assert dimmer._reclaim(_ledger, (10, 10, 800, 600)) \
-    == [((20, 20, 400, 300), 0.3, 2)], "the cover's death freed nothing"
-assert not _ledger, "reclaim left a row behind"
-assert dimmer._ledged_birth({}, _live1, 3, (20, 20, 900, 300), 0.3) \
-    == ("veil", 3, (20, 20, 900, 300), 0.3)   # PARTIAL overlap still
-    #                                         births: the documented
-    #                                         deliberate gap
-assert dimmer._ledged_birth(_ledger, {}, 3, (20, 20, 400, 300), 0.3) \
-    == ("veil", 3, (20, 20, 400, 300), 0.3)   # no cover: born at once
-ok("the pump remembers every refusal; the cover's death re-emits "
-   "exactly its contained rows")
+# --- the z-pin (gate finding 1's fix), through fakes. Pin 1: a DEAD
+# --- anchor is a silent skip - no band write, no position call, no
+# --- raise. Pin 2: a live anchor pins OUR root (never the owner's
+# --- handle - that would yank the user's window forward) under the
+# --- target's next-up neighbour, with the full flag word 0x213 =
+# --- NOSIZE|NOMOVE|NOACTIVATE|NOOWNERZORDER, band-matched: an
+# --- ordinary anchor gets an ordinary veil, a topmost one a topmost
+# --- veil, and an anchor at the band's head (GetWindow answers none)
+# --- pins at HWND_TOP (None).
+class _ZWin:
+    def __init__(self):
+        self.attrs = []
+
+    def update_idletasks(self):
+        pass
+
+    def winfo_id(self):
+        return 0x4242
+
+    def attributes(self, *a):
+        self.attrs.append(a)
+
+
+_iw, _gw, _swp = dimmer._iswindow, dimmer._getwindow, dimmer._setwindowpos
+_gwlw = dimmer._u32.GetWindowLongW
+try:
+    dimmer._iswindow = lambda h: 0
+    _z = _ZWin()
+    dimmer._zpin(_z, 0x1234)
+    assert _z.attrs == [], "a dead anchor still got a band write"
+
+    def _live_iw(h):
+        return 1
+
+    def _above(h, g):
+        return 0x1337 if g == dimmer.GW_HWNDNEXT else None
+
+    _pins = []
+
+    def _swp_rec(h, a, x, y, cx, cy, f):
+        _pins.append((h, a, f))
+        return 1
+
+    dimmer._iswindow = _live_iw
+    dimmer._getwindow = _above
+    dimmer._setwindowpos = _swp_rec
+    _z = _ZWin()
+    dimmer._zpin(_z, 0x1234)                    # ordinary anchor
+    assert _z.attrs == [("-topmost", False)], _z.attrs
+    assert _pins == [(0x4242, 0x1337, 0x213)], _pins
+    _z = _ZWin()
+    dimmer._getwindow = lambda h, g: None       # anchor at the top
+    dimmer._zpin(_z, 0x1234)
+    assert _pins[-1] == (0x4242, None, 0x213), _pins[-1]
+
+    def _topmost_ex(h, i):                      # topmost owner
+        return 0x8 if i == dimmer.GWL_EXSTYLE else 0
+
+    dimmer._u32.GetWindowLongW = _topmost_ex
+    dimmer._getwindow = _above
+    _z = _ZWin()
+    dimmer._zpin(_z, 0x1234)
+    assert _z.attrs == [("-topmost", True)], _z.attrs   # band matched
+    assert _pins[-1] == (0x4242, 0x1337, 0x213), _pins[-1]
+finally:
+    dimmer._iswindow = _iw
+    dimmer._getwindow = _gw
+    dimmer._setwindowpos = _swp
+    dimmer._u32.GetWindowLongW = _gwlw
+ok("the z-pin: a dead anchor skips silent; a live one pins OUR root "
+   "under the next-up neighbour with flags 0x213, band-matched both "
+   "ways, HWND_TOP at the band's head")
 
 
 # --- RULING 3 (Oct-15): the per-monitor always sub-mode. An opted
