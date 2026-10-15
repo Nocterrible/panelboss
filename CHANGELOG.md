@@ -1,6 +1,6 @@
 # PanelBoss changelog
 
-## Unreleased - 2026-10-14 waves (rc-2026-10-14b)
+## 0.3.0 - 2026-10-14 (rc-2026-10-14b, UAT build ec02a76)
 
 - Away modes: blackout, DIM (HDR off + brightness dip, honest
   readback, preview), and OFF in two flavors. D6 off sends the

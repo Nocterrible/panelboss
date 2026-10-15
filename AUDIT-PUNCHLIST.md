@@ -1154,7 +1154,7 @@ widget; when the caret dies, the N-second timer restarts normally.
 Caret poll rides the strip's existing timer (one call per tick). No
 focus-stealing, no click tracking: the strip notices the caret, not
 the keyboard.
-OFFDISC FOLLOW-UPS (gate OBS-1/2, next touch, both one-liners):
+OFFDISC FOLLOW-UPS \(gate OBS-1/2\) - BOTH CLOSED at 75b1141:
 (1) commit prose overclaims 'disagreement LOUD at the belt' - the belt
 passes gdi="" so the cross-check cannot disagree there; branch is
 harmless defensive, correct the comment or drop the branch.

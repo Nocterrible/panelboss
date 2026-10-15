@@ -38,9 +38,11 @@ range (93c9cc3..0ffa77e), not the original:
   _busy_note leak fix + worker-local got latch (gate:
   SHIP-WITH-FIXES, all absorbed, FlashCam pins one-frame-then-dark)
 Receipts at the new tip: gauntlet-v7.log (FILE: in scratch dir),
-probe-receipts regenerated at tag time. The RISK line above is CLOSED
-by 0d3c8df: the release now rides the device-tree lock (deferral, not
-blocking), which was the gate's named worry.
+probe-receipts regenerated at tag time. The RISK the FOURTH submission
+named (lock-free release + 30 s open deadline on the owner's multi-cam
+NVIDIA desk at first quit/reboot) is CLOSED by 0d3c8df: the release now
+rides the device-tree lock (deferral, not blocking), which was the
+gate's named worry.
 
 ## Intent
 Pre-release audit (13 batches, two-channel + probes): ~42 findings, all
@@ -338,3 +340,27 @@ unanswered; (c) camera.py/_events.py size deferrals stand (this range
 grew neither); (d) uninstall leaves a stored disconnect in the CCD db -
 changelog sentence, belt reclaims while installed; (e) restore patience
 tax: >=0.3s per hand-back, deliberate, recorded.
+
+## GATE v2 NOTES, CLEARED (same evening - the gate was right on all seven)
+- VERSION: bumped to 0.3.0 (__version__ + CHANGELOG title dated, UAT build
+  named ec02a76) - traceability restored.
+- CORNER-JAIL: SHIPPED at 93ef383 (display.jail_cursor/unjail_cursor,
+  engage-to-lift, SetCursorPos-generates-no-raw-input law in the header);
+  the addendum's 'in flight' was stale bookkeeping, corrected here.
+- CADENCE LABEL FIX: shipped at 35c2a10 (TIP speaks the effective value);
+  addendum-5's 'queued' marker closed.
+- GATE VERDICTS for lock+widening: the range review (4eaf7ce..fc3c8f4)
+  carried SHIP-WITH-FIXES -> five fixes -> SHIP with zero new bugs; the
+  package under-cited it. Both fix waves' re-gates SHIP'd (436ed4d/75b1141).
+- UAT BUILD: owner's 20:3x witnesses ran on pid 188688 = code from 436ed4d,
+  which is the tested tip ec02a76 minus docs-only commits - same code.
+- OBS-1 belt comment: FIXED at 75b1141 (comment corrected, branch kept
+  defensive); dossier follow-up block below marked CLOSED.
+- Stale 'RISK line above' at the v4 header seam: removed by the v5 rewrite;
+  v5 quotes this submission's RISK line here instead: a disconnect spell
+  outliving the app (crash with autostart off, or KVM switched away mid-
+  retract) keeps the panel dark through reboots until Settings -> Display;
+  on a KVM desk the restore may falsely warn 'never came back'. ACCEPTED
+  knowingly - the belt and the TIP's Settings-recovery sentence are the
+  mitigations, and the faux-hide/armed-spell interplay is leg-one material
+  of the next tranche.
