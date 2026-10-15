@@ -1178,3 +1178,12 @@ needs hiding; even on OLEDs it is opt-in per the law). Only enabled
 monitors get a strip painted at all; the reveal-scope choice and
 return-timer seconds are GLOBAL (one behavior, per-monitor targets -
 not a settings matrix).
+PREVIEW-SEAM FIX (436ed4d/75b1141, gate SHIP) - two soft notes for
+next touch, neither blocking: (1) the seam pin drives only the
+REACHABLE menu shape - strengthen to superset-compare vs off_choice
+on a plain fake (a 5th label added only to an unreachable branch
+would slip and land as a preview-time KeyError, loud but UI-thread);
+(2) restore patience = sleep-before-look, every restore now pays
+>=0.3s (<=1.2s serial worst in the lift loop) - same tax _gone
+already imposed since the wave, recorded so the number is known
+when someone times a lift.
