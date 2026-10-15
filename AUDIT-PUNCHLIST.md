@@ -1414,3 +1414,28 @@ hide/show geometry is precisely where the doubt lives.)
 Packet PACKET-RAISE-RESYNC.md died unsent: the seam it dictated turned
 out to be the conflict itself, and adjudicating a law conflict is not
 typist-class work.
+
+## HOTKEY WAVE, CLOSED (Oct 15) - the audit trail in three lines
+- The layering wave (423c9e0/2854492/cb71cbc) carries NO formal gate
+  verdict: the reviewer died twice on the thinking-partial trap (the
+  Oct-13 class, documented in AGENTS.md, now owner-verified twice on
+  the gate's own channel). Treatment stands on its receipts: root cause
+  measured (1408 two-thread probe), fix verified live on the owner's
+  desk, dimmer 40 + full gauntlet green, and the lane's pixel probe
+  caught the debugger's NEXT-vs-PREV error and corrected it in-commit.
+  A future gate death class is a channel-sizing fix on the def, not a
+  re-roll.
+- Gate on the 916d5ea fixup: SHIP. Its one finding, for the record:
+  display.py:493 re-initializes _hotkey_req at pump-run time, between
+  the hwnd door opening (:459) and the loop; a note posted by the
+  monitor thread inside that sliver is wiped and its caller waits the
+  5 s bound for (False, 0). Low, bounded, and the SAME shape as
+  _ear_req at :492 - a house pattern, not a new disease. Belt when the
+  pump gets next touched: assign the run-time birth only when the
+  field is None.
+- V was dispatched against the wave and died reporting the dimmer
+  suite only - awaymode (the suite that actually caught the field
+  miss) was never re-run in its session. The architect's own gauntlet
+  (rc=0, ALL GREEN, tip 916d5ea, 14:37) covers the gap; the receipt is
+  that log, and V's independent re-run stays cheap belt work for the
+  MSI wave rather than owed here.
