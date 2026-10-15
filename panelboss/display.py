@@ -890,6 +890,15 @@ def get_idle_time():
     return max(k32.GetTickCount() - info.dwTime, 0) / 1000.0
 
 
+def idle_seconds():
+    """The dimmer's input truth, public under the name the wave's
+    packet speaks: GetLastInputInfo's seconds, inf when the source is
+    deaf. One line over get_idle_time on purpose - the pin law is
+    already paid there, and a feature must not re-wrap the same verb
+    into a second lie."""
+    return get_idle_time()
+
+
 def foreground_is_fullscreen():
     """True when the foreground window covers the whole virtual desktop:
     exclusive-fullscreen apps swallow SC_MONITORPOWER broadcasts, so the

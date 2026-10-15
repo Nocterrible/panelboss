@@ -7,6 +7,7 @@ import queue
 import time
 
 from .. import display
+from .. import dimmer
 from .. import hider
 from .. import jog
 from ._preview import FrameBox
@@ -133,6 +134,8 @@ class _BootMixin:
         jog.teardown()                     # the ring forgets its place
         hider.teardown()                   # the orderly half of the same
                                            # promise, on every exit path
+        dimmer.teardown()                  # every veil gone: ordinary
+                                           # windows die with the process
 
     def _tick(self):
         """One loop cycle. Returns the lease's poll delay (seconds)
@@ -152,6 +155,11 @@ class _BootMixin:
                                            # outside the camera's pause:
                                            # a paused watch must still
                                            # let the taskbar come back
+        dimmer.tick(self.cfg, now)         # the veils converge AFTER the
+                                           # strips: the ring's offset is
+                                           # already this beat's and the
+                                           # census must not see a
+                                           # half-moved desk
         if self.quit:
             return
         self._apply_hold(now)                # the policy is asserted every

@@ -398,6 +398,24 @@ DEFAULTS = {
                                    # not heard warns and folds to shuffle
                                    # (normalize_hider's honesty, mirrored)
     },
+    "dimmer": {
+        "on": False,              # background dimming is consent: absent
+                                   # section = dark, the desk dims for no one
+        "monitors": {},           # {short: bool} - per-panel opt-in, the
+                                   # same law as the hider's rows
+        "idle_sec": 120,          # input stillness before veils may birth;
+                                   # clamped 15..3600 (silent clamp rails)
+        "ramp_sec": 8,            # the fade-out after input returns;
+                                   # clamped 3..60
+        "level": 45,              # veil darkness in percent; clamped 10..90
+        "apps": {},               # {exe-basename-lower: bool} - the
+                                   # exclusion table (bool rows, junk
+                                   # warn+drop, unknown kept)
+        "bound": None,            # the hotkey word the card stores; None
+                                   # = unbound by default (this wave:
+                                   # capture-only, the card's button is the
+                                   # pause toggle, no RegisterHotKey yet)
+    },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
                                 # profile the app re-applies by itself
@@ -873,6 +891,91 @@ def normalize_jog(value):
             "cycle_min": cyc, "mode": mode}
 
 
+DIMMER_IDLE_FLOOR = 15           # below fifteen seconds a blink is not a walk
+DIMMER_IDLE_CEIL = 3600          # past an hour the walk happened long ago
+DIMMER_IDLE_DEFAULT = 120
+DIMMER_RAMP_FLOOR = 3            # a two-second fade is a flicker
+DIMMER_RAMP_CEIL = 60            # past a minute the return is an apology
+DIMMER_RAMP_DEFAULT = 8
+DIMMER_LEVEL_FLOOR = 10          # thinner than this the veil is a rumor
+DIMMER_LEVEL_CEIL = 90           # darker than this the desk is the screen
+DIMMER_LEVEL_DEFAULT = 45
+
+
+def normalize_dimmer(value):
+    """[dimmer] in its in-memory shape: {on, monitors, idle_sec,
+    ramp_sec, level, apps, bound}. normalize_jog's honesty, mirrored:
+    a bad on warns and folds to False (the default-off law), the rails
+    clamp in silence (the hider's hold_sec law - a slider that clamps
+    must not confess at load), and the row tables fail open: a
+    non-bool row warns naming itself and is dropped, unknown keys are
+    kept (a panel or an app that may come back). 'bound' stores the
+    hotkey word the card bound; any non-str/None warns and folds to
+    None (unbound is the only state the card can promise honestly this
+    wave)."""
+    value = value if isinstance(value, dict) else {}
+    on = value.get("on", False)
+    if not isinstance(on, bool):
+        log.warning("dimmer on %r is not a bool; the desk dims for no "
+                    "one", on)
+        on = False
+    try:
+        idle = int(value.get("idle_sec", DIMMER_IDLE_DEFAULT))
+    except (TypeError, ValueError):
+        idle = DIMMER_IDLE_DEFAULT
+    idle = max(DIMMER_IDLE_FLOOR, min(DIMMER_IDLE_CEIL, idle))
+    try:
+        ramp = int(value.get("ramp_sec", DIMMER_RAMP_DEFAULT))
+    except (TypeError, ValueError):
+        ramp = DIMMER_RAMP_DEFAULT
+    ramp = max(DIMMER_RAMP_FLOOR, min(DIMMER_RAMP_CEIL, ramp))
+    try:
+        level = int(value.get("level", DIMMER_LEVEL_DEFAULT))
+    except (TypeError, ValueError):
+        level = DIMMER_LEVEL_DEFAULT
+    level = max(DIMMER_LEVEL_FLOOR, min(DIMMER_LEVEL_CEIL, level))
+    rows = {}
+    raw = value.get("monitors")
+    if isinstance(raw, dict):
+        try:
+            live = set(_live_shorts())
+        except Exception:            # a desk that cannot enumerate keeps
+            live = None              # every saved row silently
+        for short, row in raw.items():
+            short = str(short).strip()
+            if not short:
+                continue
+            if isinstance(row, bool):
+                if live is not None and short not in live:
+                    log.info("dimmer monitor %r names no panel on this "
+                             "desk; the row is kept for when it returns",
+                             short)
+                rows[short] = row
+            else:
+                log.warning("dimmer monitor %r: %r is not a bool; the "
+                            "row is dropped", short, row)
+    apps = {}
+    raw = value.get("apps")
+    if isinstance(raw, dict):
+        for name, row in raw.items():
+            name = str(name).strip().lower()
+            if not name:
+                continue
+            if isinstance(row, bool):
+                apps[name] = row
+            else:
+                log.warning("dimmer app %r: %r is not a bool; the "
+                            "row is dropped", name, row)
+    bound = value.get("bound")
+    if bound is not None and not isinstance(bound, str):
+        log.warning("dimmer bound %r is not a word; the hotkey is "
+                    "unbound", bound)
+        bound = None
+    return {"on": on, "monitors": rows, "idle_sec": idle,
+            "ramp_sec": ramp, "level": level, "apps": apps,
+            "bound": bound}
+
+
 def _live_shorts():
     """The desk's panel shorts, for the migration's rows. A seam on
     purpose: the suite patches this instead of the Win32 enum, and a
@@ -1006,6 +1109,7 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
     merged["away"] = normalize_away(merged.get("away"))
     merged["hider"] = normalize_hider(merged.get("hider"))
     merged["jog"] = normalize_jog(merged.get("jog"))
+    merged["dimmer"] = normalize_dimmer(merged.get("dimmer"))
     if verbose:
         log.debug(f"using config from {path}")
     # [camera] index and name_contains normalize to one in-memory shape
@@ -1217,6 +1321,14 @@ def _emit_table(table, path, lines):
     sub-table header, so the passes cannot be intermixed, and every
     key (and dotted-header part) goes through _dumps_key."""
     for key, value in table.items():
+        if value is None:
+            continue        # TOML has no null: the ABSENCE of a key is
+                            # this file's UNSET (the away-table law at
+                            # the rules comment, now writer-wide - a
+                            # None default like [dimmer].bound through
+                            # str() would write `bound = None`, and the
+                            # reload would call the WHOLE file corrupt
+                            # and reset every setting: the Oct-10 trap)
         if not isinstance(value, dict):
             lines.append("%s = %s" % (_dumps_key(key),
                                      _format_value(value)))
