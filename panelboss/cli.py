@@ -404,9 +404,21 @@ def _run(cfg, autostart=False):
                          args=(cfg, stop_taskbar), daemon=True,
                          name="taskbar").start()
     try:
+        # the silent-death belt (Oct-15 dossier): a corpse with no
+        # sign-off line left the hider's whole first UAT reading as a
+        # bug when it was a death. Every departure from here names
+        # itself - the return of _drive, not just its raises.
         _drive(cfg, monitor, worker, ui_events)
+        logging.getLogger("cli").info(
+            "the settings window closed; the tray lives on until the "
+            "user quits it")
     except KeyboardInterrupt:
+        logging.getLogger("cli").info("exiting: keyboard interrupt")
         monitor.events.put(("quit", True))
+    except BaseException:
+        logging.getLogger("cli").exception(
+            "exiting: _drive raised; the tail below is the reason")
+        raise
     finally:
         # a window crash must not pin the camera: stop the loop first
         stop_gaming.set()
@@ -442,6 +454,13 @@ def _run(cfg, autostart=False):
             # its way out; this call always has)
             monitor._release_camera()
         icon.stop()                          # the tray stops after the run
+    # the belt's other door: the tray pump exits on a "quit" event or
+    # on its own death, and _drive parks on the worker while headless.
+    # Either way THIS line is the app's last word; grep the log for it
+    # and for the line above - whichever pair is missing names the
+    # door the corpse left by (silent-death dossier, Oct 15).
+    logging.getLogger("cli").info("exit: the run tail is done, the "
+                                  "process ends now")
     return 0
 
 
@@ -589,6 +608,10 @@ def _drive(cfg, monitor, worker, ui_events):
             timeout_notice("settings window died: see the log",
                            ms=10000)          # a dead window is not
                                               # just a log line
+            return                            # the caller's belt would
+                                              # call this "closed" and
+                                              # be wrong (silent-death
+                                              # dossier, Oct 15)
     else:
         logging.getLogger("cli").info("no ui; running headless beside the "
                                        "tray")
