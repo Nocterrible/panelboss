@@ -1256,3 +1256,24 @@ rect; wrong guesses die on the hotkey or any input.
    uninstall and a residue sweep (registry, tasks, AppData).
 6. The veil redraw bugs (logged above) close BEFORE the trial; the
    first impression is the trial.
+
+## SILENT APP DEATH (owner UAT, Oct 15 ~11:00 - the hider's 'didn't
+## work' was a corpse, not a bug: config persisted, fresh boot applied
+## it in one tick - the feature is exonerated by its own wake-up)
+EVIDENCE: instance booted 10:56:28 ('tray icon ready', window mapped);
+last log line 10:56:39; the next launch at 11:07:06 logged 'instance
+guard: WON' (a survivor would have made it a loser with the balloon
+line). Fourteen minutes of silence, no Traceback, no 'settings window
+died' (epitaph-before-burial ships since 02:00), no quit arm, no hard
+kill - pythonw left without a word. Owner-visible symptom chain: tray
+icon gone, hider (left ON in config) inactive, everything resurrected
+by the next launch.
+SUSPECTS (next occurrence must name itself): (a) ui.run() returned -
+mainloop ended without the tray's quit arm - and the process exit was
+therefore main-thread-normal with only daemons left (silent by
+construction); (b) an os._exit path without a marker; (c) console-host
+teardown. BELT TO SHIP WITH THE NEXT TOUCH: cli._drive logs the
+return of ui.run ('window closed - tray follows' vs 'quitting'), and
+_run's tail logs EVERY exit path with its reason - a silent departure
+becomes a signed one. Grep for the belt lines names which door the
+corpse left by.
