@@ -1511,3 +1511,21 @@ OPEN, still to settle before the feature spec:
   history - the research question stands), or DDA/WGC motion with
   the WASAPI audible AND-gate (the probe rig on this same desk is
   already measuring the eye's cost).
+
+## INFERNIX (5090) OFFLINE - Oct 15 ~16:0x, owner's call: card took a
+## dive mid-shift (owner: "the 5090 decided it had had enough").
+EVIDENCE (this workstation is the GPU host): nvidia-smi lists the 5090
+at P0/53C (idle-cold), infernix-serve.exe is NOT in the process list,
+and :8082 answers SYN-but-nothing (21 s hangs, Test-NetConnection
+False on 8082 while 8091 on the beastserv appliance answers True - the
+appliance is healthy, the workstation-side engine is what fell).
+DOORS IDE GRACEFULLY (the design working): the FC panelboss box stayed
+up (health 200 whole time, eventLoop alive); fleet/q27 requests that
+would have landed on Infernix now answer 200 in <1 s on the remaining
+seats; the four lanes that died did so at START with 'no eligible
+target in group q27' - honest refusals, no phantom answers, no
+mid-answer corruption. The owner-visible lesson: seat loss = refusals
+at dispatch time, which is the loud-stop degradation the design names.
+REVIVAL (owner's call on when): re-launch F:\LLM\START-infernix-
+27b-4seq.bat once the card is rested; typist-doctor holds the deeper
+recipe for the 27B stack.
