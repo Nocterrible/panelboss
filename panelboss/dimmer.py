@@ -4,9 +4,12 @@ you are not using.
 The law, from the owner's Oct-15 rulings: when [dimmer] is on and at
 least one monitor row opted in and input has been still past
 idle_sec, EVERY visible top-level window on an opted monitor gets its
-own click-through dark veil - except the foreground window (touched =
-instantly un-veiled, next tick), zero-size, iconic, DWM-cloaked, this
-app's own windows, exes the user put on [dimmer.apps], and every
+own click-through dark veil - except the DESKTOP ITSELF (the
+Progman/WorkerW shell views carry the wallpaper; a uniform veil over
+them veils the wall, which is the "darkening the whole screen"
+reading, Oct 15 UAT), the foreground window (touched = instantly
+un-veiled, next tick), zero-size, iconic, DWM-cloaked, this app's
+own windows, exes the user put on [dimmer.apps], and every
 process the WASAPI sensor says is AUDIBLE right now (a window that
 started making sound un-dims the tick the sensor learns it; one that
 went quiet keeps its exemption for SETTLE_SEC - the API drops a
@@ -28,6 +31,16 @@ a private interpreter that obeys the birth-order law
 (hider.wait_for_window() BEFORE its tk.Tk - the lesson that froze
 this morning's blackout). Ordinary windows die with the process: a
 crash unpaints by construction, and teardown is the orderly half.
+The painter's pump wraps EVERY item: a paint for a destroyed hwnd
+raises inside Tk, and an escaped raise left that veil alive, dark
+and un-clickable over a dead app (Oct-15 UAT, the random darker
+box). On a raise the window is dropped and destroyed, and the pump
+keeps draining - the jog pump's lesson, matched. And the pump is
+where the SET is composed before it is painted: a birth whose rect
+is fully CONTAINED in a live veil's rect is refused (two stacked
+alphas paint a darker seam than either; the covering veil already
+darkens that field). The inverse containment is deliberately left
+to the next move - see _covered.
 
 THE HOTKEY LAW (owner): unbound by DEFAULT - no stolen chord before
 consent. The card captures a press and stores [mods, vk]; THIS module
@@ -92,6 +105,12 @@ _u32.GetForegroundWindow.restype = ctypes.c_void_p
 _u32.GetForegroundWindow.argtypes = []
 _u32.EnumWindows.restype = ctypes.c_int
 _u32.EnumWindows.argtypes = [ctypes.c_void_p, ctypes.c_long]
+# the veil-qualification lookup: restype/argtypes land at the import
+# block like every other user32 verb here - an unpinned lookup is the
+# class of bug that froze this morning's blackout (GetCursorPos),
+# we do not repeat it
+_u32.GetClassNameW.restype = ctypes.c_int
+_u32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
 _u32.GetWindowRect.restype = ctypes.c_int
 _u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
 _u32.RegisterHotKey.restype = ctypes.c_int
@@ -117,6 +136,13 @@ _WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
 
 HOTKEY_ID = 0x5042                      # 'PB' - the app's only slot
 MOD_NOREPEAT = 0x4000                   # autorepeat is not a press
+
+# the desktop's own shell views (Oct-15 UAT: the census kept them, so
+# the dimmer veiled the WALLPAPER and the desk read as "the whole
+# screen went dark"). This is a FACT about the desktop, not a config
+# rule, so it filters in the census stratum - never in the Veils FSM,
+# whose job is qualification by config.
+DESKTOP_VIEWS = frozenset(("Progman", "WorkerW"))
 
 # the patchable aliases the fakes lean on (the suite owns the desk
 # here; the pins above stay the real verbs)
@@ -256,7 +282,10 @@ def _fact(w, fg, by_short):
         if mx <= cx < mx + mw and my <= cy < my + mh:
             short = s
             break
-    return {"hwnd": w, "pid": pid.value, "exe": _exe(pid.value),
+    buf = ctypes.create_unicode_buffer(256)
+    _u32.GetClassNameW(w, buf)           # a refusal leaves "": no
+    return {"hwnd": w, "pid": pid.value,   # shell view is unnamed
+            "exe": _exe(pid.value), "cls": buf.value,
             "monitor": short, "fg": w == fg,
             "cloaked": bool(cloak.value),
             "iconic": bool(_u32.IsIconic(w)),
@@ -295,10 +324,23 @@ def _exe(pid):
     return name
 
 
+def _veil_rows(rows):
+    """The census stratum's filter (Oct-15 UAT): rows whose class is
+    one of DESKTOP_VIEWS are NEVER emitted - the wallpaper is not a
+    window you are not using, and veiling it made the field read as
+    "the whole screen dimmed" (the overlap of that veil with an
+    app's own veil was the extra darkness). A FACT about the desk,
+    not a config rule, so it lives here and not in the Veils FSM -
+    and named, so the suite can drive the fake census through the
+    real door. The settings window answers through the same door as
+    any other app; own-process skip covers our own veils, strips,
+    and wash."""
+    return [f for f in rows if f["cls"] not in DESKTOP_VIEWS]
+
+
 def _census():
-    """Every visible top-level window as veil facts. The settings
-    window answers through the same door as any other app - own-
-    process skip covers our own veils, strips, and wash."""
+    """Every visible top-level window as veil facts, minus the
+    desktop's own shell views (_veil_rows)."""
     from . import wm
     fg = _u32.GetForegroundWindow()
     by_short = {m["short"]: (m["x"], m["y"], m["w"], m["h"])
@@ -317,7 +359,7 @@ def _census():
 
     p = _WNDENUMPROC(cb)
     _u32.EnumWindows(p, 0)
-    return rows
+    return _veil_rows(rows)
 
 
 # ---------------------------------------------------------------- painter
@@ -350,6 +392,31 @@ def _clickthrough(win):
         pass                             # click-through degrades
 
 
+def _covered(veils, hwnd, rect):
+    """The pump's composite, consulted ONLY at a birth (Oct-15 UAT,
+    the random-darker-box): True when some live veil's rect FULLY
+    CONTAINS this new one. Two stacked Tk windows each at the level
+    darken the intersection past either - the seam reads as a stale
+    veil. The covering veil already darkens that whole field, so the
+    contained window gets no window of its own; when the covering
+    app loses its veil, the contained window's next paint request
+    births it normally. The INVERSE (a live veil sitting inside a
+    bigger newcomer) is deliberately left: the discrepancy dies the
+    tick the underlying window moves, and a general rectangle-
+    subtraction painter is a rewrite the owner has not asked for."""
+    for h, w in veils.items():
+        if h == hwnd:
+            continue
+        lr = getattr(w, "_pb_rect", None)
+        if lr is None:
+            continue                     # a veil from before the law
+        if (lr[0] <= rect[0] and lr[1] <= rect[1]
+                and rect[0] + rect[2] <= lr[0] + lr[2]
+                and rect[1] + rect[3] <= lr[1] + lr[3]):
+            return True
+    return False
+
+
 def _run_painter():
     import tkinter as tk
     from . import hider
@@ -363,28 +430,50 @@ def _run_painter():
     def pump():
         while True:
             try:
-                act, hwnd, rect, alpha = _q.get_nowait()
+                item = _q.get_nowait()
             except queue.Empty:
                 break
-            if act == "gone":
+            hwnd = None
+            try:
+                act, hwnd, rect, alpha = item
+                if act == "gone":
+                    w = veils.pop(hwnd, None)
+                    if w is not None:
+                        w.withdraw()
+                        w.after(150, w.destroy)
+                    continue
+                w = veils.get(hwnd)
+                if w is None:
+                    if _covered(veils, hwnd, rect):
+                        continue         # the covering veil owns it
+                    w = veils[hwnd] = tk.Toplevel(root)
+                    w.overrideredirect(True)
+                    w.configure(bg="#000000")
+                    w.attributes("-topmost", True)
+                    w.protocol("WM_DELETE_WINDOW", lambda: None)
+                w._pb_rect = rect
+                w.geometry("%dx%d+%d+%d" % (rect[2], rect[3],
+                                            rect[0], rect[1]))
+                w.attributes("-alpha", alpha)
+                w.deiconify()
+                w.lift()
+                _clickthrough(w)
+            except Exception:
+                # the dead-hwnd law (Oct-15 UAT, the stale dark box):
+                # a paint against a destroyed window raises inside
+                # Tk, and an escaped raise left that veil in the
+                # dict - un-click-through, un-lifted, outliving the
+                # app it covered. One bad item never takes the pump:
+                # drop the window, destroy it, keep draining (the
+                # jog pump's shape, learned twenty minutes older).
+                log.exception("dimmer: one veil item failed; the "
+                              "pump survives")
                 w = veils.pop(hwnd, None)
                 if w is not None:
-                    w.withdraw()
-                    w.after(150, w.destroy)
-                continue
-            w = veils.get(hwnd)
-            if w is None:
-                w = veils[hwnd] = tk.Toplevel(root)
-                w.overrideredirect(True)
-                w.configure(bg="#000000")
-                w.attributes("-topmost", True)
-                w.protocol("WM_DELETE_WINDOW", lambda: None)
-            w.geometry("%dx%d+%d+%d" % (rect[2], rect[3],
-                                        rect[0], rect[1]))
-            w.attributes("-alpha", alpha)
-            w.deiconify()
-            w.lift()
-            _clickthrough(w)
+                    try:
+                        w.destroy()
+                    except Exception:
+                        pass
         root.after(50, pump)
 
     root.after(50, pump)

@@ -42,17 +42,20 @@ class Rec:
 
 
 def w(hwnd, pid=1, exe="notepad.exe", monitor="AOC2790",
-      cloaked=False, iconic=False, fg=False, rect=(10, 10, 800, 600)):
-    return {"hwnd": hwnd, "pid": pid, "exe": exe, "monitor": monitor,
+      cloaked=False, iconic=False, fg=False, rect=(10, 10, 800, 600),
+      cls="ApplicationAppWindow"):
+    return {"hwnd": hwnd, "pid": pid, "exe": exe, "cls": cls,
+            "monitor": monitor,
             "cloaked": cloaked, "iconic": iconic, "fg": fg,
             "rect": rect}
 
 
 def cfg(on=True, monitors=None, apps=None, idle_sec=120, ramp_sec=8,
-        level=45):
+        level=45, always=None):
     return {"dimmer": {"on": on,
                        "monitors": monitors if monitors is not None
                        else {"AOC2790": True},
+                       "always": always or {},
                        "apps": apps or {}, "idle_sec": idle_sec,
                        "ramp_sec": ramp_sec, "level": level,
                        "bound": None}}
@@ -162,6 +165,166 @@ W.idle = 999.0
 W.tick(cfg(), 103)
 assert W.rec.painted[1][1] == 0.45
 ok("a second stillness re-lights the fade mid-step")
+
+
+# --- Oct-15 UAT bug 1: Progman and WorkerW pass the census, so the
+# --- desktop itself gets veiled. The filter lives in the CENSUS
+# --- stratum (a fact about the desk, not a config rule): a fake
+# --- census carrying a Progman row and an ordinary app row must
+# --- emit only the app row - the desktop can never reach paint.
+_raw_desk = [w(1, cls="Progman", rect=(0, 0, 2560, 1440)),
+             w(2, cls="WorkerW", rect=(0, 0, 2560, 1440)),
+             w(3, cls="Chrome_WidgetWin_1")]
+W = World(dimmer._veil_rows(_raw_desk))    # the REAL filter, named
+W.tick(cfg(), 100)
+assert set(W.rec.painted) == {3}, "a desktop view reached paint"
+ok("Progman and WorkerW never reach paint: the wallpaper is not a "
+   "window you are not using")
+assert dimmer.DESKTOP_VIEWS == {"Progman", "WorkerW"}
+SRC_LINES = SRC.splitlines()
+_i = SRC_LINES.index("def _census():")
+assert any("_veil_rows" in l for l in SRC_LINES[_i:_i + 30]), \
+    "the census returns its rows unfiltered - the set is dead weight"
+assert "GetClassNameW.restype" in SRC and \
+    "GetClassNameW.argtypes" in SRC   # the pin discipline, at the
+    #                                   import block like every other
+    #                                   verb (the GetCursorPos class)
+ok("the filter is in the census stratum, not the FSM, and the class "
+   "lookup is pinned")
+_cold = [f["cls"] for f in dimmer._census()]
+assert all(c not in dimmer.DESKTOP_VIEWS for c in _cold), _cold
+ok("the live census on this desk answers no Progman/WorkerW row")
+
+
+# --- Oct-15 UAT bug 2a: a paint for a destroyed hwnd raises inside
+# --- Tk; the item must die alone, not take the pump - and its veil
+# --- must leave the dict. Driven with a fake tkinter through the
+# --- REAL painter thread. Bug 2b rides the same drive: a birth
+# --- contained in a live veil's rect is refused (stacked alphas
+# --- paint a darker seam), while a partial overlap still births.
+import time as _time_mod
+import types as _types
+
+
+class _Cap(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.lines = []
+
+    def emit(self, rec):
+        self.lines.append(rec.getMessage())
+
+
+_cap = _Cap()
+_dlg = logging.getLogger("dimmer")
+_dlg.addHandler(_cap)
+
+
+class _DeadWin:
+    # a veil whose real app died: geometry lands, alpha raises
+    def __init__(self):
+        self._pb_rect = None
+        self.calls = []
+
+    def geometry(self, s):
+        self.calls.append("geom")
+        raise RuntimeError("invalid command name \"dead.win\"")
+
+    def deiconify(self):
+        pass
+
+    def lift(self):
+        pass
+
+    def destroy(self):
+        self.calls.append("destroy")
+
+    def withdraw(self):
+        self.calls.append("withdraw")
+
+    def attributes(self, *a):
+        pass
+
+    def overrideredirect(self, *a):
+        pass
+
+    def configure(self, *a, **k):
+        pass
+
+    def protocol(self, *a):
+        pass
+
+
+class _LiveWin(_DeadWin):
+    def geometry(self, s):
+        self.calls.append("geom")
+
+
+JOBS = []
+
+
+class _Root:
+    def withdraw(self):
+        pass
+
+    def after(self, ms, f=None):
+        JOBS.append(f)              # the test fires the pump itself
+
+    def mainloop(self):
+        pass                        # the fake loop returns; the pump
+
+
+#                                   # is driven by hand below
+_dead, _live = _DeadWin(), _LiveWin()
+_wl = iter([_live, _live, _dead])   # births: veil1, veil3, veil9-dead
+_tk = _types.SimpleNamespace(Toplevel=lambda *a, **k: _wl.__next__(),
+                             Tk=lambda: _Root())
+_saved_modules = dict(sys.modules)
+from panelboss import hider as _hider
+_saved_hider_wait = _hider.wait_for_window
+_saved_click = dimmer._clickthrough
+_saved_q = dimmer._q
+_hider.wait_for_window = lambda *a: None
+dimmer._clickthrough = lambda win: None
+sys.modules["tkinter"] = _tk
+try:
+    dimmer._q = None
+    dimmer._paint(1, (10, 10, 800, 600), 0.45)       # live veil
+    dimmer._paint(2, (20, 20, 400, 300), 0.45)       # CONTAINED birth
+    dimmer._paint(3, (1200, 10, 900, 700), 0.45)     # disjoint birth
+    dimmer._paint(9, (5, 5, 2000, 1000), 0.45)       # the DEAD hwnd
+    dimmer._paint(3, (0, 0, 700, 500), 0.45)         # grows: overlaps
+    _deadline = _time_mod.time() + 10.0
+    while not JOBS:
+        assert _time_mod.time() < _deadline, "the fake painter died"
+        _time_mod.sleep(0.02)
+    JOBS.pop(0)()                    # one pump: drain everything
+    assert dimmer._q.empty(), "the pump stopped draining on a raise"
+finally:
+    sys.modules.clear()
+    sys.modules.update(_saved_modules)
+    _hider.wait_for_window = _saved_hider_wait
+    dimmer._clickthrough = _saved_click
+    dimmer._q = _saved_q
+assert "destroy" in _dead.calls, \
+    "the dead veil was not dropped from the dict and destroyed"
+assert _live._pb_rect == (0, 0, 700, 500)    # the grown veil, alive
+assert any("one veil item failed" in l for l in _cap.lines), \
+    "the dead-veil drop was silent"
+_dlg.removeHandler(_cap)
+ok("one dead hwnd kills ONE veil (dropped from the dict, destroyed, "
+   "LOGGED) and the pump survives to drain the rest")
+# the containment was judged at birth (2 got no Toplevel: the iterator
+# proves it - three paints-to-birth, three widgets, and the dead one
+# was the THIRD). Pin the pump's own helper both ways:
+assert dimmer._covered({1: type("V", (), {"_pb_rect":
+                                         (10, 10, 800, 600)})()},
+                       2, (20, 20, 400, 300))
+assert not dimmer._covered({1: type("V", (), {"_pb_rect":
+                                              (10, 10, 800, 600)})()},
+                           2, (20, 20, 900, 300))
+ok("a contained birth is refused; a partial overlap still births "
+   "(the inverse containment is the documented, deliberate gap)")
 
 
 class Recorder(logging.Handler):
