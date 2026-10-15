@@ -317,7 +317,6 @@ assert "self._oled_dim_disarm()" in cap and \
     "dimmer.capture_word" in cap
 ok("FocusOut cancels a pending capture; every completion disarms")
 
-print("\nDIMMER TESTS OK (%d)" % len(OK))
 
 
 # the ordering truth (gate F4): a modifier's OWN keydown carries
@@ -346,3 +345,4 @@ assert s._dim_pending is not False or getattr(s, "_dim_pending", False), \
 assert s.cfg["dimmer"]["bound"] == [2, 123]      # old binding intact
 ok("a modifier keydown keeps the capture waiting (chords "
    "bindable in the natural order)")
+print("\nDIMMER TESTS OK (%d)" % len(OK))
