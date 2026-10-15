@@ -191,11 +191,18 @@ try:
                                               "IOC912B": "maybe"},
                                  "apps": {"chrome.exe": True,
                                           "JUNK": 7},
-                                 "bound": 12})
+                                 "bound": ["ctrl", 5]})
     assert n["on"] is False and n["idle_sec"] == 3600 and \
         n["ramp_sec"] == 3 and n["level"] == 90 and \
         n["monitors"] == {"AOC2790": True, "GONE": True} and \
         n["apps"] == {"chrome.exe": True} and n["bound"] is None
+    # the UI's ACTUAL write shape round-trips (the gate's F1: the
+    # old str-check folded the card's own pair to None at load):
+    assert config.normalize_dimmer({"bound": [2, 123]})["bound"] == \
+        [2, 123]
+    assert config.normalize_dimmer({"bound": ["6", "117"]})["bound"] \
+        == [6, 117]                     # the hand-edited belt
+    assert config.normalize_dimmer({"bound": [2]})["bound"] is None
     words = "\n".join(rec.lines)
     for needle in ("dimmer on", "is not a bool; the row is dropped",
                    "dimmer bound", "kept for when it returns"):
@@ -280,5 +287,34 @@ reg.clear()
 dimmer._sync_hotkey(None)
 assert reg == [] and not dimmer.bound_live()
 ok("unbound by default means UNBOUND: the arm registers nothing")
+
+# --- the capture rule (gate F4), driven with fake events: a bare key
+# --- gets the word and keeps the OLD binding; a chord becomes the
+# --- pair, Tk masks translated to the RegisterHotKey flags
+pair, word = dimmer.capture_word(0x0000, 65)             # bare 'A'
+assert pair is None and word == ("a letter is not a chord - bind a "
+                                 "combo, esc clears")
+assert dimmer.capture_word(0x4 | 0x8, 123) == ([0x3, 123], None)
+assert dimmer.capture_word(0x1, 32) == ([0x4, 32], None)   # shift
+assert dimmer.capture_word(0x40, 80) == ([0x8, 80], None)  # win
+ok("a bare key is refused (a letter is typed, not stolen); a chord "
+   "is translated")
+
+# and the walk-away cancel is wired at the arming seam (FocusOut
+# bound when the flag stands, both unbound in the disarm - the UI's
+# shape, pinned from the source the card actually ships)
+UI = open("panelboss/ui/window/_oled.py", encoding="utf-8").read()
+arm = UI[UI.index("def _oled_dim_bind"):
+         UI.index("def _oled_dim_disarm")]
+assert 'self.bind("<FocusOut>", self._oled_dim_focus_out)' in arm
+dis = UI[UI.index("def _oled_dim_disarm"):
+         UI.index("def _oled_dim_capture")]
+assert 'self.unbind_all("<KeyPress>")' in dis and \
+    'self.unbind("<FocusOut>")' in dis
+cap = UI[UI.index("def _oled_dim_capture"):
+         UI.index("def _dim_words")]
+assert "self._oled_dim_disarm()" in cap and \
+    "dimmer.capture_word" in cap
+ok("FocusOut cancels a pending capture; every completion disarms")
 
 print("\nDIMMER TESTS OK (%d)" % len(OK))

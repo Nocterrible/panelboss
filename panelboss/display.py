@@ -473,10 +473,13 @@ class Display(threading.Thread):
                     # queue. One flag-set on the pump thread - the flip
                     # belongs on the state loop's own beat (the cross-Tk
                     # law says a foreign-thread checkbox write is the
-                    # bug class)
+                    # bug class). The belt: only OUR id wakes the
+                    # dimmer - a foreign WM_HOTKEY falls through
+                    # untouched.
                     try:
                         from . import dimmer
-                        dimmer.hotkey_press()
+                        if msg.wParam == dimmer.HOTKEY_ID:
+                            dimmer.hotkey_press()
                     except Exception:
                         pass           # a dimmer that cannot hear is a
                                        # dimmer, not a dead pump

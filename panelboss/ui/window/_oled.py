@@ -513,6 +513,26 @@ class _OledMixin:
         self.oled_pause_box.set(dimmer.paused())
         self.oled_pause_box.grid(row=0, column=1, sticky="e")
         self._dim_words()
+        self.after(1000, self._dim_poll)
+
+    def _dim_poll(self):
+        """The confession and the pause switch follow the engine
+        while the card is alive - a taken combo answered AFTER the
+        capture (the arm speaks on a later beat than the click)
+        surfaces here, not only in the log. 1000 ms,
+        self-rescheduling, diff-guarded (set_text): the away card's
+        _away_poll idiom, verbatim."""
+        try:
+            if getattr(self, "_dying", False):
+                return
+            self._dim_words()
+            self.oled_pause_box.set(dimmer.paused())
+        except Exception:
+            log.debug("dimmer poll failed", exc_info=True)
+        try:
+            self.after(1000, self._dim_poll)
+        except Exception:
+            pass                          # destroyed mid-tick
 
     def _oled_dim_changed(self):
         self.cfg.setdefault("dimmer", {})["on"] = bool(
@@ -578,32 +598,45 @@ class _OledMixin:
 
     def _oled_dim_bind(self):
         if getattr(self, "_dim_pending", False):
-            self._dim_pending = False
-            ctk.CTkButton.configure(self.oled_bind_btn,
-                                    text=self._DIM_BIND_TXT)
-            self.unbind_all("<KeyPress>")
+            self._oled_dim_disarm()
             return
         self._dim_pending = True
         self.bind_all("<KeyPress>", self._oled_dim_capture)
+        # the cancel on walking away: while the capture flag stands,
+        # the window losing focus (an alt+tab, a click on another app)
+        # disarms it - a pending capture that outlives the intent is
+        # the stolen-keystroke class of bug
+        self.bind("<FocusOut>", self._oled_dim_focus_out)
         self.oled_bind_btn.configure(text="press a key now")
+
+    def _oled_dim_disarm(self):
+        self._dim_pending = False
+        self.unbind_all("<KeyPress>")
+        self.unbind("<FocusOut>")
+        self.oled_bind_btn.configure(text=self._DIM_BIND_TXT)
+
+    def _oled_dim_focus_out(self, _event=None):
+        if getattr(self, "_dim_pending", False):
+            self._oled_dim_disarm()
 
     def _oled_dim_capture(self, event):
         if not getattr(self, "_dim_pending", False):
             return
-        self._dim_pending = False
-        self.unbind_all("<KeyPress>")
-        self.oled_bind_btn.configure(text=self._DIM_BIND_TXT)
+        self._oled_dim_disarm()
         dim = self.cfg.setdefault("dimmer", {})
         if event.keysym == "Escape":
             dim["bound"] = None
             set_text(self.oled_say3, "unbound")
             self._save()
             return
-        mods = ((0x2 if event.state & 0x4 else 0)      # ctrl
-                | (0x1 if event.state & 0x8 else 0)    # alt
-                | (0x4 if event.state & 0x1 else 0)    # shift
-                | (0x8 if event.state & 0x40 else 0))  # win
-        dim["bound"] = [mods, int(event.keycode)]
+        # the bare-key rule lives in the module (capture_word) so the
+        # suite can drive it with fake events: a letter is typed, not
+        # stolen, and the OLD binding stands
+        pair, word = dimmer.capture_word(event.state, event.keycode)
+        if word:
+            set_text(self.oled_say3, word)
+            return
+        dim["bound"] = pair
         self._save()
         self._dim_words()
 

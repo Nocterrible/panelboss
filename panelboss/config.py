@@ -411,10 +411,12 @@ DEFAULTS = {
         "apps": {},               # {exe-basename-lower: bool} - the
                                    # exclusion table (bool rows, junk
                                    # warn+drop, unknown kept)
-        "bound": None,            # the hotkey word the card stores; None
-                                   # = unbound by default (this wave:
-                                   # capture-only, the card's button is the
-                                   # pause toggle, no RegisterHotKey yet)
+        "bound": None,            # the [mods, vk] pair the card binds;
+                                   # None = unbound by DEFAULT (owner
+                                   # law: no stolen chord before
+                                   # consent); the arm in dimmer.py does
+                                   # the RegisterHotKey against the
+                                   # display pump's window
     },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
@@ -909,10 +911,12 @@ def normalize_dimmer(value):
     clamp in silence (the hider's hold_sec law - a slider that clamps
     must not confess at load), and the row tables fail open: a
     non-bool row warns naming itself and is dropped, unknown keys are
-    kept (a panel or an app that may come back). 'bound' stores the
-    hotkey word the card bound; any non-str/None warns and folds to
-    None (unbound is the only state the card can promise honestly this
-    wave)."""
+    kept (a panel or an app that may come back). 'bound' is the
+    [mods, vk] pair the card bound - a two-sequence with
+    int-coercible members round-trips to [int, int] (the UI's ACTUAL
+    write shape; a hand-edited "2" earns the same courtesy); any other
+    junk warns and folds to None (unbound is the only state besides a
+    stored pair the card can promise honestly)."""
     value = value if isinstance(value, dict) else {}
     on = value.get("on", False)
     if not isinstance(on, bool):
@@ -967,9 +971,16 @@ def normalize_dimmer(value):
                 log.warning("dimmer app %r: %r is not a bool; the "
                             "row is dropped", name, row)
     bound = value.get("bound")
-    if bound is not None and not isinstance(bound, str):
-        log.warning("dimmer bound %r is not a word; the hotkey is "
-                    "unbound", bound)
+    if isinstance(bound, (list, tuple)) and len(bound) == 2:
+        try:
+            bound = [int(bound[0]), int(bound[1])]
+        except (TypeError, ValueError):
+            log.warning("dimmer bound %r holds no two ints; the "
+                        "hotkey is unbound", bound)
+            bound = None
+    elif bound is not None:
+        log.warning("dimmer bound %r is not a [mods, vk] pair; the "
+                    "hotkey is unbound", bound)
         bound = None
     return {"on": on, "monitors": rows, "idle_sec": idle,
             "ramp_sec": ramp, "level": level, "apps": apps,

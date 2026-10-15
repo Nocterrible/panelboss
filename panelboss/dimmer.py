@@ -150,13 +150,39 @@ class Veils:
         if not d.get("on") or not opted:
             self.teardown()
             return
-        sounding = set(self._audio())
-        for pid in sounding:
-            self._exempt[pid] = now
-        for pid in [p for p in self._exempt
-                    if p not in sounding
-                    and now - self._exempt[p] >= SETTLE_SEC]:
+        # the predicate first: fading needs no fresh facts; birth does
+        # - a fading tick leaves the census and the WASAPI walk in
+        # their pockets
+        dimming = (not _PAUSED
+                   and self._idle() >= d.get("idle_sec", 120))
+        if dimming:
+            sounding = set(self._audio())
+            for pid in sounding:
+                self._exempt[pid] = now
+            stale = [p for p in self._exempt
+                     if p not in sounding
+                     and now - self._exempt[p] >= SETTLE_SEC]
+        else:
+            stale = [p for p, t in self._exempt.items()
+                     if now - t >= SETTLE_SEC]
+        for pid in stale:
             del self._exempt[pid]
+        if not dimming:
+            ramp = max(3, min(60, int(d.get("ramp_sec", 8))))   # belt:
+            #                                                normalize
+            #                                                already
+            #                                                clamped
+            for hwnd, st in list(self._live.items()):
+                if st["die"] is None:
+                    st["die"] = now
+                gone = now - st["die"]
+                if gone >= ramp:
+                    self._drop(hwnd)
+                    continue
+                b = min(2, int(gone * 3 / ramp))
+                self._paint(hwnd, st["rect"],
+                            round(st["alpha"] * _FADE_LEVELS[b], 3))
+            return
         try:
             wins = self._windows()
         except Exception:
@@ -181,40 +207,24 @@ class Veils:
                 continue
             qualified[w["hwnd"]] = (x, y, cw, ch)
         alpha = d.get("level", 45) / 100.0
-        ramp = max(3, min(60, int(d.get("ramp_sec", 8))))   # belt:
-        #                                                normalize
-        #                                                already
-        #                                                clamped
-        if not _PAUSED and self._idle() >= d.get("idle_sec", 120):
-            for hwnd, rect in qualified.items():
-                st = self._live.get(hwnd)
-                if st is None:
-                    self._live[hwnd] = {"rect": rect, "alpha": alpha,
-                                        "die": None}
-                    self._paint(hwnd, rect, alpha)
-                elif st["die"] is not None or st["alpha"] != alpha:
-                    st["die"], st["alpha"] = None, alpha   # back to
-                    self._paint(hwnd, rect, alpha)         # full
-                elif st["rect"] != rect:                   # it moved
-                    st["rect"] = rect
-                    self._paint(hwnd, rect, alpha)         # we followed
-            for hwnd in [h for h in self._live if h not in qualified]:
-                self._drop(hwnd)          # disqualified: the veil is
-                                          # GONE this tick - foreground
-                                          # and sound un-dim instantly,
-                                          # the fade belongs to the
-                                          # idle edge alone
-            return
-        for hwnd, st in list(self._live.items()):
-            if st["die"] is None:
-                st["die"] = now
-            gone = now - st["die"]
-            if gone >= ramp:
-                self._drop(hwnd)
-                continue
-            b = min(2, int(gone * 3 / ramp))
-            self._paint(hwnd, st["rect"],
-                        round(st["alpha"] * _FADE_LEVELS[b], 3))
+        for hwnd, rect in qualified.items():
+            st = self._live.get(hwnd)
+            if st is None:
+                self._live[hwnd] = {"rect": rect, "alpha": alpha,
+                                    "die": None}
+                self._paint(hwnd, rect, alpha)
+            elif st["die"] is not None or st["alpha"] != alpha:
+                st["die"], st["alpha"] = None, alpha   # back to full
+                self._paint(hwnd, rect, alpha)
+            elif st["rect"] != rect:                   # it moved
+                st["rect"] = rect
+                self._paint(hwnd, rect, alpha)         # we followed
+        for hwnd in [h for h in self._live if h not in qualified]:
+            self._drop(hwnd)            # disqualified: the veil is
+                                        # GONE this tick - foreground
+                                        # and sound un-dim instantly,
+                                        # the fade belongs to the idle
+                                        # edge alone
 
     def _drop(self, hwnd):
         self._unveil(hwnd)
@@ -257,8 +267,12 @@ _exe_cache = {}
 
 
 def _exe(pid):
-    """exe-basename-lower per pid, cached (a reused pid is a one-tick
-    wrong-answer at worst, and the veil is transient anyway)."""
+    """exe-basename-lower per pid, cached FOR THE REST OF THE PROCESS:
+    a recycled pid keeps answering with the dead app's name until the
+    overflow clear below forgets everyone at once. The veil is
+    transient anyway, and a wrong name only ever fails an exclusion
+    OPEN (a dimmed window that should have been spared, for one
+    clear's lifetime at worst)."""
     name = _exe_cache.get(pid)
     if name is None:
         name = ""
@@ -272,6 +286,11 @@ def _exe(pid):
                     name = buf.value.rsplit("\\", 1)[-1].lower()
             finally:
                 _k32.CloseHandle(h)
+        if len(_exe_cache) >= 1024:
+            _exe_cache.clear()     # the bound: a thousand pids deep,
+            #                     every stale name goes at once -
+            #                     cheaper than eviction bookkeeping
+            #                     and honest by noon
         _exe_cache[pid] = name
     return name
 
@@ -450,9 +469,30 @@ def _sync_hotkey(want):
     if old and _register(hwnd, HOTKEY_ID, old[0] | MOD_NOREPEAT,
                          old[1]):
         _hk = old
-        back = "; the old binding stands"
+        back = ("; the old binding stands (clear and rebind to "
+                "retry once the other app lets go)")
     _hk_tried = want
     _hk_note = _dated("that combo is taken on this desk" + back)
+
+
+# the Tk modifier mask -> the RegisterHotKey flag (event.state order):
+_TK_MODS = ((0x4, 0x2), (0x8, 0x1), (0x1, 0x4), (0x40, 0x8))
+
+
+def capture_word(state, keycode):
+    """The card's capture rule, pure so the suite can drive it with
+    fake events: returns (pair, None) when the press is a chord, and
+    (None, the word) when it was a bare key. A letter is something
+    the user TYPES - stealing it on a bare press would be the exact
+    theft the owner's consent law forbids; the old binding stands."""
+    mods = 0
+    for tk_mask, win_mod in _TK_MODS:
+        if state & tk_mask:
+            mods |= win_mod
+    if mods == 0:
+        return None, ("a letter is not a chord - bind a combo, "
+                      "esc clears")
+    return [mods, int(keycode)], None
 
 
 def hotkey_press():
