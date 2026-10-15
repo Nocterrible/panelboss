@@ -1219,3 +1219,21 @@ search; the audit trail exists for a reason.
    _show_first(manual=True) and may inherit both.
 Repro recipe: open window, close it (X), reopen from tray -> observe
 no-veil draw; with window open, poke again -> observe full redraw.
+
+## DIMMER WAVE (owner rulings, Oct 15 - packet law for the dispatch)
+Stage A: per-monitor background-window dimming - idle-triggered dark
+click-through overlays over every non-foreground, non-excluded, non-
+audio-active window (WASAPI sensor per the Oct-14 probe: GetState slot
+3, GetProcessId slot 14, MTA, >=4 s settle hysteresis); include/
+exclude list edited IN the oled tab (one flow); foreground and any
+sound-making window un-dim INSTANTLY on touch; ramp + level sliders.
+HOTKEY LAW (owner): unbound by DEFAULT - no stolen chord before
+consent; assignment lives in the card (press-to-bind affordance), the
+binding word is stored, RegisterHotKey exclusivity failure answers
+with the dated word (probe: exclusivity incl. Win-combos verified on
+this build), and the card shows bound/unbound state honestly. Toggle
+semantics (one press pauses, one resumes), not hold.
+Stage B (later wave): optimistic around-content dim - DDA motion eye
+(ACCESS_LOST re-Duplicate law, PrintWindow PW_RENDERFULLCONTENT
+fallback - both measured) dims the window AROUND the detected motion
+rect; wrong guesses die on the hotkey or any input.
