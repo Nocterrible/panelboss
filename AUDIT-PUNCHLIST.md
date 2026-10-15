@@ -1277,3 +1277,20 @@ return of ui.run ('window closed - tray follows' vs 'quitting'), and
 _run's tail logs EVERY exit path with its reason - a silent departure
 becomes a signed one. Grep for the belt lines names which door the
 corpse left by.
+
+## WASH CRASH (owner UAT, Oct 15 11:09) - and the silent-death belt
+## answer: the 10:56 corpse was THIS class, caught red-handed the
+## first time the exception happened to land in the LOGGED path.
+Chain: run wash -> jog painter builds a CTkToplevel -> customtkinter
+registers it in the GLOBAL scaling tracker -> tracker's after() fires
+on the MAIN thread -> winfo_exists crosses into the jog thread's
+interpreter -> RuntimeError in callback -> tkinter's default reporter
+PRINTS to stderr -> pythonw's stderr raises OSError(22) -> escapes
+through Tk mainloop -> whole app dies. Fix: the veil is plain
+tk.Toplevel now (flat color, zero CTk); law recorded: WORKER-THREAD
+INTERPRETERS RUN PLAIN TK ONLY. Open question: whether the hider
+painter and the blackout overlay share the exposure (both are plain
+tk today - safe by idiom, not by policy; a future CTk anywhere on a
+worker thread resurrects it). The wash-adjacent app death is now
+EXPLAINED; the 10:56 silent death stays unproven but is the prime
+same-class suspect (it sat two minutes after a wash-era boot).

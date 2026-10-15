@@ -197,12 +197,18 @@ def _start_wash_painter():
             x, y, w, h = rect                # (F2 law, per veil now)
             v = veils.get(rect)
             if v is None:
-                import customtkinter as ctk
-                v = veils[rect] = (ctk.CTkToplevel(root), None)
+                # PLAIN tk.Toplevel, never CTk here (owner UAT, Oct
+                # 15): CTk widgets enlist a GLOBAL scaling poller
+                # whose after() loop wakes on the main thread and
+                # winfo_exists across interpreters -> RuntimeError ->
+                # report_callback_exception -> print to pythonw's
+                # dead stderr -> OSError kills the mainloop. A veil
+                # is one flat color: tk's bg is the whole need.
+                v = veils[rect] = (tk.Toplevel(root), None)
                 v[0].overrideredirect(True)
                 v[0].attributes("-topmost", True)
                 v[0].attributes("-alpha", 0.93)
-                v[0].configure(fg_color="#f8f8f0")
+                v[0].configure(bg="#f8f8f0")
             else:
                 if v[1] is not None:
                     v[0].after_cancel(v[1])
