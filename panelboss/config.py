@@ -327,10 +327,12 @@ DEFAULTS = {
                                 # rows get a black overlay, dim rows lose
                                 # HDR and drop to dim_level (no cold ODM
                                 # re-enumeration on wake)
-        "monitors": {},         # EDID short -> {"blackout": bool, "off":
-                                # bool} (normalize's shape; the loader
-                                # also takes the bare bool and a bare
-                                # "blackout"/"dim"/"off" string). The
+        "monitors": {},         # EDID short -> {"blackout": bool,
+                                # "off": bool, "offdisc": bool}
+                                # (normalize's shape; the loader also
+                                # takes the bare bool and a bare
+                                # "blackout"/"dim"/"off"/"offdisc"
+                                # string, "off-disc" included). The
                                 # off sub-mode is YOUNG: rows without
                                 # the key simply answer False (no
                                 # migration it must perform). True
@@ -341,7 +343,15 @@ DEFAULTS = {
                                 # degrades that row to blackout with
                                 # the confession on its status word
                                 # (the PROBE LAW's two honest halves,
-                                # AUDIT-PUNCHLIST 60121ed). In dim
+                                # AUDIT-PUNCHLIST 60121ed). True
+                                # "offdisc" = the DISCONNECT through
+                                # wm/_sdc.py - the path retracted at
+                                # the adapter, the state lives in
+                                # Windows' own display store (one
+                                # door deeper than this app:
+                                # Settings -> Display is always the
+                                # recovery, the boot belt reclaims
+                                # rows this app configured). In dim
                                 # mode an absent row is a dim row -
                                 # the migration promise, and the
                                 # honest default for a panel that
@@ -621,9 +631,22 @@ def normalize_camera_modes(value):
 
 
 AWAY_MODES = ("off", "dim")
-AWAY_ROW_MODES = ("blackout", "dim", "off")   # the per-row sub-modes
+AWAY_ROW_MODES = ("blackout", "dim", "off", "offdisc")   # the per-row
+#    sub-modes; offdisc = the DISCONNECT flavor (wm/_sdc.py: retracts
+#    at the adapter, comes back as a replug, works regardless of
+#    firmware) - the pair shape grows a third bool, young like "off"
+#    was: absent answers False, no migration it must perform
 DIM_LEVEL_FLOOR = 1                 # the dim sub-mode never means black
 DIM_LEVEL_CEIL = 40                 # past this the fake-off is a rumor
+
+
+def _fold_row_mode(v):
+    """A row's mode-word in its triple shape; the off-disc alias
+    folds here (the hyphen is a spelling, not a sub-mode) so both
+    the string branch and the dict branch take it identically."""
+    v = str(v or "").strip().lower().replace("-", "")
+    return {"blackout": v == "blackout", "off": v == "off",
+            "offdisc": v == "offdisc"}
 
 
 def normalize_away(value):
@@ -661,15 +684,17 @@ def normalize_away(value):
             if not short:
                 continue
             if isinstance(row, bool):
-                rows[short] = {"blackout": row, "off": False}
+                rows[short] = {"blackout": row, "off": False,
+                               "offdisc": False}
             elif isinstance(row, str) and \
-                    row.strip().lower() in AWAY_ROW_MODES:
-                v = row.strip().lower()
-                rows[short] = {"blackout": v == "blackout",
-                               "off": v == "off"}
+                    row.strip().lower().replace("-", "") in AWAY_ROW_MODES:
+                rows[short] = _fold_row_mode(row)
             elif isinstance(row, dict) and ("blackout" in row or
-                                            "off" in row or "mode" in row):
-                v = str(row.get("mode") or "").strip().lower()
+                                            "off" in row or
+                                            "offdisc" in row or
+                                            "mode" in row):
+                v = str(row.get("mode") or "").strip().lower() \
+                    .replace("-", "")
                 if "mode" in row and v not in AWAY_ROW_MODES:
                     # the dict branch answers with the SAME honesty the
                     # string branch shows a bad name (gate finding 5a):
@@ -677,13 +702,14 @@ def normalize_away(value):
                     log.warning("away monitor %r: mode %r is not a known "
                                 "sub-mode; the monitor keeps the dim "
                                 "default", short, row.get("mode"))
-                    rows[short] = {"blackout": False, "off": False}
+                    rows[short] = {"blackout": False, "off": False,
+                                   "offdisc": False}
                 elif v in AWAY_ROW_MODES:
-                    rows[short] = {"blackout": v == "blackout",
-                                   "off": v == "off"}
+                    rows[short] = _fold_row_mode(v)
                 else:
                     rows[short] = {"blackout": bool(row.get("blackout")),
-                                   "off": bool(row.get("off"))}
+                                   "off": bool(row.get("off")),
+                                   "offdisc": bool(row.get("offdisc"))}
             else:
                 log.warning("away monitor %r: %r is not an away row; "
                             "the monitor keeps the dim default", short,

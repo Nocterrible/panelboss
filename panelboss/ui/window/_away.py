@@ -36,18 +36,26 @@ log = logging.getLogger("ui")
 
 OFF_TEXT = "monitors off"
 DIM_TEXT = "dim"
+DISC_TEXT = "off (disconnect)"
 
 
 def off_choice(bright, gdi):
-    """A row's sub-mode menu. OFF is offered on every panel this app
-    REACHED - physical handles opened; the AOC answered brightness
-    at a one-shot probe's NAK-rate all morning and the PROBE LAW
-    says that door works (owner correction: capability verdicts come
-    from in-app attempts with a spent retry budget, so the state
-    machine's UNKNOWN is selectable, unbelieved, and gray was always
-    for never-reached panels only)."""
-    return ["blackout", "dim", "off"] if bright.reachable(gdi) else \
-        ["blackout", "dim"]
+    """A row's sub-mode menu. The D6 OFF is offered on every panel
+    this app REACHED - physical handles opened; the AOC answered
+    brightness at a one-shot probe's NAK-rate all morning and the
+    PROBE LAW says that door works (owner correction: capability
+    verdicts come from in-app attempts with a spent retry budget, so
+    the state machine's UNKNOWN is selectable, unbelieved, and gray
+    was always for never-reached panels only). The DISCONNECT rides
+    the adapter's own CCD door - no DDC/CI needed, firmware never
+    consulted - so it is offered everywhere, and a row whose sdc leg
+    refused after the budget KEEPS the choice: the dated status word
+    is the state machine's truth, gray would be a pre-judgment."""
+    vals = ["blackout", "dim"]
+    if bright.reachable(gdi):
+        vals.append("off")
+    vals.append(DISC_TEXT)
+    return vals
 
 TIP = {
     "mode": "off: the displays get the real power broadcast, exactly "
@@ -76,6 +84,23 @@ TIP = {
            "the effect and hands it back at the real wake instead); "
            "an off preview counts its seconds on this window - the "
            "dark panel cannot carry a digit - and a dark panel also cannot prove its own darkness: 'off (unverified)' means the write was accepted and the register (or nothing) disagrees, so the eyes and the physical button remain the honest witnesses. an OFF row is a real retraction: the display is disconnected at the adapter, the same act as the re-connect entry in Windows settings, and the state SURVIVES this app - if a panel is left off, Settings -> Display brings it back (windows refuses to disconnect the last active display, so a lone screen can never be stranded).",
+    "offdisc": "'off (disconnect)' is the other off: the path is "
+               "retracted AT THE ADAPTER (SetDisplayConfig), so it "
+               "works regardless of firmware - the panel never hears "
+               "a code, it loses its signal - and it comes back as a "
+               "replug: a re-enumeration, the panel waking like a "
+               "cold attach. Unlike the power-code off its state "
+               "lives in Windows' own display store (it survives the "
+               "app), so Settings -> Display is ALWAYS the recovery "
+               "door, and the app's boot belt re-raises rows it "
+               "configured before it died. The row's word 'off "
+               "(disconnected)' is the ONE dark this app can PROVE: "
+               "the display store itself is re-queried and the "
+               "intended target is seen gone (the GDI row list is "
+               "not believed - through a KVM it keeps lying). A "
+               "refused retraction (Windows guards the last active "
+               "display) degrades the row to blackout with the dated "
+               "word, exactly like a refused power code.",
     "level": "where dim rows park their brightness while away, 1 to "
               "40 percent - shared by every dim row (per-monitor "
               "levels are a planned follow-up).",
@@ -147,10 +172,31 @@ class _AwayMixin:
                 # gray not lie (owner correction): the choice is
                 # ABSENT here because this app never reached the
                 # panel's DDC door - said in one line, in words
-                # about our reach, not the firmware's soul
-                self._away_says[short] = ("off needs a DDC/CI door; "
-                                          "none answered for this monitor")
+                # about our reach, not the firmware's soul. The
+                # disconnect is NOT absent: the CCD door is the
+                # adapter's, and it does not ask the panel.
+                self._away_says[short] = ("the power-code off needs a "
+                                          "DDC/CI door; none answered "
+                                          "for this monitor (the "
+                                          "disconnect does not)")
             seg.grid(row=0, column=1, sticky="e")
+            # the disconnect's paragraph hangs on the picker itself:
+            # the label's tip is the row-wide one, and the 4th choice
+            # is where the question forms (same hover path as the
+            # card sub-lines). CTkSegmentedButton.bind raises
+            # NotImplementedError (measured via hdrwake's live window
+            # build) - the button's own canvas takes the bindings and
+            # covers the same pixels (the wheel-swap walker already
+            # reaches through this seam)
+            try:
+                seg._canvas.bind(
+                    "<Enter>", lambda e=None: self.tips._schedule(
+                        TIP["offdisc"], seg), add="+")
+                seg._canvas.bind("<Leave>",
+                                 lambda e=None: self.tips._hide_soon(),
+                                 add="+")
+            except Exception:
+                pass                       # no paragraph, no crime
             value = ctk.CTkLabel(row, font=self.skin.font(12),
                                  **self.skin.text_style("sub"))
             value.grid(row=0, column=3, sticky="e", padx=(6, 0))
@@ -212,15 +258,19 @@ class _AwayMixin:
         return int((self.cfg.get("away") or {}).get("dim_level", 10))
 
     def _away_row_mode(self, short):
-        """The pair shape normalize ships ({"blackout": b, "off": b});
-        the legacy bare-bool row reads honestly too (one release -
-        the file shape the dim wave wrote)."""
+        """The triple shape normalize ships ({"blackout": b, "off": b,
+        "offdisc": b}); the legacy bare-bool row reads honestly too
+        (one release - the file shape the dim wave wrote). The answer
+        is a MENU LABEL: the disconnect's label differs from its
+        stored word, and the row-menu maps label -> triple."""
         rows = (self.cfg.get("away") or {}).get("monitors") or {}
         row = rows.get(short)
         if not row:
             return "dim"
         if isinstance(row, bool):
             return "blackout" if row else "dim"
+        if row.get("offdisc"):
+            return DISC_TEXT
         if row.get("off"):
             return "off"
         return "blackout" if row.get("blackout") else "dim"
@@ -245,7 +295,8 @@ class _AwayMixin:
     def _away_submode_changed(self, short, label):
         rows = self.cfg.setdefault("away", {}).setdefault("monitors", {})
         rows[short] = {"blackout": label == "blackout",
-                       "off": label == "off"}
+                       "off": label == "off",
+                       "offdisc": label == DISC_TEXT}
         self._away_sync()
         self._save()
 

@@ -8,7 +8,12 @@ unhooks), the LOCK-ON-AWAY law (the real engage locks the session
 once rows went dark; the preview, the default, and an all-refused
 engage never do; a refused lock warns and stands) and its
 lock-aware wake (the watcher's session-unlock ear lifts a live
-spell; the lock edge says nothing), and the static ban that keeps
+spell; the lock edge says nothing), the TWO OFF FLAVORS (the D6
+trust word vs the disconnect's PROVEN word; the marshal exact on a
+fake CCD - PATH-MINUS, validate-gated, the measured 0x6A0, SAVE on
+every write, wrong-victim self-restore, EDID-token join over the
+lying gdi slot - and the boot belt's second door), and the static
+ban that keeps
 dim mode out of the power
 verbs. No Tk, no display hardware, no live app.
 Run from repo root:
@@ -127,6 +132,50 @@ class FakeOverlay:
         self.calls.append(("hide_all",))
 
 
+class FakeSDC:
+    """The wm._sdc MODULE fake (the suite patches it exactly like
+    _bright: led.keep(wm, "_sdc", fake) and the engine's late imports
+    re-read the attribute every call). The victim-map injects the
+    desk's truths: `victim` maps EDID short -> target key (None =
+    no path answers; the string "WRONG" = the dossier's accepted-
+    but-a-DIFFERENT-panel-left shape, which the real module answers
+    with its own restore before reporting). `active` is the store's
+    live set - the retract removes, the revive raises. Every call is
+    recorded; the restored RECORD rides the log so the hand-back law
+    is countable."""
+
+    def __init__(self, victim=None, active=()):
+        self.victim = dict(victim or {})
+        self.active = set(active)
+        self.retracts = []                 # row shorts, in call order
+        self.restores = []                 # the record each owed it
+        self.revives = []                  # the belt's rows
+
+    def retract(self, m):
+        self.retracts.append(m["short"])
+        key = self.victim.get(m["short"])
+        if key is None:
+            return False, "no CCD path answers this row"
+        if key == "WRONG":
+            self.restores.append({"selfrestore": m["short"]})
+            return False, "no-drop rc 0x0 gle=0 (wrong victim; restored)"
+        self.active.discard(key)
+        return True, {"paths": b"P" * 72, "modes": b"", "victim": {key},
+                      "at": 1.0}
+
+    def restore(self, saved):
+        self.restores.append(saved)
+        return True, ""
+
+    def revive(self, row):
+        self.revives.append(row)
+        key = self.victim.get(row["short"])
+        if key is None or key == "WRONG" or key in self.active:
+            return None                    # lit, or nothing to answer
+        self.active.add(key)
+        return True, "rc 0x0 gle=0"
+
+
 class FakeHookU32:
     """Records the raw-registration pair AND the LL-hook trio (which
     must NEVER be touched - the shape is gone, the pin keeps it gone).
@@ -223,9 +272,11 @@ class Ledger:
         self.saved = []
 
 
-def make_monitor(tmp, away, bright=None, hdrs=None):
-    """A PresenceMonitor with the desk, the power verbs, the input arm
-    and the DDC/CI layer faked. The camera bookkeeping stays REAL
+def make_monitor(tmp, away, bright=None, hdrs=None, sdc=None):
+    """A PresenceMonitor with the desk, the power verbs, the input arm,
+    the DDC/CI layer and the CCD door faked (the sdc fake rides the
+    same late-import re-read law as _bright - offdisc rows talk to
+    m._fake["sdc"]). The camera bookkeeping stays REAL
     except the two hold/rearm seams (no detector to hold)."""
     led = Ledger()
     cfg = config.get_config(dir=tmp, verbose=False)
@@ -235,6 +286,7 @@ def make_monitor(tmp, away, bright=None, hdrs=None):
     bright = bright or FakeBright({"D1": 80, "D2": 70, "D3": 50})
     bright.calls = led.calls            # every fake writes ONE chronology
     overlay = FakeOverlay(led.calls)
+    sdc = sdc or FakeSDC()
     hdrs = HDRS if hdrs is None else hdrs
 
     def hdr_set(gdi, on):
@@ -255,6 +307,9 @@ def make_monitor(tmp, away, bright=None, hdrs=None):
     led.keep(display, "unjail_cursor",
              lambda: led.calls.append(("unjail",)))
     led.keep(display, "set_hold", lambda *a, **k: None)
+    led.keep(wm, "_sdc", sdc)               # the offdisc door, faked
+    #                              like _bright: the engine re-reads
+    #                              the attribute on every late import
     led.keep(profiles, "hdr_away_restore",
              lambda off: led.calls.append(
                  ("hdr_restore", [dict(e) for e in off])))
@@ -264,7 +319,8 @@ def make_monitor(tmp, away, bright=None, hdrs=None):
     m._off_phase_hold = lambda _keep, _phase: None
     m._rearm = lambda _table: None
     m._ledger = led
-    m._fake = {"calls": led.calls, "bright": bright, "overlay": overlay}
+    m._fake = {"calls": led.calls, "bright": bright, "overlay": overlay,
+               "sdc": sdc}
     return m
 
 
@@ -284,9 +340,11 @@ def test_migration():
         c = config.get_config(dir=tmp, verbose=False)
         assert c["away"]["mode"] == "dim", c["away"]
         assert c["away"]["monitors"] == {"AAA": {"blackout": False,
-                                                "off": False},
+                                                "off": False,
+                                                "offdisc": False},
                                          "BBB": {"blackout": False,
-                                                "off": False}}
+                                                 "off": False,
+                                                 "offdisc": False}}
         disk = open(path).read()
         assert "[away]" in disk, "the migration must persist its stamp"
         assert "hdr_off_when_away = true" in disk, "fossil readable"
@@ -651,18 +709,24 @@ def test_off_preview_release():
 def test_off_selectable_never_pregrayed():
     """The AOC must see OFF on its menu (the correction's core: my
     morning's NAK-studded probes may not pre-sentence the panel);
-    gray is ONLY the never-reached class. No Tk: the card's menu
-    rule is a module function."""
-    from panelboss.ui.window._away import off_choice
+    gray is ONLY the never-reached class - and gray reaches the D6
+    flavor alone: the DISCONNECT rides the adapter's CCD door, needs
+    no DDC/CI, and is offered everywhere (a refused sdc leg keeps
+    the choice too - the dated word is the state machine, gray would
+    be pre-judgment). No Tk: the card's menu rule is a module
+    function."""
+    from panelboss.ui.window._away import off_choice, DISC_TEXT
     from panelboss.wm import _bright as _b
     aoc = FakeBright({"D1": 75})                # answers 0x10: bus proven
-    assert off_choice(aoc, "D1") == ["blackout", "dim", "off"]
-    dead = FakeBright({}, no_door=["DX"])       # the gray class
-    assert off_choice(dead, "DX") == ["blackout", "dim"]
-    assert off_choice(_b, "NO-SUCH-DISPLAY99") in (
-        ["blackout", "dim", "off"], ["blackout", "dim"])  # answers per door
+    assert off_choice(aoc, "D1") == ["blackout", "dim", "off", DISC_TEXT]
+    dead = FakeBright({}, no_door=["DX"])       # the gray class - D6 only
+    assert off_choice(dead, "DX") == ["blackout", "dim", DISC_TEXT]
+    assert DISC_TEXT == "off (disconnect)"     # the shipped label
+    assert off_choice(_b, "NO-SUCH-DISPLAY99")[-1] == DISC_TEXT  # answers
+    #                                          per door for D6, always
+    #                                          offers the disconnect
     print("ok - off selectable everywhere the app reached; gray only "
-          "for the never-reached")
+          "for the never-reached; the disconnect is everywhere")
 
 
 def test_lock_on_away():
@@ -805,6 +869,321 @@ def test_session_unlock_ear():
         led.undo()
 
 
+class FakeDesk:
+    """The REAL wm/_sdc's FFI trio replaced by a fake CCD: three paths
+    (targets 11/12/13, gdi slots DISPLAY1/2/3, EDID model tokens
+    DELA283/AOC2790/IOC912B). The supplied array IS the new active
+    set (what USE_SUPPLIED means); `refuse` answers VALIDATE with an
+    rc (the last-display guard's door); `wrong` plays the dossier's
+    trap - the retraction lands on the PRIMARY while the victim stays.
+    apply log: (flags, supplied target ids) per call, in order."""
+    NAMES = {11: (r"\\.\DISPLAY1", r"\\?\DISPLAY#DELA283#1&2&0#{guid}"),
+             12: (r"\\.\DISPLAY2", r"\\?\DISPLAY#AOC2790#1&2&1#{guid}"),
+             13: (r"\\.\DISPLAY3", r"\\?\DISPLAY#IOC912B#1&2&2#{guid}")}
+
+    def __init__(self, live=(11, 12, 13), refuse=0, wrong=False):
+        self.live = set(live)
+        self.refuse = refuse
+        self.wrong = wrong
+        self.applied = []
+
+    def _path(self, tid):
+        from panelboss.wm import _hdr
+        p = _hdr.DC_PATH()
+        p.src.adapter.low, p.src.adapter.high = 1, 0
+        p.src.id = tid
+        p.tgt.adapter.low, p.tgt.adapter.high = 1, 0
+        p.tgt.id = tid
+        p.flags = 1 if tid in self.live else 0
+        return p
+
+    def capture(self, flags):
+        from panelboss.wm import _sdc as sdc_mod
+        ids = ({11, 12, 13} if flags == sdc_mod.QDC_ALL
+               else {i for i in (11, 12, 13) if i in self.live})
+        paths = [self._path(i) for i in sorted(ids)]
+        pb = b"".join(bytes(bytearray(p)) for p in paths)
+        return pb, b"\0" * 64, paths
+
+    def names(self, psrc, ptgt):
+        return self.NAMES[ptgt.id]
+
+    def apply(self, path_bytes, modes_bytes, flags):
+        from panelboss.wm import _hdr
+        ids = tuple(_hdr.DC_PATH.from_buffer_copy(
+            path_bytes[i * 72:(i + 1) * 72]).tgt.id
+            for i in range(len(path_bytes) // 72))
+        self.applied.append((flags, ids))
+        if flags == sdc_V:                                  # validate
+            return (self.refuse, 87) if self.refuse else (0, 0)
+        if self.refuse:
+            return self.refuse, 5
+        self.live = set(ids)
+        if self.wrong and 12 not in ids:                    # the victim
+            self.live = (self.live - {11}) | {12}           # stayed; the
+            #                                    primary left (dossier)
+        return 0, 0
+
+
+sdc_V = None                      # the VALIDATE verb set, captured at
+#                                first use (patch-time, from the module)
+
+
+def test_sdc_marshal():
+    """The real marshal over the fake CCD: PATH-MINUS drops the
+    victim's path and keeps the rest IN ORDER (the falsified
+    ALLOW_PATH_ORDER means the driver may not reshuffle - it gets
+    the order it was given); VALIDATE gates every apply (the owner
+    strobe law); the verb set is EXACTLY the measured 0x6A0 (APPLY
+    is 0x80 not 0x1, and no 0x2000 anywhere); every write carries
+    SAVE; the wrong-victim class restores its own damage BEFORE
+    reporting; a lying gdi slot resolves by EDID token; an already-
+    retracted target is the same verified word with no glass spent;
+    and the belt's revive raises the stored-dark path back."""
+    from panelboss.wm import _sdc as sdc_mod
+    global sdc_V
+    sdc_V = sdc_mod.VALIDATE_FLAGS
+    led = Ledger()
+    desk = FakeDesk()
+    led.keep(sdc_mod, "_capture", desk.capture)
+    led.keep(sdc_mod, "_names", desk.names)
+    led.keep(sdc_mod, "_apply_cfg", desk.apply)
+    led.keep(sdc_mod, "VERIFY_WAIT_SEC", 0)          # the suite does
+    #                                                 # not sleep watch
+    row = {"short": "AOC2790", "gdi": r"\\.\DISPLAY2"}
+    try:
+        assert sdc_mod.RETRACT_FLAGS == 0x6A0        # the measured combo
+        assert not sdc_mod.RETRACT_FLAGS & 0x00002000   # falsified, out
+        assert sdc_mod.SDC_APPLY == 0x80             # the dossier's (i)
+        ok, saved = sdc_mod.retract(row)
+        assert ok is True, saved
+        assert desk.applied[0][0] == sdc_V, "validate gates the apply"
+        assert desk.applied[1] == (sdc_mod.RETRACT_FLAGS, (11, 13)), \
+            desk.applied                       # victim dropped, order kept
+        assert saved["victim"] == {(1, 0, 12)}
+        assert len(saved["paths"]) == 3 * 72, "the FULL capture is saved"
+        assert 12 not in desk.live, "the store agrees: the verified word"
+        ok, why = sdc_mod.restore(saved)
+        assert ok, why
+        assert desk.applied[-1][0] == sdc_mod.RETRACT_FLAGS, \
+            "the restore carries SAVE too (the dark-boot footgun law)"
+        assert 12 in desk.live
+        print("ok - marshal: PATH-MINUS exact, validate-gated, the 0x6A0 "
+              "combo, restore SAVES")
+
+        # the validate refusal (the last-display guard's door): no
+        # apply, no glass, the rc named in the word
+        desk.refuse = 0x57
+        desk.live = {11, 12, 13}
+        n0 = len(desk.applied)
+        ok, why = sdc_mod.retract(row)
+        assert not ok and why == "validate rc 0x57 gle=87", why
+        assert len(desk.applied) == n0 + 1 and desk.applied[-1][0] == sdc_V, \
+            "a refused shape spends the VALIDATE and NOTHING else"
+        print("ok - validate refusal: no apply follows, rc in the word")
+
+        # the wrong-victim trap: accepted, the PRIMARY left, the victim
+        # stayed - the module restores its own damage before reporting
+        desk2 = FakeDesk(wrong=True)
+        led.keep(sdc_mod, "_capture", desk2.capture)
+        led.keep(sdc_mod, "_apply_cfg", desk2.apply)
+        ok, why = sdc_mod.retract(row)
+        assert not ok and why.startswith("no-drop rc 0x0"), why
+        assert desk2.applied[-1] == (sdc_mod.RETRACT_FLAGS, (11, 12, 13)), \
+            "the self-restore rode the same SAVE flags"
+        assert 11 in desk2.live, "the wrong victim came home too"
+        print("ok - wrong victim: self-restored with SAVE, refused word")
+
+        # the ghost: the gdi slot LIES (DISPLAY99 answers nothing in
+        # the CCD), the EDID token carries the victim
+        desk3 = FakeDesk()
+        led.keep(sdc_mod, "_capture", desk3.capture)
+        led.keep(sdc_mod, "_apply_cfg", desk3.apply)
+        ok, _saved = sdc_mod.retract({"short": "AOC2790",
+                                      "gdi": r"\\.\DISPLAY99"})
+        assert ok and desk3.applied[-1][1] == (11, 13), "token join took"
+        print("ok - ghost row: gdi lies, the EDID token is the join")
+
+        # already retracted (the crash-before-lift shape): the ALL view
+        # carries the dark path - verified word, ZERO glass spent
+        desk4 = FakeDesk(live=(11, 13))
+        led.keep(sdc_mod, "_capture", desk4.capture)
+        led.keep(sdc_mod, "_apply_cfg", desk4.apply)
+        n0 = len(desk4.applied)
+        ok, saved = sdc_mod.retract(row)
+        assert ok and len(desk4.applied) == n0, "no apply on a dark target"
+        assert len(saved["paths"]) == 3 * 72, "the raise-ready capture"
+        print("ok - already dark: verified with no glass spent")
+
+        # the belt's door: the stored-dark path raised back with SAVE
+        ok, why = sdc_mod.revive({"short": "AOC2790", "gdi": ""})
+        assert ok, why
+        assert desk4.applied[-1][0] == sdc_mod.RETRACT_FLAGS
+        assert 12 in desk4.live, "the belt re-raised the path"
+        assert sdc_mod.revive({"short": "AOC2790", "gdi": ""}) is None, \
+            "a lit row answers silence (the belt does not chat)"
+        print("ok - revive: stored-dark raised with SAVE, lit says nothing")
+    finally:
+        led.undo()
+
+
+def test_offdisc_flavors():
+    """The two off flavors earn different epistemic words (the whole
+    point of the widening): the power code's dark is TRUSTED - "off
+    (unverified)", the register cannot certify; the disconnect's is
+    PROVEN - "off (disconnected)", the CCD re-query is the witness.
+    Also pinned: the retracted row claims the jail and the summary
+    count, the wrong-victim class degrades to blackout confessed and
+    owes the lift NOTHING, and the preview walks the same door while
+    the lock interlock holds (a preview that retracted still never
+    locks)."""
+    import panelboss.display as disp
+    tmp = tempfile.mkdtemp(prefix="pb_away_od")
+    sdc = FakeSDC(victim={"AAA": "T-A", "CCC": "T-C"},
+                  active={"T-A", "T-C"})
+    bright = FakeBright({"D1": 80, "D2": 70, "D3": 50}, vcp_deaf=["D3"])
+    m = make_monitor(tmp, {"mode": "dim",
+                           "monitors": {"AAA": {"mode": "offdisc"},
+                                        "CCC": {"mode": "off"}}},
+                     bright=bright, sdc=sdc)
+    fake = FakeHookU32(disp.u32)
+    m._ledger.keep(disp, "u32", fake)
+    rec = Recorder()
+    slog = logging.getLogger("state")
+    was = slog.level
+    slog.setLevel(logging.INFO)           # root sits at WARNING here
+    slog.addHandler(rec)
+    try:
+        m._screens_off(1.0)
+        assert m.away_status["AAA"] == "off (disconnected)", m.away_status
+        assert m.away_status["CCC"] == "off (unverified)", m.away_status
+        assert m.away_status["BBB"] == "dim", m.away_status  # absent row
+        assert sdc.retracts == ["AAA"], sdc.retracts
+        assert ("jail", (0, 0, 1920, 1080)) in m._fake["calls"], \
+            "a retracted row still claims the corner jail, once"
+        assert sum(1 for c in m._fake["calls"] if c[0] == "jail") == 1
+        line = [l for l in rec.lines if l.startswith("away: dim")]
+        assert len(line) == 1 and "1 disconnected" in line[0], line
+        assert fake.locks == [], "no lock asked (lock off), no lock rung"
+        m._away_lift()
+        assert len(sdc.restores) == 1 and \
+            sdc.restores[0]["victim"] == {"T-A"}, sdc.restores
+        lifted = [l for l in rec.lines if l.startswith("away: lifted")]
+        assert len(lifted) == 1 and \
+            "1 disconnect hand-back(s)" in lifted[0], lifted
+        print("ok - two flavors, two words: disconnected is PROVEN, "
+              "unverified is TRUSTED")
+
+        # the wrong-victim shape AT THE ENGINE: refused word, fallback
+        # overlay worn, the door's own restore, and NO ledger debt
+        sdc2 = FakeSDC(victim={"AAA": "WRONG"}, active=set())
+        m2 = make_monitor(tmp, {"mode": "dim",
+                                "monitors": {"AAA": {"mode": "offdisc"}}},
+                          sdc=sdc2)
+        try:
+            m2._screens_off(1.0)
+            w = m2.away_status["AAA"]
+            assert w.startswith("offdisc refused (no-drop") and \
+                w.endswith("- blackout instead)"), w
+            shows = [c for c in m2._fake["calls"] if c[0] == "show"]
+            assert ("show", "D1", (0, 0, 1920, 1080)) in shows, \
+                "the refused disconnect wears the fallback, confessed"
+            assert len(sdc2.restores) == 1, "the door restored its own damage"
+            assert not m2._away_disc, "a refused row owes the lift nothing"
+            m2._away_lift()
+            assert len(sdc2.restores) == 1, "and the lift sends nothing more"
+            print("ok - refused offdisc: blackout fallback, dated, owes none")
+        finally:
+            m2._ledger.undo()
+
+        # the preview walks the SAME door: retract, no lock, revert
+        # pays its own hand-back; adoption folds the record into the
+        # spell's ledger (the witness law the HDR fold already lives by)
+        sdc3 = FakeSDC(victim={"CCC": "T-C"}, active={"T-C"})
+        m3 = make_monitor(tmp, {"mode": "dim",
+                                "monitors": {"CCC": {"mode": "offdisc"}},
+                                "lock": True}, sdc=sdc3)
+        f3 = FakeHookU32(disp.u32)
+        m3._ledger.keep(disp, "u32", f3)
+        try:
+            r3 = m3._away_apply_row(dict(DESK[2]), "offdisc", 10)
+            assert r3["status"] == "off (disconnected)", r3
+            assert f3.locks == [], "a preview that retracts never locks"
+            assert m3._away_release("CCC", r3) == "reverted"
+            assert len(sdc3.restores) == 1, "the revert pays its own hand-back"
+            r4 = m3._away_apply_row(dict(DESK[2]), "offdisc", 10)
+            m3._screens_off(5.0)                 # the real away arrives
+            assert m3._away_release("CCC", r4) == "adopted"
+            assert m3._away_disc.get("D3"), "the record rode the fold"
+            m3._away_lift()                      # the spell pays it back
+            assert len(sdc3.restores) == 2, sdc3.restores   # revert + lift
+            assert f3.locks == [True], "the REAL engage locked; the " \
+                #                    previews never did (offdisc included)
+            print("ok - offdisc preview: no lock, revert pays, adoption "
+                  "folds the record to the lift")
+        finally:
+            m3._ledger.undo()
+    finally:
+        slog.removeHandler(rec)
+        slog.setLevel(was)
+        m._ledger.undo()
+
+
+def test_offdisc_belt():
+    """The belt's second door (the survives-the-app answer from inside
+    the app): boot with a configured-offdisc row whose target sits
+    INACTIVE in the store - the belt raises it back and says so ONCE.
+    A lit row, a no-path row, and a desk with no offdisc rows all
+    answer silence - the belt's first live act on a fresh desk must
+    be NOTHING."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_ob")
+    rec = Recorder()
+    slog = logging.getLogger("state")
+    was = slog.level
+    slog.setLevel(logging.INFO)           # root sits at WARNING here
+    slog.addHandler(rec)
+    try:
+        sdc = FakeSDC(victim={"CCC": "T-C"}, active=set())   # stored dark
+        m = make_monitor(tmp, {"mode": "dim",
+                               "monitors": {"CCC": {"mode": "offdisc"}}},
+                         sdc=sdc)
+        try:
+            m._away_boot_belt()
+            assert sdc.revives == [{"short": "CCC", "gdi": ""}], sdc.revives
+            assert "T-C" in sdc.active, "the belt re-raised the path"
+            line = [l for l in rec.lines
+                    if "boot disconnect-restore for CCC" in l]
+            assert len(line) == 1 and line[0].endswith("sent"), line
+        finally:
+            m._ledger.undo()
+        print("ok - belt door two: stored-dark raised, one honest line")
+        rec.lines.clear()
+        sdc2 = FakeSDC(victim={"CCC": "T-C"}, active={"T-C"})    # lit
+        m2 = make_monitor(tmp, {"mode": "dim",                 # AAA: none
+                                "monitors": {"CCC": {"mode": "offdisc"},
+                                             "AAA": {"mode": "offdisc"}}},
+                          sdc=sdc2)
+        try:
+            m2._away_boot_belt()
+            assert len(sdc2.revives) == 2, sdc2.revives
+            assert not [l for l in rec.lines if "disconnect-restore" in l], \
+                rec.lines
+        finally:
+            m2._ledger.undo()
+        m3 = make_monitor(tmp, {"mode": "dim", "monitors": {}})
+        try:
+            m3._away_boot_belt()
+            assert m3._fake["sdc"].revives == [], \
+                "no offdisc rows = the CCD door is never reached"
+        finally:
+            m3._ledger.undo()
+        print("ok - lit/unreachable/no-rows: all silence (fresh desks "
+              "never touch the door)")
+    finally:
+        slog.removeHandler(rec)
+        slog.setLevel(was)
+
+
 def test_static_ban():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "panelboss", "state", "_away.py"),
@@ -892,25 +1271,43 @@ def test_hook_lifecycle():
 
 
 def test_row_shorthands():
-    """Every accepted row shape folds to the pair (the off key is
-    YOUNG - it migrates by never having needed migration)."""
+    """Every accepted row shape folds to the TRIPLE (both young keys
+    answer False by never having needed migration; the old pair-shape
+    files read without migration - absent offdisc is simply False)."""
     n = config.normalize_away
     assert n({"mode": "dim", "monitors": {"A": "off"}})["monitors"] == \
-        {"A": {"blackout": False, "off": True}}
+        {"A": {"blackout": False, "off": True, "offdisc": False}}
     assert n({"mode": "dim",
               "monitors": {"A": {"mode": "blackout"}}})["monitors"] == \
-        {"A": {"blackout": True, "off": False}}
+        {"A": {"blackout": True, "off": False, "offdisc": False}}
     assert n({"mode": "dim", "monitors": {"A": True}})["monitors"] == \
-        {"A": {"blackout": True, "off": False}}
+        {"A": {"blackout": True, "off": False, "offdisc": False}}
+    assert n({"mode": "dim", "monitors": {"A": "offdisc"}})["monitors"] == \
+        {"A": {"blackout": False, "off": False, "offdisc": True}}
+    assert n({"mode": "dim", "monitors": {"A": "off-disc"}})["monitors"] == \
+        n({"mode": "dim", "monitors": {"A": "offdisc"}})["monitors"]
+    #                              the hyphen is a spelling, not a mode
+    assert n({"mode": "dim",
+              "monitors": {"A": {"mode": "off-disc"}}})["monitors"] == \
+        {"A": {"blackout": False, "off": False, "offdisc": True}}
+    assert n({"mode": "dim",
+              "monitors": {"A": {"blackout": False, "offdisc": True}}}) \
+        ["monitors"] == {"A": {"blackout": False, "off": False,
+                               "offdisc": True}}    # the triple branch
+    assert n({"mode": "dim", "monitors": {"A": {"blackout": True}}}) \
+        ["monitors"] == {"A": {"blackout": True, "off": False,
+                               "offdisc": False}}   # PAIR files read
+    #                                    un-migrated (the no-migration
+    #                                    promise, pinned at the loader)
     assert n({"mode": "dim", "monitors": {"A": "sideways"}})["monitors"] \
         == {}                      # warned, dropped, dim default
     assert n({"mode": "dim",
               "monitors": {"A": {"mode": "sideways"}}})["monitors"] == \
-        {"A": {"blackout": False, "off": False}}    # the dict branch
-    #                                    answers with the SAME honesty
-    #                                    (gate finding 5a): warn, fold
-    #                                    to dim, name the row
-    print("ok - row shorthands fold to the pair shape losslessly")
+        {"A": {"blackout": False, "off": False, "offdisc": False}}    # the
+    #                                    dict branch answers with the
+    #                                    SAME honesty (gate finding 5a):
+    #                                    warn, fold to dim, name the row
+    print("ok - row shorthands fold to the triple shape losslessly")
 
 
 def main():
@@ -929,6 +1326,9 @@ def main():
     test_preview_adopt_law()
     test_lock_on_away()
     test_session_unlock_ear()
+    test_sdc_marshal()
+    test_offdisc_flavors()
+    test_offdisc_belt()
     test_hook_lifecycle()
     test_static_ban()
     print("AWAYMODE TESTS OK")

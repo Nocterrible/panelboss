@@ -1,12 +1,14 @@
 """The away engine: dim-mode substitution for the display power verb.
 
 SIZE LAW header: this part owns the fake-off ledger and nothing else -
-and at ~410 lines (post lock-on-away) the whole is still one law: the
-ledgers, the door calls and the status words interlock line-for-line,
+and at ~515 lines (post two-flavor widening) the whole is still one
+law: the ledgers, the door
+calls and the status words interlock line-for-line,
 and splitting the prose from its call sites (or the lift from the
 engage) would sell a seam for nothing. The off wave's and the lock
 wave's growth are this file's due; the card paint lives in
-ui/window/_away.py.
+ui/window/_away.py; the widening's ctypes core moved OUT to
+wm/_sdc.py exactly where a seam existed to be sold.
 The state machine keeps its shape - _power.py calls _away_engage()
 where it used to call the broadcast, _away_lift() where it wakes,
 _events.py arms the queue lifts (away_lift from the input ears and
@@ -41,9 +43,14 @@ UNCONDITIONAL on every wake reason (see the asymmetry law at the
 engage side), and covered rows bring the corner jail. The PROBE LAW
 owns the capability story: off is selectable on every reached
 panel, and the verdict lives in these status words, timestamped -
-never in a pre-sentence about firmware. LOCK-ON-AWAY (owner-ruled,
-2026-10-14): the same engage may end by locking the workstation -
-see _away_lock for the law and the lock-aware wake it commits to.
+never in a pre-sentence about firmware. The off flavor WIDENED
+(final wave, 2026-10-14): "off" is the D6 power code and "offdisc"
+is the adapter retraction (wm/_sdc.py) - the two flavors earn
+different epistemic words, "off (unverified)" is trust and "off
+(disconnected)" is PROOF (the CCD re-query witnessed it). LOCK-ON-
+AWAY (owner-ruled, 2026-10-14): the same engage may end by locking
+the workstation - see _away_lock for the law and the lock-aware
+wake it commits to.
 """
 
 import logging
@@ -83,6 +90,7 @@ class _AwayMixin:
         self._away_bright = getattr(self, "_away_bright", None) or {}
         self._away_hdr = getattr(self, "_away_hdr", None) or []
         self._away_off = getattr(self, "_away_off", None) or {}
+        self._away_disc = getattr(self, "_away_disc", None) or {}
         rows = away.get("monitors") or {}
         jail = None
         for m in _live_desk():
@@ -95,19 +103,27 @@ class _AwayMixin:
                 # finding 5b): a refused hand-back at lift logs when
                 # the spell asked, not just that it hurts now
                 self._away_off[m["gdi"]] = rec.get("tried", time.time())
-            if jail is None and (mode == "off" or
+            if rec.get("saved"):
+                # the offdisc ledger lives beside _away_off (in-memory,
+                # the packet's law) and holds the RESTORE RECORD the
+                # lift hands back; a refused offdisc row owes no record
+                # (nothing took effect - the door validated before it
+                # touched the glass, or restored its own wrong victim)
+                self._away_disc[m["gdi"]] = rec["saved"]
+            if jail is None and (mode in ("off", "offdisc") or
                                  rec["status"].startswith("blackout")):
                 jail = (m["x"], m["y"], m["w"], m["h"])
         if jail:
             display.jail_cursor(jail)
         display.arm_input_lift(True)
         log.info("away: dim mode, %d monitors (%d HDR off, %d VCP-off "
-                 "asked, %d rows blackout-degraded on refusal)",
+                 "asked, %d disconnected, %d rows blackout-degraded on refusal)",
                  len(self.away_status), len(self._away_hdr),
-                 len(self._away_off),
+                 len(self._away_off), len(self._away_disc),
                  sum(1 for s in self.away_status.values()
                      if s.startswith("blackout (") or
-                     s.startswith("off refused")))
+                     s.startswith("off refused") or
+                     s.startswith("offdisc refused")))
         self._away_lock(away.get("lock"))   # the spell's last chore:
         #                                   rows, jail, THEN the lock -
         #                                   a locked desktop with a
@@ -207,6 +223,32 @@ class _AwayMixin:
             # ceiling of what this door can ever promise from here.
             rec["status"] = "off (unverified)"
             return rec
+        if mode == "offdisc":
+            # the DISCONNECT flavor (final wave, 2026-10-14): the path
+            # retracts AT THE ADAPTER - works regardless of firmware
+            # (the panel never hears a code, it loses its signal), and
+            # it comes back as a replug. wm/_sdc.py carries the measured
+            # law: PATH-MINUS, the 0x6A0 verb set, and the CCD re-query
+            # as the ONLY honest verification (the GDI rows lie through
+            # the KVM). The word below is therefore PROVED, not trusted
+            # - the deliberate contrast with the D6 branch above.
+            from ..wm import _sdc
+            rec["offdisc"] = True             # even a refused row: the
+            # jail and the summary count it class-wide (the blackout
+            # fallback's confession rides the word below)
+            ok, say = _sdc.retract(m)
+            rec["tried"] = time.time()        # the dated-law timestamp
+            if not ok:
+                _overlay.show(m["gdi"], rect)
+                rec["status"] = ("offdisc refused (%s - blackout "
+                                 "instead)" % say)
+                return rec
+            rec["saved"] = say                # the restore record: the
+            #                    captured arrays with the victim ACTIVE;
+            #                    the lift's restore carries SAVE too
+            #                    (or the store reboots the panel dark)
+            rec["status"] = "off (disconnected)"
+            return rec
         if mode == "blackout":
             _overlay.show(m["gdi"], rect)
             rec["status"] = "blackout"
@@ -252,10 +294,11 @@ class _AwayMixin:
         if not status:
             return ""
         from .. import display, profiles
-        from ..wm import _bright, _overlay
+        from ..wm import _bright, _overlay, _sdc
         bright = getattr(self, "_away_bright", None) or {}
         hdr = getattr(self, "_away_hdr", None) or []
         off = getattr(self, "_away_off", None) or {}
+        disc = getattr(self, "_away_disc", None) or {}
         for gdi, tried in off.items():
             # UNCONDITIONAL on every wake reason - the asymmetry note
             # lives at the engage side; the wake can only have come
@@ -271,6 +314,21 @@ class _AwayMixin:
                             "says)", gdi, say,
                             time.strftime("%Y-%m-%d %H:%M:%S",
                                           time.localtime(tried)))
+        for gdi, saved in disc.items():
+            # the disconnect hand-back rides the SAME unconditional
+            # law, and the SAVE bit rides inside _sdc.restore (a
+            # restore without it leaves the CCD store rebooting the
+            # panel dark - the footgun, closed at every write). A
+            # refusal here is not the end: the belt's offdisc door
+            # re-asks the store at the next boot.
+            ok, say = _sdc.restore(saved)
+            if not ok:
+                log.warning("away: the disconnect hand-back on %s "
+                            "refused (%s) - the panel sits dark until "
+                            "the belt or Settings raises it (the spell "
+                            "asked at %s)", gdi, say,
+                            time.strftime("%Y-%m-%d %H:%M:%S",
+                                          time.localtime(saved["at"])))
         _overlay.hide_all()                       # every cover first:
         #                                   paint dies before the panel
         #                                   underneath changes state
@@ -287,9 +345,11 @@ class _AwayMixin:
         self._away_bright = {}
         self._away_hdr = []
         log.info("away: lifted (%d brightness hand-back(s), %d HDR "
-                 "panel(s), %d power hand-back(s))", len(bright), len(hdr),
-                 len(off))
+                 "panel(s), %d power hand-back(s), %d disconnect "
+                 "hand-back(s))", len(bright), len(hdr), len(off),
+                 len(disc))
         self._away_off = {}
+        self._away_disc = {}
         return status
 
     def _away_boot_belt(self):
@@ -302,8 +362,20 @@ class _AwayMixin:
         own law. One log line per row reached; NEVER-reached rows
         (no door) stay silent; the whole pass never raises into boot
         - a belt that can break the boot is worse than the dark
-        panel it saves (the physical button remains undefeated)."""
-        from ..wm import _bright
+        panel it saves (the physical button remains undefeated).
+        THE SECOND DOOR (final wave): every row configured offdisc
+        gets a CCD re-query - and if its target sits INACTIVE in the
+        store (a crash, a quit, or an update between the retraction
+        and its hand-back: the SAVE bit keeps the disconnect past
+        this app, the documented footgun), the path is raised back
+        with SAVE too. THIS is the answer to the survives-the-app
+        footgun from inside the app - an uninstall's dark stays a
+        changelog sentence, the belt cannot help a deleted app. The
+        door asks the CONFIG's EDID token, not the desk's rows: a
+        retracted panel may answer to no GDI row at all (or only to
+        a lying ghost). A desk with no offdisc rows never reaches
+        the CCD at all - the belt's first live act is silence."""
+        from ..wm import _bright, _sdc
         away = self.cfg.get("away") or {}
         rows = away.get("monitors") or {}
         try:
@@ -318,6 +390,18 @@ class _AwayMixin:
                 log.info("away belt: boot power-on for %s %s",
                          m["short"], "sent" if sent
                          else "refused (%s)" % say)
+            for short, row in rows.items():
+                if not (row or {}).get("offdisc"):
+                    continue
+                # gdi unknown for a retracted row (no desk slot to
+                # name): the token join carries it, and an ambiguous
+                # twin answers None = silent, never a gamble
+                verdict = _sdc.revive({"short": short, "gdi": ""})
+                if verdict is not None:
+                    log.info("away belt: boot disconnect-restore for "
+                             "%s %s", short,
+                             "sent" if verdict[0]
+                             else "refused (%s)" % verdict[1])
         except Exception:
             log.debug("away belt: the boot power-on pass failed",
                       exc_info=True)
@@ -338,11 +422,19 @@ class _AwayMixin:
             for e in rec.get("hdr") or []:
                 if e not in (getattr(self, "_away_hdr", None) or []):
                     self._away_hdr.append(e)
+            if rec.get("saved"):
+                # the offdisc fold rides the SAME witness law as the
+                # HDR fold: a retracted panel answers to no GDI row
+                # (ghost or not), so the spell's own pass may never
+                # have walked it - the preview's record is the only
+                # witness of the retraction, and the lift pays it
+                self._away_disc = getattr(self, "_away_disc", None) or {}
+                self._away_disc[rec["gdi"]] = rec["saved"]
             log.info("away: the preview of %s folds into the real "
                      "dim - the spell hands it back", short)
             return "adopted"
         from .. import profiles
-        from ..wm import _bright, _overlay
+        from ..wm import _bright, _overlay, _sdc
         _overlay.hide(rec["gdi"])
         if rec.get("off"):
             # the preview's own D6=1 - same unconditional law as the
@@ -355,6 +447,16 @@ class _AwayMixin:
                 log.warning("away: the preview's power hand-back on %s "
                             "refused (%s) - the panel may sit dark "
                             "until its own button", rec["gdi"], say)
+        if rec.get("saved"):
+            # and the preview's own disconnect hand-back, same law in
+            # the other flavor (the refused-offdisc preview wore the
+            # fallback overlay; the restore is the no-op it deserves)
+            ok, say = _sdc.restore(rec["saved"])
+            if not ok:
+                log.warning("away: the preview's disconnect hand-back "
+                            "on %s refused (%s) - the panel may sit "
+                            "dark until the belt raises it",
+                            rec["gdi"], say)
         if rec["gdi"] in (getattr(self, "_away_bright", None) or {}):
             prior = self._away_bright[rec["gdi"]]
             _bright.restore(rec["gdi"], prior if prior is not None
@@ -366,37 +468,41 @@ class _AwayMixin:
         return "reverted"
 
 
+def _row_mode(rows, m):
+    """The row's sub-mode ("blackout" | "dim" | "off" | "offdisc"),
+    absent-defaulted to DIM (the packet's rule: a monitor NOT in
+    away.monitors is a dim row in dim mode - the migration promise,
+    and the honest default for a panel that joined after the config
+    was written). normalize ships the triple; precedence on a
+    hand-edited file that sets several: offdisc beats off beats
+    blackout (a retracted path cannot hear a power code, and the
+    retraction is the most explicit ask on the row)."""
+    row = rows.get(m["short"])
+    if not row:
+        return "dim"
+    if row.get("offdisc"):
+        return "offdisc"
+    if row.get("off"):
+        return "off"
+    return "blackout" if row.get("blackout") else "dim"
+
+
 def _row_went_dark(status):
     """Did this row's dark get APPLIED (the lock-on-away predicate)?
     A plain blackout (worn or configured - the paint IS the effect),
-    a dim of any honesty, an off that the door took: dark. A DEGRADED
-    refusal - "blackout (word)", "off refused - blackout instead" -
-    is the summary line's degradation count, not an applied sub-mode,
-    and an all-refused engage must not yank the session on a dark
-    every door refused. A "gone" row (the panel left the enum
-    mid-engage) darked nothing."""
+    a dim of any honesty, an off the door took, a disconnect the CCD
+    witnessed: dark. A DEGRADED refusal - "blackout (word)", "off
+    refused - blackout instead", "offdisc refused (...)" - is the
+    summary line's degradation count, not an applied sub-mode, and
+    an all-refused engage must not yank the session on a dark every
+    door refused. A "gone" row (the panel left the enum mid-engage)
+    darked nothing."""
     if status == "blackout":
         return True
     if status.startswith("dim"):
         return True
-    return (status.startswith("off")
-            and not status.startswith("off refused"))
-
-
-def _row_mode(rows, m):
-    """The row's sub-mode ("blackout" | "dim" | "off"), absent-
-    defaulted to DIM (the packet's rule: a monitor NOT in
-    away.monitors is a dim row in dim mode - the migration promise,
-    and the honest default for a panel that joined after the config
-    was written). normalize ships the pair shape; off beats blackout
-    on a hand-edited file that sets both, since the panel cannot do
-    both."""
-    row = rows.get(m["short"])
-    if not row:
-        return "dim"
-    if row.get("off"):
-        return "off"
-    return "blackout" if row.get("blackout") else "dim"
+    return (status.startswith("off") and
+            not status.startswith(("off refused", "offdisc")))
 
 
 def _live_desk():
