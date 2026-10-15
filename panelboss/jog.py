@@ -186,7 +186,11 @@ def _start_wash_painter():
                 while True:
                     act, rect = _wash_q.get_nowait()
                     if act == "wash":
-                        _lit(rect)
+                        try:
+                            _lit(rect)
+                        except Exception:
+                            log.exception("jog: one wash item failed;"
+                                          " the pump survives")
             except queue.Empty:
                 pass
             root.after(50, pump)
@@ -204,14 +208,18 @@ def _start_wash_painter():
                 # report_callback_exception -> print to pythonw's
                 # dead stderr -> OSError kills the mainloop. A veil
                 # is one flat color: tk's bg is the whole need.
-                v = veils[rect] = (tk.Toplevel(root), None)
+                # LIST, not tuple: the job slot is assigned below,
+                # and a tuple made the FIRST wash raise after lifting
+                # the first veil - the pump died, the second monitor
+                # never lit, pythonw hid the traceback (owner UAT).
+                v = veils[rect] = [tk.Toplevel(root), None]
                 v[0].overrideredirect(True)
                 v[0].attributes("-topmost", True)
                 v[0].attributes("-alpha", 0.93)
                 v[0].configure(bg="#f8f8f0")
-            else:
-                if v[1] is not None:
-                    v[0].after_cancel(v[1])
+            elif v[1] is not None:
+                v[0].after_cancel(v[1])   # (the elif that also shows
+                                          #  the vein the tuple hid)
             v[0].geometry("%dx%d+%d+%d" % (w, h, x, y))
             v[0].deiconify()
             v[0].lift()
