@@ -270,6 +270,40 @@ def _session_age_sec():
     return None
 
 
+POKE_WAIT_SEC = 2.0      # the winner's UI tick answers in ~90 ms; two
+                         # seconds of silence names the no-listener
+                         # case (dead window, or none at all)
+
+
+def _poke_winner():
+    """Second-instance handoff through the config dir: the app owns
+    no server socket, and a file stamp is the one cross-process
+    primitive both instances share (the ack round trip is the honesty:
+    a poke into a window that died at birth is tonight's silent half,
+    and the loser must SEE that). Winner side:
+    SettingsWindow._drain_poke."""
+    poke = os.path.join(config.CONFIG_DIR, "poke")
+    ack = os.path.join(config.CONFIG_DIR, "poke_ack")
+    try:
+        before = os.path.getmtime(ack) if os.path.exists(ack) else 0.0
+        with open(poke, "a"):
+            os.utime(poke, None)
+    except OSError:
+        return False                    # un-stampable desk: old words
+    deadline = time.time() + POKE_WAIT_SEC
+    while time.time() < deadline:
+        try:
+            m = os.path.getmtime(ack)
+        except OSError:
+            m = 0.0          # not written yet (the winner's tick owns
+                             # a ~90 ms latency), or it vanished: the
+                             # deadline is the only honest verdict
+        if m > before:
+            return True
+        time.sleep(0.1)
+    return False
+
+
 def _run(cfg, autostart=False):
     from . import state
     from . import startup
@@ -278,6 +312,17 @@ def _run(cfg, autostart=False):
     if not _single_instance():
         logging.getLogger("cli").info("already running; one instance is "
                                        "always checked first")
+        # the handoff (owner UAT, Oct 15: two dead icon clicks through
+        # a living tray tonight - the balloon explained NOTHING; the
+        # winner should ANSWER the click). Touch the shared poke
+        # stamp: the running copy's UI tick maps its window and acks.
+        # Only real silence - no listener, or a window that died at
+        # birth - falls back to the box, and a logon launch still
+        # never speaks (its poke rides regardless).
+        if _poke_winner():
+            logging.getLogger("cli").info("poked the running copy; its "
+                                          "window answers the click")
+            return 0
         if not autostart:
             # a logon launch must never speak: if an old copy somehow
             # survived the shutdown, the twin's only sound is the log

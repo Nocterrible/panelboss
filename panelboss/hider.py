@@ -262,8 +262,21 @@ def _tk_painter():
         q.root.after(50, pump)
 
     def run():
+        # the birth-order law (owner UAT, Oct 15): tkinter's default
+        # root is process-global and the FIRST Tk() claims it;
+        # customtkinter binds every image to that default (its
+        # ImageTk.PhotoImage passes no master). A painter born before
+        # the settings window therefore stole the window's images -
+        # the kofi cup raised "image pyimage1 doesn't exist" inside
+        # SettingsWindow.__init__, every boot since the boot hooks.
+        # The painter waits for the window's root instead; a headless
+        # boot (no window will ever come) waits out the timeout and
+        # claims the default for itself - nothing else builds images
+        # on the main thread then.
+        _WINDOW_READY.wait(PAINTER_READY_TIMEOUT_SEC)
         root = tk.Tk()
-        root.withdraw()
+        root._owner_thread = threading.get_ident()  # the sweep's guard
+        root.withdraw()                             # (see _shell.run)
         q.root = root
         root.after(50, pump)
         root.mainloop()
@@ -280,6 +293,20 @@ def _tk_painter():
     def unpaint(short, rect):
         q.put(("unpaint", short, rect))
     return paint, unpaint
+
+
+# Birth-order law, see _tk_painter: the painter's interpreter must
+# not be the process's first Tk; window_ready() releases it.
+_WINDOW_READY = threading.Event()
+PAINTER_READY_TIMEOUT_SEC = 10.0
+
+
+def window_ready():
+    """The settings window calls this the moment its Tk is born: the
+    default root is the window's now, so the painter's interpreter can
+    no longer claim it (tkinter first-root-wins). A headless boot
+    never calls this; the painter times out and claims."""
+    _WINDOW_READY.set()
 
 
 def boot():

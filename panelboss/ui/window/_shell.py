@@ -35,12 +35,15 @@ next seam to split out is the size-recall trio if this grows again.
 from __future__ import annotations
 
 import logging
+import os
+import threading
 import time
 import tkinter as tk
 
 import customtkinter as ctk
 
 from ... import config
+from ... import hider
 from .. import theme
 from ..helpbtn import Tips
 from ..kofi import kofi_pil
@@ -89,6 +92,11 @@ class SettingsWindow(
 
     def __init__(self, cfg, monitor, ui_events):
         super().__init__()
+        # the birth-order law's other half (owner UAT, Oct 15): this
+        # root now owns the process default - release the waiting
+        # painter; its interpreter can claim nothing anymore, and the
+        # images customtkinter binds to the default land HERE
+        hider.window_ready()
         # the CTk root maps at BIRTH, before a single widget exists:
         # withdraw instantly so the empty window never gets a frame on
         # screen - the first pixels a user may ever see come from
@@ -135,6 +143,17 @@ class SettingsWindow(
                                          # mid-flight must cancel it, never
                                          # ride a ghost lift
         self._lease_ticks = 0
+        # the second-instance handoff (owner UAT, Oct 15): a poke from
+        # a launched-while-running twin opens this window (the tray's
+        # own manual-open seam) and reads an ack; the stamp's mtime at
+        # birth is the floor, so a logon poke racing the build never
+        # replays into a map nobody asked for
+        self._poke = os.path.join(config.CONFIG_DIR, "poke")
+        self._poke_ack = os.path.join(config.CONFIG_DIR, "poke_ack")
+        try:
+            self._poke_seen = os.path.getmtime(self._poke)
+        except OSError:
+            self._poke_seen = 0.0
         self._tab = TABS[0]
         ctk.set_appearance_mode(self.skin.mode)
         self.configure(fg_color=self.skin.bg)
@@ -211,6 +230,29 @@ class SettingsWindow(
         "power plan": ("_sync_power_switches", "_sync_gaming_switches"),
         "general": ("_sync_general_switches",),
     }
+
+    def _drain_ui_events(self):
+        _RuntimeMixin._drain_ui_events(self)
+        self._drain_poke()
+
+    def _drain_poke(self):
+        """The handoff's winner side (owner UAT, Oct 15): the loser
+        of the instance race touches poke; this tick (90 ms cadence,
+        the tick runs withdrawn) maps the window through the tray's
+        own manual-open path and answers in poke_ack, so the next
+        launch skips its balloon. Raises ride the runtime tick's own
+        try/except - a dead stamp must never brick the loop."""
+        try:
+            m = os.path.getmtime(self._poke)
+        except OSError:
+            return
+        if m <= self._poke_seen:
+            return
+        self._poke_seen = m
+        with open(self._poke_ack, "a"):
+            os.utime(self._poke_ack, None)
+        self._show_first(manual=True)
+        self.focus_force()
 
     def _repaint_switches(self, pane=None):
         """Re-paint the truth switches at settled geometry. WHY: a
@@ -756,20 +798,37 @@ def run(cfg, monitor, ui_events):
     try:
         window = SettingsWindow(cfg, monitor, ui_events)
     except Exception:
+        # the epitaph BEFORE the burial (owner UAT, Oct 15): a destroy
+        # that hangs (cross-thread Tcl lock with the hider/overlay
+        # interpreters alive) used to swallow this line - the one line
+        # that names the raise. Log first, sweep second; the re-raise
+        # below is unchanged (gate ledger 11: the sweep must not mask).
+        log.exception("boot: settings window died; the half-dressed "
+                      "root is destroyed and the failure re-raised")
         try:
             window.destroy()
         except (NameError, tk.TclError):  # the raise came from inside
-            if tk._default_root is not None:   # __init__: the name was
-                tk._default_root.destroy()     # never bound, the born
-                                       # root is this process's default;
-                                       # a TclError here means the root
-                                       # is already half-gone - the
-                                       # fallback sweep covers it (and
-                                       # a raw destroy raise must not
-                                       # MASK the boot failure: gate
-                                       # ledger 11)
-        log.exception("boot: settings window died; the half-dressed "
-                      "root is destroyed and the failure re-raised")
+            # __init__: the name was never bound, the born root may
+            # be this process's default - sweep ONLY a root of THIS
+            # thread (owner UAT, Oct 15): the worker painters tag
+            # theirs (hider._tk_painter), and destroying another
+            # thread's root from here is the cross-thread Tcl
+            # deadlock that ate the epitaph all night. An untagged
+            # root was born here, on this thread: this window's. A
+            # foreign default is left standing and the half-dressed
+            # root leaks until exit - ordinary windows die with the
+            # process, the hider's own law borrowed here - and a raw
+            # destroy raise must still not MASK the boot failure
+            # (gate ledger 11).
+            root = tk._default_root
+            if root is not None and getattr(
+                    root, "_owner_thread",
+                    threading.get_ident()) == threading.get_ident():
+                root.destroy()
+            elif root is not None:
+                log.error("boot sweep skipped: the default root answers "
+                          "to another thread (destroying it here would "
+                          "deadlock the boot)")
         raise
     window.mainloop()
     return window
