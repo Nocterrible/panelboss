@@ -1202,3 +1202,20 @@ drifted' caution: RESOLVED - taskbar.py already documents them
 wrong offset, the folklore was mine, the codebase was right. Lesson
 filed once more: bounded-recon packets must include the prior-art
 search; the audit trail exists for a reason.
+
+## VEIL / WINDOW-RAISE BUGS (owner UAT, Oct 15 morning - fix later,
+## leg-two era; symptom-first, guesses last)
+1. The open-from-tray veil works ONLY for the window's first show of
+   the session; after a close, the next tray-open draws the full UI on
+   screen (no veil cover during the draw) - so the veil is riding
+   first-show state somewhere instead of every-show.
+2. When the settings window is ALREADY open, a fresh tray-open re-draws
+   widgets instead of raising the existing window to focus - and
+   BUTTONS redraw visibly the most (the kofi/chip/tabs bar family).
+   Suspect seams to read first: _shell.py _show_first's already-mapped
+   branch (does it early-return after focus, or fall through to a
+   rebuild?), and any _repaint_switches/_draw storm the raise path
+   triggers; the poke handoff (_drain_poke) rides the same
+   _show_first(manual=True) and may inherit both.
+Repro recipe: open window, close it (X), reopen from tray -> observe
+no-veil draw; with window open, poke again -> observe full redraw.
