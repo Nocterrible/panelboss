@@ -1,13 +1,13 @@
-# RC package v4: PanelBoss ui-1c-reskin fix waves 1-3 (45fcc38..93c9cc3)
-FOURTH-SUBMISSION RESULT: **RELEASE** (no blockers; RISK line: the
-lock-free release + 30 s open deadline on the owner's multi-cam NVIDIA
-desk at first quit/reboot - late presence decisions, not crashes;
-accepted knowingly). Housekeeping notes from that verdict (stale
-header below, receipts predating probe section (d), docs-only delta
-6ce0a1a..27a6d42) are closed by THIS commit: header refreshed,
-probe-receipts-v4 regenerated at the final tip (13 suites incl. the
-(d) marker-chain line and the deterministic unknown_state), and the
-tag moved to the tested content.
+# RC package v5: PanelBoss ui-1c-reskin - day two (93c9cc3..HEAD)
+RANGE THIS PACKAGE COVERS: 93c9cc3..ec02a76 (profiles loud-voice wave,
+freeze fix, dim mode full, raw-input organ swap, cadence sliders, the
+OFF sub-mode with its two flavors + lock-on-away, the probe-law and
+AOC/taskbar dossiers, and all gate fixes). Receipt artifacts named below;
+the v3-era files (rc-fixwave-v3.patch, gauntlet-final-tagc.log) cover the
+PRIOR range only - v4's header said so obliquely and got BLOCKed for it.
+v5 receipts: rc-14b-range.patch (this range, whole), the app-down
+gauntlet log at the final tip (ALL GREEN complete, rc=0), and the
+verdict record in AUDIT-PUNCHLIST.md's wave ledgers.
 
 ## POST-RELEASE addendum (UAT wave, same day) - re-tag due at 0ffa77e
 The owner's UAT battery + one live APPCRASH produced SIX more gated
@@ -307,3 +307,34 @@ RESUBMISSION CONTRACT: one message again, this addendum + rewritten
 header + named logs + shipping-path witness lines; the gate's RISK line
 (KVM panel wake-from-off unverifiable by register) is quoted into the
 off-row TIP wording so the product itself confesses the limitation.
+
+## ADDENDUM 6 (Oct 14, night) - witnesses landed; this is the submission range
+OWNER-EYE WITNESSES (the shipping path's own log, %APPDATA%\PanelBoss\logs):
+- 20:32:29 'preview of AOC2790 reverted (off (disconnected))' - the CCD
+  retraction through the SHIPPING app on the KVM panel, panel dark per
+  owner's eyes, windows returned on the replug. The blocker-3 witness:
+  the scratch-probe claim is now superseded by app-path evidence.
+- 20:33:17 IOC912B preview 'off (unverified)' - the D6 leg through the
+  app on the directly-attached OLED, witnessed dark earlier by probe,
+  word honest per the register-lies law.
+- 20:36:30 FIRST LIVE ARMED SPELL on the new code: 'dim mode, 3
+  monitors (2 VCP-off asked, 0 disconnected, 0 degraded)' -> 20:39:51
+  lifted with 2 power hand-backs. The armed path, not a preview:
+  ledger item (ii) closed by the owner's own desk.
+- Owner verdict on the whole battery: 'worked - awesome'.
+GAUNTLET: scripts/run_all.ps1 at ec02a76, app DOWN, 'ALL GREEN
+(complete)', rc=0 - log: Temp/opencode/gauntlet-14b-1840.log (blocker-1
+receipt; the 14e tag's law now satisfied at this tip).
+INTERLUDE, in-grade (the day teaching): first owner UAT of off (disconnect)
+fell to blackout wearing a DIM refusal word - captain-debugger root-caused
+a label-vs-word seam (preview passed the MENU LABEL to the engine, which
+silently fell through to the dim leg); fix at 436ed4d (MODE_BY_LABEL +
+unknown-sub-mode confession + seam pin), re-gate SHIP, re-UAT PASSED as
+quoted above. Bug class closed by the belt, not just the bug.
+KNOWN OPEN LEDGER AT THIS TAG (judged, not hidden): (a) faux taskbar
+hider + per-window dimming = the NEXT tranche (OLED tab), spec complete
+in the dossier; (b) motion-mode confidence-row taste call, cosmetic,
+unanswered; (c) camera.py/_events.py size deferrals stand (this range
+grew neither); (d) uninstall leaves a stored disconnect in the CCD db -
+changelog sentence, belt reclaims while installed; (e) restore patience
+tax: >=0.3s per hand-back, deliberate, recorded.
