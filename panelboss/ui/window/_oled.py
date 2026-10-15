@@ -684,6 +684,15 @@ class _OledMixin:
         # suite can drive it with fake events: a letter is typed, not
         # stolen, and the OLD binding stands
         pair, word = dimmer.capture_word(event.state, event.keycode)
+        # the Oct-15 truth line for the false-"taken" hunt: raw
+        # event.state as Tk THIS platform set it, and the word the
+        # table made of it - a dropped or phantom modifier is now
+        # visible before registration ever calls it a clash. MOD_
+        # NOREPEAT rides only at registration; it has no Tk analogue
+        # (0x40000000 in state is Tk's own lock-mask territory and
+        # the table reads neither it nor 0x2 capslock in/out).
+        log.info("dimmer: capture: raw state=%#x keycode=%#x -> "
+                 "stored %r", event.state, event.keycode, pair)
         if word:
             set_text(self.oled_say3, word)
             return

@@ -475,9 +475,16 @@ class Display(threading.Thread):
                     # law says a foreign-thread checkbox write is the
                     # bug class). The belt: only OUR id wakes the
                     # dimmer - a foreign WM_HOTKEY falls through
-                    # untouched.
+                    # untouched. The Oct-15 wire truth (the "presses
+                    # and nothing happens" hunt): the arrival itself is
+                    # logged - if a press never prints this line, the
+                    # message never reached this queue; if it prints
+                    # with a foreign wParam, the id belt is honest.
                     try:
                         from . import dimmer
+                        log.info("display: WM_HOTKEY wParam=%#x on "
+                                 "hwnd=%#x (want %#x)", msg.wParam,
+                                 self._hwnd or 0, dimmer.HOTKEY_ID)
                         if msg.wParam == dimmer.HOTKEY_ID:
                             dimmer.hotkey_press()
                     except Exception:

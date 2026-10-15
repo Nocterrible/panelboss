@@ -58,17 +58,23 @@ window (the registering thread must pump the queue the WM_HOTKEY
 posts to - the broadcast lesson's twin), and re-arms from the tick
 when the stored word changes. A taken combo answers the card's say
 row with the dated word and keeps the OLD binding; binding while
-headless answers a word too, never a silent lie. One press pauses,
-one resumes (toggle, not hold).
+headless answers a word too, never a silent lie. Since the Oct-15
+instrumentation the say row is EVIDENCE, not a verdict: every
+attempt logs the stored word, the registered mods, the vk and the
+pump hwnd in hex, and a refusal that is not
+ERROR_HOTKEY_ALREADY_REGISTERED says its number, not "taken" - the
+one word was swallowing 87s and 1400s into a lie about a chord that
+was never actually taken. One press pauses, one resumes (toggle,
+not hold).
 
-SIZE LAW: the file runs ~470 and the seam is real, not cosmetic -
-Veils (the FSM, ~120) and the stratum below it (census + pins,
+SIZE LAW: the file runs ~660 and the seam is real, not cosmetic -
+Veils (the FSM, ~150) and the stratum below it (census + pins,
 painter, hotkey arm) are already three files wearing one name; when
 the veil set needs card-side state, the stratum moves out as
 _dimwin.py and the seam opens on its own. The pinning table is
-atomic (the shared-windll lesson) and the test drives the FSM AND
-the hotkey arm through injected seams, so the whole module runs
-app-up and headless alike.
+atomic (the shared-windll lesson) and the test drives the FSM, the
+painter pump (with a fake tkinter), AND the hotkey arm through
+injected seams, so the whole module runs app-up and headless alike.
 """
 
 import ctypes
@@ -145,6 +151,11 @@ _WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
 
 HOTKEY_ID = 0x5042                      # 'PB' - the app's only slot
 MOD_NOREPEAT = 0x4000                   # autorepeat is not a press
+ERROR_HOTKEY_ALREADY_REGISTERED = 1409  # the ONLY errno allowed to
+                                        # say "taken" (Oct-15 UAT:
+                                        # every refusal wore that one
+                                        # word - the rest now wear
+                                        # their number)
 
 # the desktop's own shell views (Oct-15 UAT: the census kept them, so
 # the dimmer veiled the WALLPAPER and the desk read as "the whole
@@ -632,9 +643,20 @@ def _sync_hotkey(want):
     if not want:
         _hk_tried, _hk_note = None, ""
         return
-    if _register(hwnd, HOTKEY_ID, want[0] | MOD_NOREPEAT, want[1]):
-        _hk, _hk_tried, _hk_note = want, want, ""
+    mods = want[0] | MOD_NOREPEAT        # the ONLY place NOREPEAT is
+    if _register(hwnd, HOTKEY_ID, mods, want[1]):                   # added:
+        _hk, _hk_tried, _hk_note = want, want, ""                   # the
+        log.info("dimmer: hotkey arm: stored [%#x, %#x] registered "
+                 "as mods=%#x vk=%#x on hwnd=%#x - one press pauses",
+                 want[0], want[1], mods, want[1], hwnd or 0)
         return
+    err = ctypes.get_last_error()        # use_last_error=True on the
+    log.warning("dimmer: hotkey arm: stored [%#x, %#x] refused on "  # DLL
+                "hwnd=%#x: mods=%#x vk=%#x errno=%d%s",              # from
+                want[0], want[1], hwnd or 0, mods, want[1], err,     # birth,
+                " (ERROR_HOTKEY_ALREADY_REGISTERED)"                 # read
+                if err == ERROR_HOTKEY_ALREADY_REGISTERED            # now
+                else " - NOT a collision - a different door")
     back = (" (clear and rebind to retry once the other app lets "
             "go)")                       # the advice belongs on the
     if old and _register(hwnd, HOTKEY_ID, old[0] | MOD_NOREPEAT,   # bare
@@ -642,7 +664,14 @@ def _sync_hotkey(want):
         _hk = old                                                   # too:
         back = "; the old binding stands" + back                    # first
     _hk_tried = want                                                # binds
-    _hk_note = _dated("that combo is taken on this desk" + back)    # hit
+    if err == ERROR_HOTKEY_ALREADY_REGISTERED:
+        _hk_note = _dated("that combo is taken on this desk" + back)  # hit
+    else:
+        # the Oct-15 fix for the false "taken": a refusal that is
+        # not 1409 says its NUMBER (87 is a bad parameter, 1400 a
+        # bad chord - none of them is another app holding the key)
+        _hk_note = _dated("the desk refused that combo - windows "
+                          "error %d, not a clash" % err)
 
 
 # the Tk modifier mask -> the RegisterHotKey flag (event.state order):

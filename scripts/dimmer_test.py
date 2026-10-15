@@ -3,6 +3,7 @@ across its 4.0 s boundary, the ramp that never blinks, and the
 normalize rails. The suite drives the Veils FSM through its injected
 seams - no Tk, no WASAPI, no census - so it runs app-up and headless
 alike."""
+import ctypes
 import logging
 import os
 import sys
@@ -557,7 +558,10 @@ ok("a WM_HOTKEY press toggles: one pauses, one resumes")
 # --- the hotkey arm, driven through fakes: the stored word registers
 # --- ONCE against the live pump window; a taken combo keeps the old
 # --- and leaves the dated word; headless answers a word and retries;
-# --- the default (bound None) registers NOTHING
+# --- the default (bound None) registers NOTHING. The Oct-15
+# --- instrumentation rides the same drive: every attempt logs the
+# --- truth line, and only errno 1409 may wear the word "taken".
+_dlg.addHandler(_cap)
 reg, unreg = [], []
 dimmer._pump_hwnd = lambda: 0x99
 dimmer._register = lambda h, i, m, v: (reg.append((m, v)) is None)
@@ -565,19 +569,50 @@ dimmer._unregister = lambda h, i: (unreg.append(i) is None)
 dimmer._sync_hotkey([0x0002, 123])              # ctrl+F12 as stored
 assert reg == [(0x0002 | dimmer.MOD_NOREPEAT, 123)] and \
     dimmer.bound_live()
+assert any("stored [0x2, 0x7b] registered as mods=0x4002 vk=0x7b "
+           "on hwnd=0x99" in l for l in _cap.lines), _cap.lines
 dimmer._sync_hotkey([0x0002, 123])              # unchanged: no re-knock
 assert len(reg) == 1
-ok("the stored word registers once against the live pump window")
-dimmer._register = lambda h, i, m, v: (                    # the desk
-    reg.append((m, v)) is None and                         # says TAKEN
-    (m, v) != (0x0001 | dimmer.MOD_NOREPEAT, 65))          # to ONE
+ok("the stored word registers once against the live pump window, "
+   "and the success says so in hex")
+
+
+def _taken_to_one(h, i, m, v):
+    # 1409 on the one chord the desk holds; the restore-knock of the
+    # old binding must find a clean 0
+    ctypes.set_last_error(1409 if (m, v) ==
+                          (0x0001 | dimmer.MOD_NOREPEAT, 65) else 0)
+    reg.append((m, v))
+    return (m, v) != (0x0001 | dimmer.MOD_NOREPEAT, 65)
+
+
+dimmer._register = _taken_to_one
 dimmer._sync_hotkey([0x0001, 65])
 note = dimmer.bind_note()
 assert (0x0001 | dimmer.MOD_NOREPEAT, 65) in reg              # knocked
 assert reg[-1] == (0x0002 | dimmer.MOD_NOREPEAT, 123)         # restored
 assert "taken" in note and note[:2].isdigit()          # and it is dated
 assert dimmer.bound_live()                             # OLD one stands
+assert any("errno=1409 (ERROR_HOTKEY_ALREADY_REGISTERED)" in l
+           for l in _cap.lines)
 ok("a taken combo answers with the dated word and keeps the old")
+
+
+def _refuse_a_different_door(h, i, m, v):
+    ctypes.set_last_error(87)          # ERROR_INVALID_PARAMETER
+    reg.append((m, v))
+    return False
+
+
+dimmer._register = _refuse_a_different_door
+dimmer._sync_hotkey([0x0004, 0x2d])                  # win+'-'
+note = dimmer.bind_note()
+assert "taken" not in note and "87" in note, note
+assert any("mods=0x4004 vk=0x2d" in l and "hwnd=0x99" in l
+           and "errno=87" in l for l in _cap.lines), _cap.lines
+ok("a NON-collision refusal says its number, never 'taken' - the "
+   "Oct-15 false-claim fix, and the truth line carries the hex")
+dimmer._register = lambda h, i, m, v: (reg.append((m, v)) is None)
 dimmer._sync_hotkey(None)                    # esc: clean unbind
 assert unreg and not dimmer.bound_live() and dimmer.bind_note() == ""
 before = len(reg)
@@ -625,8 +660,9 @@ cap = UI[UI.index("def _oled_dim_capture"):
          UI.index("def _dim_words")]
 assert "self._oled_dim_disarm()" in cap and \
     "dimmer.capture_word" in cap
-ok("FocusOut cancels a pending capture; every completion disarms")
-
+assert "raw state=" in cap               # the Oct-15 truth line: the
+ok("FocusOut cancels a pending capture; every completion disarms "   # raw
+   "and logs the raw Tk state it stored")                            # state
 
 
 # the ordering truth (gate F4): a modifier's OWN keydown carries
@@ -655,4 +691,27 @@ assert s._dim_pending is not False or getattr(s, "_dim_pending", False), \
 assert s.cfg["dimmer"]["bound"] == [2, 123]      # old binding intact
 ok("a modifier keydown keeps the capture waiting (chords "
    "bindable in the natural order)")
+
+
+# --- 6b: THE WIRE. The pump branch and the id must agree, or a press
+# --- is silent and total; a rename on either side used to be free.
+# --- Pin the message id, the wParam belt, and the call-in together
+# --- from the source the app actually runs (the fake-seam drive above
+# --- has never touched the real branch - this does).
+DISP = open("panelboss/display.py", encoding="utf-8").read()
+assert "WM_HOTKEY = 0x0312" in DISP                  # the message id
+assert dimmer.HOTKEY_ID == 0x5042                    # the app's slot
+_branch = DISP[DISP.index("if msg.message == WM_HOTKEY:"):]
+_branch = _branch[:_branch.index("elif msg.message")]
+assert "msg.wParam == dimmer.HOTKEY_ID" in _branch and \
+    "dimmer.hotkey_press()" in _branch, \
+    "the pump's WM_HOTKEY branch no longer walks the id belt to the "\
+    "press call-in"
+assert "hotkey_window" in DISP                       # the registrar's
+#                                                     # door (the hwnd
+#                                                     # that owns the
+#                                                     # registration)
+_dlg.removeHandler(_cap)
+ok("the WM_HOTKEY wire is pinned end to end: 0x0312, the 0x5042 "
+   "belt, straight to hotkey_press")
 print("\nDIMMER TESTS OK (%d)" % len(OK))
