@@ -1474,3 +1474,40 @@ it. ENGINE SIDE SURVIVES WHOLE: panelboss.tweaks, its registry values,
 and tweaks_test's apply/revert round-trip all stand - only the face
 is gone. The power tab's column-two law stayed (re-anchored on the
 gaming card, the column's remaining tenant).
+
+## VIDEO-DIM RESEARCH: WHAT THE DEAD RESEARCHER LEFT VERIFIED
+The deep-research dispatch died on the continuation trap (third death
+of the day on that channel family); the mission's load-bearing links
+were verified directly instead. Established from Chromium's own docs
+(googlesource, retrieved Oct 15):
+- Every WebContents (tab) IS a media session; the web platform's
+  playbackState is an explicit enum (none|paused|playing), and the
+  media session service exposes MediaControllerManager:
+  CreateActiveMediaController follows the active session, and the
+  exposed is_controllable boolean is documented for exactly the
+  question "is there any current media playback" - the playing/
+  paused/none transition is EVENT-driven (MediaSessionObserver), no
+  sampling. Chromium has a documented Windows SMC design doc
+  (content/browser/media/system_media_controls) - the web-video-to-
+  SMTC bridge is by design, not folklore (owner screenshot: the
+  autohide app's card shows Chrome as provider).
+- Chrome's session GROUPING (all browser sessions share one group
+  id; concurrent tabs behave as individual sessions) is documented -
+  an allow-list by app instance id is needed so a Spotify session
+  never arms the video-dim.
+OPEN, still to settle before the feature spec:
+- HOW the third-party overlay reads SMTC. A live probe found NO
+  winrt/winsdk in the venv and NO SMTC code anywhere in PanelBoss's
+  tree (the media card the owner pointed at is the owner's autohide
+  app - a sibling process; my attribution of its card to PanelBoss
+  was folklore, caught by the probe, recorded). Routes left: the
+  WinRT projection via pywinrt (new venv dep, no admin), or COM
+  direct through the Windows SDK metadata, or the fallback that
+  needs no bridge at all: PDH GPU Engine counters split by
+  engtype_video_decode per-pid (the owner's own
+  h
+</think>
+ avenue; per-process GPU counters have a known driver-gap
+  history - the research question stands), or DDA/WGC motion with
+  the WASAPI audible AND-gate (the probe rig on this same desk is
+  already measuring the eye's cost).
