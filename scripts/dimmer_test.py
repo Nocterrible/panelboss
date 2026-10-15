@@ -22,8 +22,10 @@ def ok(name):
 assert dimmer.SETTLE_SEC == 4.0
 ok("the audible exemption outlives the session by exactly 4.0 s")
 
-SRC = open("panelboss/dimmer.py", encoding="utf-8").read() + \
-    open("panelboss/_wasapi.py", encoding="utf-8").read()
+SRC = open("panelboss/dimmer.py", encoding="utf-8").read()
+assert "RegisterHotKey" in SRC   # the arm lives here now - the pin
+#                                 below is that the DEFAULT registers
+#                                 nothing, not that no plumbing does
 
 
 class Rec:
@@ -208,9 +210,75 @@ try:
 finally:
     config._live_shorts = config._live_shorts_saved
 
-# the hotkey law: this wave is capture-only; the module that ships
-# the feature registers NOTHING
-assert "RegisterHotKey(" not in SRC and "WM_HOTKEY" in SRC
-ok("unbound by default means UNBOUND: no hotkey plumbing anywhere")
+# --- the pause switch is a SOFT stop: it fades like activity does and
+# --- comes back the tick the pause lifts - no blink, no re-arming walk
+W = World([w(1)])
+W.tick(cfg(), 100)                      # veil at full, unpaused
+assert W.rec.painted[1][1] == 0.45
+dimmer.set_paused(True)
+assert dimmer.paused() is True
+W.tick(cfg(), 101)                      # paused: the fade clock starts
+assert W.rec.painted[1][1] == 0.45      # hold, not blink
+W.tick(cfg(), 109)                      # the whole ramp: bare, not killed
+assert W.rec.painted == {} and 1 in W.rec.gone
+dimmer.set_paused(False)
+W.tick(cfg(), 110)
+assert W.rec.painted[1][1] == 0.45      # back at full, the next tick
+ok("the pause switch fades the field within ramp and lifts it back")
+
+# --- one press pauses, one resumes (the toggle, not the hold)
+dimmer.set_paused(False)
+dimmer._veils = None
+dimmer.hotkey_press()
+dimmer.tick(cfg(on=False), 100)
+assert dimmer.paused() is True
+dimmer.hotkey_press()
+dimmer.tick(cfg(on=False), 101)
+assert dimmer.paused() is False
+ok("a WM_HOTKEY press toggles: one pauses, one resumes")
+
+# --- the hotkey arm, driven through fakes: the stored word registers
+# --- ONCE against the live pump window; a taken combo keeps the old
+# --- and leaves the dated word; headless answers a word and retries;
+# --- the default (bound None) registers NOTHING
+reg, unreg = [], []
+dimmer._pump_hwnd = lambda: 0x99
+dimmer._register = lambda h, i, m, v: (reg.append((m, v)) is None)
+dimmer._unregister = lambda h, i: (unreg.append(i) is None)
+dimmer._sync_hotkey([0x0002, 123])              # ctrl+F12 as stored
+assert reg == [(0x0002 | dimmer.MOD_NOREPEAT, 123)] and \
+    dimmer.bound_live()
+dimmer._sync_hotkey([0x0002, 123])              # unchanged: no re-knock
+assert len(reg) == 1
+ok("the stored word registers once against the live pump window")
+dimmer._register = lambda h, i, m, v: (                    # the desk
+    reg.append((m, v)) is None and                         # says TAKEN
+    (m, v) != (0x0001 | dimmer.MOD_NOREPEAT, 65))          # to ONE
+dimmer._sync_hotkey([0x0001, 65])
+note = dimmer.bind_note()
+assert (0x0001 | dimmer.MOD_NOREPEAT, 65) in reg              # knocked
+assert reg[-1] == (0x0002 | dimmer.MOD_NOREPEAT, 123)         # restored
+assert "taken" in note and note[:2].isdigit()          # and it is dated
+assert dimmer.bound_live()                             # OLD one stands
+ok("a taken combo answers with the dated word and keeps the old")
+dimmer._sync_hotkey(None)                    # esc: clean unbind
+assert unreg and not dimmer.bound_live() and dimmer.bind_note() == ""
+before = len(reg)
+dimmer._pump_hwnd = lambda: None             # headless now
+dimmer._sync_hotkey([0x0008, 80])
+assert len(reg) == before and "pump" in dimmer.bind_note()
+dimmer._pump_hwnd = lambda: 0x99             # the pump came back
+dimmer._sync_hotkey([0x0008, 80])
+assert reg[-1] == (0x0008 | dimmer.MOD_NOREPEAT, 80)
+ok("binding while headless answers a word and retries, never a lie")
+
+# --- the DEFAULT, one more time from a cold arm: bound None registers
+# --- NOTHING (the owner's consent law, not a grep)
+dimmer._hk = dimmer._hk_tried = None
+dimmer._hk_note = ""
+reg.clear()
+dimmer._sync_hotkey(None)
+assert reg == [] and not dimmer.bound_live()
+ok("unbound by default means UNBOUND: the arm registers nothing")
 
 print("\nDIMMER TESTS OK (%d)" % len(OK))

@@ -253,6 +253,14 @@ class _GUID(ctypes.Structure):
     _fields_ = [("b", ctypes.c_char * 16)]
 
 
+WM_HOTKEY = 0x0312               # the dimmer's pause press: registered
+                                 # by dimmer against THIS pump's window,
+                                 # and WM_HOTKEY is a POSTED message -
+                                 # it rides the queue (the broadcast
+                                 # lesson's twin: sent goes to the proc,
+                                 # posted goes to the loop below)
+
+
 class LastInputInfo(ctypes.Structure):
     _fields_ = [("cbSize", wintypes.DWORD),
                 ("dwTime", wintypes.DWORD)]
@@ -459,7 +467,20 @@ class Display(threading.Thread):
                 # is sent to the window proc (the _def_window ear)
                 # and never rides this queue; only the REGISTERED
                 # power notification lands as a queued message
-                if msg.message == WM_POWER and msg.wParam == PBT_POWER:
+                if msg.message == WM_HOTKEY:
+                    # the dimmer's pause toggle: the key was registered
+                    # against this window, so the post lands in this
+                    # queue. One flag-set on the pump thread - the flip
+                    # belongs on the state loop's own beat (the cross-Tk
+                    # law says a foreign-thread checkbox write is the
+                    # bug class)
+                    try:
+                        from . import dimmer
+                        dimmer.hotkey_press()
+                    except Exception:
+                        pass           # a dimmer that cannot hear is a
+                                       # dimmer, not a dead pump
+                elif msg.message == WM_POWER and msg.wParam == PBT_POWER:
                     if not msg.lParam:
                         # NULL is an ACCESS VIOLATION, not an exception:
                         # from_address(0) kills this thread natively,
@@ -897,6 +918,15 @@ def idle_seconds():
     already paid there, and a feature must not re-wrap the same verb
     into a second lie."""
     return get_idle_time()
+
+
+def hotkey_window():
+    """The live pump's hwnd for dimmer's RegisterHotKey, or None: no
+    watcher thread, no window, and the arm answers the card with the
+    dated word instead of a silent lie. A message-only fallback
+    window would NOT do here: hotkeys are per desktop, and the
+    top-level shape is the one the watcher keeps."""
+    return _ACTIVE[0]._hwnd if _ACTIVE else None
 
 
 def foreground_is_fullscreen():

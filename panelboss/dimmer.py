@@ -13,6 +13,8 @@ went quiet keeps its exemption for SETTLE_SEC - the API drops a
 stopped session from the enumeration at once, the settle lives
 HERE). Input returns and the whole set fades out within ramp_sec in
 at most THREE alpha steps: a dimmer that blinks off is a screensaver.
+The card's pause switch and the bound hotkey pause the same way: a
+fade, not a blink, and the field comes back the tick the pause lifts.
 
 Geometry is DWMWA_EXTENDED_FRAME_BOUNDS (13), not GetWindowRect:
 measured today, the GDI rect lies by eight pixels around every
@@ -27,16 +29,24 @@ a private interpreter that obeys the birth-order law
 this morning's blackout). Ordinary windows die with the process: a
 crash unpaints by construction, and teardown is the orderly half.
 
-SIZE LAW: the file is 390 lines and the seam is real, not
-cosmetic - Veils (the FSM, ~110) and the stratum below it
-(census/pins ~130, painter ~80) are already two files wearing one
-name; when the UI half lands and needs veil state on the card, the
-stratum moves out as _dimwin.py and the seam opens on its own. The
-pinning table is atomic (the shared-windll lesson) and the test
-drives the FSM through its injected seams either way. The hotkey:
-bound is a STORED WORD only - this wave registers no hotkey
-anywhere (the card's button pauses; WM_HOTKEY plumbing is the
-documented follow-up).
+THE HOTKEY LAW (owner): unbound by DEFAULT - no stolen chord before
+consent. The card captures a press and stores [mods, vk]; THIS module
+does the actual RegisterHotKey, against the DISPLAY watcher's pump
+window (the registering thread must pump the queue the WM_HOTKEY
+posts to - the broadcast lesson's twin), and re-arms from the tick
+when the stored word changes. A taken combo answers the card's say
+row with the dated word and keeps the OLD binding; binding while
+headless answers a word too, never a silent lie. One press pauses,
+one resumes (toggle, not hold).
+
+SIZE LAW: the file runs ~470 and the seam is real, not cosmetic -
+Veils (the FSM, ~120) and the stratum below it (census + pins,
+painter, hotkey arm) are already three files wearing one name; when
+the veil set needs card-side state, the stratum moves out as
+_dimwin.py and the seam opens on its own. The pinning table is
+atomic (the shared-windll lesson) and the test drives the FSM AND
+the hotkey arm through injected seams, so the whole module runs
+app-up and headless alike.
 """
 
 import ctypes
@@ -45,6 +55,7 @@ import os
 import queue
 import threading
 import time
+
 log = logging.getLogger("dimmer")
 
 SETTLE_SEC = 4.0        # the audible exemption outlives the session by
@@ -83,6 +94,11 @@ _u32.EnumWindows.restype = ctypes.c_int
 _u32.EnumWindows.argtypes = [ctypes.c_void_p, ctypes.c_long]
 _u32.GetWindowRect.restype = ctypes.c_int
 _u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+_u32.RegisterHotKey.restype = ctypes.c_int
+_u32.RegisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_uint,
+                                ctypes.c_uint, ctypes.c_uint]
+_u32.UnregisterHotKey.restype = ctypes.c_int
+_u32.UnregisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_uint]
 _dwm = ctypes.WinDLL("dwmapi", use_last_error=True)
 _dwm.DwmGetWindowAttribute.restype = ctypes.c_long
 _dwm.DwmGetWindowAttribute.argtypes = [ctypes.c_void_p, ctypes.c_uint,
@@ -98,6 +114,14 @@ _k32.CloseHandle.restype = ctypes.c_int
 _k32.CloseHandle.argtypes = [ctypes.c_void_p]
 _WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
                                   ctypes.c_long)
+
+HOTKEY_ID = 0x5042                      # 'PB' - the app's only slot
+MOD_NOREPEAT = 0x4000                   # autorepeat is not a press
+
+# the patchable aliases the fakes lean on (the suite owns the desk
+# here; the pins above stay the real verbs)
+_register = _u32.RegisterHotKey
+_unregister = _u32.UnregisterHotKey
 
 
 class _RECT(ctypes.Structure):
@@ -161,7 +185,7 @@ class Veils:
         #                                                normalize
         #                                                already
         #                                                clamped
-        if self._idle() >= d.get("idle_sec", 120):
+        if not _PAUSED and self._idle() >= d.get("idle_sec", 120):
             for hwnd, rect in qualified.items():
                 st = self._live.get(hwnd)
                 if st is None:
@@ -189,11 +213,8 @@ class Veils:
                 self._drop(hwnd)
                 continue
             b = min(2, int(gone * 3 / ramp))
-            a = round(st["alpha"] * _FADE_LEVELS[b], 3)
-            self._paint(hwnd, st["rect"], a)
-            st["die"] = st["die"]         # the ramp clock is the
-                                          # first fading tick's; it
-                                          # never re-starts mid-ramp
+            self._paint(hwnd, st["rect"],
+                        round(st["alpha"] * _FADE_LEVELS[b], 3))
 
     def _drop(self, hwnd):
         self._unveil(hwnd)
@@ -219,7 +240,6 @@ def _fact(w, fg, by_short):
     cloak = ctypes.c_uint()
     _dwm.DwmGetWindowAttribute(w, DWMWA_CLOAKED, ctypes.byref(cloak),
                                ctypes.sizeof(cloak))
-    x, y = r.l, r.t
     cx, cy = (r.l + r.r) // 2, (r.t + r.b) // 2
     short = None
     for s, (mx, my, mw, mh) in by_short.items():
@@ -230,7 +250,7 @@ def _fact(w, fg, by_short):
             "monitor": short, "fg": w == fg,
             "cloaked": bool(cloak.value),
             "iconic": bool(_u32.IsIconic(w)),
-            "rect": (x, y, r.r - r.l, r.b - r.t)}
+            "rect": (r.l, r.t, r.r - r.l, r.b - r.t)}
 
 
 _exe_cache = {}
@@ -370,6 +390,102 @@ def _idle_secs():
     return display.idle_seconds()
 
 
+# ------------------------------------------------------------- hotkey arm
+
+def _pump_hwnd():
+    """The display watcher's own window: WM_HOTKEY posts to the queue
+    of the thread that REGISTERED, and that thread is the pump."""
+    from . import display
+    return display.hotkey_window()
+
+
+_hk = None        # the (mods, vk) currently registered; None = no key
+_hk_tried = None  # the stored word the last settled attempt answered
+_hk_note = ""     # the dated word the card's say row shows
+_hot_flag = False  # set on the pump thread, flipped on the loop beat
+_PAUSED = False
+
+
+def _dated(word):
+    return time.strftime("%H:%M ") + word
+
+
+def _norm_bound(want):
+    if isinstance(want, (list, tuple)) and len(want) == 2:
+        try:
+            return (int(want[0]), int(want[1]))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _sync_hotkey(want):
+    """The tick's hotkey bookkeeping: one attempt per CHANGED stored
+    word (not one per tick). The old key is released before the new
+    knock - a combo that turns out taken keeps the OLD binding and
+    leaves the dated word for the card; a headless attempt is NOT
+    marked tried, so the arm re-tries once a pump lives, answering
+    the card with the word in the meantime."""
+    global _hk, _hk_tried, _hk_note
+    want = _norm_bound(want)
+    if want == _hk_tried:
+        return
+    hwnd = _pump_hwnd()
+    if want and hwnd is None:
+        _hk_note = _dated("no message pump lives to hold the key "
+                          "yet")
+        return
+    old = _hk
+    if old is not None:
+        if hwnd:
+            _unregister(hwnd, HOTKEY_ID)
+        _hk = None
+    if not want:
+        _hk_tried, _hk_note = None, ""
+        return
+    if _register(hwnd, HOTKEY_ID, want[0] | MOD_NOREPEAT, want[1]):
+        _hk, _hk_tried, _hk_note = want, want, ""
+        return
+    back = ""
+    if old and _register(hwnd, HOTKEY_ID, old[0] | MOD_NOREPEAT,
+                         old[1]):
+        _hk = old
+        back = "; the old binding stands"
+    _hk_tried = want
+    _hk_note = _dated("that combo is taken on this desk" + back)
+
+
+def hotkey_press():
+    """The display pump's call-in (its WM_HOTKEY branch): a press is
+    ONE flag, flipped on the state loop's next beat - flipping the
+    card's checkbox from the pump thread would be the cross-Tk class
+    again, and the pause law is a toggle either way."""
+    global _hot_flag
+    _hot_flag = True
+
+
+def set_paused(v):
+    """The card's pause switch: a runtime bool, NOT config - the
+    pause lives as long as the process."""
+    global _PAUSED
+    _PAUSED = bool(v)
+
+
+def paused():
+    return _PAUSED
+
+
+def bind_note():
+    """The binding confession, dated at attempt time: '' when the arm
+    has nothing to say."""
+    return _hk_note
+
+
+def bound_live():
+    """True only while a hotkey is actually registered."""
+    return _hk is not None
+
+
 # ------------------------------------------------------------------ API
 
 _veils = None
@@ -379,15 +495,25 @@ def tick(cfg, now):
     """The _boot hook (AFTER hider.tick). No boot call: the veils are
     lazy, the painter thread only exists the first time a veil is
     actually born - an armed-off [dimmer] costs one dict and a
-    return."""
-    global _veils
+    return. The hotkey press lands here as a flag: ONE press
+    pauses, one resumes."""
+    global _veils, _hot_flag
+    if _hot_flag:
+        _hot_flag = False
+        set_paused(not _PAUSED)
     if _veils is None:
         _veils = Veils(_census, _sounding, _idle_secs, _paint, _unveil)
+    _sync_hotkey((cfg.get("dimmer") or {}).get("bound"))
     _veils.tick(cfg, now)
 
 
 def teardown():
-    global _veils
+    global _veils, _hk, _hk_tried, _hk_note
+    if _hk is not None:
+        hwnd = _pump_hwnd()
+        if hwnd:
+            _unregister(hwnd, HOTKEY_ID)
+        _hk, _hk_tried, _hk_note = None, None, ""
     if _veils is not None:
         _veils.teardown()
         _veils = None
