@@ -284,10 +284,13 @@ def revive(row):
     its path back with the SAVE bit. None = nothing to do (the row
     is lit, twins the token cannot single out, or no path answers it
     - the belt's silent classes, same religion as the D6 door);
-    (ok, why) = the belt already logged the act either way - and a
-    slot/token DISAGREEMENT is loud on purpose (gate fix 2): the
-    belt must not silently skip a row whose identity the store
-    disputes."""
+    (ok, why) = the belt already logged the act either way. A
+    slot/token DISAGREEMENT is loud for callers that NAME a gdi -
+    but the belt's own call shape ({"short", "gdi": ""}) carries no
+    slot to cross-check, so disputes stay SILENT BY DESIGN on the
+    belt's road and the loud branch below is defensive for the
+    gdi-naming callers that may come (dossier follow-up 2: the
+    comment, not the branch, was the lie)."""
     al = _rows(QDC_ALL)
     if al is None:
         return None
@@ -302,10 +305,20 @@ def revive(row):
         "rc 0x%X gle=%d" % (rc, gle)
 
 
-def _victim_active(keys):
+def _victim_active(keys, tries=VERIFY_TRIES):
     """True/False for an answering view; None = BLIND (no verdict
-    about the glass, only about the check)."""
-    view = _rows(QDC_ACTIVE)
-    if view is None:
-        return None
-    return bool(keys & {r[1] for r in view[2]})
+    about the glass, only about the check). THE SAME PATIENCE _gone
+    earned (dossier follow-up 1): the CCD reactivates a path on its
+    own schedule - one immediate look false-warned 'never came
+    back' on a merely slow store, so every verify seam re-looks
+    within the same budget."""
+    blind = True
+    for _ in range(tries):
+        time.sleep(VERIFY_WAIT_SEC)
+        view = _rows(QDC_ACTIVE)
+        if view is None:
+            continue
+        blind = False
+        if keys & {r[1] for r in view[2]}:
+            return True
+    return None if blind else False
