@@ -1144,3 +1144,13 @@ with the store route behind a labeled 'make it permanent' affordance
 if the owner ever wants it to survive logout. Coexist law either way:
 conflict with foreign hider residue CONFESSES on the row, never
 last-writer-wins in silence.
+FAUX-HIDE BEHAVIOR SPEC (owner, Oct 14 late): strip covers taskbar
+edge. Mouse enters taskbar zone -> withdraw. Mouse out of zone for N
+user-settled seconds -> return (slider, timer-card idiom, default off
+law). EXCEPTION: while a live caret (GetGuitThreadInfo hcaret of the
+foreground thread, rect screen-mapped) sits inside the taskbar bounds,
+return is HELD - the case the owner named is typing in the search
+widget; when the caret dies, the N-second timer restarts normally.
+Caret poll rides the strip's existing timer (one call per tick). No
+focus-stealing, no click tracking: the strip notices the caret, not
+the keyboard.
