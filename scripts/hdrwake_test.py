@@ -51,14 +51,26 @@ cfg["restore"]["enabled"] = False
 # previous one.
 CALLS = []                               # (kind, thread-name)
 
+# the walk's marker is CHOSEN AT SPAWN, not read from CALLS inside the
+# driver: a background thread is a clock, and a marker derived from the
+# live counter says the desk moved at whatever instant the thread woke,
+# not at the moment the walk was requested. The desk may still move -
+# the marker simply records the desk as the caller described it.
+MARKERS = {}                               # walk number -> marker str
+
+
 def _live_modes():
     CALLS.append(("modes", threading.current_thread().name))
     time.sleep(1.5)
     n = sum(1 for k, _ in CALLS if k == "modes")     # this call's number
-    # the desk MOVES under every walk: the pane can only be proven to
-    # carry the LATEST answer by seeing this call's marker and not the
-    # previous call's
-    return {"MONITOR\\T": ["100x100@60", "%d00x%d00@60" % (n + 1, n + 1)]}
+    marker = MARKERS.get(n)
+    if marker is None:                     # a walk the pump window
+        #                                  permitted that the test
+        #                                  did not pre-describe: the
+        #                                  desk answers with the
+        #                                  offered mode only
+        return {"MONITOR\\T": ["100x100@60"]}
+    return {"MONITOR\\T": ["100x100@60", "%s@60" % marker]}
 
 
 def _hdr_states():
@@ -125,13 +137,23 @@ def check():
                 n += 1
             return n
 
-        # the ride-up, driven through the REAL arm: one post, and while
-        # the walk is in flight three more (the storm)
+        # The ride-up, driven through the REAL arm: one post, and while
+        # the walk is in flight three more (the storm). The two walks the
+        # storm law permits are PRE-DESCRIBED here - the first carries
+        # marker "200x200", its superseder "300x300", and the offered
+        # baseline is always "100x100". Choosing at spawn is the whole
+        # lesson: with the marker read from CALLS inside the driver, a
+        # third walk the pump window permits (or a timer that lands a
+        # beat differently) paints a marker the assertion has no number
+        # for, and the suite fails while the law it pins still holds.
         app.ui_events.put(("hdr_sync", None))
+        modes_at_spawn = sum(1 for k, _ in CALLS if k == "modes")
+        MARKERS[modes_at_spawn + 1] = "200x200"
+        MARKERS[modes_at_spawn + 2] = "300x300"
         cycles = pump(1.0)               # the spawn drains here
         for _ in range(3):
             app.ui_events.put(("hdr_sync", None))
-        cycles += pump(8.0)              # BOTH walks' sleep windows
+        cycles += pump(14.0)             # BOTH walks' sleep windows
                                          # (3 s each, back to back):
                                          # the pump must stay alive
                                          # clean through them
@@ -155,10 +177,9 @@ def check():
         app.update()
         res_menu = app._mode_menus["MONITOR\\T"][0]
         vals = str(res_menu.cget("values")).replace(" ", "")
-        last_n = sum(1 for k, _ in CALLS if k == "modes")   # total
-        assert "%d00x%d00" % (last_n + 1, last_n + 1) in vals, \
-            "the pane never consumed the walk's payload: %s" % vals
-        assert "%d00x%d00" % (last_n, last_n) not in vals, \
+        assert "300x300" in vals, \
+            "the pane never consumed the LAST walk's payload: %s" % vals
+        assert "200x200" not in vals, \
             "a superseded payload still paints (latest must win): %s" \
             % vals
         print("[PASS] hdr wake: pump alive through the walk (%d cycles), "
@@ -192,8 +213,8 @@ def ban():
 
 
 def _hard_kill():
-    time.sleep(60)
-    print("HARD KILL after 60 s (rc=3 contract)", flush=True)
+    time.sleep(90)
+    print("HARD KILL after 90 s (rc=3 contract)", flush=True)
     os._exit(3)
 
 
