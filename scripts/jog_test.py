@@ -82,6 +82,20 @@ w = jog.wash("GONE", cfg())
 assert w == "monitor GONE is not opted in", w
 ok("every wash refusal names itself (the veil itself is UAT's)")
 
+# the sweep: the button lights the WHOLE opted-in set, not the dict's
+# first key (owner UAT, Oct 15: the IOC-only wash was a hidden
+# preference by insertion order). One monitor's rect is unknown to a
+# test desk without windows, so the honest word for THAT row is the
+# off-desk one - what the pin demands is that every opted row is
+# ASKED, each answering its own word.
+w = jog.wash_all(cfg(rows={"AOC2790": True, "IOC912B": True,
+                           "GONE": False}))
+assert w.count(",") == 1, w
+assert "wash: AOC2790" in w or "off the desk" in w, w
+assert "wash: IOC912B" in w or "off the desk" in w.split("AOC2790")[-1], w
+assert "GONE" not in w                       # opted out: never asked
+ok("the wash sweep asks every opted-in row, in order, none skipped")
+
 # normalize rails mirror the hider's honesty exactly
 import logging                                    # noqa: E402
 

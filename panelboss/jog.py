@@ -111,7 +111,10 @@ def wash(short, cfg):
     """The manual wash for one monitor: returns the word the card
     shows - it NEVER raises and it never lights silently. cfg arrives
     from the UI (the state loop's dict), so the verdict reads the same
-    rails the user just moved."""
+    rails the user just moved. The BUTTON asks for every opted-in row
+    (owner UAT, Oct 15: a wash that lights the first monitor by dict
+    order is a wash with a hidden preference); this stays per-monitor
+    so one word can name one failure."""
     j = cfg.get("jog") or {}
     if not j.get("on"):
         return "jog feature is armed off - nothing lights"
@@ -129,6 +132,15 @@ def wash(short, cfg):
     _paint_wash(rect)
     log.info("jog: wash started on %s for %.0f s", short, JOG_WASH_SEC)
     return "wash: %s" % short
+
+
+def wash_all(cfg):
+    """The card's word for the whole opted-in set, in row order."""
+    rows = (cfg.get("jog") or {}).get("monitors") or {}
+    shorts = [s for s, on in rows.items() if on]
+    if not shorts:
+        return wash("", cfg)            # the honest empty word
+    return ", ".join(wash(s, cfg) for s in shorts)
 
 
 def teardown():
@@ -166,43 +178,45 @@ def _start_wash_painter():
         root = tk.Tk()
         root._owner_thread = threading.get_ident()
         root.withdraw()
-        veil = None
+        veils = {}                           # rect -> (widget, job)
         global _drop_job
 
         def pump():
-            nonlocal veil
             try:
                 while True:
                     act, rect = _wash_q.get_nowait()
                     if act == "wash":
-                        x, y, w, h = rect
-                        if veil is None:
-                            import customtkinter as ctk
-                            veil = ctk.CTkToplevel(root)
-                            veil.overrideredirect(True)
-                            veil.attributes("-topmost", True)
-                            veil.attributes("-alpha", 0.93)
-                            veil.configure(fg_color="#f8f8f0")
-                        veil.geometry("%dx%d+%d+%d" % (w, h, x, y))
-                        veil.deiconify()
-                        veil.lift()
-                        global _drop_job
-                        if _drop_job is not None:
-                            veil.after_cancel(_drop_job)   # F2: a
-                        _drop_job = veil.after(            # second wash
-                            int(JOG_WASH_SEC * 1000), _drop)  # EXTENDS
+                        _lit(rect)
             except queue.Empty:
                 pass
             root.after(50, pump)
 
-        def _drop():
-            nonlocal veil
-            global _drop_job
-            _drop_job = None
-            if veil is not None:
-                veil.withdraw()
-                root.after(150, veil.destroy)
-                veil = None
+        def _lit(rect):                      # one veil per monitor; a
+            nonlocal veils                   # second wash on the SAME
+                #                          # rect extends its deadline
+            x, y, w, h = rect                # (F2 law, per veil now)
+            v = veils.get(rect)
+            if v is None:
+                import customtkinter as ctk
+                v = veils[rect] = (ctk.CTkToplevel(root), None)
+                v[0].overrideredirect(True)
+                v[0].attributes("-topmost", True)
+                v[0].attributes("-alpha", 0.93)
+                v[0].configure(fg_color="#f8f8f0")
+            else:
+                if v[1] is not None:
+                    v[0].after_cancel(v[1])
+            v[0].geometry("%dx%d+%d+%d" % (w, h, x, y))
+            v[0].deiconify()
+            v[0].lift()
+            v[1] = v[0].after(int(JOG_WASH_SEC * 1000),
+                              lambda r=rect: _drop(r))
+
+        def _drop(rect):
+            v = veils.pop(rect, None)
+            if v is not None:
+                v[0].withdraw()
+                root.after(150, v[0].destroy)
         global _drop_job
 
         root.after(50, pump)

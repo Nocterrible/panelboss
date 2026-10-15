@@ -287,12 +287,9 @@ class _OledMixin:
         self._save()
 
     def _oled_wash_now(self):
-        rows = (self.cfg.get("jog") or {}).get("monitors") or {}
-        short = next((s for s, on in rows.items() if on), None)
-        if short is None:
-            set_text(self.oled_say2, jog.wash("", self.cfg))
-            return
-        set_text(self.oled_say2, jog.wash(short, self.cfg))
+        # every opted-in monitor lights, in row order (owner UAT: the
+        # dict's first key is not the user's whole set)
+        set_text(self.oled_say2, jog.wash_all(self.cfg))
 
     def _oled_sync(self):
         if getattr(self, "oled_say", None) is None:
