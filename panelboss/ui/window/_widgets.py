@@ -248,6 +248,50 @@ class SkewCombo(tk.Menubutton):
         tk.Menubutton.destroy(self)
 
 
+def desk_position(rows, x, y, w, h):
+    """The monitor's RELATIVE slot on the desk (owner law, Oct 15):
+    a name disambiguates panels only when the EDID strings differ;
+    the geometry disambiguates three identical ones. A pure
+    function over the live row list so every card says the same
+    word for the same desk. Rows without geometry are skipped -
+    no row raises inside a card redraw. A single-row desk gets no
+    word: with one panel the position IS the desk and says
+    nothing. Parts that cannot vary are omitted, not faked:
+    side-by-side rows share their top edge and the vertical half
+    of the word is vacuous; a stack shares its x span and the
+    horizontal half is."""
+    edges = []
+    for rx, ry, rw, rh in rows:
+        if not all(isinstance(v, (int, float))
+                   for v in (rx, ry, rw, rh)):
+            continue
+        edges.append((rx, ry, rx + rw, ry + rh))
+    if len(edges) < 2:
+        return ""
+    min_x = min(e[0] for e in edges)
+    max_r = max(e[2] for e in edges)
+    min_y = min(e[1] for e in edges)
+    max_b = max(e[3] for e in edges)
+    if max_r - min_x <= 0:
+        h_part = ""
+    elif x == min_x:
+        h_part = "left"
+    elif x + w == max_r:
+        h_part = "right"
+    else:
+        h_part = "middle"
+    if max_b - min_y <= 0:
+        v_part = ""
+    elif y == min_y:
+        v_part = "top"
+    elif y + h == max_b:
+        v_part = "bottom"
+    else:
+        v_part = "middle"
+    parts = [p for p in (v_part, h_part) if p]
+    return (" [%s]" % " ".join(parts)) if parts else ""
+
+
 class _WidgetsMixin:
     def _card(self, parent, title, sub=""):
         frame = ctk.CTkFrame(parent, **self.skin.panel_style())

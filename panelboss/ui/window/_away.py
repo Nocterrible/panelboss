@@ -30,7 +30,7 @@ import threading
 import customtkinter as ctk
 
 from ... import wm
-from ._widgets import set_text
+from ._widgets import desk_position, set_text
 
 log = logging.getLogger("ui")
 
@@ -166,14 +166,19 @@ class _AwayMixin:
         self._away_rows = {}
         self._away_jobs = {}          # short -> {"timer", "rec"}
         self._away_says = {}          # short -> status word to show
-        base = [m.get("short") or m.get("id") for m in wm.monitors()]
+        _live = wm.monitors()
+        base = [m.get("short") or m.get("id") for m in _live]
         dupes = {b for b in base if base.count(b) > 1}
-        for m, short in zip(wm.monitors(), base):
+        for m, short in zip(_live, base):
             label = short
             if short in dupes:
                 label = "%s (%s)" % (
                     short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
                     [-1] or "?")
+            label = label + desk_position(
+                [(mm.get("x", 0), mm.get("y", 0), mm.get("w", 0),
+                  mm.get("h", 0)) for mm in _live],
+                m.get("x", 0), m.get("y", 0), m.get("w", 0), m.get("h", 0))
             row = self._row(box, label, TIP["row"], hint_chars=42)
             vals = off_choice(wm._bright, m["gdi"])
             seg = ctk.CTkSegmentedButton(
