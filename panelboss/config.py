@@ -369,6 +369,22 @@ DEFAULTS = {
                                 # the law's floor: a spell that grabs
                                 # the session needs asking first
     },
+    "hider": {
+        "on": False,              # the faux taskbar strip is consent,
+                                  # like everything that touches the
+                                  # desk: absent section = dark, no
+                                  # migration it must perform
+        "hold_sec": 3,            # how long the cursor must stay out
+                                  # of EVERY bar zone before a withdrawn
+                                  # strip returns; clamped 1..30
+        "reveal": "hovered",      # "hovered" = only the bar the cursor
+                                  # entered; "all" = every enabled bar
+                                  # withdraws together (a multi-monitor
+                                  # owner switching apps across screens)
+        "monitors": {},           # {short: bool} - per-panel opt-in;
+                                  # default ALL off (burn-in is the OLED
+                                  # problem; even OLED rows are opt-in)
+    },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
                                 # profile the app re-applies by itself
@@ -718,6 +734,63 @@ def normalize_away(value):
             "lock": lock}
 
 
+HIDER_REVEALS = ("hovered", "all")   # the strip's reveal scopes
+HOLD_SEC_FLOOR = 1                   # below a second nobody reads
+HOLD_SEC_CEIL = 30                   # above half a minute it is a rumor
+HOLD_SEC_DEFAULT = 3
+
+
+def normalize_hider(value):
+    """[hider] in its in-memory shape: {on, hold_sec, reveal, monitors}.
+    The away section's honesty laws, mirrored: a bad on warns and folds
+    to False (the default-off law - strips are painted windows until a
+    user says otherwise), a bad reveal word warns naming itself and
+    folds to hovered (the label-vs-word lesson of the preview seam: a
+    word this app has not heard never silently selects a leg), hold_sec
+    clamps to the rails, and monitor rows are plain bools - unknown
+    shorts warn but KEEP (they name panels that may come back; the
+    strip for an absent panel is simply never painted)."""
+    value = value if isinstance(value, dict) else {}
+    on = value.get("on", False)
+    if not isinstance(on, bool):
+        log.warning("hider on %r is not a bool; the taskbar stays as "
+                    "Windows left it", on)
+        on = False
+    reveal = value.get("reveal", "hovered")
+    if reveal not in HIDER_REVEALS:
+        log.warning("hider reveal %r is not one of %s; the strip will "
+                    "only withdraw under the cursor's own bar",
+                    reveal, ", ".join(HIDER_REVEALS))
+        reveal = "hovered"
+    try:
+        hold = int(value.get("hold_sec", HOLD_SEC_DEFAULT))
+    except (TypeError, ValueError):
+        hold = HOLD_SEC_DEFAULT
+    hold = max(HOLD_SEC_FLOOR, min(HOLD_SEC_CEIL, hold))
+    rows = {}
+    raw = value.get("monitors")
+    if isinstance(raw, dict):
+        try:
+            live = set(_live_shorts())
+        except Exception:            # a desk that cannot enumerate keeps
+            live = None              # every saved row silently
+        for short, row in raw.items():
+            short = str(short).strip()
+            if not short:
+                continue
+            if isinstance(row, bool):
+                if live is not None and short not in live:
+                    log.info("hider monitor %r names no panel on this "
+                             "desk; the row is kept for when it returns",
+                             short)
+                rows[short] = row
+            else:
+                log.warning("hider monitor %r: %r is not a bool; the "
+                            "row is dropped", short, row)
+    return {"on": on, "hold_sec": hold, "reveal": reveal,
+            "monitors": rows}
+
+
 def _live_shorts():
     """The desk's panel shorts, for the migration's rows. A seam on
     purpose: the suite patches this instead of the Win32 enum, and a
@@ -849,6 +922,7 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
                           "write failed; recomputed next boot")
     merged.pop("_raw_power", None)
     merged["away"] = normalize_away(merged.get("away"))
+    merged["hider"] = normalize_hider(merged.get("hider"))
     if verbose:
         log.debug(f"using config from {path}")
     # [camera] index and name_contains normalize to one in-memory shape

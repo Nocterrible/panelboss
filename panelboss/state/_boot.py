@@ -7,6 +7,7 @@ import queue
 import time
 
 from .. import display
+from .. import hider
 from ._preview import FrameBox
 
 log = logging.getLogger("state")
@@ -113,6 +114,11 @@ class _BootMixin:
     # ------------------------------------------------------------------ run
     def run(self):
         display.watch()                    # the sink always starts first
+        hider.boot()                       # the faux-strip FSM: silent
+                                           # until [hider] says on, and
+                                           # ordinary windows die with
+                                           # the process - a crash
+                                           # unpaints by construction
         while not self.quit:
             d = None
             try:
@@ -123,6 +129,8 @@ class _BootMixin:
                 self._release_camera()     # the honest word is a
                                            # release NOW, cooloff or not
             time.sleep(0.2 if d is None else d)
+        hider.teardown()                   # the orderly half of the same
+                                           # promise, on every exit path
 
     def _tick(self):
         """One loop cycle. Returns the lease's poll delay (seconds)
@@ -132,6 +140,10 @@ class _BootMixin:
                                            # every sleep
         self._drain_tray()
         self._drain_display(now)
+        hider.tick(self.cfg)               # the shell's own ears stay
+                                           # outside the camera's pause:
+                                           # a paused watch must still
+                                           # let the taskbar come back
         if self.quit:
             return
         self._apply_hold(now)                # the policy is asserted every
