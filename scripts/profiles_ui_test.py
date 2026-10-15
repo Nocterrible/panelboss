@@ -587,7 +587,7 @@ def check_8e():
 # fires and this process would hang the whole sweep. This daemon
 # kills at 120 s with rc=3 - the run_all table's hard-kill code.
 def _hard_kill():
-    time.sleep(120)
+    time.sleep(200)
     print("HARD KILL after 120 s: the Tk event loop stopped "
           "processing - killing so the sweep cannot hang",
           flush=True)
@@ -610,7 +610,12 @@ def _watchdog():
 
 threading.Thread(target=_hard_kill, daemon=True).start()
 
-wd = app.after(60000, _watchdog)
+# bracket re-arm (Oct 14, the OLED tab's window-cost teaching): the
+# camera enumerate door gets ~60 s to report its own dead verdict
+# (watchdog.ENUMERATE_DOOR_BUDGET_SEC, NVIDIA warm-open arithmetic);
+# a 60 s watchdog raced that boundary and lost every race the desk
+# state could lose. 110 s still kills a true hang in one sweep minute.
+wd = app.after(110000, _watchdog)
 app.after(600, check)
 try:
     app.mainloop()
