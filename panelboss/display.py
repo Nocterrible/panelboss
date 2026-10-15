@@ -23,6 +23,13 @@
   killed it is documented at the raw block below)
 - foreground fullscreen detection: exclusive-fullscreen apps swallow the
   broadcast, so the guard skips them
+- the dimmer's hotkey door (request_hotkey): RegisterHotKey and
+  UnregisterHotKey belong to the thread that owns the window and
+  pumps its queue (measured Oct-15: a cross-thread register is
+  refused with 1408, ERROR_INVALID_HOTKEY_WINDOW; a wrong-thread
+  unregister leaks the registration), so the arm leaves a NOTE here
+  and the pump loop applies it - the _ear_req idiom, not new
+  machinery; (ok, errno) travels back on the note's event
 - the away dim spell's corner jail: covered rects get the cursor
   parked (jail_cursor/unjail_cursor) - a SetCursorPos move generates
   no raw input, so the jail can never wake what it covers
@@ -53,6 +60,14 @@ u32.GetCursorPos.restype = ctypes.c_int            # pin law, Oct 15:
 u32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]   # self-
 u32.SetCursorPos.restype = ctypes.c_int                         # pinned,
 u32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]       # no order luck
+u32.RegisterHotKey.restype = ctypes.c_int          # the hotkey pair is
+u32.RegisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_int,  # applied on
+                               ctypes.c_uint, ctypes.c_uint]   # the pump
+u32.UnregisterHotKey.restype = ctypes.c_int                     # thread only
+u32.UnregisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_int]
+u32.PostMessageW.restype = ctypes.c_int             # the hotkey note's
+u32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint,
+                             ctypes.c_void_p, ctypes.c_void_p] # wake
 k32 = ctypes.windll.kernel32
 wts = ctypes.windll.wtsapi32     # the session-event ear's door
                                  # (WTSRegisterSessionNotification);
@@ -254,11 +269,18 @@ class _GUID(ctypes.Structure):
 
 
 WM_HOTKEY = 0x0312               # the dimmer's pause press: registered
-                                 # by dimmer against THIS pump's window,
+                                 # by the PUMP THREAD against THIS
+                                 # window (the 1408 lesson - see the
+                                 # note block at _service_hotkey),
                                  # and WM_HOTKEY is a POSTED message -
                                  # it rides the queue (the broadcast
-                                 # lesson's twin: sent goes to the proc,
-                                 # posted goes to the loop below)
+                                 # lesson's twin: sent goes to the
+                                 # proc, posted goes to the loop below)
+WM_APP = 0x8000                  # private message range; +1 is the
+                                 # dimmer's hotkey note landing. The
+                                 # post is a WAKE ONLY - the pump
+                                 # applies whatever note it finds, no
+                                 # payload travels on the message
 
 
 class LastInputInfo(ctypes.Structure):
@@ -458,6 +480,9 @@ class Display(threading.Thread):
                         "carries the lift", k32.GetLastError())
         self._hooked = False
         self._ear_req = None
+        self._hotkey_req = None              # the dimmer's pending
+        #                                    # (op, mods, vk,
+        #                                    # done_event, result) note
         while not self._stop:
             # Drain EVERY pending message per cycle (the inner while
             # is the whole answer: with the input-aware wait below,
@@ -536,11 +561,23 @@ class Display(threading.Thread):
             #                                  raw ears' events
             #                                  (QS_RAWINPUT) as well
             #                                  as the pause floor
+            self._service_hotkey()             # the dimmer's hotkey note
+            #                                  # too: the registration
+            #                                  # belongs to this thread
+            #                                  # (the 1408 law), the
+            #                                  # WM_APP post was its wake
             u32.MsgWaitForMultipleObjectsEx(
                 0, None, int(self._pump_pause() * 1000),
                 QS_ALLEVENTS | QS_RAWINPUT, MWMO_INPUTAVAILABLE)
         self._release_ears()                   # the lift ears die with
         #                                      the thread, cradle to grave
+        if self._hotkey_req is not None:       # a note posted as the
+            #                                  # pump went out: a refusal
+            #                                  # now, never a caller left
+            #                                  # waiting on a dead queue
+            _req, self._hotkey_req = self._hotkey_req, None
+            _req[4] = (False, 0)
+            _req[3].set()
         try:
             if self._wts_reg:
                 wts.WTSUnRegisterSessionNotification(self._hwnd)
@@ -577,10 +614,13 @@ class Display(threading.Thread):
         wait is part of the spell's latency budget), the old 100 ms
         deaf. With RAWINPUT the wait also WAKES on the input itself
         (QS_RAWINPUT), so the floor only bounds _stop/_ear_req
-        service; a spell pays CPU nowhere near the stutter the LL
+        service (the hotkey note wakes on its WM_APP+1 post; the
+        floor is its belt, not its route); a spell pays CPU nowhere
+        near the stutter the LL
         round-trip charged. Deaf floor untouched: the mode-off idle
         profile 36e3214 measured (0.02-0.06 cores) is unchanged."""
-        if self._hooked or self._ear_req is not None:
+        if (self._hooked or self._ear_req is not None
+                or self._hotkey_req is not None):
             return ARMED_PAUSE_SEC
         return IDLE_PAUSE_SEC
 
@@ -598,6 +638,59 @@ class Display(threading.Thread):
         else:
             self._release_ears()
         self._ear_req = None
+
+    def request_hotkey(self, op, mods=0, vk=0):
+        """The dimmer's hotkey knock, NOTE-AND-WAIT (the _ear_req
+        idiom's twin): the store and a WM_APP+1 post - the pump's
+        wait already wakes on posted input - and the PUMP thread
+        applies it against its own window (1408, measured Oct-15:
+        RegisterHotKey from a foreign thread is refused for a foreign
+        window; the un-knock crosses too, a wrong-thread unregister
+        leaks the registration in the owning queue). Blocks on the
+        note's event: a wedged pump answers (False, 0) after the
+        wait's bound, never a silent hang - the monitor tick that
+        carries the arm may not die on the desk's behalf."""
+        done = threading.Event()
+        note = [op, int(mods), int(vk), done, (False, 0)]
+        self._hotkey_req = note
+        u32.PostMessageW(self._hwnd, WM_APP + 1, 0, 0)
+        done.wait(5.0)
+        return note[4]
+
+    def _service_hotkey(self):
+        """Apply the pending hotkey note, on the pump loop (every
+        verb here belongs to THIS thread's window). The belt is
+        honest: only our id is touched, the refusal keeps its real
+        number (k32.GetLastError is this module's errno route - the
+        windll handle here does not carry ctypes' copy), and the
+        caller's event is set whatever happens - a note never dies
+        waiting."""
+        note = self._hotkey_req
+        if note is None:
+            return
+        self._hotkey_req = None
+        op, mods, vk, done, _res = note
+        ok, err = False, 0
+        try:
+            from . import dimmer
+            if op == "register":
+                ok = bool(u32.RegisterHotKey(self._hwnd, dimmer.HOTKEY_ID,
+                                             mods, vk))
+            elif op == "unregister":
+                ok = bool(u32.UnregisterHotKey(self._hwnd, dimmer.HOTKEY_ID))
+            if not ok:
+                # the windll handle here carries no ctypes copy
+                # (use_last_error is dimmer's shape, display's house
+                # verb is the real k32.GetLastError, as every refusal
+                # line in this module already reads): the pump thread
+                # calls the API directly, the number is its own.
+                err = k32.GetLastError()
+        except Exception:                    # a dead hwnd mid-knock:
+            err = k32.GetLastError()          # the refusal rides the
+            #                                 # same (False, errno)
+            #                                 # road back, no raise
+        note[4] = (ok, err)
+        done.set()
 
     _DEVICES = ((1, 2), (1, 6))      # generic-desktop pointer, keyboard
 
@@ -937,6 +1030,22 @@ def hotkey_window():
     window would NOT do here: hotkeys are per desktop, and the
     top-level shape is the one the watcher keeps."""
     return _ACTIVE[0]._hwnd if _ACTIVE else None
+
+
+def request_hotkey(op, mods=0, vk=0):
+    """The dimmer's hotkey door: (op, mods, vk) -> (ok, err). The
+    registration is APPLIED on the pump thread against the pump's own
+    window - the Oct-15 measuring: RegisterHotKey from a foreign
+    thread answers ERROR_INVALID_HOTKEY_WINDOW (1408, same-thread
+    (True, 123), cross-thread (False, 1408)), and an unregister from
+    the wrong thread leaks the registration in the owning queue - so
+    the note crosses, the verb does not (the _ear_req idiom, ridden
+    not re-invented). No live watcher answers (False, 0) at once:
+    the pump does not exist to hold a note."""
+    w = _ACTIVE[0] if _ACTIVE else None
+    if w is None or not w._hwnd:
+        return False, 0
+    return w.request_hotkey(op, mods, vk)
 
 
 def foreground_is_fullscreen():

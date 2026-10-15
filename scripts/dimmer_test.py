@@ -686,50 +686,63 @@ ok("a WM_HOTKEY press toggles: one pauses, one resumes")
 # --- the default (bound None) registers NOTHING. The Oct-15
 # --- instrumentation rides the same drive: every attempt logs the
 # --- truth line, and only errno 1409 may wear the word "taken".
+# --- SINCE THE 1408 FIX the arm LEAVES NOTES, it does not knock: the
+# --- fake stands in for display.request_hotkey and the asserts name
+# --- the pump-thread law - mods/vk/MOD_NOREPEAT must reach the pump
+# --- verbatim, and the restore of an old binding rides the SAME road.
 _dlg.addHandler(_cap)
 reg, unreg = [], []
+
+
+class _Door:
+    """The fake note door: records every (op, mods, vk) the arm
+    leaves, refuses the pairs armed in REFUSE with their errno."""
+    REFUSE = {}
+
+    def __call__(self, op, mods=0, vk=0):
+        (reg if op == "register" else unreg).append((op, mods, vk))
+        err = self.REFUSE.get((mods, vk), 0)
+        return (err == 0, err)
+
+
 dimmer._pump_hwnd = lambda: 0x99
-dimmer._register = lambda h, i, m, v: (reg.append((m, v)) is None)
-dimmer._unregister = lambda h, i: (unreg.append(i) is None)
+dimmer._request_hotkey = _Door()
 dimmer._sync_hotkey([0x0002, 123])              # ctrl+F12 as stored
-assert reg == [(0x0002 | dimmer.MOD_NOREPEAT, 123)] and \
+assert reg == [("register", 0x0002 | dimmer.MOD_NOREPEAT, 123)] and \
     dimmer.bound_live()
 assert any("stored [0x2, 0x7b] registered as mods=0x4002 vk=0x7b "
            "on hwnd=0x99" in l for l in _cap.lines), _cap.lines
 dimmer._sync_hotkey([0x0002, 123])              # unchanged: no re-knock
 assert len(reg) == 1
-ok("the stored word registers once against the live pump window, "
-   "and the success says so in hex")
+ok("the stored word registers once against the live pump (the note "
+   "carries mods|NOREPEAT and the vk VERBATIM), and the success says so in hex")
 
 
-def _taken_to_one(h, i, m, v):
+class _Taken(_Door):
     # 1409 on the one chord the desk holds; the restore-knock of the
-    # old binding must find a clean 0
-    ctypes.set_last_error(1409 if (m, v) ==
-                          (0x0001 | dimmer.MOD_NOREPEAT, 65) else 0)
-    reg.append((m, v))
-    return (m, v) != (0x0001 | dimmer.MOD_NOREPEAT, 65)
+    # old binding must find a clean 0 ON THE PUMP, same as the first.
+    REFUSE = {(0x0001 | dimmer.MOD_NOREPEAT, 65): 1409}
 
 
-dimmer._register = _taken_to_one
+dimmer._request_hotkey = _Taken()
 dimmer._sync_hotkey([0x0001, 65])
 note = dimmer.bind_note()
-assert (0x0001 | dimmer.MOD_NOREPEAT, 65) in reg              # knocked
-assert reg[-1] == (0x0002 | dimmer.MOD_NOREPEAT, 123)         # restored
+assert reg[-2] == ("register", 0x0001 | dimmer.MOD_NOREPEAT, 65)  # knocked
+assert unreg == [("unregister", 0, 0)]                            # old released
+assert reg[-1] == ("register", 0x0002 | dimmer.MOD_NOREPEAT, 123)  # restored
 assert "taken" in note and note[:2].isdigit()          # and it is dated
 assert dimmer.bound_live()                             # OLD one stands
 assert any("errno=1409 (ERROR_HOTKEY_ALREADY_REGISTERED)" in l
            for l in _cap.lines)
-ok("a taken combo answers with the dated word and keeps the old")
+ok("a taken combo answers with the dated word and keeps the old - "
+   "the release AND the restore both ran on the pump door")
 
 
-def _refuse_a_different_door(h, i, m, v):
-    ctypes.set_last_error(87)          # ERROR_INVALID_PARAMETER
-    reg.append((m, v))
-    return False
+class _DifferentDoor(_Door):
+    REFUSE = {(0x0004 | dimmer.MOD_NOREPEAT, 0x2d): 87}
 
 
-dimmer._register = _refuse_a_different_door
+dimmer._request_hotkey = _DifferentDoor()
 dimmer._sync_hotkey([0x0004, 0x2d])                  # win+'-'
 note = dimmer.bind_note()
 assert "taken" not in note and "87" in note, note
@@ -737,16 +750,19 @@ assert any("mods=0x4004 vk=0x2d" in l and "hwnd=0x99" in l
            and "errno=87" in l for l in _cap.lines), _cap.lines
 ok("a NON-collision refusal says its number, never 'taken' - the "
    "Oct-15 false-claim fix, and the truth line carries the hex")
-dimmer._register = lambda h, i, m, v: (reg.append((m, v)) is None)
+dimmer._request_hotkey = _Door()
 dimmer._sync_hotkey(None)                    # esc: clean unbind
-assert unreg and not dimmer.bound_live() and dimmer.bind_note() == ""
+assert len(unreg) == 3 and not dimmer.bound_live() and \
+    dimmer.bind_note() == ""                 # esc, taken-release,
+#                                              # different-door release
 before = len(reg)
 dimmer._pump_hwnd = lambda: None             # headless now
 dimmer._sync_hotkey([0x0008, 80])
-assert len(reg) == before and "pump" in dimmer.bind_note()
+assert len(reg) == before and len(unreg) == 3 and \
+    "pump" in dimmer.bind_note()
 dimmer._pump_hwnd = lambda: 0x99             # the pump came back
 dimmer._sync_hotkey([0x0008, 80])
-assert reg[-1] == (0x0008 | dimmer.MOD_NOREPEAT, 80)
+assert reg[-1] == ("register", 0x0008 | dimmer.MOD_NOREPEAT, 80)
 ok("binding while headless answers a word and retries, never a lie")
 
 # --- the DEFAULT, one more time from a cold arm: bound None registers

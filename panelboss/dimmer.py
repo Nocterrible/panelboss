@@ -60,19 +60,24 @@ miss: skip, never straggle.
 
 THE HOTKEY LAW (owner): unbound by DEFAULT - no stolen chord before
 consent. The card captures a press and stores [mods, vk]; THIS module
-does the actual RegisterHotKey, against the DISPLAY watcher's pump
-window (the registering thread must pump the queue the WM_HOTKEY
-posts to - the broadcast lesson's twin), and re-arms from the tick
-when the stored word changes. A taken combo answers the card's say
-row with the dated word and keeps the OLD binding; binding while
-headless answers a word too, never a silent lie. Since the Oct-15
-instrumentation the say row is EVIDENCE, not a verdict: every
-attempt logs the stored word, the registered mods, the vk and the
-pump hwnd in hex, and a refusal that is not
-ERROR_HOTKEY_ALREADY_REGISTERED says its number, not "taken" - the
-one word was swallowing 87s and 1400s into a lie about a chord that
-was never actually taken. One press pauses, one resumes (toggle,
-not hold).
+decides the re-arm from the tick when the stored word changes, but
+the VERB is a note on the display watcher's pump queue (the Oct-15
+1408 law, measured: RegisterHotKey from a foreign thread is refused
+with ERROR_INVALID_HOTKEY_WINDOW for a window it does not own, and a
+wrong-thread unregister leaks the registration in the owning queue -
+the registering thread must pump the queue the WM_HOTKEY posts to,
+the broadcast lesson's twin). The note carries (op, mods, vk); the
+pump applies it against its own window and the answer (ok, errno)
+rides back on the note's event (the _ear_req idiom, ridden not
+re-invented). A taken combo answers the card's say row with the
+dated word and keeps the OLD binding; binding while headless answers
+a word too, never a silent lie. Since the Oct-15 instrumentation the
+say row is EVIDENCE, not a verdict: every attempt logs the stored
+word, the registered mods, the vk and the pump hwnd in hex, and a
+refusal that is not ERROR_HOTKEY_ALREADY_REGISTERED says its number,
+not "taken" - the one word was swallowing 87s and 1400s into a lie
+about a chord that was never actually taken. One press pauses, one
+resumes (toggle, not hold).
 
 SIZE LAW: the file runs ~795 and the seam is real, not cosmetic -
 Veils (the FSM, ~180) and the stratum below it (census + pins,
@@ -147,11 +152,9 @@ _u32.SetWindowPos.restype = ctypes.c_int
 _u32.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
                               ctypes.c_int, ctypes.c_int, ctypes.c_int,
                               ctypes.c_int, ctypes.c_uint]
-_u32.RegisterHotKey.restype = ctypes.c_int
-_u32.RegisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_uint,
-                                ctypes.c_uint, ctypes.c_uint]
-_u32.UnregisterHotKey.restype = ctypes.c_int
-_u32.UnregisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+# (the hotkey pair is NOT pinned here: since the Oct-15 1408 law the
+# verbs belong to the display pump thread - display.py's own block
+# pins them; this module leaves notes, see _request_hotkey)
 _dwm = ctypes.WinDLL("dwmapi", use_last_error=True)
 _dwm.DwmGetWindowAttribute.restype = ctypes.c_long
 _dwm.DwmGetWindowAttribute.argtypes = [ctypes.c_void_p, ctypes.c_uint,
@@ -184,9 +187,15 @@ ERROR_HOTKEY_ALREADY_REGISTERED = 1409  # the ONLY errno allowed to
 DESKTOP_VIEWS = frozenset(("Progman", "WorkerW"))
 
 # the patchable aliases the fakes lean on (the suite owns the desk
-# here; the pins above stay the real verbs)
-_register = _u32.RegisterHotKey
-_unregister = _u32.UnregisterHotKey
+# here; the pins above stay the real verbs). The hotkey pair is a
+# NOTE on the display pump since the Oct-15 1408 lesson (a
+# cross-thread RegisterHotKey is refused for a foreign window, and a
+# cross-thread unregister leaks the registration in the owning
+# queue): the note carries (op, mods, vk) and the pump answers
+# (ok, errno) - the alias IS the door the fakes stand in.
+def _request_hotkey(op, mods=0, vk=0):
+    from . import display
+    return display.request_hotkey(op, mods, vk)
 _iswindow = _u32.IsWindow
 _getwindow = _u32.GetWindow
 _setwindowpos = _u32.SetWindowPos
@@ -662,7 +671,12 @@ def _sync_hotkey(want):
     knock - a combo that turns out taken keeps the OLD binding and
     leaves the dated word for the card; a headless attempt is NOT
     marked tried, so the arm re-tries once a pump lives, answering
-    the card with the word in the meantime."""
+    the card with the word in the meantime. Since the Oct-15 1408
+    lesson every verb is a NOTE on the display pump's queue (the
+    _ear_req idiom): the registration belongs to the thread that
+    owns the window and pumps the queue the WM_HOTKEY posts to, and
+    the (ok, errno) rides back on the note's event - the restore of
+    an old binding is a second note, so it stands on the same law."""
     global _hk, _hk_tried, _hk_note
     want = _norm_bound(want)
     if want == _hk_tried:
@@ -675,32 +689,38 @@ def _sync_hotkey(want):
     old = _hk
     if old is not None:
         if hwnd:
-            _unregister(hwnd, HOTKEY_ID)
+            _request_hotkey("unregister")
         _hk = None
     if not want:
         _hk_tried, _hk_note = None, ""
         return
     mods = want[0] | MOD_NOREPEAT        # the ONLY place NOREPEAT is
-    if _register(hwnd, HOTKEY_ID, mods, want[1]):                   # added:
-        _hk, _hk_tried, _hk_note = want, want, ""                   # the
+    ok, err = _request_hotkey("register", mods, want[1])          # added:
+    #                                    the pump applies it, THIS tick
+    #                                    reports the answer - the door
+    #                                    that was the bug is now the
+    #                                    law: no verb leaves this
+    #                                    thread when a window owns it
+    if ok:
+        _hk, _hk_tried, _hk_note = want, want, ""
         log.info("dimmer: hotkey arm: stored [%#x, %#x] registered "
                  "as mods=%#x vk=%#x on hwnd=%#x - one press pauses",
                  want[0], want[1], mods, want[1], hwnd or 0)
         return
-    err = ctypes.get_last_error()        # use_last_error=True on the
-    log.warning("dimmer: hotkey arm: stored [%#x, %#x] refused on "  # DLL
-                "hwnd=%#x: mods=%#x vk=%#x errno=%d%s",              # from
-                want[0], want[1], hwnd or 0, mods, want[1], err,     # birth,
-                " (ERROR_HOTKEY_ALREADY_REGISTERED)"                 # read
-                if err == ERROR_HOTKEY_ALREADY_REGISTERED            # now
+    log.warning("dimmer: hotkey arm: stored [%#x, %#x] refused on "
+                "hwnd=%#x: mods=%#x vk=%#x errno=%d%s",
+                want[0], want[1], hwnd or 0, mods, want[1], err,
+                " (ERROR_HOTKEY_ALREADY_REGISTERED)"
+                if err == ERROR_HOTKEY_ALREADY_REGISTERED
                 else " - NOT a collision - a different door")
     back = (" (clear and rebind to retry once the other app lets "
             "go)")                       # the advice belongs on the
-    if old and _register(hwnd, HOTKEY_ID, old[0] | MOD_NOREPEAT,   # bare
-                         old[1]):                                   # word
-        _hk = old                                                   # too:
-        back = "; the old binding stands" + back                    # first
-    _hk_tried = want                                                # binds
+    if old and _request_hotkey("register",                        # bare
+                               old[0] | MOD_NOREPEAT,             # word
+                               old[1])[0]:                        # too:
+        _hk = old                                                 # first
+        back = "; the old binding stands" + back                  # binds
+    _hk_tried = want                                              # hit
     if err == ERROR_HOTKEY_ALREADY_REGISTERED:
         _hk_note = _dated("that combo is taken on this desk" + back)  # hit
     else:
@@ -786,9 +806,14 @@ def tick(cfg, now):
 def teardown():
     global _veils, _hk, _hk_tried, _hk_note
     if _hk is not None:
-        hwnd = _pump_hwnd()
-        if hwnd:
-            _unregister(hwnd, HOTKEY_ID)
+        if _pump_hwnd():
+            _request_hotkey("unregister")      # the un-knock crosses too
+            #                                  # (the leak law - and by
+            #                                  # teardown time the pump
+            #                                  # may already be gone:
+            #                                  # the door answers (False,
+            #                                  # 0) and the registration
+            #                                  # dies with the process)
         _hk, _hk_tried, _hk_note = None, None, ""
     if _veils is not None:
         _veils.teardown()
