@@ -410,7 +410,9 @@ DEFAULTS = {
                                    # foreground and the audible
                                    # exemptions; false is the plain law
         "idle_sec": 120,          # input stillness before veils may birth;
-                                   # clamped 15..3600 (silent clamp rails)
+                                   # clamped 0..3600 (silent clamp rails;
+                                   # 0 = the rail reaches zero and means
+                                   # it, the ramp's law - Oct 15 UAT)
         "ramp_sec": 8,            # the fade-out after input returns;
                                    # clamped 0..60 (0 = the drop is
                                    # immediate, a ruling not an accident)
@@ -902,7 +904,12 @@ def normalize_jog(value):
             "cycle_min": cyc, "mode": mode}
 
 
-DIMMER_IDLE_FLOOR = 15           # below fifteen seconds a blink is not a walk
+DIMMER_IDLE_FLOOR = 0            # the rail reaches zero and MEANS it (the
+                                 # ramp's law, extended by the Oct-15 UAT:
+                                 # "dim right away" is a choice, not an
+                                 # accident - at 0 the veil births on the
+                                 # first beat, the foreground and audible
+                                 # exemptions still bow to it)
 DIMMER_IDLE_CEIL = 3600          # past an hour the walk happened long ago
 DIMMER_IDLE_DEFAULT = 120
 DIMMER_RAMP_FLOOR = 0            # the rail reaches zero and MEANS it: at

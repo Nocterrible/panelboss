@@ -9,15 +9,20 @@ Progman/WorkerW shell views carry the wallpaper; a uniform veil over
 them veils the wall, which is the "darkening the whole screen"
 reading, Oct 15 UAT), the foreground window (touched = instantly
 un-veiled, next tick), zero-size, iconic, DWM-cloaked, this app's
-own windows, exes the user put on [dimmer.apps], and every
-process the WASAPI sensor says is AUDIBLE right now (a window that
-started making sound un-dims the tick the sensor learns it; one that
-went quiet keeps its exemption for SETTLE_SEC - the API drops a
-stopped session from the enumeration at once, the settle lives
-HERE). Input returns and the whole set fades out within ramp_sec in
-at most THREE alpha steps: a dimmer that blinks off is a screensaver.
-The card's pause switch and the bound hotkey pause the same way: a
-fade, not a blink, and the field comes back the tick the pause lifts.
+OWN OVERLAYS (the skip is TOOLWINDOW-scoped since the same UAT: our
+strips/veils/covers are overrideredirect toplevels and carry the bit,
+the settings window does not and dims like any background window -
+"doesn't work on panelboss settings window itself", owner), exes the
+user put on [dimmer.apps], and every process the WASAPI sensor says
+is AUDIBLE right now (a window that started making sound un-dims the
+tick the sensor learns it; one that went quiet keeps its exemption
+for SETTLE_SEC - the API drops a stopped session from the enumeration
+at once, the settle lives HERE). Input returns and the whole set
+fades out within ramp_sec in at most THREE alpha steps: a dimmer
+that blinks off is a screensaver. The card's idle rail also reaches
+ZERO (Oct-15 UAT, the ramp's floor law). The card's pause switch and
+the bound hotkey pause the same way: a fade, not a blink, and the
+field comes back the tick the pause lifts.
 An [dimmer.always] row is a SUB-MODE of the opt-in, not a bypass:
 that panel dims without waiting for idle_sec, but it bows to the
 foreground (its center inside the panel's rect un-dims the panel -
@@ -314,7 +319,15 @@ class Veils:
             x, y, cw, ch = w["rect"]
             if cw <= 0 or ch <= 0:
                 continue
-            if w["pid"] == os.getpid():
+            # SELF-VEIL LAW (owner UAT, Oct 15): the own-process skip
+            # protects OUR OVERLAYS, not our process - the taskbar
+            # strips, the jog/wash covers, the veils and the tip are
+            # overrideredirect/click-through Tk toplevels and answer
+            # the census WITH the toolwindow bit; the SETTINGS window
+            # is the CTk root, no such bit, and dims like any
+            # background window. (The hider's strips stay immune by
+            # exactly this test - toolwindows - measured, not named.)
+            if w["pid"] == os.getpid() and w.get("tool"):
                 continue
             if apps.get(w["exe"]) is True:
                 continue
@@ -415,8 +428,15 @@ def _fact(w, fg, by_short):
             break
     buf = ctypes.create_unicode_buffer(256)
     _u32.GetClassNameW(w, buf)           # a refusal leaves "": no
-    return {"hwnd": w, "pid": pid.value,   # shell view is unnamed
+    ex = _u32.GetWindowLongW(w, GWL_EXSTYLE)   # shell view is unnamed
+    return {"hwnd": w, "pid": pid.value,
             "exe": _exe(pid.value), "cls": buf.value,
+            # the overlay badge, measured on this desk (Oct-15 UAT):
+            # every window WE paint is an overrideredirect (or an
+            # explicit click-through) Tk toplevel, and Windows Tk
+            # gives THOSE WS_EX_TOOLWINDOW; the settings window is
+            # the CTk root - same class, NO toolwindow bit.
+            "tool": bool(ex & WS_EX_TOOLWINDOW),
             "monitor": short, "fg": w == fg,
             "cloaked": bool(cloak.value),
             "iconic": bool(_u32.IsIconic(w)),
@@ -464,8 +484,10 @@ def _veil_rows(rows):
     not a config rule, so it lives here and not in the Veils FSM -
     and named, so the suite can drive the fake census through the
     real door. The settings window answers through the same door as
-    any other app; own-process skip covers our own veils, strips,
-    and wash. The exception the gate's fg fix adds: a desktop row
+    any other app AND gets the veil (owner UAT, Oct 15): the
+    own-process skip is TOOLWINDOW-scoped, covering our own veils,
+    strips, and wash - never the settings window. The exception the
+    gate's fg fix adds: a desktop row
     THAT HOLDS THE FOREGROUND FLAG rides through - dropping it
     before the flag is consulted threw away the focus attribution
     (a WorkerW/Progman focus became "the foreground sits on no

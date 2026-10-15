@@ -44,9 +44,13 @@ class Rec:
 
 def w(hwnd, pid=1, exe="notepad.exe", monitor="AOC2790",
       cloaked=False, iconic=False, fg=False, rect=(10, 10, 800, 600),
-      cls="ApplicationAppWindow"):
+      cls="ApplicationAppWindow", tool=False):
     return {"hwnd": hwnd, "pid": pid, "exe": exe, "cls": cls,
             "monitor": monitor,
+            # the overlay badge the REAL census carries (Oct-15 UAT):
+            # our own strips/veils/covers answer with the toolwindow
+            # bit, the settings window and every foreign app do not
+            "tool": tool,
             "cloaked": cloaked, "iconic": iconic, "fg": fg,
             "rect": rect}
 
@@ -108,15 +112,33 @@ W = World([w(1),
            w(2, fg=True),
            w(3, cloaked=True),
            w(4, iconic=True),
-           w(5, pid=os.getpid()),
+           w(5, pid=os.getpid(), tool=True),
            w(6, exe="chrome.exe"),
            w(7, rect=(0, 0, 0, 400)),
            w(8, pid=555)], audio=[555])
 W.tick(cfg(level=30, apps={"chrome.exe": True}), 100)
 assert set(W.rec.painted) == {1}
 assert W.rec.painted[1][1] == 0.3
-ok("the skip list is law (fg, cloaked, iconic, own, excluded, zero, "
-   "audible) and the veil's alpha IS the level")
+ok("the skip list is law (fg, cloaked, iconic, own-tool, excluded, "
+   "zero, audible) and the veil's alpha IS the level")
+
+# --- THE SELF-VEIL LAW (owner UAT, Oct 15: "doesn't work on
+# --- panelboss settings window itself"): the own-process skip is
+# --- TOOLWINDOW-scoped. The fake rows carry the flags MEASURED off
+# --- this desk's census: the settings window is the CTk root -
+# --- class TkTopLevel, ex-style 0x100 (windowedge, NO tool bit);
+# --- our veils/strips/covers are overrideredirect toplevels -
+# --- class TkTopLevel, ex-style 0x80 (the tool bit IS the badge).
+# --- The settings row qualifies and gets a paint call; the
+# --- toolwindow veil row does not.
+W = World([w(21, pid=os.getpid(), cls="TkTopLevel", tool=False),
+           w(22, pid=os.getpid(), cls="TkTopLevel", tool=True)])
+W.tick(cfg(level=30), 100)
+assert set(W.rec.painted) == {21}, \
+    "the self-veil law is not the tool bit: %r" % (W.rec.painted,)
+ok("own pid alone no longer skips: the settings window (no tool "
+   "bit) dims like any background window, our toolwindow overlays "
+   "never do")
 
 # foreground change un-veils on the tick it is seen (the ~0.2 s law)
 W = World([w(1), w(2)])
@@ -581,6 +603,16 @@ assert "from_=DIMMER_RAMP_FLOOR" in _UIR and \
 assert '"always"' in _UISRC and "_oled_dim_always_changed" in _UISRC
 ok("the card draws its rails from the constants and carries the "
    "always sub-mode per row")
+# the Oct-15 UAT's rail floor, idle arm: the SAME repair class as
+# the ramp's morning fix - the card draws from the shared constant
+# and the constant says ZERO (the normalize acceptance is pinned
+# in the block below).
+_UII = _UISRC[_UISRC.index('row = self._row(box, "dim after"'):]
+_UII = _UII[:_UII.index('"fade within"')]
+assert "from_=DIMMER_IDLE_FLOOR" in _UII and \
+    config.DIMMER_IDLE_FLOOR == 0
+ok("the idle rail reaches zero through the shared constant "
+   "(the ramp's floor law, extended)")
 
 
 class Recorder(logging.Handler):
@@ -625,6 +657,12 @@ try:
     assert config.normalize_dimmer({"ramp_sec": 2})["ramp_sec"] == 2
     assert config.normalize_dimmer({"ramp_sec": 0})["ramp_sec"] == 0
     assert config.normalize_dimmer({"ramp_sec": 99})["ramp_sec"] == 60
+    # and the SAME floor law reached idle the same afternoon (owner
+    # UAT): 0 is the rail's real bottom, a junk negative still folds
+    # to it in silence, a hand-set 7 stays 7 (the 15 floor is dead)
+    assert config.normalize_dimmer({"idle_sec": 0})["idle_sec"] == 0
+    assert config.normalize_dimmer({"idle_sec": 7})["idle_sec"] == 7
+    assert config.normalize_dimmer({"idle_sec": -5})["idle_sec"] == 0
     # and the level default dropped to 20 as a DEFAULT: an explicit
     # 45 is still a legal 45 (the rails 10..90 stand unmoved)
     assert config.normalize_dimmer({"level": 45})["level"] == 45
