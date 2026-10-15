@@ -51,6 +51,7 @@ JOG_RING = (0, 1, 0, -1)     # the rest-start, zero-drift ring; the
 _state = {}                  # short -> {"idx": int, "due": float}
 _wash_q = None               # the veil painter's queue, lazy
 _wash_thread = None
+_drop_job = None             # the live unmap deadline (F2: extends)
 
 
 def tick(cfg, now):
@@ -61,10 +62,14 @@ def tick(cfg, now):
         return
     rows = j.get("monitors") or {}
     cycle = max(60, int(j.get("cycle_min", 30)) * 60)
-    for short, on in rows.items():
-        if not on:
-            _state.pop(short, None)
+    shuffle = j.get("mode", "shuffle") == "shuffle"   # F1: the mode
+    for short, on in list(rows.items()):             #    word is LIVE
+        if not on:                                   #    (F4: list()
+            _state.pop(short, None)                  #    over the
+            continue                                 #    UI-mutable
+        if not shuffle:                              #    dict)
             continue
+
         st = _state.get(short)
         if st is None:
             # arming rests at zero: the first beat only sets the deadline
@@ -162,6 +167,7 @@ def _start_wash_painter():
         root._owner_thread = threading.get_ident()
         root.withdraw()
         veil = None
+        global _drop_job
 
         def pump():
             nonlocal veil
@@ -180,17 +186,24 @@ def _start_wash_painter():
                         veil.geometry("%dx%d+%d+%d" % (w, h, x, y))
                         veil.deiconify()
                         veil.lift()
-                        veil.after(int(JOG_WASH_SEC * 1000), _drop)
+                        global _drop_job
+                        if _drop_job is not None:
+                            veil.after_cancel(_drop_job)   # F2: a
+                        _drop_job = veil.after(            # second wash
+                            int(JOG_WASH_SEC * 1000), _drop)  # EXTENDS
             except queue.Empty:
                 pass
             root.after(50, pump)
 
         def _drop():
             nonlocal veil
+            global _drop_job
+            _drop_job = None
             if veil is not None:
                 veil.withdraw()
                 root.after(150, veil.destroy)
                 veil = None
+        global _drop_job
 
         root.after(50, pump)
         root.mainloop()

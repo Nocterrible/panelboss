@@ -290,7 +290,7 @@ class _OledMixin:
         rows = (self.cfg.get("jog") or {}).get("monitors") or {}
         short = next((s for s, on in rows.items() if on), None)
         if short is None:
-            set_text(self.oled_say2, jog.wash("AOC2790", self.cfg))
+            set_text(self.oled_say2, jog.wash("", self.cfg))
             return
         set_text(self.oled_say2, jog.wash(short, self.cfg))
 

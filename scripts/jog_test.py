@@ -63,6 +63,11 @@ assert jog.shift("AOC2790") == (0, 0)           # beat 0 again (wrapped)
 assert jog._state["AOC2790"]["due"] == LASTDUE + 900 * 60 + 30 * 60
 ok("a fifteen-hour clock gap steps once - no catch-up, no skip")
 
+# the feature's own law: not one tick of the whole ring walk above
+# ever birthed the veil painter
+assert jog._wash_q is None, "tick() reached for the wash veil"
+ok("tick never births the wash veil - wash is manual, proven")
+
 # opted-out rows are forgotten; unknown shifts answer zero
 jog.tick_with_cfg(cfg(rows={"AOC2790": False}), LASTDUE + 901 * 60)
 assert "AOC2790" not in jog._state and jog.shift("AOC2790") == (0, 0)
