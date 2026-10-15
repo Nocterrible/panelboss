@@ -100,10 +100,18 @@ TIP_DIM = {
           "may return. nothing dims until you opt in, per monitor.",
     "row": "dim veils on THIS monitor only (the opt-in law, shared "
            "with the strip and the refresh).",
+    "always": "dim this panel WITHOUT the idle wait: the veils land "
+              "the moment the focus leaves the panel, and lift when "
+              "it returns - the one you are using never dims. the "
+              "sound exemption and the pause ride here too; only "
+              "the idle countdown is skipped. an opt-in sub-mode, "
+              "exactly like the strip's reveal scope: a panel that "
+              "never opted in never dims by itself.",
     "idle": "how still the input must be before the veils land.",
     "ramp": "how long the fade takes once input returns: the veils "
             "step down at most three times and are gone - a dimmer "
-            "that blinks off is a screensaver.",
+            "that blinks off is a screensaver. at zero the blink is "
+            "the choice: the drop is immediate.",
     "level": "how dark the veils are, in percent.",
     "apps": "apps that never wear a veil, by exe file name as the "
             "title bar shows it (chrome.exe). the exclusion is "
@@ -395,6 +403,7 @@ class _OledMixin:
         self.oled_dim_box.grid(row=0, column=1, sticky="e")
 
         self._dim_rows = {}
+        self._dim_always = {}
         dim = self.cfg.setdefault("dimmer", {})
         base = [m.get("short") or m.get("id") for m in wm.monitors()]
         dupes = {b for b in base if base.count(b) > 1}
@@ -417,6 +426,28 @@ class _OledMixin:
             box2.set(bool((dim.get("monitors") or {}).get(short)))
             box2.grid(row=0, column=1, sticky="e")
             self._dim_rows[short] = box2
+            # the Oct-15 always sub-mode, per row - the same opt-in
+            # discipline as the strip's reveal scope: it only ever
+            # modifies a row that is already opted in
+            abox = ctk.CTkCheckBox(
+                row, text="always",
+                command=lambda s=short: self._oled_dim_always_changed(s),
+                font=self.skin.font(12), checkbox_width=18,
+                checkbox_height=18,
+                border_color=self.skin.border_raised,
+                fg_color=self.skin.accent, hover_color=self.skin.accent,
+                text_color=self.skin.text,
+                text_color_disabled=self.skin.txt3)
+            abox.set(bool((dim.get("always") or {}).get(short)))
+            abox.grid(row=0, column=2, sticky="e",
+                      padx=(theme.S_FIELD, 0))
+            # the same hover-tip path _row wires on its label
+            abox.bind("<Enter>",
+                      lambda e=None, b=abox: self.tips._schedule(
+                          TIP_DIM["always"], b), add="+")
+            abox.bind("<Leave>",
+                      lambda e=None: self.tips._hide_soon(), add="+")
+            self._dim_always[short] = abox
 
         row = self._row(box, "dim after", TIP_DIM["idle"],
                         hint_chars=42)
@@ -544,6 +575,18 @@ class _OledMixin:
         if box is None:
             return
         self.cfg.setdefault("dimmer", {}).setdefault("monitors", {})[short] \
+            = bool(box.get())
+        self._save()
+
+    def _oled_dim_always_changed(self, short):
+        """The Oct-15 always sub-mode rail: [dimmer.always] is the
+        panel's own word, stored per row exactly like the opt-in it
+        modifies - a false row is the plain idle law, and a row that
+        never opted in dims by an always that has no effect."""
+        box = self._dim_always.get(short)
+        if box is None:
+            return
+        self.cfg.setdefault("dimmer", {}).setdefault("always", {})[short] \
             = bool(box.get())
         self._save()
 

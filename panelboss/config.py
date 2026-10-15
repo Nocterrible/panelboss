@@ -403,11 +403,20 @@ DEFAULTS = {
                                    # section = dark, the desk dims for no one
         "monitors": {},           # {short: bool} - per-panel opt-in, the
                                    # same law as the hider's rows
+        "always": {},             # {short: bool} - the SUB-MODE rail
+                                   # (owner ruling, Oct 15): an opted row
+                                   # that also says always dims without
+                                   # the idle wait, bowing to the
+                                   # foreground and the audible
+                                   # exemptions; false is the plain law
         "idle_sec": 120,          # input stillness before veils may birth;
                                    # clamped 15..3600 (silent clamp rails)
         "ramp_sec": 8,            # the fade-out after input returns;
-                                   # clamped 3..60
-        "level": 45,              # veil darkness in percent; clamped 10..90
+                                   # clamped 0..60 (0 = the drop is
+                                   # immediate, a ruling not an accident)
+        "level": 20,              # veil darkness in percent; clamped
+                                   # 10..90 (Oct-15 OLED ruling: 45 was
+                                   # aggressive on a dark desk)
         "apps": {},               # {exe-basename-lower: bool} - the
                                    # exclusion table (bool rows, junk
                                    # warn+drop, unknown kept)
@@ -896,17 +905,22 @@ def normalize_jog(value):
 DIMMER_IDLE_FLOOR = 15           # below fifteen seconds a blink is not a walk
 DIMMER_IDLE_CEIL = 3600          # past an hour the walk happened long ago
 DIMMER_IDLE_DEFAULT = 120
-DIMMER_RAMP_FLOOR = 3            # a two-second fade is a flicker
+DIMMER_RAMP_FLOOR = 0            # the rail reaches zero and MEANS it: at
+                                 # 0 the drop is immediate (owner ruling,
+                                 # Oct 15 - the Veils fade guards this
+                                 # case by name, no /ramp surprise)
 DIMMER_RAMP_CEIL = 60            # past a minute the return is an apology
 DIMMER_RAMP_DEFAULT = 8
 DIMMER_LEVEL_FLOOR = 10          # thinner than this the veil is a rumor
 DIMMER_LEVEL_CEIL = 90           # darker than this the desk is the screen
-DIMMER_LEVEL_DEFAULT = 45
+DIMMER_LEVEL_DEFAULT = 20        # the Oct-15 OLED ruling: 45 was
+                                 # aggressive; the rails did not move
 
 
 def normalize_dimmer(value):
-    """[dimmer] in its in-memory shape: {on, monitors, idle_sec,
-    ramp_sec, level, apps, bound}. normalize_jog's honesty, mirrored:
+    """[dimmer] in its in-memory shape: {on, monitors, always,
+    idle_sec, ramp_sec, level, apps, bound}. normalize_jog's honesty,
+    mirrored:
     a bad on warns and folds to False (the default-off law), the rails
     clamp in silence (the hider's hold_sec law - a slider that clamps
     must not confess at load), and the row tables fail open: a
@@ -940,11 +954,11 @@ def normalize_dimmer(value):
     level = max(DIMMER_LEVEL_FLOOR, min(DIMMER_LEVEL_CEIL, level))
     rows = {}
     raw = value.get("monitors")
+    try:
+        live = set(_live_shorts())
+    except Exception:                # a desk that cannot enumerate keeps
+        live = None                  # every saved row silently
     if isinstance(raw, dict):
-        try:
-            live = set(_live_shorts())
-        except Exception:            # a desk that cannot enumerate keeps
-            live = None              # every saved row silently
         for short, row in raw.items():
             short = str(short).strip()
             if not short:
@@ -957,6 +971,25 @@ def normalize_dimmer(value):
                 rows[short] = row
             else:
                 log.warning("dimmer monitor %r: %r is not a bool; the "
+                            "row is dropped", short, row)
+    # [dimmer.always] normalizes under the EXACT same law as the
+    # monitors table (Oct-15 sub-mode): bool rows only, junk warns and
+    # drops, a panel that is off the desk now is kept for its return
+    always = {}
+    raw = value.get("always")
+    if isinstance(raw, dict):
+        for short, row in raw.items():
+            short = str(short).strip()
+            if not short:
+                continue
+            if isinstance(row, bool):
+                if live is not None and short not in live:
+                    log.info("dimmer always %r names no panel on this "
+                             "desk; the row is kept for when it returns",
+                             short)
+                always[short] = row
+            else:
+                log.warning("dimmer always %r: %r is not a bool; the "
                             "row is dropped", short, row)
     apps = {}
     raw = value.get("apps")
@@ -982,9 +1015,9 @@ def normalize_dimmer(value):
         log.warning("dimmer bound %r is not a [mods, vk] pair; the "
                     "hotkey is unbound", bound)
         bound = None
-    return {"on": on, "monitors": rows, "idle_sec": idle,
-            "ramp_sec": ramp, "level": level, "apps": apps,
-            "bound": bound}
+    return {"on": on, "monitors": rows, "always": always,
+            "idle_sec": idle, "ramp_sec": ramp, "level": level,
+            "apps": apps, "bound": bound}
 
 
 def _live_shorts():

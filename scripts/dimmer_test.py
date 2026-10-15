@@ -217,7 +217,8 @@ class _Cap(logging.Handler):
 
 _cap = _Cap()
 _dlg = logging.getLogger("dimmer")
-_dlg.addHandler(_cap)
+_dlg.setLevel(logging.DEBUG)          # else the INFO confessions die
+_dlg.addHandler(_cap)                 # at the default WARNING gate
 
 
 class _DeadWin:
@@ -327,6 +328,136 @@ ok("a contained birth is refused; a partial overlap still births "
    "(the inverse containment is the documented, deliberate gap)")
 
 
+# --- RULING 3 (Oct-15): the per-monitor always sub-mode. An opted
+# --- row that also says always dims WITHOUT the idle clock - but the
+# --- foreground window's panel is exempt (the owner: "if the focused
+# --- app or mouse isn't on that monitor"), the audible exemption
+# --- rides, and the pause clears everything. dimming is a SET.
+_AOC = {"AOC2790": True, "IOC912B": True}
+_c = cfg(monitors=_AOC, always={"IOC912B": True})
+W = World([w(9, fg=True, monitor="AOC2790"),      # focus on AOC
+           w(1, monitor="AOC2790"),
+           w(2, monitor="IOC912B")], idle=0.0)    # desk NOT idle
+W.tick(_c, 100)
+assert set(W.rec.painted) == {2}, \
+    "always did not dim the un-focused panel while the desk is busy"
+# the focus moves onto the always panel: that panel bows to the edge -
+# its field FADES out soft (the pause law's shape), it does not blink
+W.wins = [w(9, fg=True, monitor="IOC912B"), w(1, monitor="AOC2790"),
+          w(2, monitor="IOC912B")]
+W.tick(_c, 101)
+assert W.rec.painted[2][1] == 0.45       # the edge holds, no blink
+W.tick(_c, 109)                          # a whole ramp later: bare
+assert W.rec.painted == {} and 2 in W.rec.gone
+ok("an always panel dims without the idle wait and fades the tick "
+   "the focus lands on it")
+# a focus that answers NO panel (off every rect, or none): the always
+# rows dim blind, confessed ONCE per transition - not per tick
+_dlg.addHandler(_cap)
+W.wins = [w(9, fg=True, monitor=None), w(1, monitor="AOC2790"),
+          w(2, monitor="IOC912B")]
+W.tick(_c, 110)
+assert W.rec.painted[2][1] == 0.45       # re-lit: the blind word says why
+before = len(_cap.lines)
+W.tick(_c, 111)
+W.tick(_c, 112)
+assert len(_cap.lines) == before, "the blind-focus word repeats per tick"
+assert any("no panel" in l for l in _cap.lines)
+_dlg.removeHandler(_cap)
+ok("an unattributable focus dims the always rows, and the blind word "
+   "rides the transition")
+# audible exemption rides the always path; the settle walks past it
+# like anywhere else; the pause outranks the row and clears the field
+W = World([w(2, monitor="IOC912B", pid=77)], audio=[77], idle=0.0)
+W.tick(_c, 100)
+assert 2 not in W.rec.painted
+W.audio = set()
+W.tick(_c, 104.01)                       # the settle is a settle here too
+assert set(W.rec.painted) == {2}
+ok("a window the sensor hears keeps its brightness on an always panel")
+dimmer.set_paused(True)
+W.tick(_c, 105)                          # the pause edge holds, soft
+assert W.rec.painted[2][1] == 0.45
+W.tick(_c, 113)                          # the whole ramp: bare
+assert W.rec.painted == {} and 2 in W.rec.gone
+dimmer.set_paused(False)
+W.tick(_c, 114)
+assert set(W.rec.painted) == {2}
+ok("the pause outranks the always row and the field returns with it")
+# an always that never opted in dims nothing (sub-mode, not a bypass)
+W = World([w(2, monitor="IOC912B")], idle=0.0)
+W.tick(cfg(monitors={"IOC912B": False}, always={"IOC912B": True}), 100)
+assert W.rec.painted == {}
+ok("always is a SUB-MODE of the opt-in: an un-armed row never dims")
+# a dimming always panel does NOT freeze a returning panel's veil:
+# input back with BOTH panels always - the focus lands on IOC, so
+# IOC fades down its own ramp while AOC never blinks
+_c2 = cfg(monitors=_AOC, always={"AOC2790": True, "IOC912B": True})
+W = World([w(1, monitor="AOC2790"), w(2, monitor="IOC912B")],
+          idle=999.0)
+W.tick(_c2, 100)                         # idle: both panels full
+assert set(W.rec.painted) == {1, 2}
+W.idle = 0.0
+W.wins = [w(9, fg=True, monitor="IOC912B"), w(1, monitor="AOC2790"),
+          w(2, monitor="IOC912B")]
+W.tick(_c2, 101)                         # IOC owns the focus now
+assert W.rec.painted[2][1] == 0.45       # still full at the edge...
+W.tick(_c2, 104)                         # ...three seconds down the ramp
+assert W.rec.painted[2][1] == 0.3
+assert W.rec.painted[1][1] == 0.45       # AOC never blinked
+W.tick(_c2, 110)
+assert 2 in W.rec.gone and W.rec.painted[1][1] == 0.45
+ok("the panel that stopped dimming fades on its own edge while an "
+   "always panel keeps duty")
+
+# --- RULING 4: ramp_sec reaches ZERO and the drop is immediate. The
+# --- fade arithmetic guards the /ramp by name; the drop lands THIS
+# --- tick. (The clamp rails are pinned in the normalize block above,
+# --- the card's range in the UI pin below - floor 0, ceiling 60.)
+W = World([w(1), w(2)])
+W.tick(cfg(ramp_sec=0), 100)
+assert set(W.rec.painted) == {1, 2}
+W.idle = 0.0
+W.tick(cfg(ramp_sec=0), 100)
+assert W.rec.painted == {} and 1 in W.rec.gone and 2 in W.rec.gone
+ok("ramp 0 is the instant drop - no division, no step, this tick")
+# and a mid-fade re-stillness at ramp 0 re-lights like any other ramp
+W = World([w(1)])
+W.tick(cfg(ramp_sec=0), 100)
+W.idle = 0.0
+W.tick(cfg(ramp_sec=0), 101)
+W.idle = 999.0
+W.tick(cfg(ramp_sec=0), 102)
+assert W.rec.painted[1][1] == 0.45
+ok("stillness at ramp 0 re-lights the field like any other ramp")
+
+# --- RULING 5: the level DEFAULT is 20 (OLED). The rails are pinned
+# --- untouched in the normalize block; here the bare dict (no level
+# --- key at all) must paint 0.2, and an explicit level still rules.
+_nolvl = cfg()
+del _nolvl["dimmer"]["level"]
+W = World([w(1)])
+W.tick(_nolvl, 100)
+assert W.rec.painted[1][1] == 0.2
+W.tick(cfg(level=30), 101)
+assert W.rec.painted[1][1] == 0.3
+ok("the bare-config veil sits at 20 percent; an explicit level rules")
+
+# the card must SHOW both rulings: the ramp slider's floor is the
+# shared constant (it reaches 0 with the rail), the level default
+# rides the same constant - a card restating its own numbers is the
+# lie these pins refuse
+_UISRC = open("panelboss/ui/window/_oled.py", encoding="utf-8").read()
+_UIR = _UISRC[_UISRC.index('row = self._row(box, "fade within"'):]
+_UIR = _UIR[:_UIR.index('"veil level"')]
+assert "from_=DIMMER_RAMP_FLOOR" in _UIR and \
+    "DIMMER_LEVEL_DEFAULT" in _UISRC and \
+    config.DIMMER_LEVEL_DEFAULT == 20 and config.DIMMER_RAMP_FLOOR == 0
+assert '"always"' in _UISRC and "_oled_dim_always_changed" in _UISRC
+ok("the card draws its rails from the constants and carries the "
+   "always sub-mode per row")
+
+
 class Recorder(logging.Handler):
     def __init__(self):
         super().__init__()
@@ -352,13 +483,26 @@ try:
                                  "monitors": {"AOC2790": True,
                                               "GONE": True,
                                               "IOC912B": "maybe"},
+                                 "always": {"AOC2790": True,
+                                            "GONE": False,
+                                            "IOC912B": "maybe"},
                                  "apps": {"chrome.exe": True,
                                           "JUNK": 7},
                                  "bound": ["ctrl", 5]})
     assert n["on"] is False and n["idle_sec"] == 3600 and \
-        n["ramp_sec"] == 3 and n["level"] == 90 and \
+        n["ramp_sec"] == 2 and n["level"] == 90 and \
         n["monitors"] == {"AOC2790": True, "GONE": True} and \
+        n["always"] == {"AOC2790": True, "GONE": False} and \
         n["apps"] == {"chrome.exe": True} and n["bound"] is None
+    # the Oct-15 ramp ruling: the FLOOR moved to zero (a stored 2 is
+    # now legal verbatim - nothing clamps it up), an explicit 0
+    # survives, and the CEILING still rules
+    assert config.normalize_dimmer({"ramp_sec": 2})["ramp_sec"] == 2
+    assert config.normalize_dimmer({"ramp_sec": 0})["ramp_sec"] == 0
+    assert config.normalize_dimmer({"ramp_sec": 99})["ramp_sec"] == 60
+    # and the level default dropped to 20 as a DEFAULT: an explicit
+    # 45 is still a legal 45 (the rails 10..90 stand unmoved)
+    assert config.normalize_dimmer({"level": 45})["level"] == 45
     # the UI's ACTUAL write shape round-trips (the gate's F1: the
     # old str-check folded the card's own pair to None at load):
     assert config.normalize_dimmer({"bound": [2, 123]})["bound"] == \
@@ -368,15 +512,18 @@ try:
     assert config.normalize_dimmer({"bound": [2]})["bound"] is None
     words = "\n".join(rec.lines)
     for needle in ("dimmer on", "is not a bool; the row is dropped",
-                   "dimmer bound", "kept for when it returns"):
+                   "dimmer bound", "kept for when it returns",
+                   "dimmer always"):
         assert needle in words, needle
     for needle in ("idle", "ramp", "level"):      # the rails clamp
         assert needle not in words                # in silence, hider
     d = config.normalize_dimmer({})               # law
-    assert d["on"] is False and d["monitors"] == {} and d["apps"] == \
-        {} and d["idle_sec"] == 120 and d["ramp_sec"] == 8 and \
-        d["level"] == 45 and d["bound"] is None
-    ok("bad words warn and fold; the rails clamp; absent is dark")
+    assert d["on"] is False and d["monitors"] == {} and \
+        d["always"] == {} and d["apps"] == {} and \
+        d["idle_sec"] == 120 and d["ramp_sec"] == 8 and \
+        d["level"] == 20 and d["bound"] is None
+    ok("bad words warn and fold; the rails clamp; absent is dark; "
+       "the always table normalizes under the monitors' own law")
 finally:
     config._live_shorts = config._live_shorts_saved
 

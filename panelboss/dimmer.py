@@ -18,6 +18,15 @@ HERE). Input returns and the whole set fades out within ramp_sec in
 at most THREE alpha steps: a dimmer that blinks off is a screensaver.
 The card's pause switch and the bound hotkey pause the same way: a
 fade, not a blink, and the field comes back the tick the pause lifts.
+An [dimmer.always] row is a SUB-MODE of the opt-in, not a bypass:
+that panel dims without waiting for idle_sec, but it bows to the
+foreground (its center inside the panel's rect un-dims the panel -
+if the focused app is ON it, you are using it) and to the audible
+exemption; an unattributable focus dims the always rows and
+confesses once per transition. The veil LEVEL defaults to 20% (the
+Oct-15 OLED ruling: 45 was aggressive) and the RAMP rail reaches 0,
+where the drop is immediate - the fade arithmetic guards that case
+by name, not by luck.
 
 Geometry is DWMWA_EXTENDED_FRAME_BOUNDS (13), not GetWindowRect:
 measured today, the GDI rect lies by eight pixels around every
@@ -157,17 +166,24 @@ class _RECT(ctypes.Structure):
 
 class Veils:
     """Pure FSM (the Strips shape): windows() -> window facts
-    (hwnd, pid, exe, monitor, rect, cloaked, iconic, fg), audio() ->
-    the ACTIVE-pid set (silent empty on every sensor failure - never
-    raises), idle() -> input-still seconds, paint(hwnd, rect, alpha)
-    / unveil(hwnd). A census hiccup holds every veil at its last
-    position: no tick, not a dead loop."""
+    (hwnd, pid, exe, cls, monitor, rect, cloaked, iconic, fg),
+    audio() -> the ACTIVE-pid set (silent empty on every sensor
+    failure - never raises), idle() -> input-still seconds,
+    paint(hwnd, rect, alpha) / unveil(hwnd). A census hiccup holds
+    every veil at its last position: no tick, not a dead loop.
+    Qualification is PER MONITOR since the Oct-15 always ruling:
+    "dimming" is a set of active panel shorts, not one boolean -
+    but the census-stays-shut law survives: it opens only when at
+    least one panel is active."""
 
     def __init__(self, windows, audio, idle, paint, unveil):
         self._windows, self._audio, self._idle = windows, audio, idle
         self._paint, self._unveil = paint, unveil
-        self._live = {}        # hwnd -> {"rect", "alpha", "die": None|t}
+        self._live = {}        # hwnd -> {"rect", "alpha", "die":
+        #                           None|t, "mon": panel short}
         self._exempt = {}      # pid -> last tick the sensor heard it
+        self._fg_unattr = False  # the always rows' blind-focus
+        #                        # confession rides TRANSITIONS
 
     def tick(self, cfg, now):
         d = cfg.get("dimmer") or {}
@@ -178,9 +194,27 @@ class Veils:
             return
         # the predicate first: fading needs no fresh facts; birth does
         # - a fading tick leaves the census and the WASAPI walk in
-        # their pockets
-        dimming = (not _PAUSED
+        # their pockets. Per-monitor since the Oct-15 "always" ruling:
+        # an always row dims WITHOUT the idle clock, for as long as
+        # the foreground window is not sitting on it (the owner's own
+        # words: "if the focused app or mouse isn't on that monitor",
+        # attributed by the fg window's CENTER inside the monitor
+        # rect). The foreground and audible exemptions still apply
+        # INSIDE an always panel - only the idle wait is skipped -
+        # and the pause clears the whole field, always rows included.
+        idle_ok = (not _PAUSED
                    and self._idle() >= d.get("idle_sec", 120))
+        always = {s for s, v in (d.get("always") or {}).items()
+                  if v and s in opted}
+        if idle_ok:
+            self._fg_unattr = False
+            dimming = set(opted)
+        elif _PAUSED:
+            dimming = set()
+        else:
+            dimming = set(always)      # tentative: the fg attribution
+            #                          # below can only SUBTRACT from
+            #                          # an armed always set
         if dimming:
             sounding = set(self._audio())
             for pid in sounding:
@@ -194,20 +228,7 @@ class Veils:
         for pid in stale:
             del self._exempt[pid]
         if not dimming:
-            ramp = max(3, min(60, int(d.get("ramp_sec", 8))))   # belt:
-            #                                                normalize
-            #                                                already
-            #                                                clamped
-            for hwnd, st in list(self._live.items()):
-                if st["die"] is None:
-                    st["die"] = now
-                gone = now - st["die"]
-                if gone >= ramp:
-                    self._drop(hwnd)
-                    continue
-                b = min(2, int(gone * 3 / ramp))
-                self._paint(hwnd, st["rect"],
-                            round(st["alpha"] * _FADE_LEVELS[b], 3))
+            self._fade(d, now)
             return
         try:
             wins = self._windows()
@@ -215,6 +236,26 @@ class Veils:
             log.warning("dimmer: the census failed this tick; the "
                         "veils hold position")
             return
+        if not idle_ok:
+            fg = [w for w in wins if w["fg"]]
+            fg_short = fg[0]["monitor"] if fg else None
+            if fg_short is None:
+                # the focus answers no panel at all (no foreground,
+                # or a center off every rect): the always rows own
+                # it, confessed ONCE per transition, not per tick
+                if not self._fg_unattr:
+                    self._fg_unattr = True
+                    log.info("dimmer: the foreground window sits on "
+                             "no panel; the always rows dim blind "
+                             "until it answers")
+            else:
+                self._fg_unattr = False
+                dimming.discard(fg_short)
+            if not dimming:
+                # the focus landed on the last always panel and the
+                # desk is not idle: the field fades out soft
+                self._fade(d, now)
+                return
         apps = d.get("apps") or {}
         qualified = {}
         for w in wins:
@@ -227,30 +268,70 @@ class Veils:
                 continue
             if apps.get(w["exe"]) is True:
                 continue
-            if w["monitor"] not in opted:
+            if w["monitor"] not in dimming:
                 continue
             if w["pid"] in self._exempt:
                 continue
-            qualified[w["hwnd"]] = (x, y, cw, ch)
-        alpha = d.get("level", 45) / 100.0
-        for hwnd, rect in qualified.items():
+            qualified[w["hwnd"]] = ((x, y, cw, ch), w["monitor"])
+        alpha = d.get("level", 20) / 100.0
+        for hwnd, (rect, short) in qualified.items():
             st = self._live.get(hwnd)
             if st is None:
                 self._live[hwnd] = {"rect": rect, "alpha": alpha,
-                                    "die": None}
+                                    "die": None, "mon": short}
                 self._paint(hwnd, rect, alpha)
             elif st["die"] is not None or st["alpha"] != alpha:
                 st["die"], st["alpha"] = None, alpha   # back to full
+                st["mon"] = short
                 self._paint(hwnd, rect, alpha)
             elif st["rect"] != rect:                   # it moved
                 st["rect"] = rect
+                st["mon"] = short                      # its own panel
                 self._paint(hwnd, rect, alpha)         # we followed
-        for hwnd in [h for h in self._live if h not in qualified]:
-            self._drop(hwnd)            # disqualified: the veil is
-                                        # GONE this tick - foreground
-                                        # and sound un-dim instantly,
-                                        # the fade belongs to the idle
+        ramp = max(0, min(60, int(d.get("ramp_sec", 8))))   # belt:
+        #                                                normalize
+        #                                                already
+        #                                                clamps
+        for hwnd, st in list(self._live.items()):
+            if hwnd in qualified:
+                continue
+            if st["mon"] in dimming:
+                self._drop(hwnd)        # disqualified ON A DIMMING
+                                        # PANEL: the veil is GONE
+                                        # this tick - foreground and
+                                        # sound un-dim instantly, the
+                                        # fade belongs to the idle
                                         # edge alone
+            else:
+                # the panel itself stopped dimming (input returned
+                # while an always panel keeps the field, an opt-out):
+                # that edge is an idle edge FOR THIS PANEL - fade it
+                # down, don't blink it off, and don't freeze it dark
+                # just because another panel is still working
+                self._fade_one(now, hwnd, st, ramp)
+
+    def _fade(self, d, now):
+        """The whole field goes soft: every live veil takes one step
+        down the ramp."""
+        ramp = max(0, min(60, int(d.get("ramp_sec", 8))))
+        for hwnd, st in list(self._live.items()):
+            self._fade_one(now, hwnd, st, ramp)
+
+    def _fade_one(self, now, hwnd, st, ramp):
+        """One veil, one step. ramp 0 is the Oct-15 ruling (the rail
+        must reach zero and mean it) and the explicit guard is what
+        the division below owes it: the drop lands THIS tick,
+        immediate - never a ZeroDivisionError wearing the fade's
+        clothes."""
+        if st["die"] is None:
+            st["die"] = now
+        gone = now - st["die"]
+        if ramp == 0 or gone >= ramp:
+            self._drop(hwnd)
+            return
+        b = min(2, int(gone * 3 / ramp))
+        self._paint(hwnd, st["rect"],
+                    round(st["alpha"] * _FADE_LEVELS[b], 3))
 
     def _drop(self, hwnd):
         self._unveil(hwnd)
