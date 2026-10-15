@@ -55,7 +55,17 @@ def _start_root():
 
     def run():
         global _root
+        from .. import hider          # same law as the hider painter
+        hider.window_ready()          # (tonight's root cause): the
+                                      # window's root must claim the
+                                      # process default FIRST, or CTk
+                                      # images bind to this interpreter
+                                      # and the main window dies at
+                                      # build. Blackout pre-window still
+                                      # waits the contract's floor.
         root = tk.Tk()
+        root._owner_thread = threading.get_ident()   # the sweep's
+                                      # ownership tag (hider/_shell law)
         root.withdraw()            # the root is scaffolding, never a UI
         root.title("panelboss-away")
         _root = root

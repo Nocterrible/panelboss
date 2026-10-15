@@ -106,6 +106,18 @@ def _wrap_shell_notify():
     def stamped(code, data):
         global _guid_live
         _stamp_identity(data)
+        if code == win32.NIM_ADD and not getattr(
+                stamped, "_added_once", False):
+            # ghost reclaim (owner UAT, Oct 15): every forced kill of the
+            # day - and Stop-Process kills skip NIM_DELETE - leaves the
+            # Shell holding our (path, uID) slot with a dead owner. The
+            # fresh ADD then ANSWERS TRUE and renders NOTHING: a stale
+            # entry is the one shell state that dedupes a live one.
+            # Delete our identity before the first ADD of the process
+            # (a missing slot is a legitimate FALSE), then add clean.
+            stamped._added_once = True
+            inner(win32.NIM_DELETE, data)
+            time.sleep(0.05)
         ok = bool(inner(code, data))
         if not ok and code == win32.NIM_ADD and _guid_live:
             # the common refused ADD is our OWN hide-then-show race

@@ -2,6 +2,21 @@
 
 ## 0.4.0 (in development)
 
+- Boot fix (owner UAT, Oct 15 night): the settings window died at
+  birth on every launch since the hiders boot hooks - the hiders
+  painter Tk raced the windows for tkinters process-global default
+  root and won it, and customtkinter binds every image to that
+  default, so the kofi cup landed in the painters interpreter and
+  the window raised `image `pyimage1` doesnt exist`. The boot
+  containment then destroyed the OTHER threads root - the
+  cross-thread Tcl deadlock that also ate the traceback (the log line
+  now runs before the destroy, and the destroy refuses roots it does
+  not own). The painter waits for the windows root instead (a
+  headless boot waits 10 s and claims). The second instance answers
+  the click now too: the loser pokes the winners window open through
+  the trays own seam and falls back to the balloon only after two
+  seconds of silence.
+
 - Taskbar hider (new `oled` tab): a painted black strip over each
   opted-in monitor's taskbar - the OLED burn-in defense. Hover bares
   the bar you reached for (or every bar, your choice); it returns
