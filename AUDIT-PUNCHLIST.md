@@ -1369,3 +1369,25 @@ fire the resync only on the map that actually needed it, and that
 touches the ordering the geometry probe pins - so it ships with the
 next touch, not as a drive-by. Recorded here so the dossier does not
 read as one bug half-fixed twice.
+
+## HDRWAKE: THE LABEL WAS THE BUG (Oct 15, second pass)
+The qa lane named the cause as a late counter read; my snapshot patch fixed
+that and the suite STILL failed - two ways in five runs: rc=3 (its own 60 s
+hard-kill) and rc=1 (the marker assert). Both trace to the same shape, and
+neither is the app: the fake driver derives its desk marker from the LIVE
+counter (`_live_modes`, hdrwake_test.py:57), so a walk's answer depends on
+when its own thread happens to append, and the third walk the pump window
+permits paints a marker the test's arithmetic never reserved. The rc=3 run
+spent 60 s inside `pump(8.0)` with an 8-second wall and 1.5 s driver sleeps
+that need several drains to deliver - the fuse is cut close to the work.
+And `check()` swallows its own cause into a label:
+`HDR WAKE PIN FAILED in ['check']` when the traceback was already in the
+stream; the label was blind by construction, which is why a FLAKE was the
+first story we told.
+Fix in this commit: the driver's marker is chosen by the CALLER's snapshot
+(the desk is described at spawn time, so no thread-timing can move it), the
+expected payload is derived from the spawn-time list, and the hard-kill
+moves to 90 s so a slow drain cannot be read as a stuck pump. The law this
+records: in a suite with live background threads, every expected value must
+be frozen at spawn time - a number read from a moving counter is not an
+expectation, it is a race with a label.
