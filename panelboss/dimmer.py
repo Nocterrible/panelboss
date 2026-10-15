@@ -47,7 +47,9 @@ box). On a raise the window is dropped and destroyed, and the pump
 keeps draining - the jog pump's lesson, matched. Layering is a Z-
 PIN, not topmost (gate finding 1): every paint SetWindowPos's the
 veil immediately above its OWN window - against the target's
-GW_HWNDNEXT neighbour, band-matched so a topmost owner still gets
+GW_HWNDPREV neighbour (the next-ABOVE window; GW_HWNDNEXT walks the
+order DOWN and was measured painting the veil under its owner,
+nailing nothing), band-matched so a topmost owner still gets
 a topmost veil. Topmost was the bug: every veil lived in the
 topmost band above every non-topmost window, so overlapping
 backgrounds STACKED their alphas (45, 69.75, 83.4 percent at one,
@@ -112,6 +114,12 @@ WS_EX_NOACTIVATE = 0x08000000
 GA_ROOT = 2
 GW_HWNDNEXT = 2
 WS_EX_TOPMOST = 0x8
+# The next-ABOVE anchor is GW_HWNDPREV (3), not the packet's
+# GW_HWNDNEXT (2): the docs' "next in the Z order" walks TOP toward
+# BOTTOM (EnumWindows' own top-down order is the same convention),
+# and the GetPixel probe of Oct-15 measured the NEXT-shaped pin
+# painting the veil UNDER its target (no dim at all on a gray base).
+GW_HWNDPREV = 3
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _FADE_LEVELS = (1.0, 2.0 / 3.0, 1.0 / 3.0)   # THREE steps, then gone
 _SWP_ZPIN = 0x213   # NOSIZE | NOMOVE | NOACTIVATE | NOOWNERZORDER: a
@@ -532,16 +540,19 @@ def _zpin(win, target_hwnd):
     """The layering law (gate finding 1): the veil sits IMMEDIATELY
     ABOVE ITS OWN WINDOW, band-matched - never in the topmost band,
     where stacked veils over overlapping apps add alphas into a
-    seam darker than either. The pin reads the target's neighbour
-    (GW_HWNDNEXT), then SetWindowPos's OUR veil's root ancestor
-    under it: the first argument is ours, never the owner's, which
-    is what keeps the call from yanking the user's window forward -
-    the trap this whole fix must not fall into. Band-match first
-    (a topmost owner still gets a topmost veil, an ordinary one an
-    ordinary veil), and a dead anchor is a SKIP, not a raise: a
-    refused pin (UIPI-elevated target, a window that vanished this
-    tick) costs one cosmetic beat and the next paint follows the
-    window anyway."""
+    seam darker than either. The pin reads the target's next-ABOVE
+    neighbour (GW_HWNDPREV - the packet said GW_HWNDNEXT and the
+    GetPixel probe of Oct-15 refused it: the z-order walk goes top
+    toward bottom, so NEXT pinned the veil UNDER its owner, painting
+    nothing; PREV anchors above), then SetWindowPos's OUR veil's
+    root ancestor under it: the first argument is ours, never the
+    owner's, which is what keeps the call from yanking the user's
+    window forward - the trap this whole fix must not fall into.
+    Band-match first (a topmost owner still gets a topmost veil, an
+    ordinary one an ordinary veil), and a dead anchor is a SKIP, not
+    a raise: a refused pin (UIPI-elevated target, a window that
+    vanished this tick) costs one cosmetic beat and the next paint
+    follows the window anyway."""
     try:
         if not _iswindow(target_hwnd):
             return                       # dead anchor: skip, never straggle
@@ -549,7 +560,7 @@ def _zpin(win, target_hwnd):
         win.attributes("-topmost", bool(ex & WS_EX_TOPMOST))
         win.update_idletasks()
         h = _u32.GetAncestor(win.winfo_id(), GA_ROOT) or win.winfo_id()
-        above = _getwindow(target_hwnd, GW_HWNDNEXT)
+        above = _getwindow(target_hwnd, GW_HWNDPREV)
         _setwindowpos(h, above, 0, 0, 0, 0, _SWP_ZPIN)
     except Exception:                    # the veil still dims; only
         pass                             # the layering degrades

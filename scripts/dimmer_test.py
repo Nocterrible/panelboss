@@ -415,7 +415,7 @@ try:
         return 1
 
     def _above(h, g):
-        return 0x1337 if g == dimmer.GW_HWNDNEXT else None
+        return 0x1337 if g == dimmer.GW_HWNDPREV else None
 
     _pins = []
 
@@ -434,7 +434,6 @@ try:
     dimmer._getwindow = lambda h, g: None       # anchor at the top
     dimmer._zpin(_z, 0x1234)
     assert _pins[-1] == (0x4242, None, 0x213), _pins[-1]
-
     def _topmost_ex(h, i):                      # topmost owner
         return 0x8 if i == dimmer.GWL_EXSTYLE else 0
 
