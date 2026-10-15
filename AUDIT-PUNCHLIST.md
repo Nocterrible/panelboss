@@ -1294,3 +1294,27 @@ tk today - safe by idiom, not by policy; a future CTk anywhere on a
 worker thread resurrects it). The wash-adjacent app death is now
 EXPLAINED; the 10:56 silent death stays unproven but is the prime
 same-class suspect (it sat two minutes after a wash-era boot).
+
+## DIMMER OWNER-UAT RULINGS (Oct 15, wave c157f86 - V PASS, gate pending)
+- Wallpaper dim was REAL: Progman/WorkerW passed the census and got
+  veils; the desktop is now excluded at the CENSUS stratum (a fact
+  about the desk, not config). The "random darker box near the focused
+  window" was a dead app's veil: the paint raised inside the pump after
+  the hwnd died, stranding an immortal unclick-through window - same
+  pump-death class the jog veil showed at 11:20. One bad item can no
+  longer take the dimmer pump either.
+- Owner law, recorded: default dim LEVEL is 20 (45 was aggressive on
+  OLED); the fade rail must reach 0 (the clamp's max(3,..) was lying);
+  per-monitor ALWAYS ON mode = the autohide shape (dim that panel while
+  focus sits elsewhere; exemptions and the hotkey pause still rule).
+- Hotkey honesty law: "taken" may ONLY be said on Windows error 1409.
+  Every other failure names its code. A word that blames "another app"
+  for our own errno is the DISPATCH PURITY disease wearing a UI label.
+  Owed from the next real press: the hex line (mods/vk/hwnd/errno) -
+  the owner's original Ctrl+Alt+D "taken" may have been a false
+  accusation; if so the rebind simply works.
+- Overlap law (deliberate boundary, not an oversight): suppression is
+  containment-at-birth only; partial overlaps still stack their alpha,
+  and an overlapping veil that later dies can strand its suppressed
+  window undimmed until the next move. General rect subtraction stays
+  a rewrite nobody asked for.
