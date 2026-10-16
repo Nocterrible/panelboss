@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "PanelBoss Companion",
+  "version": "0.1.0",
+  "description": "Manual veil trigger for PanelBoss: one click on the toolbar icon measures the playing video and hands the geometry to the app.",
+  "permissions": ["debugger", "nativeMessaging", "tabs", "downloads"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "PanelBoss: veil this video" }
+}

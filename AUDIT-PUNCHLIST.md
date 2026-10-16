@@ -1625,3 +1625,47 @@ Consequences written down so the next lane does not re-close the door:
 - The app remains a *subscriber*: its own absence must never change
   what the extension does (no 'waiting for PanelBoss' state, no
   retry storms keyed to one consumer).
+
+## VIDEO-DIM FOUNDATION - the decisions this batch ships (Oct 15, evening)
+THE DATA PATH IS THE DEBUG PORT, not websocket-bidi: --remote-
+debugging-port + stdlib HTTP/WS (panelboss/wm/_cdp.py) is the whole
+Chromium story; the companion extension is the MANUAL trigger and
+the future content-script seat, NOT a requirement of the automatic
+veil. Firefox (no CDP port of this shape) is deferred to a content-
+add-on future that rides the same bridge-file row shape.
+THE .LNK EDIT IS RETIRED: no shortcut rewriting anywhere - the
+flag is re-armed at launch (PanelBoss owns the launch when the
+feature is on; a browser already running unflagged is simply a
+family the eye cannot see, confessed in the per-family say line).
+BRIDGE FILE (the manual trigger, %APPDATA%\PanelBoss\rect and the
+zero-plumbing Downloads\PanelBoss\rect the v1 click writes via
+chrome.downloads): freshest source wins, ties the file's. The
+native-messaging host is FUTURE work and today's measurement says
+start elsewhere: the .cmd-wrapper manifest shape DIES AT STDIN EOF
+(the wrapper exits before the host answers) and the two-token
+pythonw manifest form FAILED on this Edge (boots, never hears the
+message) - both named in extension/README.md's future section so
+the next lane does not re-derive them.
+PACKET REALITY, MEASURED AT DISPATCH: "Edge is running with the
+port at 9222 (Edg/156)" had aged out - Edge ran WITHOUT any flag
+(6 procs, no netstat listener at 9222); the live debug port was
+CHROME/155 at 9333 (a prior lane's experiment, user-data-dir
+truncated at the space in "User Data" - the argv shows why quoting
+matters). The full transport rode that live browser: handshake,
+Runtime.evaluate (a real 800x450 paused fixture video), the
+Browser.getWindowForTarget/getWindowBounds pair (response shape
+{"windowId", "bounds{left,top,width,height}"}, DIP px), fold to
+physical (708,551,800,450). By delivery time that browser had
+exited and probe() reports no-debug-port for all three families -
+the fail-open path, live-verified twice. Opera GX: still no flagged
+launch on this box; UNVERIFIED for the feature until one is tested
+(the launch-owning lane does that, it is not a claim here).
+THE GEOMETRY JUDGMENT the packet left open, decided and pinned:
+the straddle frame covers, per intersected monitor, MONITOR minus
+the FULL rect - a piece's inner edge is the rect where the rect
+crosses the panel border, so the video column across the seam
+stays bright and no dark sliver can land on video px (test pins 13
+and 14 hold both the single-monitor four and the straddle six).
+getBoundingClientRect is VIEWPORT space: the scroll pair rides the
+row for the DRM future and does NOT shift the veil (pin 6).
+PAUSED IS NOT LIVE: the feature dims playback, not posters (pin 7).

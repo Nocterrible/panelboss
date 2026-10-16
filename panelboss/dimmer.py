@@ -86,7 +86,11 @@ not "taken" - the one word was swallowing 87s and 1400s into a lie
 about a chord that was never actually taken. One press pauses, one
 resumes (toggle, not hold).
 
-SIZE LAW: the file runs ~795 and the seam is real, not cosmetic -
+SIZE LAW: the file runs ~900 (the Oct-15 video mode grew it ~100 -
+the frame is the Veils qualification the docstring above the FSM
+promised, and the mode shares the paint loop, the ramp, and the
+drop table: splitting Veils now would fork the qualification by
+half) and the seam is real, not cosmetic -
 Veils (the FSM, ~180) and the stratum below it (census + pins,
 painter, hotkey arm) are already three files wearing one name; when
 the veil set needs card-side state, the stratum moves out as
@@ -221,7 +225,7 @@ class _RECT(ctypes.Structure):
 
 class Veils:
     """Pure FSM (the Strips shape): windows() -> window facts
-    (hwnd, pid, exe, cls, monitor, rect, cloaked, iconic, fg),
+    (hwnd, pid, exe, cls, monitor, rect, cloaked, iconic, fg, tool),
     audio() -> the ACTIVE-pid set (silent empty on every sensor
     failure - never raises), idle() -> input-still seconds,
     paint(hwnd, rect, alpha) / unveil(hwnd). A census hiccup holds
@@ -229,22 +233,48 @@ class Veils:
     Qualification is PER MONITOR since the Oct-15 always ruling:
     "dimming" is a set of active panel shorts, not one boolean -
     but the census-stays-shut law survives: it opens only when at
-    least one panel is active."""
+    least one panel is active.
 
-    def __init__(self, windows, audio, idle, paint, unveil):
+    VIDEO MODE (Oct-15, the dim-around-the-playing-video ruling):
+    the two optional seams, video(cfg, now) -> a LIVE physical rect
+    or None (videoeye.video_rect is the shipped eye; the suite
+    injects a fake) and monitors() -> panel rows. When the eye is
+    live the veil set gains FOUR dark pieces (top/bottom/left/
+    right) around the rect, clamped PER MONITOR, keyed by synthetic
+    negative hwnds; the plain per-window veils are SKIPPED on the
+    covered panels - the frame already darkens everything outside
+    the hole there, and a window veil under the frame would stack
+    its alpha (the stratum's own no-stacking law). The foreground
+    gets NO exclusion on those panels: the browser's own chrome
+    dims too - the hole is the rect, not the window. The frame's
+    alpha is the shared [dimmer] level and the fade/ramp rules
+    apply unchanged; a gone rect rides the RAMP, not a blink."""
+
+    def __init__(self, windows, audio, idle, paint, unveil,
+                 video=None, monitors=None):
         self._windows, self._audio, self._idle = windows, audio, idle
         self._paint, self._unveil = paint, unveil
+        self._video, self._mons = video, monitors or _monitors
+        self._frames = {}      # (panel short, side) -> synthetic key
         self._live = {}        # hwnd -> {"rect", "alpha", "die":
-        #                           None|t, "mon": panel short}
+        #                           None|t, "mon": panel short,
+        #                           "frame": bool (video pieces)}
         self._exempt = {}      # pid -> last tick the sensor heard it
         self._fg_unattr = False  # the always rows' blind-focus
         #                        # confession rides TRANSITIONS
 
     def tick(self, cfg, now):
         d = cfg.get("dimmer") or {}
+        vrect = self._live_rect(cfg, now)
+        frame = self._frame_pieces(vrect)
+        covered = {short for _, short in frame.values()}
         rows = d.get("monitors") or {}
         opted = {s for s, v in rows.items() if v}
-        if not d.get("on") or not opted:
+        if (not d.get("on") or not opted) and not covered:
+            # the [videodim] section is its OWN consent: a live
+            # frame survives an off [dimmer] (it borrows the level
+            # and the ramp rules, not the switch); with no frame
+            # the old master gate stands untouched
             self.teardown()
             return
         # the predicate first: fading needs no fresh facts; birth does
@@ -270,6 +300,19 @@ class Veils:
             dimming = set(always)      # tentative: the fg attribution
             #                          # below can only SUBTRACT from
             #                          # an armed always set
+        if covered:
+            # VIDEO MODE (the class docstring): the panels the frame
+            # covers qualify on the rect ALONE - the always ruling's
+            # shape without the idle wait, because a live video IS
+            # the activity this mode was built around. The fg
+            # attribution below may subtract a covered panel for the
+            # PLAIN veils; the frame re-adds it (no fg exclusion in
+            # video mode - the browser's chrome dims with the rest).
+            dimming |= covered
+        if not d.get("on"):
+            dimming = covered           # the off [dimmer] seeds
+            #                           # NOTHING plain: the frame
+            #                           # is the whole veil set
         if dimming:
             sounding = set(self._audio())
             for pid in sounding:
@@ -306,6 +349,10 @@ class Veils:
             else:
                 self._fg_unattr = False
                 dimming.discard(fg_short)
+            if covered:
+                dimming |= covered   # the frame owes the focus no
+                #                    # passage: video mode dims the
+                #                    # foreground window's chrome too
             if not dimming:
                 # the focus landed on the last always panel and the
                 # desk is not idle: the field fades out soft
@@ -331,17 +378,28 @@ class Veils:
                 continue
             if apps.get(w["exe"]) is True:
                 continue
+            if w["monitor"] in covered:
+                continue     # VIDEO MODE (the class docstring): the
+            #                 # frame owns this panel and a window
+            #                 # veil under it would STACK its alpha
+            #                 # (the stratum's own no-stacking law)
             if w["monitor"] not in dimming:
                 continue
             if w["pid"] in self._exempt:
                 continue
             qualified[w["hwnd"]] = ((x, y, cw, ch), w["monitor"])
+        for key, piece in frame.items():
+            qualified[key] = piece      # the frame rides the SAME
+            #                           # paint loop: birth, follow
+            #                           # (the rect moves, the pieces
+            #                           # re-clip), shared level alpha
         alpha = d.get("level", 20) / 100.0
         for hwnd, (rect, short) in qualified.items():
             st = self._live.get(hwnd)
             if st is None:
                 self._live[hwnd] = {"rect": rect, "alpha": alpha,
-                                    "die": None, "mon": short}
+                                    "die": None, "mon": short,
+                                    "frame": hwnd in frame}
                 self._paint(hwnd, rect, alpha)
             elif st["die"] is not None or st["alpha"] != alpha:
                 st["die"], st["alpha"] = None, alpha   # back to full
@@ -358,7 +416,22 @@ class Veils:
         for hwnd, st in list(self._live.items()):
             if hwnd in qualified:
                 continue
-            if st["mon"] in dimming:
+            if st.get("frame"):
+                self._fade_one(now, hwnd, st, ramp)   # a vanished
+                #                                    # rect is a
+                #                                    # stopped video:
+                #                                    # the RAMP pulls
+                #                                    # the frame back
+                #                                    # (its first step
+                #                                    # is the one-tick
+                #                                    # hold the eye's
+                #                                    # fail-open
+                #                                    # promise names,
+                #                                    # ramp 0 drops
+                #                                    # now - the fade
+                #                                    # rules apply
+                #                                    # UNCHANGED)
+            elif st["mon"] in dimming:
                 self._drop(hwnd)        # disqualified ON A DIMMING
                                         # PANEL: the veil is GONE
                                         # this tick - foreground and
@@ -372,6 +445,74 @@ class Veils:
                 # down, don't blink it off, and don't freeze it dark
                 # just because another panel is still working
                 self._fade_one(now, hwnd, st, ramp)
+
+    def _live_rect(self, cfg, now):
+        """The eye's door, fail-open by construction: no seam, a
+        paused desk, a raising eye - all read as "no rect". The
+        liveness law itself (not paused, big enough, fresh within
+        grace) is the eye's: videoeye.video_rect applies the
+        [videodim] rails, so this FSM re-checks nothing."""
+        if self._video is None or _PAUSED or not (
+                (cfg.get("videodim") or {}).get("on")):
+            return None                  # pause outranks the frame too
+            #                            # (the whole-field law, the
+            #                            # always rows' own shape)
+        try:
+            return self._video(cfg, now)
+        except Exception:
+            log.warning("dimmer: the video eye raised; no frame "
+                        "this tick (fail-open)")
+            return None
+
+    def _frame_pieces(self, vrect):
+        """The four dark pieces (top/bottom/left/right) around the
+        live rect, CLAMPED PER MONITOR: a straddle cuts one piece
+        set per panel and every piece stays inside its panel's
+        bounds - the video column across the seam stays bright, so
+        no dark sliver ever lands on video px (the judgment call
+        this geometry ships with, named in the delivery). Zero-size
+        pieces (the rect touching an edge) drop; the full ring is
+        FOUR, an edge kiss is three, a panel-covering rect is none.
+        Keys are synthetic NEGATIVE ints: the painter takes
+        (hwnd, rect, alpha) and keys nothing off hwnd realism (the
+        z-pin reads the dead anchor and skips - the frame sits in
+        the plain band, documented at the class)."""
+        out = {}
+        if vrect is None:
+            return out
+        rx, ry, rw, rh = vrect
+        if rw <= 0 or rh <= 0:
+            return out
+        try:
+            mons = self._mons()
+        except Exception:
+            return out                  # no desk, no frame: fail-open
+        for m in mons:
+            mx, my, mw, mh = m["x"], m["y"], m["w"], m["h"]
+            ix0, iy0 = max(rx, mx), max(ry, my)
+            ix1, iy1 = min(rx + rw, mx + mw), min(ry + rh, my + mh)
+            if ix0 >= ix1 or iy0 >= iy1:
+                continue                # the rect is off this panel
+            s = m["short"]
+            if iy0 > my:
+                out[self._fkey(s, "t")] = ((mx, my, mw, iy0 - my), s)
+            if iy1 < my + mh:
+                out[self._fkey(s, "b")] = ((mx, iy1, mw,
+                                            my + mh - iy1), s)
+            if ix0 > mx:
+                out[self._fkey(s, "l")] = ((mx, iy0, ix0 - mx,
+                                            iy1 - iy0), s)
+            if ix1 < mx + mw:
+                out[self._fkey(s, "r")] = ((ix1, iy0,
+                                            mx + mw - ix1,
+                                            iy1 - iy0), s)
+        return out
+
+    def _fkey(self, short, side):
+        key = self._frames.get((short, side))
+        if key is None:
+            key = self._frames[(short, side)] = -(len(self._frames) + 1)
+        return key
 
     def _fade(self, d, now):
         """The whole field goes soft: every live veil takes one step
@@ -664,6 +805,23 @@ def _sounding():
     return _wasapi.sounding_pids()
 
 
+def _video_rect(cfg, now):
+    """The eye's door into the FSM (the seam the tests replace):
+    lazy import - videoeye owns the sockets, this module only ever
+    asks the question. Liveness and the [videodim] rails are the
+    eye's law, pinned in videoeye.video_rect's own docstring."""
+    from . import videoeye
+    return videoeye.video_rect(cfg, now)
+
+
+def _monitors():
+    """The panel rows the frame clamps against (the seam the tests
+    replace): wm.monitors answers {short, x, y, w, h} in the same
+    physical px the veils paint in."""
+    from . import wm
+    return wm.monitors()
+
+
 def _idle_secs():
     from . import display
     return display.idle_seconds()
@@ -831,7 +989,8 @@ def tick(cfg, now):
         _hot_flag = False
         set_paused(not _PAUSED)
     if _veils is None:
-        _veils = Veils(_census, _sounding, _idle_secs, _paint, _unveil)
+        _veils = Veils(_census, _sounding, _idle_secs, _paint, _unveil,
+                       video=_video_rect)
     _sync_hotkey((cfg.get("dimmer") or {}).get("bound"))
     _veils.tick(cfg, now)
 

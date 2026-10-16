@@ -2,6 +2,27 @@
 
 ## 0.4.0 (in development)
 
+- Video dim (the dim-around-the-playing-video eye): with [videodim]
+  on (default OFF - off means no sockets, no file reads, nothing),
+  PanelBoss reads the playing video's rect from the browser's
+  Chrome DevTools debug port (wm/_cdp: stdlib-only RFC 6455, no
+  pip websockets) and lays exactly four dark veils around it -
+  clamped per monitor, so a straddling video keeps its seam column
+  bright while both panels frame it. The foreground browser gets no
+  exclusion: the hole is the rect, not the window - the browser's
+  own chrome dims too, and the plain per-window veils stand down on
+  a covered panel (they would stack under the frame). The veil
+  borrows the dimmer's level and ramp rules; a stopped or vanished
+  video unfurls down that ramp, never a blink. The companion
+  extension (extension/) carries the manual "veil this video"
+  trigger: one toolbar click writes the same row to the bridge file
+  with zero native-host plumbing (chrome.downloads). Opera GX is
+  the first-tested browser; Chrome and Edge share the port path.
+  The decode-counter gate ships NEXT, once measured. (The
+  Browser.getWindowBounds fold, the /json/version brand decide, and
+  the two dead native-host manifest shapes are logged in the audit
+  punchlist; window.screenX measures (0,0) lies on occluded windows
+  - the CDP call is the anchor.)
 - Panel refresh (OLED tab, second card): micro-jog steps the app's
   covers around a zero-drift ring every 5-180 minutes (1-8 px), and a
   manual 'run wash now' button lights one opted-in monitor white for
