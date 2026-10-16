@@ -1,0 +1,9 @@
+{
+  "name": "com.nocterrible.panelboss",
+  "description": "PanelBoss Companion - hands the measured video geometry to PanelBoss's Movie theater mode",
+  "path": "panelboss-host.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://PLACEHOLDER--REPLACE-WITH-THE-EXTENSION-ID/"
+  ]
+}

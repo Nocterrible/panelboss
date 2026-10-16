@@ -1,10 +1,9 @@
 {
   "manifest_version": 3,
   "name": "PanelBoss Companion",
-  "version": "0.2.0",
-  "description": "Manual veil trigger for PanelBoss: one click on the toolbar icon measures the playing video and hands the geometry to the app.",
-  "permissions": ["scripting", "tabs", "downloads"],
-  "host_permissions": ["<all_urls>"],
+  "version": "0.3.0",
+  "description": "Measure the playing video on a page and hand the geometry to PanelBoss's Movie theater mode through a local native host. No network calls, no timers.",
+  "permissions": ["scripting", "activeTab", "nativeMessaging"],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "PanelBoss: veil this video" }
 }

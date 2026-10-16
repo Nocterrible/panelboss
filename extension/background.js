@@ -1,106 +1,133 @@
-/* PanelBoss Companion - the manual "veil this video" trigger, v0.2.0.
+/* PanelBoss Companion - the manual "veil this video" trigger, v0.3.0.
  *
  * One click on the toolbar icon, once, no timers, no pumps: ask the
- * active tab ONE question with chrome.scripting - the same class of
- * call every ad blocker uses to find things on a page (the owner's
- * ruling, Oct 16, after v0.1.1's debugger route proved it can hold a
- * silent, banner-raising conversation with Opera: "we need to not do
- * that this way if we can avoid it"). The answer is the SAME string
- * the RECT_JS constant holds - the byte-twin of panelboss/videoeye.py's
- * constant (the suite pins the pairing) - and the geometry lands in
- * the bridge file via chrome.downloads (the zero-native-host-plumbing
- * writer: the blob lands at <browser download dir>\PanelBoss\rect,
- * where PanelBoss reads; the %APPDATA%\PanelBoss\rect doorway waits
- * for the future native host - see README, including the two manifest
- * shapes that died on this Edge and why the next lane should not
- * retry them).
+ * active tab ONE question with chrome.scripting (the ad-blocker class
+ * of call - the owner's Oct 16 ruling after the debugger's banner), and
+ * hand the answer to the LOCAL native host over chrome.runtime
+ * native messaging. The host writes the geometry to the app's own
+ * doorway file; PanelBoss's eye reads it. No network, no remote code,
+ * no eval - the measure function is a static, bundled FUNCTION (MV3's
+ * CSP law: an eval string is remote-code-shaped and a store rejection).
  *
- * NO DEBUGGER, NO BANNER, NO PORT: nothing to attach, nothing that
- * can outlive the click, nothing that tells the page a measuring tool
- * arrived. The awaits still ride withTimeout - every way this flow can
- * die answers with its own badge word (att/ask/slow/novid/json/win/dl
- * /veiled), because the v0.1.0 build's silent wordless death is the
- * reason the word list exists at all.
+ * THE API IS OPEN (MIT): every message is a plain JSON object with an
+ * "op", and the "capabilities" op self-describes what this extension
+ * can send (the veil rect today; the DRM observer, site metadata, more
+ * tomorrow). PanelBoss reads the capabilities the way any project may -
+ * discover, never assume. The one ACL is the extension's own id: the
+ * native-host manifest lists OUR origin, the browser's install check is
+ * the whole handshake, no pairing, no token.
+ *
+ * Every way the click can die answers with its own badge word
+ * (ask/slow/novid/json/win/nm), so a silent wordless death - the class
+ * that sank v0.1.0 - can never recur.
  */
-const RECT_JS = "(function(){var v=document.querySelector('video');return v?JSON.stringify({rect:v.getBoundingClientRect(),dpr:window.devicePixelRatio,paused:v.paused,scroll:[window.scrollX,window.scrollY],view:[window.innerWidth,window.innerHeight]}):'null';})()";
 
-/* the family PanelBoss knows this browser as: the UA is the honest
- * tell - Opera GX answers OPR/, Edge answers Edg/, Chrome answers
- * Chrome/ and is the only one left standing */
+// the measure, as a STATIC function (never eval'd): executeScript
+// serializes it alone into the tab's world, no closures ride. It
+// returns the same row shape every version ships - rect (viewport CSS
+// px), devicePixelRatio, paused, the scroll pair (the future DRM lane
+// reads document space from it), and the inner size the fold needs.
+function measureVideo() {
+  const v = document.querySelector("video");
+  if (!v) return null;
+  return {
+    rect: v.getBoundingClientRect(),
+    dpr: window.devicePixelRatio,
+    paused: v.paused,
+    scroll: [window.scrollX, window.scrollY],
+    view: [window.innerWidth, window.innerHeight],
+  };
+}
+
+const HOST = "com.nocterrible.panelboss";
+
 const FAMILY = /OPR\//.test(navigator.userAgent) ? "opera_gx"
              : /Edg\//.test(navigator.userAgent) ? "edge"
              : "chrome";
 
-async function activeTab() {
-  const t = await chrome.tabs.query({active: true, currentWindow: true});
-  return t && t[0];
-}
-
 function withTimeout(p, ms, word) {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject({badge: word}), ms);
+    const t = setTimeout(() => reject({ badge: word }), ms);
     p.then(v => { clearTimeout(t); resolve(v); },
            e => { clearTimeout(t); reject(e); });
   });
 }
 
+function say(word) {
+  try {
+    chrome.action.setBadgeText({ text: word });
+    chrome.action.setBadgeBackgroundColor({ color: "#333" });
+  } catch (e) {}
+}
+
+// one native message to the host, answer back (the host replies with a
+// frame we read once; a missing host or a broken pipe reads as the nm
+// death word, never a hung click).
+function sendNative(msg, ms) {
+  return new Promise((resolve, reject) => {
+    let port;
+    try {
+      port = chrome.runtime.connectNative(HOST);
+    } catch (e) {
+      reject({ badge: "nm" });
+      return;
+    }
+    let done = false;
+    const finish = (fn, v) => {
+      if (done) return;
+      done = true;
+      clearTimeout(t);
+      try { port.disconnect(); } catch (e) {}
+      fn(v);
+    };
+    const t = setTimeout(() => finish(reject, { badge: "slow" }), ms);
+    port.onMessage.addListener((m) => finish(resolve, m));
+    port.onDisconnect.addListener(() => finish(reject, { badge: "nm" }));
+    port.postMessage(msg);
+  });
+}
+
 async function veil(_tab) {
-  const tab = _tab && _tab.id !== undefined ? _tab : await activeTab();
-  if (!tab || tab.id === undefined) return;
+  const tab = _tab && typeof _tab.id === "number" ? _tab
+            : (await chrome.tabs.query({ active: true,
+                                         currentWindow: true }))[0];
+  if (!tab || typeof tab.id !== "number") return;
+
   let inj;
   try {
-    // the ad-blocker class of call: one function, serialized into the
-    // tab's world, its return value handed back. The function is
-    // SELF-CONTAINED (executeScript serializes it alone - no closures
-    // ride), so the eye's own string comes in as an ARG and eval runs
-    // it there; the suite pins that the shipped string is byte-exact.
     inj = await withTimeout(chrome.scripting.executeScript({
-      target: {tabId: tab.id, injectImmediately: true},
-      func: (src) => eval(src),
-      args: [RECT_JS],
+      target: { tabId: tab.id },
+      func: measureVideo,
     }), 5000, "slow");
   } catch (e) {
-    say("ask");                // the injection itself was refused
-    return;                    // (restricted page, or a browser that
-}                              // says no to scripting)
-  const v = inj && inj[0] && inj[0].result;
-  if (!v || v === "null") {
-    say("novid");              // the page answers no video element:
-    return;                    // nothing to veil, nothing to write
+    say("ask");                    // the injection was refused (a
+    return;                        // restricted page, or a browser that
+  }                                // says no to scripting)
+  const row = inj && inj[0] && inj[0].result;
+  if (!row) {
+    say("novid");                  // no <video> element: nothing to
+    return;                        // veil, nothing to send
   }
-  let row;
-  try { row = JSON.parse(v); }
-  catch (e) { say("json"); return; }
+
   let win;
   try {
     win = await withTimeout(chrome.windows.get(tab.windowId),
                             5000, "slow");
   } catch (e) {
-    say("win");                // the desk bounds are the one thing
-    return;                    // the fold cannot be computed without
+    say("win");                    // the desk bounds are the one thing
+    return;                        // the fold cannot be computed without
   }
-  row.bounds = {left: win.left, top: win.top,
-                width: win.width, height: win.height};
+  row.bounds = { left: win.left, top: win.top,
+                 width: win.width, height: win.height };
   row.family = FAMILY;
   row.ts = Date.now() / 1000;
-  const blob = new Blob([JSON.stringify(row) + "\n"],
-                        {type: "application/octet-stream"});
-  const url = URL.createObjectURL(blob);
-  try {
-    await chrome.downloads.download({
-      url, filename: "PanelBoss/rect", saveAs: false,
-      conflictAction: "overwrite"});
-    say("veiled");
-  } catch (e) {
-    say("dl");                 // the download was REFUSED (a blocked
-  }                            // downloads permission reads exactly
-}                              // like this word
 
-function say(word) {
   try {
-    chrome.action.setBadgeText({text: word});
-    chrome.action.setBadgeBackgroundColor({color: "#333"});
-  } catch (e) {}
+    const ans = await sendNative({ op: "veil", payload: row }, 5000);
+    say(ans && ans.ok ? "veiled" : "nm");
+  } catch (e) {
+    say(e && e.badge ? e.badge : "nm");
+  }
 }
 
 chrome.action.onClicked.addListener(veil);

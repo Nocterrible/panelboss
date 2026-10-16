@@ -15,6 +15,10 @@ build/
 dist/
 *.egg-info
 
+# native-messaging host build (built by extension/host/install_host.ps1)
+extension/host/panelboss-host.exe
+extension/host/build/
+
 # optional extras
 .faces/
 
