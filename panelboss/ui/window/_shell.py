@@ -457,21 +457,38 @@ class SettingsWindow(
         # a z-order that makes two-generation bleed-through
         # unrepresentable.
         self._backdrop.tkraise()
-        self._repaint_switches(pane=key)  # knob-lie belt (pane arm)
-        self._sync_slider_wheels()
-        for k, b in self.tab_buttons.items():
-            b.configure(**(self.skin.primary() if k == key
-                          else self.skin.secondary()))
-        try:
-            self._backdrop.update()      # flat fill over the body NOW
-        except Exception:
-            pass                         # dying window: the switch below
-        # (a real event flush, not RedrawWindow: only update() forces
-        # Tk to paint the flat frame synchronously - measured). The prep
-        # above runs while the flat frame is coming up, so the flat
-        # moment is one or two frames, not the whole rebuild's budget.
-        page.tkraise()                   # THE SWITCH - restack, instant
-        page.sync_region()               # belt for the wheel: geometry
+        try:            # findings 1+2: the whole switch under one finally
+            self._repaint_switches(pane=key)  # knob-lie belt (pane arm)
+            self._sync_slider_wheels()
+            for k, b in self.tab_buttons.items():
+                b.configure(**(self.skin.primary() if k == key
+                              else self.skin.secondary()))
+            try:
+                self._backdrop.update()  # flat fill over the body NOW
+            except Exception:
+                pass                     # dying window: the switch below
+            # (a real event flush, not RedrawWindow: only update() forces
+            # Tk to paint the flat frame synchronously - measured). The
+            # prep above runs while the flat frame is coming up, so the
+            # flat moment is one or two frames, not the whole rebuild's
+            # budget.
+        finally:
+            # FINDINGS 1+2 (the gate, Oct 16): an exception between the
+            # backdrop raise and the switch used to leave the flat
+            # backdrop up FOREVER (blank body - and _tab was already
+            # set, so re-clicking the same tab no-oped: the old veil
+            # had a tick watchdog, the backdrop had none; this finally
+            # IS the watchdog). AND the flush above pumps queued
+            # events, so a nested second tab click completed INSIDE
+            # the outer switch; the outer's unconditional re-raise then
+            # re-dressed the superseded page (visible A, dressed B,
+            # B's tab a dead click until A is chosen again). The raise
+            # runs only while this switch is still the truth (_tab
+            # re-read, not captured): a nested switcher already raised
+            # its own page and needs no re-raise.
+            if self._tab == key:
+                page.tkraise()           # THE SWITCH - restack, instant
+                page.sync_region()       # belt for the wheel: geometry
 
 
     def _sync_slider_wheels(self):

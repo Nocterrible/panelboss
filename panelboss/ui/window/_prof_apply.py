@@ -188,7 +188,20 @@ class _ModeMixin:
                         except (tk.TclError, RuntimeError):
                             pass     # superseded menu: the repaint below
                                      # builds the picker from the store
+                        # THE READABLE BEAT (owner Oct 16: "capturing..."
+                        # was never readable - the worker reports in
+                        # ~100 ms and the old code blanked the say-line
+                        # the same instant). The durable line naming what
+                        # landed stays until the next interaction
+                        # overwrites it - honest beats a timer. ORDER:
+                        # after _profile_picked (which blanks _prof_msg
+                        # and paints the fresh pane) and INSIDE the
+                        # ghost-guard the whole visual half lives under
+                        # (gate finding 5: the note's paint rode outside
+                        # the except, next to the raise it must survive).
                         self._profile_picked(name)
+                        self._prof_msg = self._captured_note(name)
+                        self._fill_status()
                     else:
                         # the create pane builds _status_lbl and NEVER _mode_status
                         # (_fill_monitors early-returns on prof None), so routing
@@ -204,15 +217,9 @@ class _ModeMixin:
                 if err is None:
                     self._prof_sel = name   # _profile_picked records this
                                             # first; idempotent belt for
-                                            # the mid-render ghost
-                    # THE READABLE BEAT (owner Oct 16: "capturing..." was
-                    # never readable - the worker reports in ~100 ms and
-                    # the old code blanked the say-line the same instant).
-                    # A success now leaves a DURABLE line naming what
-                    # landed, and it stays until the next interaction (any
-                    # later action overwrites it) - honest beats a timer.
-                    self._prof_msg = self._captured_note(name)
-                    self._fill_status()
+                                            # the mid-render ghost: the
+                                            # note/repaint above may
+                                            # have died on a ghost
             try:
                 self.after(0, done)
             except (tk.TclError, RuntimeError):       # the sibling's measured

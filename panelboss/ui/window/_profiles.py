@@ -25,7 +25,7 @@ import customtkinter as ctk
 from .. import theme
 from ... import profiles, wm
 from ._constants import TIPS, HDR_ASK_LABELS, HDR_MENU_ORDER
-from ._present import present
+from ._present import present, clip_siblings
 from ._widgets import SkewCombo, _fresh_pin_edit
 
 log = logging.getLogger("ui")
@@ -154,11 +154,20 @@ class _ProfilesMixin:
             self._page_region()   # same rule as _repaint: the whole
             #                   body just swapped - re-measure (see
             #                   scroll_probe, Oct 12)
+            clip_siblings(self._prof_body)     # fresh-born widgets are
+            clip_siblings(self._prof_pins_body)  # clip-blind until told
             present(self._body)   # ONE synchronous repaint of the swapped
             #                   pane: the fresh widgets map here, and
             #                   presenting them now (not on the next tick)
             #                   is what keeps the swap a single frame
-            #                   instead of the old/new mix the owner saw
+            #                   instead of the old/new mix the owner saw.
+            #                   GATE FINDING 3 (Oct 16): the clip pass in
+            #                   build_all is a BUILD-TIME snapshot - the
+            #                   widgets rebuilt HERE were born flag-free
+            #                   and the forced present makes them paint
+            #                   anyway, over the backdrop and the active
+            #                   page if this pane's tab is hidden. Clip
+            #                   the fresh bodies first (idempotent).
 
 
     def _repaint(self, *names):
@@ -192,6 +201,15 @@ class _ProfilesMixin:
             if not olds:
                 continue            # nothing was rebuilt: the section
                 #                   updated in place (or first fill)
+            clip_siblings(self._psec[name])   # the fresh buffer was born
+            #                                 # after the build-time clip
+            #                                 # pass (gate finding 3):
+            #                                 # clip BEFORE the forced
+            #                                 # paint below, or a repaint
+            #                                 # that lands while this
+            #                                 # pane's tab is hidden
+            #                                 # paints over the backdrop
+            #                                 # and the active page.
             self._psec[name].pack(
                 fill="x", pady=self._psec_pady.get(name, (0, 0)),
                 # anchor on the frame being REPLACED (still packed
