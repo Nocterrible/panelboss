@@ -39,8 +39,16 @@ class _ProfilesMixin:
         # are no longer per-tab literals - every tab now shares ONE column
         # rhythm (_two_columns: equal widths, one gutter, flush edges), so
         # the eye finds the grid without hunting.
-        col, right = self._two_columns(page)
+        gcol, gright = self._two_columns(page)
+        # the two column frames the suite knows by name stay PACK-managed
+        # (profiles_ui_test asserts winfo_manager() == "pack") - they are
+        # now transparent wrappers inside the grid's equal columns, which
+        # is what actually makes the widths equal.
+        col = ctk.CTkFrame(gcol, fg_color="transparent")
+        col.pack(fill="both", expand=True)
         self._prof_left = col
+        right = ctk.CTkFrame(gright, fg_color="transparent")
+        right.pack(fill="both", expand=True)
         self._prof_right = right
         box = self._card(col, "whole-desktop profiles",
                          "one profile is the desk spelled out: the "

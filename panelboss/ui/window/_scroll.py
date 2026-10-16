@@ -202,6 +202,15 @@ class ScrollHost(tk.Frame):
             lambda e: None if getattr(self, "_dead", False)
             else self.sync_region(), add="+")
         self._canvas.bind("<Configure>", self._width, add="+")
+        # the FIRST MEASURE from a real height (owner Oct 15, the dead
+        # trough that survived the swap): a host born inside a section
+        # that is built while its page is still unmapped measures a 1 px
+        # canvas, reads "content overflows", packs the bar - and nothing
+        # later re-checks, because a fitted region fires no <Configure>.
+        # The map is the missing seat: one re-measure when the widget
+        # lands on screen (sync_region is already debounced and
+        # idempotent, so an eager host pays nothing for this).
+        self.bind("<Map>", lambda e: self.sync_region(), add="+")
         # the wheel: one dispatcher, installed once, owned by no host.
         # UNCONDITIONAL (gate finding 1): PanelBoss owns <MouseWheel>
         # app-wide - a guarded install would silently skip if any

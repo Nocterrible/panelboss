@@ -322,22 +322,28 @@ class _WidgetsMixin:
         """THE ONE COLUMN RHYTHM (owner Oct 15, spatial similarity: "all
         cards should occupy a uniform footprint - same widths, same column
         rhythm, same header band height across every tab"). Two columns of
-        equal width filling the page, one gutter token between them, flush
+        EQUAL width filling the page, one gutter token between them, flush
         to both page edges - every tab rides this, so the eye finds the
         grid without hunting.
 
-        Why equal: pack hands every -expand sibling an equal share of the
-        LEFTOVER space, so two identical requested widths land identical.
-        The width below is a FLOOR (the HINT_WRAP budget: 480 + its two
-        section pads), never the final number. Why pack, not grid: the
-        pinned-apps suite asserts both profile columns are pack-managed,
-        and one rhythm everywhere is the point."""
+        Why grid + `uniform` and not pack+expand: pack hands equal shares
+        of the LEFTOVER to its -expand siblings, so two columns with
+        different content requests land different widths (measured on the
+        wide-geometry shot: 904 vs 812 at a 1804 px window). `uniform`
+        makes the widths equal BY CONSTRUCTION, whatever the content
+        asks for. The width option below is only a build-time hint; the
+        fitted wrap (_fit_wrap) is what keeps text honest when a column
+        is narrow, so no minsize is pinned - a small window shrinks both
+        columns together instead of clipping the right one."""
         g = theme.S_SECTION if gutter is None else gutter
         floor = HINT_WRAP + 2 * theme.S_SECTION
+        parent.grid_rowconfigure(0, weight=1)
+        parent.grid_columnconfigure(0, weight=1, uniform="pbcol")
+        parent.grid_columnconfigure(1, weight=1, uniform="pbcol")
         left = ctk.CTkFrame(parent, width=floor, fg_color="transparent")
-        left.pack(side="left", fill="both", expand=True)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, g))
         right = ctk.CTkFrame(parent, width=floor, fg_color="transparent")
-        right.pack(side="left", fill="both", expand=True, padx=(g, 0))
+        right.grid(row=0, column=1, sticky="nsew")
         return left, right
 
     def _card(self, parent, title, sub=""):
