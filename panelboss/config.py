@@ -429,6 +429,44 @@ DEFAULTS = {
                                    # the RegisterHotKey against the
                                    # display pump's window
     },
+    "videodim": {
+        "enabled": False,          # the companion's opt-in rail, and
+                                   # the debug-flag route is RETIRED
+                                   # (Oct 15): the debug port hands
+                                   # any local process full CDP (the
+                                   # infostealer classic), the approval
+                                   # dialogs + the automation banner
+                                   # make the app read as the cookie
+                                   # thief, and Opera's own Content/
+                                   # Privacy gate refused the flag -
+                                   # replacement: the content-script
+                                   # companion (extension/), no
+                                   # debugger, no port; the flagging
+                                   # families default to none
+        "on": False,               # the dim-around-the-playing-video
+                                   # consent, default-off like every
+                                   # other rail: off = no sockets, no
+                                   # file reads, nothing (Oct 15)
+        "flag_families": (),       # the launch-with-flag families:
+                                   # empty = zero families flagged
+                                   # (the opt-in law)
+        "sites": ["youtube.com", "netflix.com", "twitch.tv",
+                  "vimeo.com", "disneyplus.com", "primevideo.com"],
+                                   # the hosts the eye may trust for a
+                                   # rect; a row is a substring of the
+                                   # page url (normalize_videodim keeps
+                                   # strings, warns the junk)
+        "min_rect_px": 200000,     # the ad-banner line of defense: a
+                                   # "video" smaller than this (in
+                                   # PHYSICAL px) is not a video;
+                                   # clamped 0..4_000_000 (the silent
+                                   # rails, the hider's hold_sec law)
+        "grace_s": 3,              # how stale the last good rect may
+                                   # ride before the eye calls it gone
+                                   # (a vanished rect is a stopped
+                                   # video: the dimmer's ramp retracts
+                                   # the frame); clamped 0..60
+    },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
                                 # profile the app re-applies by itself
@@ -1027,6 +1065,83 @@ def normalize_dimmer(value):
             "apps": apps, "bound": bound}
 
 
+VIDEODIM_MIN_FLOOR = 0             # a zero min means "trust every
+VIDEODIM_MIN_CEIL = 4_000_000      #   rect" - legal, not a mistake
+VIDEODIM_GRACE_FLOOR = 0
+VIDEODIM_GRACE_CEIL = 60
+
+
+def normalize_videodim(value):
+    """[videodim] in its in-memory shape: {on, sites, min_rect_px,
+    grace_s}. The same honesty law as normalize_dimmer, mirrored:
+    a bad on warns and folds to False (the default-off root - the
+    feature sleeps until the owner wakes it), the rails clamp in
+    silence, and a sites list keeps its strings and warns the junk
+    (an empty list is an answer: match no host, live only off the
+    bridge click)."""
+    value = value if isinstance(value, dict) else {}
+    on = value.get("on", False)
+    if not isinstance(on, bool):
+        log.warning("videodim on %r is not a bool; the eye stays shut",
+                    on)
+        on = False
+    # the companion's opt-in rail (Oct 15, retired-flag dossier): the
+    # debug port hands any local process full CDP (the infostealer
+    # classic), the approval dialogs + automation banner make the app
+    # read as the cookie thief, and Opera's Content/Privacy gate
+    # refused the flag; the replacement is the content-script
+    # companion, no debugger, no port. Enabled absent (the pre-companion
+    # file) = False; flag_families carries the real key names and an
+    # empty list is the answer: flag no browser.
+    enabled = value.get("enabled", False)
+    if not isinstance(enabled, bool):
+        log.warning("videodim enabled %r is not a bool; the companion "
+                    "stays off", enabled)
+        enabled = False
+    fams = value.get("flag_families")
+    if fams is None:
+        fams = list(DEFAULTS["videodim"]["flag_families"])
+    elif isinstance(fams, (list, tuple)):
+        good = [str(s).strip() for s in fams if isinstance(s, str)
+                and str(s).strip()]
+        if len(good) != len(fams):
+            log.warning("videodim flag_families %r: only strings are "
+                        "families; the rest are dropped", fams)
+        fams = good
+    else:
+        log.warning("videodim flag_families %r is not a list; the "
+                    "shipped default (no families) returns", fams)
+        fams = list(DEFAULTS["videodim"]["flag_families"])
+    sites = value.get("sites")
+    if sites is None:
+        sites = list(DEFAULTS["videodim"]["sites"])
+    elif isinstance(sites, (list, tuple)):
+        good = [str(s).strip() for s in sites if isinstance(s, str)
+                and str(s).strip()]
+        if len(good) != len(sites):
+            log.warning("videodim sites %r: only strings are hosts; "
+                        "the rest are dropped", sites)
+        sites = good
+    else:
+        log.warning("videodim sites %r is not a list; the shipped "
+                    "default hosts return", sites)
+        sites = list(DEFAULTS["videodim"]["sites"])
+    try:
+        mins = int(value.get("min_rect_px",
+                             DEFAULTS["videodim"]["min_rect_px"]))
+    except (TypeError, ValueError):
+        mins = DEFAULTS["videodim"]["min_rect_px"]
+    mins = max(VIDEODIM_MIN_FLOOR, min(VIDEODIM_MIN_CEIL, mins))
+    try:
+        grace = int(value.get("grace_s", DEFAULTS["videodim"]["grace_s"]))
+    except (TypeError, ValueError):
+        grace = DEFAULTS["videodim"]["grace_s"]
+    grace = max(VIDEODIM_GRACE_FLOOR, min(VIDEODIM_GRACE_CEIL, grace))
+    return {"enabled": enabled, "flag_families": fams,
+            "on": on, "sites": sites, "min_rect_px": mins,
+            "grace_s": grace}
+
+
 def _live_shorts():
     """The desk's panel shorts, for the migration's rows. A seam on
     purpose: the suite patches this instead of the Win32 enum, and a
@@ -1174,6 +1289,7 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
     merged["hider"] = normalize_hider(merged.get("hider"))
     merged["jog"] = normalize_jog(merged.get("jog"))
     merged["dimmer"] = normalize_dimmer(merged.get("dimmer"))
+    merged["videodim"] = normalize_videodim(merged.get("videodim"))
     if verbose:
         log.debug(f"using config from {path}")
     # [camera] index and name_contains normalize to one in-memory shape
