@@ -22,6 +22,7 @@ from .. import theme
 from ._camedit import ADD_LABEL, duty_roster
 from ._identity import diag_suffix, display_names, hidden_indices
 from ._constants import TIPS
+from ._hints import HINT_WRAP
 from ._widgets import SkewCombo
 
 log = logging.getLogger("ui")
@@ -29,27 +30,32 @@ log = logging.getLogger("ui")
 
 class _CameraMixin:
     # ----------------------------------------------------- camera + preview --
-    def _build_camera_card(self, band):
-        # beside the settings column (see _build_detection): the
-        # window cannot promise the preview height fits, so the page
-        # scrolls (unscrollable, the switch was simply born below the
-        # clip edge - seen live)
-        # the card matches the preview width for column alignment, but
-        # NEVER narrower than its own form (320 px zone + section
-        # pads): a debug-sized preview_width (the harness config's 140)
-        # used to clip every label mid-word - the card bows to the
-        # preview, not below its own content
-        card = ctk.CTkFrame(band, width=max(
+    def _build_camera_card(self, parent):
+        # the camera column (owner Oct 15: it is the SECOND COLUMN of the
+        # tab's one rhythm now, not a card parked beside it). The width is
+        # a FLOOR - the preview plus its own form - never the final size;
+        # the column decides that.
+        card = ctk.CTkFrame(parent, width=max(
             int(self.cfg["ui"]["preview_width"]) + 30, 360),
             **self.skin.panel_style())
-        card.pack(anchor="nw", padx=(theme.S_SECTION, 0))
+        card.pack(anchor="nw", fill="x")
         head = ctk.CTkFrame(card, fg_color="transparent")
         head.pack(anchor="w", padx=theme.S_SECTION,
-                  pady=(theme.S_ROW, 0))
+                  pady=(theme.S_SECTION, 0))
         head_lbl = ctk.CTkLabel(head, text="Camera",
                                 font=self.skin.font(15, "bold"),
                                 **self.skin.text_style())
         head_lbl.pack(side="left")
+        # the same header band every card wears (owner Oct 15, spatial
+        # similarity: same header height across the tabs) - a title line
+        # plus the one-line sub, both on the card's own padding
+        ctk.CTkLabel(card,
+                     text="the eye the detector watches, and how it "
+                          "behaves as the screens change",
+                     font=self.skin.font(11), justify="left", anchor="w",
+                     wraplength=HINT_WRAP,
+                     **self.skin.text_style("sub")).pack(
+            anchor="w", padx=theme.S_SECTION)
         # the camera card is a preview_width+30 (~350 px) column; the
         # paragraph that used to ride the inline hint line now pops on
         # the heading's hover (UI-1c reversal - bubbles back)

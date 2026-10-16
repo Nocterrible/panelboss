@@ -125,14 +125,15 @@ class _EditorMixin:
         self.match_menu.grid(row=0, column=1, sticky="e")
         row = self._row(sec, "open it if missing",
                         TIPS["profile_pin_open"])
-        self.pin_open_box = ctk.CTkCheckBox(row, text="",
-                                            font=self.skin.font(12),
-                                            command=self._pin_open,
-                                            checkbox_width=18,
-                                            checkbox_height=18,
-                                            border_color=self.skin.border_raised,
-                                            fg_color=self.skin.accent,
-                                            hover_color=self.skin.accent)
+        # a SWITCH, not a bare checkbox (owner Oct 15, the legibility
+        # pass): an 18 px empty checkbox with no text beside it is a
+        # rounded outline on a dark canvas - it read as a broken widget,
+        # not an off toggle. Every other lone boolean in the house (live
+        # preview, the movie-theater master) is a switch.
+        self.pin_open_box = ctk.CTkSwitch(row, text="",
+                                          font=self.skin.font(12),
+                                          command=self._pin_open,
+                                          **self.skin.switch_style())
         self.pin_open_box.grid(row=0, column=1, sticky="e")
         # knob-from-truth, BOTH branches (the editor checkbox is the
         # family's ninth member - caught in the same owner pass): the

@@ -63,6 +63,7 @@ from PIL import Image
 
 from .. import theme
 from . import _identity
+from ._scroll import ScrollHost
 from ... import camera
 
 log = logging.getLogger("ui")
@@ -395,14 +396,16 @@ class SetupWindow(ctk.CTkToplevel):
                                  font=self.skin.font(13, "bold"),
                                  **self.skin.text_style("sub"))
         self.veil.pack(side="bottom", pady=theme.S_ROW)
-        self._host = ctk.CTkScrollableFrame(self, fg_color="transparent",
-                                            corner_radius=0)
-        # flat (owner Oct 15): the main window's pages ride the flat
-        # tk Canvas ScrollHost (_scroll.py); the setup screen's scroll
-        # surface must match - CTkScrollableFrame's _parent_frame is a
-        # CTkFrame and would otherwise keep the theme's rounded 6px
-        # look (and its camo risk) while sitting under flat cards.
-        # radius 0 = one rectangle, no corner patch, no mismatch.
+        # THE HOUSE'S OWN SCROLL SURFACE (owner Oct 15 + the earlier
+        # uniformity note this line used to concede in words): the setup
+        # screen now rides the same flat tk ScrollHost the main window's
+        # pages ride, not CTkScrollableFrame. Three wins in one swap:
+        # the bar is the themed one (ctk's own scrollbar painted the
+        # system-light trough), the hide-when-fitted law comes along for
+        # free (no dead trough on a short board), and the wheel dispatcher
+        # is the shared one. The 60 ms pump and the destroy law are
+        # untouched - only the widget class changed.
+        self._host = ScrollHost(self, bg=self.skin.bg)
         self._host.pack(fill="both", expand=True,
                         padx=theme.S_SECTION, pady=(0, theme.S_FIELD))
         threading.Thread(target=self._gather, daemon=True,
@@ -665,8 +668,10 @@ class SetupWindow(ctk.CTkToplevel):
 
     def _add_card(self, row, error, frame):
         spec = card_spec(row, frame is None, self.app.cfg["camera"])
-        card = ctk.CTkFrame(self._host, **self.skin.panel_style())
-        card.pack(fill="x", pady=(0, theme.S_ROW))
+        # cards are invisible now (owner Oct 15), so the gap IS the
+        # grouping - same S_PAGE rhythm the main window's cards use
+        card = ctk.CTkFrame(self._host.inner, **self.skin.panel_style())
+        card.pack(fill="x", pady=(0, theme.S_PAGE))
         head = spec["header"]
         if frame is None:
             head += "  ·  no frame"          # the honest reason the

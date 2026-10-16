@@ -293,20 +293,76 @@ def desk_position(rows, x, y, w, h):
 
 
 class _WidgetsMixin:
+    def _fit_wrap(self, container, label, pad=None):
+        """Keep a wrapped label inside its container at ANY width (owner
+        Oct 15, the NO-CLIPPING word). HINT_WRAP was a fixed 480 and a
+        card can be narrower than that on a small desk or a narrow column
+        - a wraplength wider than its own box clips, silently. The honest
+        wrap is the container's own width minus its padding, recomputed on
+        every resize; the diff guard is the loop-breaker (a configure that
+        does not change the number must not re-fire the layout)."""
+        step = theme.S_SECTION if pad is None else pad
+        seen = [None]
+
+        def fit(event):
+            want = max(200, int(event.width) - 2 * step)
+            if want == seen[0]:
+                return
+            seen[0] = want
+            try:
+                label.configure(wraplength=want)
+            except Exception:
+                pass                     # dying card: nothing to fit
+        try:
+            container.bind("<Configure>", fit, add="+")
+        except Exception:
+            pass
+
+    def _two_columns(self, parent, gutter=None):
+        """THE ONE COLUMN RHYTHM (owner Oct 15, spatial similarity: "all
+        cards should occupy a uniform footprint - same widths, same column
+        rhythm, same header band height across every tab"). Two columns of
+        equal width filling the page, one gutter token between them, flush
+        to both page edges - every tab rides this, so the eye finds the
+        grid without hunting.
+
+        Why equal: pack hands every -expand sibling an equal share of the
+        LEFTOVER space, so two identical requested widths land identical.
+        The width below is a FLOOR (the HINT_WRAP budget: 480 + its two
+        section pads), never the final number. Why pack, not grid: the
+        pinned-apps suite asserts both profile columns are pack-managed,
+        and one rhythm everywhere is the point."""
+        g = theme.S_SECTION if gutter is None else gutter
+        floor = HINT_WRAP + 2 * theme.S_SECTION
+        left = ctk.CTkFrame(parent, width=floor, fg_color="transparent")
+        left.pack(side="left", fill="both", expand=True)
+        right = ctk.CTkFrame(parent, width=floor, fg_color="transparent")
+        right.pack(side="left", fill="both", expand=True, padx=(g, 0))
+        return left, right
+
     def _card(self, parent, title, sub=""):
+        # the card is INVISIBLE (owner Oct 15: "I don't like the look of
+        # cards") - page fill, no border. The section GAP is therefore
+        # load-bearing: a whole S_PAGE of air under every card plus the
+        # header's own S_SECTION above it is what makes two adjacent
+        # blocks read as two blocks at all.
         frame = ctk.CTkFrame(parent, **self.skin.panel_style())
-        frame.pack(fill="x", pady=(0, theme.S_SECTION))
+        frame.pack(fill="x", pady=(0, theme.S_PAGE))
         ctk.CTkLabel(frame, text=title, font=self.skin.font(15, "bold"),
                      **self.skin.text_style()).pack(
-            anchor="w", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
+            anchor="w", padx=theme.S_SECTION, pady=(theme.S_SECTION, 0))
         if sub:
             # wraplength or the label clips: the sub lines are longer
-            # than any column. The sub doubles as the heading's hover
-            # bubble (UI-1c reversal: the bubbles are back, on the labels)
+            # than any column. Now FITTED to the card's live width
+            # (_fit_wrap) instead of a fixed HINT_WRAP, so a narrow
+            # column wraps honestly instead of cutting a sentence off.
+            # The sub doubles as the heading's hover bubble (UI-1c
+            # reversal: the bubbles are back, on the labels)
             sub_lbl = ctk.CTkLabel(frame, text=sub, font=self.skin.font(11),
                                    wraplength=HINT_WRAP, justify="left",
                                    anchor="w", **self.skin.text_style("sub"))
             sub_lbl.pack(anchor="w", padx=theme.S_SECTION)
+            self._fit_wrap(frame, sub_lbl)
             sub_lbl.bind("<Enter>",
                          lambda e=None: self.tips._schedule(sub, sub_lbl),
                          add="+")

@@ -105,9 +105,15 @@ class Tips:
         tip.transient(self.root)               # note at the cursor, not
                                                # a window that announces
                                                # itself as another app
-        frame = tk.Frame(tip, bg=self.skin.border, padx=1, pady=1)  # hairline border, not a gap
+        # the tip is a POPUP: it wears the raised tier (owner Oct 15, the
+        # cards-disappear pass). On the old panel/border tokens it stayed
+        # legible by contrast with the card fill; with the card fill now
+        # EQUAL to the page, a page-fill tip over a page-fill window is an
+        # invisible box - the one surface a "hairline" would not have
+        # saved. Popups float above the canvas, so they take RAISED.
+        frame = tk.Frame(tip, bg=self.skin.border_raised, padx=1, pady=1)
         frame.pack(fill="both", expand=True)
-        tk.Label(frame, text=text, bg=self.skin.panel, fg=self.skin.text,
+        tk.Label(frame, text=text, bg=self.skin.field_bg, fg=self.skin.text,
                  font=("Segoe UI", 10), justify="left", anchor="nw",
                  wraplength=WIDTH - 24, padx=theme.S_ROW, pady=theme.S_FIELD).pack(anchor="nw")
         tip.update_idletasks()

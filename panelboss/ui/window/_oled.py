@@ -167,17 +167,15 @@ TIP_COMP = {
 class _OledMixin:
     # ------------------------------------------------------------------ oled --
     def _build_oled(self, parent):
-        # the two-column law (owner, Oct 15), the power tab's idiom at
-        # _power.py:46: fixed-width side-packed columns; the ScrollHost
-        # scrolls the rest. LEFT: hider over dimmer - the pixels that
-        # rest; RIGHT: the refresh card over the veil card - the pixels
-        # that move. 560/520: the card sub's own 480 wrap (HINT_WRAP)
-        # needs 488 of inner room, and the 520 column supplies exactly
-        # it. Pack order is the owner's cell order, column by column.
-        col = ctk.CTkFrame(parent, width=560, fg_color="transparent")
-        col.pack(side="left", fill="y")
-        col2 = ctk.CTkFrame(parent, width=520, fg_color="transparent")
-        col2.pack(side="left", fill="y")
+        # the two-column law (owner, Oct 15), now on the HOUSE rhythm
+        # (_two_columns): equal widths, one gutter, flush edges - the
+        # old per-tab 560/520 literals were a second rhythm the eye had
+        # to re-learn on every tab, and pack's propagate meant they were
+        # never honored anyway (the columns sized to their content).
+        # LEFT: hider over dimmer - the pixels that rest; RIGHT: the
+        # refresh card over the veil card - the pixels that move. Pack
+        # order is the owner's cell order, column by column.
+        col, col2 = self._two_columns(parent)
         box = self._card(col, "taskbar hider",
                          "a painted strip that keeps the bar's pixels "
                          "from aging in place")
@@ -343,7 +341,7 @@ class _OledMixin:
             row, text="run wash now", height=26, width=120,
             command=self._oled_wash_now, **self.skin.secondary())
         self.oled_wash_btn.grid(row=0, column=1, sticky="e")
-        self.oled_say2 = ctk.CTkLabel(row, font=self.skin.font(11),
+        self.oled_say2 = ctk.CTkLabel(row, text="", font=self.skin.font(11),
                                       wraplength=200, justify="left",
                                       anchor="e",
                                       **self.skin.text_style("sub"))
@@ -569,7 +567,12 @@ class _OledMixin:
                       **self.skin.secondary()).grid(
             row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
         row = self._row(box, "excluded", TIP_DIM["apps"], hint_chars=42)
-        self._dim_apps_box = ctk.CTkFrame(row, fg_color="transparent")
+        # zero-size on purpose: CTk's frame default is 200x200, and this
+        # box is EMPTY until an app is excluded - the default request was
+        # a 200 px hole in the middle of the card (measured in the
+        # baseline shot, owner's "even spacing" finding)
+        self._dim_apps_box = ctk.CTkFrame(row, width=0, height=0,
+                                          fg_color="transparent")
         self._dim_apps_box.grid(row=0, column=1, columnspan=2, sticky="e")
         self._dim_apps_repaint()
 
@@ -685,6 +688,16 @@ class _OledMixin:
         for c in self._dim_apps_box.winfo_children():
             c.destroy()
         apps = (self.cfg.get("dimmer") or {}).get("apps") or {}
+        if not apps:
+            # the honest empty state: with the card chrome gone (owner
+            # Oct 15) a bare "excluded" label over nothing read as a
+            # broken row rather than an empty one
+            ctk.CTkLabel(self._dim_apps_box,
+                         text="none - every app wears a veil",
+                         font=self.skin.font(11), anchor="e",
+                         **self.skin.text_style("sub")).pack(
+                side="right", padx=(theme.S_FIELD, 0))
+            return
         for name in sorted(apps):
             line = ctk.CTkFrame(self._dim_apps_box, fg_color="transparent")
             line.pack(fill="x")

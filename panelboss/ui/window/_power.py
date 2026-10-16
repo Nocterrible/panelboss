@@ -43,17 +43,7 @@ log = logging.getLogger("ui")
 class _PowerMixin:
     # --------------------------------------------------------- power plan --
     def _build_power(self, page):
-        col = ctk.CTkFrame(page, width=560, fg_color="transparent")
-        col.pack(side="left", fill="y")
-        # the profiles tab's two-column law, extended here on the
-        # owner's word (Oct 12): the gaming refresh-rates card (and,
-        # until its Oct-15 burial, the Game DVR card) move to column
-        # two - they are the page's rare-visit knobs, not its timer
-        # story, and the single-column page had grown into the
-        # owner's "too long" complaint by exactly the distance their
-        # cards add
-        col2 = ctk.CTkFrame(page, width=520, fg_color="transparent")
-        col2.pack(side="left", fill="y")
+        col, col2 = self._two_columns(page)
         box = self._card(col, "override Windows' own timers",
                          "nothing in the power plan changes: the "
                          "timers are only held from firing while the app "

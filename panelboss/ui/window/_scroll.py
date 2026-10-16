@@ -25,6 +25,79 @@ withdraws all take the hit without re-entry.
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import ttk
+
+from .. import theme
+
+_SCROLLBAR_STYLES = set()
+                # style names already configured in THIS interpreter,
+                # so a rebuild storm does not re-configure the style per bar
+
+
+def scrollbar_style(master, surface):
+    """The ttk style name for a bar over `surface`, configured once per
+    interpreter (see themed_scrollbar's header for why ttk and why clam)."""
+    style = ttk.Style(master)
+    name = "PB_%s.Vertical.TScrollbar" % str(surface).lstrip("#")
+    if name not in _SCROLLBAR_STYLES:
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass                       # foreign theme: the configure below
+                                       # still lands where it can
+        thumb = theme_rule_thumb(surface)
+        style.configure(name, troughcolor=surface, background=thumb,
+                        bordercolor=surface, arrowcolor=surface,
+                        lightcolor=thumb, darkcolor=thumb,
+                        relief="flat", borderwidth=0, focuscolor=surface)
+        try:
+            style.map(name, background=[("active", thumb),
+                                        ("pressed", thumb)])
+        except Exception:
+            pass
+        _SCROLLBAR_STYLES.add(name)
+    return name
+
+
+def themed_scrollbar(master, surface, width=10, command=None):
+    """A vertical scrollbar that honors the skin.
+
+    WHY NOT tk.Scrollbar (measured, Oct 15, scratch probe against this
+    venv's Tk 9.0.0): troughcolor/background/activebackground/
+    elementborderwidth/borderwidth/relief are ALL ignored - whatever the
+    options, the widget paints the system-light trough, so every bar in
+    the app read as a white slash inside a dark card (the power tab's
+    blockers box and gaming boxes, the pinned-apps list, the page host).
+    ttk's clam theme DOES honor them, so every bar in the house rides one
+    configured style instead.
+
+    Two styles, named by the surface the bar sits on (the page tier or
+    the raised/popup tier on top of it) - the trough vanishes into
+    whatever it is drawn over while the thumb stays a visible rail.
+
+    Side effect, deliberate and named: ttk's theme is switched to clam for
+    this interpreter. The app owns ZERO ttk widgets (grepped; ui/__init__
+    imports ttkbootstrap as an optional probe only), so nothing else can
+    observe the theme change - and it is idempotent per interpreter.
+    """
+    sb = ttk.Scrollbar(master, orient="vertical",
+                       style=scrollbar_style(master, surface),
+                       command=command)
+    try:
+        sb.configure(width=width)
+    except Exception:
+        pass
+    return sb
+
+
+def theme_rule_thumb(surface):
+    """The thumb's rail color for a given trough: the raised-control tier
+    when the bar sits on the page, the lighter control border when it
+    sits ON a raised surface (a thumb equal to its own trough would be an
+    invisible bar - the other half of the defect this module prevents)."""
+    return theme.BORDER_RAISED if str(surface).lower() == \
+        str(theme.RAISED).lower() else theme.RAISED
+
 
 _LIVE = []                     # every mapped ScrollHost, innermost-
                # first resolution order; kept tiny on purpose (five
@@ -94,8 +167,7 @@ class ScrollHost(tk.Frame):
         self._dead = False              # the <Destroy> binding's opt-out
         self._region_job = None         # the sync_region rungs, tracked:
         self._region_job2 = None        # a pending rung is never re-armed
-        self._sb = tk.Scrollbar(self, width=10, bg=bg, troughcolor=bg,
-                                activebackground=bg, highlightthickness=0)
+        self._sb = themed_scrollbar(self, bg, width=10)
         self._sb.pack(side="right", fill="y")
         self._canvas = tk.Canvas(self, bg=bg, highlightthickness=0,
                                  borderwidth=0, width=width, height=height,

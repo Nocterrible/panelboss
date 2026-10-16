@@ -43,6 +43,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 from .. import theme
+from ._scroll import themed_scrollbar, scrollbar_style
 
 # fallbacks ARE the design tiers; call sites pass both explicitly,
 # these answer hand-built uses
@@ -78,9 +79,12 @@ class SkewText(tk.Text):
                          relief="flat", borderwidth=0,
                          highlightthickness=0, padx=4, pady=4)
         self._textbox = self     # the CTkTextbox mirror (see docstring)
-        self._sb = tk.Scrollbar(self, width=_SB_W, bg=bg, troughcolor=bg,
-                                activebackground=bg,
-                                highlightthickness=0, command=self.yview)
+        # the bar rides the house's themed one (the themed_scrollbar
+        # header has the measurement: a plain tk.Scrollbar cannot be
+        # colored on this Tk, so it painted the system-light trough
+        # inside our dark field - the white slashes the owner saw)
+        self._sb = themed_scrollbar(self, bg, width=_SB_W,
+                                    command=self.yview)
         # placed child, pinned to the right edge (Text children take
         # place/grid, not pack slots); relheight keeps it full-height
         self._sb.place(rely=0.0, relx=1.0, anchor="ne", width=_SB_W,
@@ -131,8 +135,11 @@ class SkewText(tk.Text):
         if "fg_color" in kw:
             kw["bg"] = kw.pop("fg_color")
             kw.setdefault("troughcolor", kw["bg"])
-            self._sb.configure(bg=kw["bg"], troughcolor=kw["bg"],
-                               activebackground=kw["bg"])
+            try:                            # re-dress the bar with the new
+                self._sb.configure(         # field: the ttk style IS the
+                    style=scrollbar_style(self, kw["bg"]))  # bar's look
+            except Exception:
+                pass                        # dying widget: no re-dress
         if "text_color" in kw:
             kw["fg"] = kw["insertbackground"] = kw.pop("text_color")
         for key in _IGNORED:

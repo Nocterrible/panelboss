@@ -43,21 +43,22 @@ class _DetectionMixin:
                                          **self.skin.text_style("sub"))
         self.consent_note.pack(anchor="w", padx=theme.S_SECTION,
                                pady=(theme.S_FIELD, theme.S_ROW))
-        # ONE band anchored top-left: the camera card mounts beside
-        # the settings column, never against the window edge -
-        # stretching the window opens spare room to the RIGHT of the
-        # pair, not in a canyon between its halves
+        # ONE band, now on the house rhythm (owner Oct 15, spatial
+        # similarity): the settings column and the camera column are the
+        # SAME two-column split every other tab rides - same widths, same
+        # gutter, flush to both page edges. The old "spare room to the
+        # RIGHT of the pair" shape is superseded: a uniform footprint the
+        # eye can find beats edge-hugging exception cases.
         band = ctk.CTkFrame(page, fg_color="transparent")
-        band.pack(anchor="nw")
+        band.pack(anchor="nw", fill="x")
         self._consent_band = band                # the gray-out's scope
-        left = ctk.CTkFrame(band, width=380, fg_color="transparent")
-        left.pack(side="left", fill="y")
+        left, camcol = self._two_columns(band)
         self._build_detect_card(left)
         # the away card owns the slot between Detection and Timers:
         # it decides what the timers' dark actually is (see _away.py)
         self._away_card(left)
         self._build_timers(left)
-        self._build_camera_card(band)
+        self._build_camera_card(camcol)
         self._sync_consent_switch()              # paint from cfg truth
 
 
@@ -196,15 +197,20 @@ class _DetectionMixin:
         self.gpu_ids = inference.cuda_gpus()
         if not self.gpu_ids:
             self.gpu_ids = [(n, "") for n in range(4)]
-        labels = ["%s %s" % (gid, name[:40]) for gid, name in self.gpu_ids]
+        labels = [self._gpu_label(gid, name) for gid, name in self.gpu_ids]
         row = self._row(box, "cuda gpu id", TIPS["gpu"], hint_chars=42)
-        gpu_menu = SkewCombo(
-            row, values=labels, width=300, command=self._gpu_changed,
+        # the combo is a FIXED-width Menubutton (SkewCombo: px -> chars),
+        # and a GPU name is far longer than the box - the baseline shot
+        # showed it cut on BOTH sides ("...VIDIA RTX PRO 6000 Blackwell
+        # Works!"). Honest ellipsis + room to breathe (owner Oct 15,
+        # NO CLIPPING): the full name still rides the label's hover.
+        self.gpu_menu = gpu_menu = SkewCombo(
+            row, values=labels, width=380, command=self._gpu_changed,
             **self.skin.menu_style())
         gpu_menu.grid(row=0, column=1, sticky="e")
         for gid, name in self.gpu_ids:
             if gid == self.cfg["inference"]["device_id"]:
-                self._set_menu(gpu_menu, "%s %s" % (gid, name[:40]))
+                self._set_menu(gpu_menu, self._gpu_label(gid, name))
                 break
         rows.append(("cuda gpu id", row))
 
@@ -340,6 +346,20 @@ class _DetectionMixin:
         self.cfg["inference"]["device"] = name
         self.monitor.events.put(("device", name))
         self._save()
+
+
+    @staticmethod
+    def _gpu_label(gid, name):
+        """One GPU menu entry: the id that drives the choice, then the
+        card name SHORTENED to fit the combo's own box (the Menubutton
+        centres its text and cuts it at both edges when the string
+        overruns - the baseline shot's "...VIDIA RTX PRO 6000 Blackwell
+        Works!"). The ellipsis is honest; the full name stays readable on
+        the row's hover tip."""
+        short = str(name or "").strip()
+        if len(short) > 34:
+            short = short[:33] + "\u2026"
+        return ("%s %s" % (gid, short)).strip()
 
 
     def _gpu_changed(self, label):

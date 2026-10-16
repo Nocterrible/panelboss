@@ -26,10 +26,21 @@ log = logging.getLogger("theme")
 # four spacing numbers. THE single source - call sites take these names
 # (raw hexes here and nowhere else); a missing name raises at import,
 # loud, there is no silent fallback.
-PAGE = "#17181A"           # window background
-CARD = "#202123"           # card / frame fill
-RAISED = "#2A2C2F"         # buttons, fields, combo faces
-BORDER_CARD = "#141517"    # card border: one step DARKER than the card
+PAGE = "#17181A"           # window background - and, since the Oct 15
+                           # owner ruling, the CARD fill too: "I don't
+                           # like the look of cards." ONE canvas; the
+                           # cards are grouping, not chrome.
+CARD = PAGE               # the card tier IS the page tier (owner Oct 15:
+                          # the panel-vs-page contrast and its 1px edge
+                          # are gone). Grouping is carried by the spacing
+                          # ladder and the header type alone - see
+                          # _widgets._card's section gap.
+RAISED = "#2A2C2F"         # buttons, fields, combo faces, and POPUPS
+                           # (tooltips, dropdown lists): the one tier that
+                           # still reads as "above the canvas"
+BORDER_CARD = PAGE         # no card edge to draw: the token is the page
+                           # so a stray panel_style border can never
+                           # re-introduce a line
 BORDER_RAISED = "#3A3D41"  # raised-control border and hover: LIGHTER
 ACCENT = "#2dd6a6"         # the shipped green - active tab, primary
                            # button, selected state; the ONLY accent
@@ -88,20 +99,17 @@ class Skin:
 
     # -- style kwargs, one per widget kind, so window.py stays generic --
     def panel_style(self):
-        # elevation = contrast tiers + a 1px border DARKER than the
-        # card, never a shadow (the Monitorian/PowerToys recipe).
-        # FLAT (owner Oct 15): corner_radius=0, NOT self.radius - the
-        # rounded-card LOOK is gone entirely. A zero radius draws a
-        # pure rectangle: CTk fakes rounded corners by painting four
-        # "background_corner_*" patches with the REMEMBERED parent
-        # color (draw_engine.draw_background_corners), and those
-        # patches are the white-canvas seams the owner saw when the
-        # remembered color drifted from the true parent. Radius 0
-        # leaves nothing to patch and no patch to go stale, so the
-        # card fill CANNOT mismatch its canvas - the uniformity rule
-        # is satisfied by construction, not by matching.
-        return dict(fg_color=self.panel, border_color=self.border,
-                    border_width=1, corner_radius=0)
+        # THE CARDS DISAPPEAR (owner ruling, Oct 15): "I don't like the
+        # look of cards." A card is now an invisible grouping container -
+        # page fill, NO border (a border is a card saying "I'm a card"),
+        # radius 0. Grouping is carried ONLY by spacing, alignment and
+        # the header type (_widgets._card owns the section gap; the
+        # spacing ladder is load-bearing now, not decorative).
+        # History worth keeping: radius 0 landed Oct 15 because CTk fakes
+        # rounded corners with remembered-parent-color patches, and those
+        # patches were the white-canvas seams the owner saw. Nothing to
+        # patch, nothing to go stale - still true, and now moot besides.
+        return dict(fg_color=self.panel, border_width=0, corner_radius=0)
 
     def primary(self):
         return dict(fg_color=self.accent, hover_color=self.accent_hover,
@@ -129,10 +137,14 @@ class Skin:
 
     def menu_style(self):
         # the combo face is a RAISED control, not decoration: it takes
-        # the field tier, and the accent stays reserved for live state
+        # the field tier, and the accent stays reserved for live state.
+        # The DROPDOWN LIST takes the raised tier too (owner Oct 15: the
+        # card fill fell to the page tier, so a popup left on self.panel
+        # would open as a page-colored rectangle over a page-colored
+        # window - a popup must read as ABOVE the canvas).
         return dict(fg_color=self.field_bg, button_color=self.field_bg,
                     button_hover_color=self.button_hover,
-                    dropdown_fg_color=self.panel,
+                    dropdown_fg_color=self.field_bg,
                     dropdown_hover_color=self.button_hover,
                     text_color=self.text, corner_radius=self.radius,
                     font=self.font(13))

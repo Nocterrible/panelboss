@@ -35,14 +35,12 @@ class _ProfilesMixin:
     def _build_profiles(self, page):
         # owner sketch (Oct 12): LEFT column = whole-desktop profiles
         # + the restore-at-start lever, RIGHT column = the pin half
-        # (pick an app, the editor, the pinned seats). 620/520: the
-        # page is ~1200 wide at the owner's window size and the
-        # ScrollHost scrolls the rest.
-        col = ctk.CTkFrame(page, width=620, fg_color="transparent")
-        col.pack(side="left", fill="y")
+        # (pick an app, the editor, the pinned seats). Oct 15: the widths
+        # are no longer per-tab literals - every tab now shares ONE column
+        # rhythm (_two_columns: equal widths, one gutter, flush edges), so
+        # the eye finds the grid without hunting.
+        col, right = self._two_columns(page)
         self._prof_left = col
-        right = ctk.CTkFrame(page, width=520, fg_color="transparent")
-        right.pack(side="left", fill="y")
         self._prof_right = right
         box = self._card(col, "whole-desktop profiles",
                          "one profile is the desk spelled out: the "
