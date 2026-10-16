@@ -57,9 +57,11 @@ class _CameraMixin:
                      wraplength=HINT_WRAP,
                      **self.skin.text_style("sub")).pack(
             anchor="w", padx=theme.S_SECTION)
-        # the camera card is a preview_width+30 (~350 px) column; the
-        # paragraph that used to ride the inline hint line now pops on
-        # the heading's hover (UI-1c reversal - bubbles back)
+        # the paragraph that used to ride the inline hint line pops on
+        # the heading's hover (UI-1c reversal - bubbles back). (The card
+        # is a full COLUMN since the Oct-15 uniform-footprint ruling, not
+        # the ~350 px preview-sized block this comment used to describe -
+        # rewritten Oct 16 when the width path moved to _preview_px.)
         head_lbl.bind("<Enter>",
                       lambda e=None: self.tips._schedule(TIPS["camera"],
                                                          head_lbl),
