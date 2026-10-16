@@ -1605,3 +1605,23 @@ resolver must probe both hives, profile at %APPDATA%\Opera Software\
 Opera GX Stable). Opera remains UNVERIFIED for the feature until a
 flagged launch is tested; the ship lane does that test, it is not a
 claim.
+
+## PANELBOSSBUDDY: OPEN API, OPEN EXTENSION (owner ruling, Oct 15)
+The companion is NOT PanelBoss-private. Owner law: the extension ships
+open (MIT, in-repo, no obfuscation) and the video-location channel has
+NO handshake, NO pairing, NO app allow-list - if the extension can
+reach an endpoint, it reports. Any project wanting video rect +
+playback state may listen; PanelBoss is just the first consumer.
+Consequences written down so the next lane does not re-close the door:
+- No shared secret in the manifest or messages. (An origin ACL on the
+  native-messaging channel is the browser's own install-boundary
+  check, not a pairing: the extension must name a host, and the host
+  registration is what 'handshake' ever means here. If a future
+  version adds a token, it is a bug against this ruling unless the
+  owner says so in writing.)
+- The message format ships documented beside the extension (schema in
+  the extension's README); version it with a field so a second
+  consumer can live beside the first.
+- The app remains a *subscriber*: its own absence must never change
+  what the extension does (no 'waiting for PanelBoss' state, no
+  retry storms keyed to one consumer).
