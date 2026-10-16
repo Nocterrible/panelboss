@@ -277,11 +277,15 @@ class Ledger:
         self.saved = []
 
 
-def make_monitor(tmp, away, bright=None, hdrs=None, sdc=None):
+def make_monitor(tmp, away, bright=None, hdrs=None, sdc=None,
+                 remote=False):
     """A PresenceMonitor with the desk, the power verbs, the input arm,
-    the DDC/CI layer and the CCD door faked (the sdc fake rides the
-    same late-import re-read law as _bright - offdisc rows talk to
-    m._fake["sdc"]). The camera bookkeeping stays REAL
+    the DDC/CI layer, the CCD door and the SESSION TRANSPORT fake
+    (remote=False/True/None - the query's answer; the suite owns its
+    desk's truth: the box that RUNS the gauntlet may itself live in an
+    RDP session, and the real query would then exempt every row.
+    The sdc fake rides the same late-import re-read law as _bright -
+    offdisc rows talk to m._fake["sdc"]). The camera bookkeeping stays REAL
     except the two hold/rearm seams (no detector to hold)."""
     led = Ledger()
     cfg = config.get_config(dir=tmp, verbose=False)
@@ -315,6 +319,10 @@ def make_monitor(tmp, away, bright=None, hdrs=None, sdc=None):
     led.keep(wm, "_sdc", sdc)               # the offdisc door, faked
     #                              like _bright: the engine re-reads
     #                              the attribute on every late import
+    led.keep(wm, "session_is_remote", lambda: remote)  # the transport
+    #                              answer: the gauntlet's own box may
+    #                              BE an RDP session - the suite owns
+    #                              its desk's truth, never the host's
     led.keep(profiles, "hdr_away_restore",
              lambda off: led.calls.append(
                  ("hdr_restore", [dict(e) for e in off])))
@@ -427,6 +435,98 @@ def test_substitution():
     finally:
         slog.removeHandler(rec)
         slog.setLevel(was)
+        m._ledger.undo()
+
+
+def test_remote_desk_exempt():
+    """THE REMOTE-DESK STAND-DOWN (the owner's black remote screen,
+    Oct 15): a row is exempt from EVERY off leg - off, offdisc AND
+    the blackout-degradation paint - whenever its bus root says
+    virtual or the session answers remote. D6-attempt-once is
+    REJECTED by measurement (the fake DDC bus ACKs and LIES:
+    reachable=True, nphys=1): an attempt that looks like success and
+    leaves a dead canvas is the exact bug class. The exemption rides
+    the None-row leg verbatim (hide the cover, touch no door) with
+    its own sibling word; the refused query (None) is NOT remote."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_rx")
+    vdesk = [dict(m, virtual=(m["short"] == "AAA")) for m in DESK]
+    sdc = FakeSDC(victim={"AAA": "T-A", "BBB": "T-B"}, active={"T-A",
+                                                               "T-B"})
+    # a virtual row configured the hardest way possible (offdisc
+    # beats off): the legs must still stand down, the word says so
+    m = make_monitor(tmp, {"mode": "dim",
+                           "monitors": {"AAA": {"mode": "offdisc"},
+                                        "BBB": {"mode": "off"}}},
+                     sdc=sdc)
+    try:
+        m._ledger.keep(wm, "monitors", lambda: [dict(r) for r in vdesk])
+        m._screens_off(1.0)
+        assert m.away_status["AAA"] == "exempt (virtual/remote)", \
+            m.away_status
+        assert m.away_status["BBB"] == "off (unverified)", m.away_status
+        assert sdc.retracts == [], "the fake bus never heard a retraction"
+        assert not [c for c in m._fake["calls"] if c[0] == "vcp"
+                    and c[1] == "D1"], "no D6 on the virtual row either"
+        assert m.state == "off" and not sdc.revives
+        print("ok - the virtual row stands down every off leg; its "
+              "neighbor's legs ride on")
+        m._away_lift()
+        # ALL rows exempt (the remote session exempts the whole desk):
+        # the engage returns the exemption dict - and the stock path
+        # skips the SC_MONITORPOWER broadcast too (no painting into
+        # nothing)
+        m2 = make_monitor(tmp, {"mode": "off", "monitors": {}},
+                          sdc=sdc, remote=True)
+        try:
+            m2._screens_off(2.0)
+            assert set(m2.away_status.values()) == {"exempt (virtual/remote)"}, \
+                m2.away_status
+            calls = m2._fake["calls"]
+            assert ("turn_off",) not in calls, \
+                "the remote desk skipped the broadcast"
+            assert not [c for c in calls if c[0] in ("get", "set",
+                                                     "vcp", "show")], \
+                "no painting, no door, no code on a remote desk"
+            assert m2.state == "off", "the spell still counts as dark"
+            print("ok - a remote session exempts the WHOLE desk and "
+                  "the stock broadcast stands down too")
+            m2._away_lift()
+            # a REFUSED query (None) is unknown, not remote: the
+            # physical desk keeps its dark (the belt's own religion -
+            # unknown never grants the exemption)
+            m3 = make_monitor(tmp, {"mode": "dim", "monitors": {}},
+                              remote=None)
+            try:
+                m3._screens_off(3.0)
+                assert set(m3.away_status.values()) == {"dim"}, \
+                    m3.away_status
+                print("ok - a refused session query does not exempt: "
+                      "unknown is not remote")
+            finally:
+                m3._ledger.undo()
+            # THE BELT READS THE FLAG TOO: the boot power-on and the
+            # disconnect-restore both skip the virtual row (the door
+            # is a lie; the belt that knocks on a lie is the bug)
+            m4 = make_monitor(tmp, {"mode": "dim",
+                                    "monitors": {"AAA": {"mode": "off"},
+                                                 "BBB": {"mode": "offdisc"}}},
+                              sdc=sdc)
+            try:
+                m4._ledger.keep(wm, "monitors",
+                                lambda: [dict(r) for r in vdesk])
+                m4._away_boot_belt()
+                assert not [c for c in m4._fake["calls"]
+                            if c[0] == "vcp" and c[1] == "D1"], \
+                    "the belt sent no power code to the virtual row"
+                assert not [r for r in sdc.revives
+                            if r["short"] == "AAA"], sdc.revives
+                print("ok - the belt's two doors both stand down on the "
+                      "virtual row (flag) - no code, no revive")
+            finally:
+                m4._ledger.undo()
+        finally:
+            m2._ledger.undo()
+    finally:
         m._ledger.undo()
 
 
@@ -836,7 +936,11 @@ def test_session_unlock_ear():
         d._session_change(disp.WTS_SESSION_UNLOCK)
         ev = d.queue.get_nowait()
         assert ev[0] == "session_unlock" and ev[1] == 1.0, ev
-        print("ok - the ear: lock edge silent, unlock edge posts")
+        d._session_change(disp.WTS_REMOTE_CONNECT, 5)   # transport flip
+        ev = d.queue.get_nowait()    # (lParam carries the sessionId):
+        assert ev[0] == "displaychange", ev     # the desk re-derives
+        print("ok - the ear: lock edge silent, unlock edge posts, the "
+              "transport flips re-derive the desk")
         m = make_monitor(tempfile.mkdtemp(prefix="pb_away_su"),
                          {"mode": "dim", "monitors": {}})
         m._ledger.keep(disp, "watcher", d)
@@ -1424,6 +1528,10 @@ def test_hook_lifecycle():
     led.keep(wm, "hdr_set", lambda gdi, on: "")
     led.keep(wm, "_bright", FakeBright({"D1": 80, "D2": 70, "D3": 50}))
     led.keep(wm, "_overlay", FakeOverlay())
+    led.keep(wm, "session_is_remote", lambda: False)  # the suite owns
+    #                              its desk's truth: the gauntlet box
+    #                              may BE a remote session (the stock
+    #                              law is a LOCAL-desk law)
     led.keep(profiles, "hdr_away_restore", lambda off: None)
     tmp = tempfile.mkdtemp(prefix="pb_away_h")
     cfg = config.get_config(dir=tmp, verbose=False)
@@ -1520,6 +1628,7 @@ def main():
     test_row_shorthands()
     test_substitution()
     test_stock_path()
+    test_remote_desk_exempt()
     test_refusal_degrades()
     test_unverified_trust()
     test_vcp_retry_law()

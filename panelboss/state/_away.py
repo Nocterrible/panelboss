@@ -79,9 +79,21 @@ class _AwayMixin:
         stays readable and honored there (downgrade honesty, one
         release)."""
         away = self.cfg.get("away") or {}
-        if away.get("mode") != "dim":
+        from .. import display, wm
+        # THE EXEMPTION (2026-10-15, the owner's black remote screen):
+        # session_is_remote() read ONCE per engage. True exempts the
+        # WHOLE desk - the canvas is not a panel and the DDC door
+        # ACKs and LIES for it (measured from inside the session:
+        # reachable=True, nphys=1; the D6-attempt-once proposal is
+        # REJECTED by that measurement: an attempt that looks like
+        # success and leaves a dead canvas is the exact bug class).
+        # None (a refused query) is UNKNOWN and unknown does not
+        # exempt: the console desk is the common case and a silent
+        # door must not strand a physical panel lit. The row's own
+        # bus-root flag is the per-row door either way.
+        remote = wm.session_is_remote() is True
+        if away.get("mode") != "dim" and not remote:
             return {}
-        from .. import display
         self.away_status = {}
         # the ledgers ACCUMULATE, never reset: a live preview already
         # holds the true priors (the value at the leaving moment), and
@@ -95,7 +107,23 @@ class _AwayMixin:
         jail = None
         for m in _live_desk():
             mode = _row_mode(rows, m)
+            if remote and mode is not None:
+                mode = None                # the remote session exempts
+                #                          the whole desk: the None leg
+                #                          below is its stand-down
             rec = self._away_apply_row(m, mode, away.get("dim_level", 10))
+            if mode is None:
+                # the EXEMPTION word, the sibling of "gone": the row
+                # did not lose its panel - the panel is virtual glass
+                # (bus-root flag) or the desk is a remote canvas, and
+                # every off leg stands down (no D6, no retraction, no
+                # blackout paint; the cover is hidden, the ledgers
+                # stay clean, and _row_went_dark does not know this
+                # word: an all-exempt engage never locks the session).
+                # An engage that darked NOTHING still returns the
+                # dict: _screens_off's guard is what skips the
+                # power broadcast too - no painting into nothing.
+                rec["status"] = "exempt (virtual/remote)"
             self.away_status[m["short"]] = rec["status"]
             self._away_hdr += rec.get("hdr") or []
             if rec.get("off"):
@@ -388,11 +416,23 @@ class _AwayMixin:
         from ..wm import _bright, _sdc
         away = self.cfg.get("away") or {}
         rows = away.get("monitors") or {}
+        # THE EXEMPTION reaches the belt too (the canvas is not a
+        # panel: the DDC door ACKs and LIES on it - reachable=True,
+        # nphys=1, measured from inside the session). The short set
+        # is precomputed OUTSIDE both try-blocks (gate fix 3 stays
+        # honored: a raising D6 row must not skip the disconnect
+        # pass), and it is total: _live_desk answers fail-soft and
+        # every read below is a .get.
+        desk = _live_desk()
+        virtual = {m.get("short") for m in desk if m.get("virtual")}
         try:
-            for m in _live_desk():
+            for m in desk:
                 row = rows.get(m["short"])
                 if not (row or {}).get("off"):
                     continue
+                if m.get("virtual"):
+                    continue          # the belt says nothing to a
+                    #                 # canvas: no DDC door, no door
                 if not _bright.reachable(m["gdi"]):
                     continue          # no door: the belt says nothing
                 sent, say = _bright.vcp(m["gdi"], _bright.VCP_POWER,
@@ -410,6 +450,12 @@ class _AwayMixin:
             for short, row in rows.items():
                 if not (row or {}).get("offdisc"):
                     continue
+                if short in virtual:
+                    continue          # the row answers the live desk
+                    #                 as a canvas: no retraction to
+                    #                 raise back (a withdrawn canvas
+                    #                 that answers NO row stays the
+                    #                 belt's existing silent class)
                 # gdi unknown for a retracted row (no desk slot to
                 # name): the token join carries it, and an ambiguous
                 # twin answers None = silent, never a gamble - and
@@ -497,7 +543,12 @@ def _row_mode(rows, m):
     was written). normalize ships the triple; precedence on a
     hand-edited file that sets several: offdisc beats off beats
     blackout (a retracted path cannot hear a power code, and the
-    retraction is the most explicit ask on the row)."""
+    retraction is the most explicit ask on the row). A VIRTUAL row
+    (the bus-root flag, wm/_monitors._row_is_virtual) answers None:
+    the exemption is not a sub-mode, it is the stand-down of every
+    off leg - the engage's None leg carries the word."""
+    if m.get("virtual"):
+        return None
     row = rows.get(m["short"])
     if not row:
         return "dim"
