@@ -1680,3 +1680,12 @@ up: a continuation guard kills the session, and the runner reports
 re-issue runs as a FOREGROUND dispatch — a lane that dies in the
 foreground dies audibly in my window, where the loss is visible
 instead of discovered by the next audit.
+
+## FLAG LAUNCHER GAP (named, not silent, b7bc55c)
+The card now records the per-family flag choice and the engine reads
+it, but NOTHING yet restarts a browser to actually carry the port -
+the checkbox is a decision with no executor. Next lane: the re-arm
+launcher (kill-with-restore + flagged launch, the semantics the CDP
+probe already measured), or the flag rows gray themselves until it
+lands. The zero-plumbing path (icon click -> bridge file -> veil) is
+the one PROVEN end-to-end candidate and needs no launcher at all.
