@@ -58,8 +58,12 @@ guessed, on this desk:
 
 What works is the **one shape the spec always documented**: a single
 absolute exe (no wrapper, no shell), `O_BINARY` stdin/stdout, the 4-byte
-LE length prefix read before **every** frame. That is `panelboss_host.py`,
-frozen to `panelboss-host.exe` by `install_host.ps1`.
+**native-order** length prefix read before **every** frame (little-endian
+on this platform — the spec says *native*, not LE; a port to a
+big-endian platform must not hard-code the byte order. This correction
+is the fixer's, Oct 16: v0.3 shipped `<I` and this line said "LE"). That
+is `panelboss_host.py`, frozen to `panelboss-host.exe` by
+`install_host.ps1`.
 
 ## Load it (measured on Opera GX, Oct 15-16)
 

@@ -2,9 +2,11 @@
 
 The ONE untried manifest shape, built to the spec the last two attempts
 skipped: a single absolute exe (no wrapper, no shell, no argv split),
-stdin read as 4-byte LE length-prefixed UTF-8 JSON frames in O_BINARY
-mode (the \n->\r\n text-mode corruption is the silent killer that made
-the pythonw form pipe-blind), every reply written back the same way.
+stdin read as 4-byte NATIVE-order length-prefixed UTF-8 JSON frames in
+O_BINARY mode (the \n->\r\n text-mode corruption is the silent killer
+that made the pythonw form pipe-blind), every reply written back the
+same way. (Chrome's spec is NATIVE order - little-endian on this
+platform, but a future port must not hard-code LE.)
 
 The host is a PURE TRANSPORT + one file write. It does not bind a port,
 does not touch the network, does not run PanelBoss: it receives the
@@ -60,14 +62,15 @@ CAPABILITIES = {
 
 
 def _read_frame(stream):
-    """One native-messaging frame: 4-byte LE unsigned length, then
-    exactly that many UTF-8 bytes, json-decoded. A short read or bad
-    json returns None - the browser owns the lifecycle, a dead frame is
-    the end of the conversation, never a traceback on stdout."""
+    """One native-messaging frame: 4-byte NATIVE-order (< on this desk,
+    but the spec says native, not LE) unsigned length, then exactly that
+    many UTF-8 bytes, json-decoded. A short read or bad json returns
+    None - the browser owns the lifecycle, a dead frame is the end of
+    the conversation, never a traceback on stdout."""
     head = stream.read(4)
     if len(head) != 4:
         return None
-    (n,) = struct.unpack("<I", head)
+    (n,) = struct.unpack("@I", head)
     if n > 1024 * 1024:                # the spec's own 1 MB host cap
         return None
     body = stream.read(n)
@@ -84,7 +87,7 @@ def _write_frame(stream, obj):
     top so the length byte-count and the written bytes can never drift
     on a Windows newline."""
     data = json.dumps(obj).encode("utf-8")
-    stream.write(struct.pack("<I", len(data)))
+    stream.write(struct.pack("@I", len(data)))
     stream.write(data)
     stream.flush()
 

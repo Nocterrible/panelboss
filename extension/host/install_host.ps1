@@ -27,9 +27,20 @@
 param([string]$ExtensionId = "")
 
 $ErrorActionPreference = 'Stop'
+# a typo today registers a never-matching origin and reads forever as the
+# nm badge - the exact silent class this design kills. An extension id is
+# 32 lowercase chars in [a-p] (the Chromium id alphabet); reject anything
+# else BEFORE a single file is written.
+if ($ExtensionId -and $ExtensionId -notmatch '^[a-p]{32}$') {
+    Write-Output "bad extension id '$ExtensionId' - it must be 32 lowercase a-p (from the browser's extensions page)"
+    exit 1
+}
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $hostPy = Join-Path $here 'panelboss_host.py'
 $hostExe = Join-Path $here 'panelboss-host.exe'
+# the written (installed) manifest carries the ABSOLUTE exe path; the
+# committed template (host-manifest.template.json) is a shape example
+# only - its relative path is NOT Chrome-legal as-is.
 $manifestPath = Join-Path $here 'host-manifest.json'
 $repo = Split-Path -Parent (Split-Path -Parent $here)   # extension/ -> repo
 $py = Join-Path $repo '.venv\Scripts\python.exe'
