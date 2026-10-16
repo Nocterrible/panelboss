@@ -1574,3 +1574,34 @@ install). A runtime resolver must probe BOTH hives. Profile
 process carries no --user-data-dir (default profile confirmed).
 scripts/videoeye_probe.py (the DDA/PrintWindow/WGC rig the dossier
 cites) joins the repo here so the gauntlet stamp reads clean.
+
+## DECODE GATE, MEASURED - and the ctypes PDH wall (Oct 15, 17:51 runner)
+The owner's gate idea is PROVEN on this box: during real playback the
+engtype_VideoDecode counter answers on EVERY sample (0.33-0.54%), at
+rest and on tab-close it sits at 0.00% across 196 instances - and the
+answering pid is the browser's GPU CHILD process, never the main one
+(live shape: main 61728 / child 63744). The gate must walk the process
+tree and sum the family, or it reads zero forever.
+
+THE WALL (a shipped-module finding, not theory): the ctypes PDH route
+in wm/_videostats.py AND the probe rig's copy fails with STATUS
+c0000bbd (STATUS_NOT_FOUND - the PdhAddEnglishCounterW export is
+missing from the Pdh.dll on this Python/Windows pairing) on EVERY
+counter, both call pairings, while Get-Counter reads live in the same
+session. The production reader FAIL-OPENS to zero, meaning
+video_busy() answers FALSE for a playing video on this machine today.
+Consequence: the decode gate cannot ship on the current route; the fix
+is the wide-char PdhAddEnglishCounterW call shape (or the Get-Counter
+fallback), and a suite pin must assert a NON-zero answer during a
+forced query or the fail-open hides the whole gate again. The Oct-13
+header claim of a working reader was true then, or was never
+verified-live - the dossier does not know which, and the lane's
+honesty line says so.
+
+OPERA GX: running on this box (31 pids, decode instances present at
+rest) but carries NO debug port (no flag in argv, no DevToolsActivePort
+file) and installs per-user (App Paths in HKCU, not HKLM - the
+resolver must probe both hives, profile at %APPDATA%\Opera Software\
+Opera GX Stable). Opera remains UNVERIFIED for the feature until a
+flagged launch is tested; the ship lane does that test, it is not a
+claim.
