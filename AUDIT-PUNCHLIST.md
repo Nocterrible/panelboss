@@ -1689,3 +1689,16 @@ launcher (kill-with-restore + flagged launch, the semantics the CDP
 probe already measured), or the flag rows gray themselves until it
 lands. The zero-plumbing path (icon click -> bridge file -> veil) is
 the one PROVEN end-to-end candidate and needs no launcher at all.
+
+## THE BURN-IN PERIOD IS THE PLAN, NOT A CAVEAT (owner, Oct 15)
+Tonight's class: a feature that is correct on the desk it was built on
+is wrong the moment the desk changes. The dimmer's opt-ins survived
+from the physical OLEDs onto the RDP virtual display and blacked the
+owner's remote session - the per-monitor law did exactly what it was
+told, on a panel the owner never opted in from the remote side, with
+the state imported by config rather than chosen. The MSI fresh-install
+trial would have caught it; a few days of the final build on the real
+life desk (office, remote, sleep, replug) catches its unknown cousins.
+Owner ruling recorded: between the trial and the ship sits a burn-in
+period of days - FINAL STATE, no more feature traffic - and nothing
+goes out before it. The feature freeze is the point, not the delay.
