@@ -322,7 +322,15 @@ class SetupWindow(ctk.CTkToplevel):
     schedule, never destroying under a live callback."""
 
     def __init__(self, app):
-        super().__init__(master=app, fg_color=app.skin.panel)
+        # the WINDOW tier, not the panel tier (uniformity, owner Oct 15):
+        # the main window's root is skin.bg (PAGE); this toplevel was
+        # born fg_color=panel (CARD) - the setup screen's cards then
+        # sat CARD-on-CARD with nothing but the border to separate them,
+        # the exact 'card identical to its canvas' invisibility point 4
+        # warns about. bg (PAGE) here means the scroll surface under the
+        # cards is PAGE and each card's CARD fill + border reads as the
+        # same raised structure the main window's cards get for free.
+        super().__init__(master=app, fg_color=app.skin.bg)
         self.app, self.skin = app, app.skin
         self.title("camera setup")
         self.geometry("480x600")
@@ -387,7 +395,14 @@ class SetupWindow(ctk.CTkToplevel):
                                  font=self.skin.font(13, "bold"),
                                  **self.skin.text_style("sub"))
         self.veil.pack(side="bottom", pady=theme.S_ROW)
-        self._host = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._host = ctk.CTkScrollableFrame(self, fg_color="transparent",
+                                            corner_radius=0)
+        # flat (owner Oct 15): the main window's pages ride the flat
+        # tk Canvas ScrollHost (_scroll.py); the setup screen's scroll
+        # surface must match - CTkScrollableFrame's _parent_frame is a
+        # CTkFrame and would otherwise keep the theme's rounded 6px
+        # look (and its camo risk) while sitting under flat cards.
+        # radius 0 = one rectangle, no corner patch, no mismatch.
         self._host.pack(fill="both", expand=True,
                         padx=theme.S_SECTION, pady=(0, theme.S_FIELD))
         threading.Thread(target=self._gather, daemon=True,

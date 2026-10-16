@@ -151,6 +151,21 @@ class ScrollHost(tk.Frame):
         try:
             reg = self._canvas.bbox("all") or ()
             self._canvas.configure(scrollregion=reg)
+            # the scrollbar's honesty (owner Oct 15: "no scrollbar when
+            # there is nothing to scroll"): the bar is only meaningful
+            # while the content overhangs the viewport. A fitted page
+            # (bbox height <= canvas) hides the bar entirely - the idle
+            # trough was a dead seam that read as "more below" on short
+            # tabs. The same bbox test the wheel and the clamp already
+            # share decides it, so the three can never disagree (the
+            # region-vs-viewport law, _scroll_up's header).
+            overflow = len(reg) == 4 and reg[3] > self._canvas.winfo_height()
+            if overflow:
+                if not self._sb.winfo_manager():
+                    self._sb.pack(side="right", fill="y")
+            else:
+                if self._sb.winfo_manager():
+                    self._sb.pack_forget()
             # clamp a stranded view (Oct 12, owner's "blank space at
             # the top"): rows that leave (collapsed tiles, retracting
             # update lines) SHRINK the region, and tk never re-clamps
@@ -161,7 +176,7 @@ class ScrollHost(tk.Frame):
             # mapped, so the clamp belongs here where the region
             # changes. Content that does not fill the viewport has
             # exactly ONE sane position: the top.
-            if len(reg) == 4 and reg[3] <= self._canvas.winfo_height():
+            if not overflow:
                 self._canvas.yview_moveto(0.0)
             # the same law's partial-shrink arm (gate finding, LOW,
             # measured there): a region that shrinks but still
