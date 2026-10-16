@@ -138,7 +138,7 @@ class SettingsWindow(
                                           # _camid trap law: a CTk
                                           # preview resets to an
                                           # IMAGE, never to None)
-        self._unveil_job = None          # the tracked after(300) that lifts
+        self._unveil_job = None          # the tracked after(0) lift chain that raises
                                          # a boot/skin veil: a re-veil
                                          # mid-flight must cancel it, never
                                          # ride a ghost lift
@@ -235,6 +235,16 @@ class SettingsWindow(
         # owner reported. The exception is a veil we just armed -
         # behind a cover the same repaint is free, and hide/show is
         # exactly the cycle where the geometry claim is unverified.
+        if getattr(self, "_unveil_job", None) is not None:
+            try:
+                self.after_cancel(self._unveil_job)   # cancel-then-
+            except Exception:                         # assign: an
+                pass                                  # un-cancelled
+            self._unveil_job = None                   # orphan is a
+                                                      # ghost lift
+                                                      # (Oct-12 law,
+                                                      # re-entry by
+                                                      # this door)
         if not was_mapped or getattr(self, "_veil_lbl", None) is not None:
             self.after(0, self._repaint_switches)
             self.after(0, self._sync_slider_wheels)
@@ -250,7 +260,12 @@ class SettingsWindow(
             # still cancels this job through the same _unveil_job slot
             # (_veil's cancel arm), and the watchdog keeps the 3 s
             # backstop for a flush that wedges.
-            self._unveil_job = self.after(0, self._unveil)
+            if not self._diag_veiled:               # the sweep's
+                #                                   veil owns its
+                self._unveil_job = self.after(0, self._unveil)  # report
+                #                                   -arm; the chain
+                #                                   must not lift it
+                #                                   mid-sweep
 
 
     # -------------------------------------------------- switch repaint --
@@ -616,6 +631,13 @@ class SettingsWindow(
             pass
 
     def _unveil(self):
+        if self.state() == "withdrawn":
+            # gate finding 3 (Oct 15): the after(0) chain can drain
+            # before the WM delivers <Map> on the close->reopen path;
+            # re-arm once, the first <Configure> re-fires the flush
+            # chain, and the 3 s watchdog stays the fuse.
+            self._unveil_job = self.after(0, self._unveil)
+            return
         self._unveil_job = None         # a fired/forced lift is no
                                         # longer pending: a stale id
                                         # here would make the next

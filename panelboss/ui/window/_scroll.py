@@ -229,6 +229,13 @@ class ScrollHost(tk.Frame):
             self._canvas.itemconfigure(self._win, width=event.width)
         except tk.TclError:      # canvas gone mid-teardown: the sibling
             pass                 # _region already swallows this class
+        # the scrollbar hide/show law is a resize law (gate finding 2,
+        # Oct 15): a vertical resize changes the canvas height without
+        # re-geometrying the inner frame, so the <Configure>-bound
+        # region check goes stale in BOTH directions - a dead trough
+        # re-appears, or a needed bar never shows. Re-check here;
+        # microsecond cheap, TclError-guarded by _region itself.
+        self._region()
 
     def _wheel(self, event):                   # kept for old callers
         self._canvas.yview_scroll(int(-event.delta / 120), "units")
