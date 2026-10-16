@@ -1529,3 +1529,48 @@ at dispatch time, which is the loud-stop degradation the design names.
 REVIVAL (owner's call on when): re-launch F:\LLM\START-infernix-
 27b-4seq.bat once the card is rested; typist-doctor holds the deeper
 recipe for the 27B stack.
+
+## VIDEOEYE PACKET (Oct 15, coder lane): three seams absent, the decode
+delta measured, OPERA UNVERIFIED
+The four-delta packet arrived with three of its targets missing from the
+tip: panelboss/videoeye.py, scripts/install_companion.py,
+scripts/videoeye_test.py, scripts/companion_test.py exist on NO ref -
+worktree, every local branch, every tag, every sibling worktree, and
+`git ls-remote` says origin/ui-1c-reskin IS a88491d (the dossier commit),
+so the debugger lane's "companion installer + manifest fix" push never
+reached this repository. Deltas 1/2/4 (opera in BROWSERS, re-arm
+watchdog, the pin) have no seam to edit - the feature must be specced
+whole, not patched blind. What IS here (wm/_videostats.py, the counter
+vocabulary) made delta 3 (the ship evidence) fully runnable. Measured,
+scratch rig, Get-Counter against the already-flagged chrome on :9333,
+video dQw4w9WgXcQ (title + paused=false verify playback):
+  rest:      196 engtype_VideoDecode instances, 0 nonzero, max 0.00%
+  playback:  15 samples / 30 s, every sample answered by ONE pid:
+             63744, range 0.33-0.54% (its two videodecode engines)
+             - the gpu-process CHILD of main 61728; the main pid and
+             the renderers read zero throughout (the child-pid fact,
+             live, not folklore)
+  tab closed: max back to 0.00%, 3 consecutive samples
+THE UNCOMFORTABLE FINDING: the repo's own ctypes PDH route - the
+video_probe.py plumbing AND the shipped _videostats.video_busy() it
+shares its struct/query laws with - read rc=0xC0000BBD for EVERY
+formatted counter, both documented format/struct pairings, at rest and
+during verified playback, WHILE Get-Counter returned live values from
+the same provider in the same session. On this box today the
+production reader fail-opens to 0.0 while the OS has the data: the
+counter gate can never arm via ctypes here. The route needs one probe
+session (engine-localized machine handle? PdhCollectQueryDataWithTime
+interval?) before hdrwatch or any video-dim trust it. Recorded per
+README's own Oct-10 law ("dead provider masked by silent zeros").
+OPERA GX: UNVERIFIED - the running family is present (31-pid tree, all
+five videodecode instances at 0.00 at rest) but carries NO debug port
+(no --remote-debugging-port in any argv, no DevToolsActivePort under
+the profile) - nothing to drive, so no opera playback delta exists.
+The registry fact the packet assumed is also inverted on this box:
+HKLM App Paths opera.exe is ABSENT (rc=1); HKCU App Paths opera.exe ->
+C:\Users\user\AppData\Local\Programs\Opera GX\opera.exe (the per-user
+install). A runtime resolver must probe BOTH hives. Profile
+%APPDATA%\Opera Software\Opera GX Stable exists; the running main
+process carries no --user-data-dir (default profile confirmed).
+scripts/videoeye_probe.py (the DDA/PrintWindow/WGC rig the dossier
+cites) joins the repo here so the gauntlet stamp reads clean.
