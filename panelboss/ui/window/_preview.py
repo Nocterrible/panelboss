@@ -32,12 +32,13 @@ class _CameraMixin:
     # ----------------------------------------------------- camera + preview --
     def _build_camera_card(self, parent):
         # the camera column (owner Oct 15: it is the SECOND COLUMN of the
-        # tab's one rhythm now, not a card parked beside it). The width is
-        # a FLOOR - the preview plus its own form - never the final size;
-        # the column decides that.
-        card = ctk.CTkFrame(parent, width=max(
-            int(self.cfg["ui"]["preview_width"]) + 30, 360),
-            **self.skin.panel_style())
+        # tab's one rhythm now, not a card parked beside it). The floor is
+        # the FORM's own minimum, NOT preview_width + 30 (owner follow-up,
+        # Oct 16: the card's width was being negotiated by the picture, so
+        # the picture was the pane's widest element and every control
+        # squeezed against it); the preview is a guest here and is clamped
+        # to the well it is actually drawn in, never the other way round.
+        card = ctk.CTkFrame(parent, width=360, **self.skin.panel_style())
         card.pack(anchor="nw", fill="x")
         head = ctk.CTkFrame(card, fg_color="transparent")
         head.pack(anchor="w", padx=theme.S_SECTION,
@@ -80,14 +81,19 @@ class _CameraMixin:
                       # close either way - the force-probe path in
                       # _scan_cameras serves that refresh)
                       **self.skin.secondary()).pack(
-            side="left", padx=theme.S_FIELD)
-        # the label zone is a 320 px form, not the card's full width:
-        # full width flings labels to one edge and menus to the other
-        # and the eye has to cross a canyon to read the pair (the
-        # screenshot's complaint); 320 keeps every control's right
-        # edge on one line, close enough to its label to belong to it
-        zone = ctk.CTkFrame(card, width=320, fg_color="transparent")
-        zone.pack(anchor="w", padx=theme.S_SECTION)
+            side="left", padx=(theme.S_ROW, 0))
+        # the label zone now FILLS the card (owner follow-up, Oct 16, the
+        # smush): it was a hard 320 px form, sized back when the card was
+        # ~350 wide and the labels cleared their controls by a hair. This
+        # card is a full column now, so the fixed form held the label and
+        # its control two pixels apart ("while screens are on" ended at
+        # 758, its combo started at 760). Full width puts the camera rows
+        # on exactly the rhythm the dimmer and timers cards wear - label
+        # left, control right, one card of air between - which is the
+        # owner's even-spacing ruling applied to the section that was the
+        # odd one out.
+        zone = ctk.CTkFrame(card, fg_color="transparent")
+        zone.pack(anchor="w", fill="x", padx=theme.S_SECTION)
         for key, label, tip in (("mode_on", "while screens are on",
                                  TIPS["cam_on"]),
                                 ("mode_off", "while screens are off",
@@ -120,7 +126,11 @@ class _CameraMixin:
         # fill) with a square edge, matching every now-flat card and the
         # flat SkewText/SkewCombo recesses. No camo either way (no
         # background_corner_colors was ever passed).
-        self.preview_frame.pack(anchor="w",
+        # Oct 16: the well spans the card's content box, so the picture
+        # is drawn INSIDE a display area the same width as every row
+        # above it - it is the frame around the image, not a block the
+        # image happens to be exactly as wide as.
+        self.preview_frame.pack(anchor="w", fill="x",
                                 pady=(theme.S_FIELD, theme.S_FIELD),
                                 padx=theme.S_SECTION)
         self.preview_label = ctk.CTkLabel(self.preview_frame,
@@ -128,7 +138,7 @@ class _CameraMixin:
                                           "live preview",
                                           font=self.skin.font(12),
                                           **self.skin.text_style("sub"))
-        self.preview_label.pack()
+        self.preview_label.pack(pady=theme.S_FIELD)
         self.preview_info = ctk.CTkLabel(card, text="",
                                          font=self.skin.font(10),
                                          wraplength=400, justify="left",
@@ -136,6 +146,7 @@ class _CameraMixin:
                                          **self.skin.text_style("sub"))
         self.preview_info.pack(anchor="w", padx=theme.S_SECTION,
                                pady=(0, theme.S_ROW))
+        self._fit_wrap(card, self.preview_info)
 
 
     def _mode_changed(self, key):
@@ -462,6 +473,28 @@ class _CameraMixin:
         self._rebuild_cam_rows(found)
 
 
+    def _preview_px(self):
+        """The preview's rendered width (owner follow-up, Oct 16, "much
+        too wide relative to everything else in the pane"): [ui]
+        preview_width IS the honest dial and is honored EXACTLY - clamped,
+        never ignored - to the well the picture is actually drawn in. The
+        old path let the dial negotiate the CARD's width
+        (preview_width + 30 was the card's floor), so the picture was the
+        pane's widest element and every control squeezed against it; now
+        the well owns the width and the dial only decides how much of the
+        well the image fills. Unmapped (width 1) reads as no clamp, so a
+        draw before the first <Configure> still paints the configured
+        size instead of a 120 px sliver."""
+        want = max(120, int(self.cfg["ui"]["preview_width"]))
+        try:
+            well = int(self.preview_frame.winfo_width())
+        except Exception:
+            return want                    # no well yet: the dial alone
+        if well > 80:                      # mapped: the well knows itself
+            want = min(want, max(120, well - 2 * theme.S_FIELD))
+        return want
+
+
     def _preview_placeholder(self):
         """The main pane's half of the reset law (the owner's: a list
         change must NEVER leave a stale frame from the previous
@@ -469,9 +502,7 @@ class _CameraMixin:
         local: a CTkLabel preview resets to a configured PLACEHOLDER
         image, never back to image=None (the Oct 13 freeze's law) -
         one image per window, cheap, built on the first reset."""
-        img = Image.new("RGB",
-                        (int(self.cfg["ui"]["preview_width"]), 90),
-                        (24, 26, 33))
+        img = Image.new("RGB", (self._preview_px(), 90), (24, 26, 33))
         self._ph_img = self._ph_img or ctk.CTkImage(
             light_image=img, dark_image=img, size=(img.size[0], 90))
         self.preview_label.configure(image=self._ph_img, text="")
@@ -491,7 +522,7 @@ class _CameraMixin:
                         (int(box[0]), max(int(box[1]) - 6, 12)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.skin.box_bgr, 2)
         rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        width = int(self.cfg["ui"]["preview_width"])
+        width = self._preview_px()
         height = int(width * img.shape[0] / max(img.shape[1], 1))
         image = Image.fromarray(rgb).resize((width, height))
         self._ctkimg = ctk.CTkImage(light_image=image, dark_image=image,

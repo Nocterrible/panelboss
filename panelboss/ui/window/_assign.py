@@ -708,7 +708,7 @@ class SetupWindow(ctk.CTkToplevel):
                         border_color=self.skin.border_raised,
                         text_color=self.skin.text,
                         text_color_disabled=self.skin.txt3).pack(
-            side="right", padx=(theme.S_FIELD, 0))
+            side="right", padx=(theme.S_ROW, 0))
         # the ADD box (amendment 6, the owner's one-screen law):
         # beside the rename entry, seeded from the duty roster (an
         # on-duty feed starts CHECKED - omission must not silently
@@ -725,7 +725,7 @@ class SetupWindow(ctk.CTkToplevel):
                                   border_color=self.skin.border_raised,
                                   text_color=self.skin.text,
                                   text_color_disabled=self.skin.txt3)
-        add_box.pack(side="right", padx=(theme.S_FIELD, 0))
+        add_box.pack(side="right", padx=(theme.S_SECTION, 0))
         add_var.trace_add("write", self._recount)
         self._cards.append({"key": spec["key"], "prefill": spec["prefill"],
                             "entry": entry, "var": var,
