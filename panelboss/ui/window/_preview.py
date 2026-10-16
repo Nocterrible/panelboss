@@ -106,7 +106,14 @@ class _CameraMixin:
         self.power_msg = ""                      # install/uninstall result
         self.power_msg_ts = 0.0
         self.preview_frame = ctk.CTkFrame(card, fg_color=self.skin.field_bg,
-                                          corner_radius=self.skin.radius)
+                                          corner_radius=0)
+        # flat (owner Oct 15): the preview well is a CTkFrame - the same
+        # class the cards are - and its rounded radius was the one
+        # leftover rounded rectangle in the card family. Radius 0 keeps
+        # it a field-tier recess (RAISED fill, distinct from the CARD
+        # fill) with a square edge, matching every now-flat card and the
+        # flat SkewText/SkewCombo recesses. No camo either way (no
+        # background_corner_colors was ever passed).
         self.preview_frame.pack(anchor="w",
                                 pady=(theme.S_FIELD, theme.S_FIELD),
                                 padx=theme.S_SECTION)
