@@ -239,6 +239,7 @@ class SettingsWindow(
         # exactly the cycle where the geometry claim is unverified.
         if not was_mapped or getattr(self, "_veil_lbl", None) is not None:
             self.after(0, self._repaint_switches)
+            self.after(0, self._sync_slider_wheels)
 
 
     # -------------------------------------------------- switch repaint --
@@ -398,6 +399,40 @@ class SettingsWindow(
         # a switch's geometry cannot lie twice under the eye that
         # reads it - the same table as the show path, scoped here)
         self._repaint_switches(pane=key)
+        self._sync_slider_wheels()
+
+
+    def _sync_slider_wheels(self):
+        """The owner's scroll law (Oct 15): the mouse wheel belongs to
+        the window, not to the value under the cursor - CTk sliders
+        grab <MouseWheel> on their own canvas and NEVER consult state
+        (the measured defect that made 'disabled' a lie, worked
+        around by _gate_widgets' swap; the one-way opt-out generalizes
+        it). One walk per tab build; idempotent (unbind twice is a
+        no-op). SCROLL_SLIDERS True restores per-slider wheels."""
+        if getattr(self, "_sliders_seen", None) is None:
+            self._sliders_seen = set()
+
+        def walk(w):
+            try:
+                if isinstance(w, ctk.CTkSlider):
+                    key = id(w)
+                    if not theme.SCROLL_SLIDERS:
+                        cv = getattr(w, "_canvas", None)
+                        if cv is not None:
+                            cv.unbind("<MouseWheel>")
+                    elif key not in self._sliders_seen:
+                        cv = getattr(w, "_canvas", None)
+                        ev = getattr(w, "_mouse_scroll_event", None)
+                        if cv is not None and ev is not None:
+                            cv.bind("<MouseWheel>", ev)
+                            self._sliders_seen.add(key)
+            except Exception:
+                pass
+            for c in w.winfo_children():
+                walk(c)
+        for child in self.winfo_children():
+            walk(child)
 
 
     def rebuild_for_skin(self):

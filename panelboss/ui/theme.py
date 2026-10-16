@@ -42,6 +42,12 @@ TXT_3 = "#6b6e72"          # disabled
 # page) - shared by both skins: this is layout, not palette
 S_PAGE, S_SECTION, S_ROW, S_FIELD = 24, 16, 8, 4
 
+SCROLL_SLIDERS = False   # the wheel scrolls the window, not the
+                         # value (owner UAT, Oct 15: every scroll
+                         # over a card nudged a slider); True
+                         # re-arms the per-slider wheel for a
+                         # future per-card choice
+
 
 @dataclass
 class Skin:
