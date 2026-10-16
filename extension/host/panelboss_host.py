@@ -100,7 +100,11 @@ def _veil(msg):
     try:
         # the eye reads the FIRST line and json.loads it - write one
         # line, a trailing newline, no atomic temp (a torn write reads
-        # as a failed parse and the next good click overwrites it).
+        # as a failed parse and the next good click overwrites it). The
+        # directory is made if the app never created it (the host is
+        # standalone; the app downs the door on install, but the host
+        # must not depend on that ordering).
+        os.makedirs(os.path.dirname(RECT_PATH), exist_ok=True)
         with open(RECT_PATH, "w", encoding="utf-8") as f:
             f.write(json.dumps(payload) + "\n")
     except OSError as e:
