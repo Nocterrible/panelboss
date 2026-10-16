@@ -8,6 +8,7 @@ from ctypes import wintypes
 from ._winapi import (DWMWA_CLOAKED, FURNITURE_PREFIX, GA_ROOT,
                       GWL_EXSTYLE, GWL_STYLE,
                       PROCESS_QUERY_LIMITED_INFORMATION, RECT,
+                      SMTO_ABORTIFHUNG, SMTO_TIMEOUT_MS, WM_GETTEXT,
                       WS_CHILD, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
                       WNDENUMPROC, byref, dwm, k32, sizeof, u32)
 
@@ -30,12 +31,28 @@ def _cloaked(hwnd):
 
 
 def win_title(hwnd):
-    n = u32.GetWindowTextLengthW(hwnd)
-    if n <= 0:
-        return ""
-    buf = ctypes.create_unicode_buffer(min(n, 200) + 1)
-    u32.GetWindowTextW(hwnd, buf, len(buf))
-    return buf.value
+    """Title, with a deadline. A FOREIGN window answers GetWindowText
+    from the manager's cached copy and cannot block (Raymond Chen's
+    rule, and the reason this is surgical: only own-process windows
+    ever send). OUR windows - the hider strips ride the hider-paint
+    thread - answer with a SENT message, and a send to a thread that
+    is not pumping waits forever (the capture freeze, measured
+    Oct-16). Own-process windows therefore ride SendMessageTimeout:
+    1.5 s, then an honest empty title."""
+    pid = wintypes.DWORD()
+    u32.GetWindowThreadProcessId(hwnd, byref(pid))
+    if pid.value != k32.GetCurrentProcessId():
+        n = u32.GetWindowTextLengthW(hwnd)     # cached read, cannot block
+        if n <= 0:
+            return ""
+        buf = ctypes.create_unicode_buffer(min(n, 200) + 1)
+        u32.GetWindowTextW(hwnd, buf, len(buf))
+        return buf.value
+    buf = ctypes.create_unicode_buffer(201)
+    if u32.SendMessageTimeoutW(hwnd, WM_GETTEXT, 200, byref(buf),
+                               SMTO_ABORTIFHUNG, SMTO_TIMEOUT_MS, None):
+        return buf.value
+    return ""                                  # deaf thread: honest empty
 
 
 def _proc_info(hwnd):

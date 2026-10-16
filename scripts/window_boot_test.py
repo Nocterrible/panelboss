@@ -166,6 +166,52 @@ def check():
         _oi = _labels.index("restore my windows")
         assert _ri < _oi, \
             "the actions row must keep rescue first, restore second"
+        # --- the capture-freeze doses, pinned (Oct-16, py-spy proven).
+        #     (a) dose 1, the timeout route: a Tk toplevel IS an own-
+        #     process window, so win_title takes the SendMessage branch
+        #     for real - a wrong ctypes shape raises or lies; and a
+        #     deaf answer must fall to the honest empty. (b) dose 3:
+        #     skin.font holds a STRONG ref (a main-interpreter Font
+        #     finalized on a worker thread is the frame that froze
+        #     hider-paint). The window here is the Tk root for both.
+        #     (c) dose 2's visible lock: capture shares the apply
+        #     button list, or the worker-ized verb runs un-locked.
+        from panelboss.ui import theme
+        from panelboss.wm import _inspect as _I
+        import ctypes as _ct
+        _top = tk.Toplevel(app)
+        _top.title("freeze-canary")
+        _top.update()
+        _hwnd = _ct.windll.user32.GetAncestor(_top.winfo_id(), 2)  # GA_ROOT
+        _got = _I.win_title(_hwnd)
+        assert _got == "freeze-canary", \
+            "win_title lost a real own-process title (timeout route " \
+            "broken): got %r" % _got
+        class _Deaf:
+            def __init__(self, real):
+                self._real = real
+            def __getattr__(self, n):
+                return getattr(self._real, n)
+            def SendMessageTimeoutW(self, *a):
+                return 0
+        _real_u32, _I.u32 = _I.u32, _Deaf(_I.u32)
+        try:
+            assert _I.win_title(_hwnd) == "", \
+                "a deaf thread must answer the honest empty, not hang"
+        finally:
+            _I.u32 = _real_u32
+        _top.destroy()
+        _f0 = len(theme.MODERN._fonts)
+        _f = theme.MODERN.font(size=11)
+        assert len(theme.MODERN._fonts) == _f0 + 1, \
+            "skin.font does not hold the font (the GC cross-thread edge)"
+        app._profile_picked(PF.NEW)            # the create-now pane (the
+        #                                      only one that builds the
+        #                                      capture button)
+        assert getattr(app, "_prof_create_btn", None) is not None and \
+            app._prof_create_btn in app._apply_btns, \
+            "capture button not in _apply_btns: the worker-ized capture " \
+            "verb would run un-locked"
         app.destroy()
         print("[PASS] the settings window survives its own constellation "
               "(painter waits, default root is the window, poke opens it)")

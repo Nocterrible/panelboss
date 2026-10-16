@@ -217,7 +217,12 @@ VK_CONTROL = 0x11              # a lone modifier presses no buttons
 DEVICE_NOTIFICATION = 1
 SERVICE_NOTIFICATION = 2
 
-SMTO_NORMAL = 0x0002
+SMTO_ABORTIFHUNG = 0x0002     # was mis-named SMTO_NORMAL since first
+                              # write (Oct-16 audit): SMTO_NORMAL is
+                              # 0x0000; the VALUE here is the abort
+                              # flag, and it is the RIGHT one for a
+                              # broadcast power command. Value kept,
+                              # name corrected.
 SMTO_TIMEOUT_MS = 1500
 
 SM_XVIRTUALSCREEN = 76
@@ -983,7 +988,7 @@ def turn_off():
     log.debug("sending SC_MONITORPOWER(2) ...")
     user32 = u32
     user32.SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND,
-                               SC_MONITORPOWER, MONITOR_OFF, SMTO_NORMAL,
+                               SC_MONITORPOWER, MONITOR_OFF, SMTO_ABORTIFHUNG,
                                SMTO_TIMEOUT_MS,
                                ctypes.byref(ctypes.c_ulong()))
     if watcher:
@@ -1010,7 +1015,7 @@ def wake(timeout=2.0):
     """
     _ctrl_tap()
     u32.SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND,
-                             SC_MONITORPOWER, MONITOR_ON, SMTO_NORMAL,
+                             SC_MONITORPOWER, MONITOR_ON, SMTO_ABORTIFHUNG,
                              SMTO_TIMEOUT_MS,
                              ctypes.byref(ctypes.c_ulong()))
     k32.SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED)

@@ -199,10 +199,26 @@ _TYPED = {
     # calls these two by these names, so no pin can step on it.
     "GetWindowPlacement": (ctypes.c_void_p, ctypes.c_void_p),
     "SetWindowPlacement": (ctypes.c_void_p, ctypes.c_void_p),
+    # The timeout route for title reads (win_title, _inspect): GetWindow-
+    # Text on an OWN-process window SENDS, and a send to a thread that
+    # is not pumping waits forever - measured Oct-16 (py-spy, two frozen
+    # threads): the capture walk died on the hider-paint thread. The
+    # lparam and out-param slots are c_void_p (the shared-windll lesson
+    # above): byref(buffer)/None satisfy them, and display.py's turn_off
+    # passes byref(c_ulong()) in the same slot, no stepping-on.
+    "SendMessageTimeoutW": (ctypes.c_void_p, ctypes.c_uint,
+                            ctypes.c_ulonglong, ctypes.c_void_p,
+                            ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p),
 }
 for _name, _args in _TYPED.items():
     getattr(u32, str(_name)).argtypes = list(_args)
 del _name, _args
+u32.SendMessageTimeoutW.restype = ctypes.c_long   # 0 = refused or timed out
+
+WM_GETTEXT = 0x000D
+SMTO_ABORTIFHUNG = 0x0002     # SMTO_NORMAL is 0x0000; the constant in
+SMTO_TIMEOUT_MS = 1500        # display.py mis-named for years (measured
+                              # Oct-16) - the VALUE is this flag.
 
 k32.OpenProcess.restype = ctypes.c_void_p
 k32.OpenProcess.argtypes = [wintypes.DWORD, ctypes.c_bool, wintypes.DWORD]
