@@ -17,7 +17,7 @@ import logging
 
 import customtkinter as ctk
 
-from ... import companion, dimmer, hider, jog, videoeye, wm
+from ... import companion, dimmer, hider, jog, wm
 from ...config import (DIMMER_IDLE_CEIL, DIMMER_IDLE_DEFAULT,
                        DIMMER_IDLE_FLOOR, DIMMER_LEVEL_CEIL,
                        DIMMER_LEVEL_DEFAULT, DIMMER_LEVEL_FLOOR,
@@ -133,21 +133,12 @@ TIP_COMP = {
           "the playing video - the frame lands around the rect and "
           "the browser's chrome dims with it. off is the root law: "
           "no socket opens, no file is read, nothing happens. the "
-          "eye learns the video's place two ways: the buddy "
-          "extension's bridge file (no flag, no port - the free "
-          "path) and a flagged browser's debug port (the rows "
-          "below).",
-    "status": "live words: the rail's state, the bridge file's "
-              "last click, and the port truth of every flagged "
-              "family, refreshed on the dimmer's own beat. the "
+          "eye learns the video's place from the buddy "
+          "extension's bridge file: no flag, no port.",
+    "status": "live words: the rail's state and the bridge file's "
+              "last click, refreshed on the dimmer's own beat. the "
               "manual veil answers here too. a missing answer "
               "reads as words, never a crash.",
-    "flag": "enabling this makes PanelBoss restart that browser "
-            "with the debug port when arming; unchecking does NOT "
-            "kill a running flagged browser - the flag drops at "
-            "the next restart of yours. the port is the whole "
-            "price: any local process may read it while it is "
-            "open. the bridge path below carries the veil free.",
     "veil": "manual one-shot over the bridge channel only: no "
             "flag, no port, no daemon. click the buddy "
             "extension's icon on a video tab, then this: "
@@ -798,13 +789,16 @@ class _OledMixin:
     # key is words, never a crash.
     # ------------------------------------------------------------------
     _CMP_FAMILIES = (("chrome", "chrome"), ("edge", "edge"),
-                     ("opera_gx", "opera gx"))
+                     ("opera_gx", "opera gx"))  # the port-era families:
+    # no longer rendered (owner's second purge, Oct 16 - the debug port
+    # left the user surface); kept ONLY so a config that predates the
+    # ruling still parses through companion.families without surprise.
 
     def _build_companion(self, parent):
         box = self._card(parent, "Movie theater mode",
                          "the eye that dims the desk around the "
-                         "video - by bridge, or by the port you "
-                         "agree to open")
+                         "video - the buddy extension tells it "
+                         "where the video is")
         row = self._row(box, "Movie theater mode", TIP_COMP["on"],
                         hint_chars=42)
         self.oled_comp_box = ctk.CTkSwitch(
@@ -815,21 +809,14 @@ class _OledMixin:
                                         {}).get("on") is True \
             else self.oled_comp_box.deselect()
 
-        self._comp_rows = {}
-        for fam, label in self._CMP_FAMILIES:
-            row = self._row(box, label, TIP_COMP["flag"], hint_chars=42)
-            box2 = ctk.CTkCheckBox(
-                row, text="debug port",
-                command=lambda f=fam: self._oled_comp_flag_changed(f),
-                font=self.skin.font(12), checkbox_width=18,
-                checkbox_height=18,
-                border_color=self.skin.border_raised,
-                fg_color=self.skin.accent, hover_color=self.skin.accent,
-                text_color=self.skin.text,
-                text_color_disabled=self.skin.txt3)
-            box2.set(fam in companion.families(self.cfg))
-            box2.grid(row=0, column=1, sticky="e")
-            self._comp_rows[fam] = box2
+        # THE DEBUG PORT IS GONE FROM THE SURFACE (owner, Oct 16,
+        # second instruction): the per-family checkboxes made the dead
+        # route look alive - the flag path restarts a browser with a
+        # port open to every local process, the infostealer classic
+        # the retire dossier was written about. The engine keeps the
+        # reader (config keys, companion.families, videoeye.probe) so
+        # a pre-ruling config never surprises anyone; the card simply
+        # no longer offers the trade.
 
         row = self._row(box, "veil this video", TIP_COMP["veil"],
                         hint_chars=42)
@@ -843,8 +830,7 @@ class _OledMixin:
                                           **self.skin.text_style("sub"))
         self.oled_comp_say.grid(row=0, column=2, sticky="e",
                                 padx=(theme.S_FIELD, 0))
-        self._comp_beat = 0
-        self._comp_probe = {}
+        # (the port-era probe state died with the checkboxes, Oct 16)
 
         row = self._row(box, " ", TIP_COMP["path"], hint_chars=42)
         ctk.CTkLabel(row, text=companion.EXT_DIR,
@@ -856,33 +842,12 @@ class _OledMixin:
 
     def _comp_words(self):
         """The status line, on the dimmer poll's beat: companion.say
-        for the rail and the bridge, and the eye's live probe words -
-        but the probe (it opens a real socket per family) runs only
-        while a flag actually asks for a port, and every fourth beat
-        at that: the card may not stall the tab on a half-dead port
-        once a second. Junk shapes read as words."""
+        for the rail and the bridge - the bridge channel's words, the
+        only channel the card offers since the Oct-16 purge. Junk
+        shapes read as words."""
         if getattr(self, "oled_comp_say", None) is None:
             return
-        words = companion.say(self.cfg)
-        if companion.families(self.cfg):
-            self._comp_beat = getattr(self, "_comp_beat", 0) + 1
-            if self._comp_beat % 4 == 1:
-                try:
-                    p = videoeye.probe()
-                    self._comp_probe = p if isinstance(p, dict) else {}
-                except Exception:
-                    log.debug("companion probe failed", exc_info=True)
-                    self._comp_probe = {}
-            bits = []
-            for fam, label in self._CMP_FAMILIES:
-                out = self._comp_probe.get(fam)
-                if not isinstance(out, dict):
-                    continue
-                bits.append("%s: %s" % (label, out.get("say")
-                                        or "not checked"))
-            if bits:
-                words += " | " + "; ".join(bits)
-        set_text(self.oled_comp_say, words)
+        set_text(self.oled_comp_say, companion.say(self.cfg))
 
     def _oled_comp_changed(self):
         # one gesture, both keys: the consent the engine gates on and
@@ -894,34 +859,16 @@ class _OledMixin:
         self._save()
         self._comp_words()
 
-    def _oled_comp_flag_changed(self, fam):
-        box = self._comp_rows.get(fam)
-        if box is None:
-            return
-        vd = self.cfg.setdefault("videodim", {})
-        fams = [f for f in (vd.get("flag_families") or [])
-                if isinstance(f, str)]
-        want = bool(box.get())
-        if want and fam not in fams:
-            fams.append(fam)
-        if not want and fam in fams:
-            fams = [f for f in fams if f != fam]
-        vd["flag_families"] = fams
-        self._save()
-        self._comp_words()
-
     def _oled_comp_veil(self):
         # the one-shot answers in the status line itself (the wash
         # button's idiom): the rect it saw, or the no-bridge words
         set_text(self.oled_comp_say, companion.veil_now(self.cfg))
 
     def _sync_companion_switches(self):
-        """Knob-lie belt (_shell.SWITCH_SYNC): the master switch and
-        the flag boxes painted from the rail at settled geometry -
-        both branches, no commands fired (the _power idiom's law)."""
+        """Knob-lie belt (_shell.SWITCH_SYNC): the master switch
+        painted from the rail at settled geometry - both branches, no
+        commands fired (the _power idiom's law). The flag boxes left
+        the surface Oct 16 with the port purge."""
         on = (self.cfg.get("videodim") or {}).get("on") is True
         self.oled_comp_box.select() if on \
             else self.oled_comp_box.deselect()
-        fams = set(companion.families(self.cfg))
-        for fam, box in self._comp_rows.items():
-            box.select() if fam in fams else box.deselect()
