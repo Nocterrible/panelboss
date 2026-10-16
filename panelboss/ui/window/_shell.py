@@ -51,6 +51,8 @@ from ._constants import TABS, TIPS
 from ._scroll import ScrollHost
 from ._widgets import _SleepPrompt
 from ._widgets import _WidgetsMixin
+from ._present import clip_siblings
+from ._present import present
 from ._runtime import _RuntimeMixin
 from ._detection import _DetectionMixin
 from ._away import _AwayMixin
@@ -387,6 +389,19 @@ class SettingsWindow(
         # relwidth/relheight track body resizes for free.
         for p in self.pages.values():
             p.place(in_=self._body, x=0, y=0, relwidth=1, relheight=1)
+        # the FLAT BACKDROP (see _show_tab's atomic-switch note): a plain
+        # page-background frame that always sits directly UNDER the active
+        # page, so the incoming page's not-yet-repainted regions show the
+        # page's own background - never the outgoing page's text. Plain
+        # tk (nothing to theme, nothing to draw): one rectangle fill.
+        self._backdrop = tk.Frame(self._body, bg=self.skin.bg)
+        self._backdrop.place(in_=self._body, x=0, y=0,
+                             relwidth=1, relheight=1)
+        # WS_CLIPSIBLINGS on every window in the house: without it the
+        # lower tab page's child windows paint OVER the raised page -
+        # the coexistence the owner screenshotted (measured; see
+        # _present.clip_siblings). One walk per build.
+        clip_siblings(self)
         start = self._tab
         self._tab = None               # fresh layers, undressed buttons:
         self._show_tab(start)          # the first call must run past
@@ -395,17 +410,26 @@ class SettingsWindow(
 
 
     def _show_tab(self, key):
-        """The layer law (re-cut Oct 12, owner: "can we draw all
-        screens and just layer them behind each other so tabbing just
-        reveals them instead of fully redrawing them each time?"):
-        the pages were ALWAYS all built at boot; the crawl lived in
-        the pack_forget/pack remap - every CTk canvas re-renders on
-        re-map (issue #40 class). They now ride the body as
-        permanently mapped layers and a switch is ONE tkraise: no
-        unmap, no burst, so the switch veil, its forced update() and
-        its 120 ms lift die with the remap that needed them. The
-        boot/skin veils STAY: _show_first and rebuild_for_skin sweep
-        with real widget births, which no layering can hide."""
+        """The ONE-AT-A-TIME switch (re-cut Oct 16, owner: "tabbing
+        causes both sets of objects to coexist briefly... I NEVER want
+        to see anything paint live").
+
+        The Oct-12 layer law kept every page mapped and switched by
+        `tkraise` alone, on the theory that a raise is free. It is not,
+        on this toolkit: a merely-restacked window gets no expose from
+        Windows, so the page on top kept the PREVIOUS page's pixels on
+        the glass until unrelated app activity happened to dirty the
+        region - the owner's screenshot. `raise`, `update` and
+        `update_idletasks` all failed to cure it (measured; see
+        _present.py's header): none of them queues the work the restack
+        never queued.
+
+        The cure forces the present: after the raise, one synchronous
+        whole-subtree repaint completes inside this call, before control
+        returns to the loop, so the switch is one complete frame by
+        construction. Pages stay BUILT and MAPPED (no remap: unmapping
+        loses CTk's drawn canvases - measured, the fragments the owner
+        would have seen instead), so only the present is new work."""
         page = self.pages[key]
         if key == self._tab and page.winfo_manager() == "place":
             return                     # already the revealed layer: a
@@ -413,19 +437,41 @@ class SettingsWindow(
             # nulls _tab first, so a fresh build never trips this)
         self.tips.kill()                 # a tooltip anchored to a row
         self._tab = key                  # would float over the new page
-        page.tkraise()                   # THE WHOLE SWITCH
-        page.sync_region()               # belt for the wheel: geometry
-        # did not move under a raise, but this is exactly the seam
-        # _page_region's law says a re-measure belongs (one loop late)
+        # ---- THE ATOMIC SWITCH (Oct 16, the owner's coexistence shot)
+        # Measured on this toolkit (see _present.py's header): a
+        # restacked page repaints over ~40 ms and Windows does NOT
+        # repaint the raised page's covered region, so the outgoing
+        # page's pixels stay on the glass in every gap - the two
+        # generations the owner screenshotted. raise+update, reorder,
+        # unmap/remap and a forced present all failed to make it one
+        # frame (the present even LENGTHENED the visible change to
+        # ~130 ms, so there is none here).
+        #
+        # The cure is a persistent FLAT BACKDROP that always sits
+        # directly under the active page: the switch raises the
+        # backdrop, then the incoming page over it. Every page that is
+        # not active is now below an opaque flat surface, so the
+        # not-yet-repainted regions of the incoming page show the
+        # page's OWN background colour - never the outgoing page's
+        # text. No cover to paint, no present to force, no timer: just
+        # a z-order that makes two-generation bleed-through
+        # unrepresentable.
+        self._backdrop.tkraise()
+        self._repaint_switches(pane=key)  # knob-lie belt (pane arm)
+        self._sync_slider_wheels()
         for k, b in self.tab_buttons.items():
             b.configure(**(self.skin.primary() if k == key
                           else self.skin.secondary()))
-        # knob-lie belt, pane arm: the reveal re-paints this pane's
-        # truth switches (their build paint may have happened hidden;
-        # a switch's geometry cannot lie twice under the eye that
-        # reads it - the same table as the show path, scoped here)
-        self._repaint_switches(pane=key)
-        self._sync_slider_wheels()
+        try:
+            self._backdrop.update()      # flat fill over the body NOW
+        except Exception:
+            pass                         # dying window: the switch below
+        # (a real event flush, not RedrawWindow: only update() forces
+        # Tk to paint the flat frame synchronously - measured). The prep
+        # above runs while the flat frame is coming up, so the flat
+        # moment is one or two frames, not the whole rebuild's budget.
+        page.tkraise()                   # THE SWITCH - restack, instant
+        page.sync_region()               # belt for the wheel: geometry
 
 
     def _sync_slider_wheels(self):
