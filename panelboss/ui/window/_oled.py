@@ -497,7 +497,7 @@ class _OledMixin:
         slider = ctk.CTkSlider(row, from_=DIMMER_IDLE_FLOOR,
                                to=DIMMER_IDLE_CEIL,
                                number_of_steps=(DIMMER_IDLE_CEIL
-                                                - DIMMER_IDLE_FLOOR) // 60,
+                                                - DIMMER_IDLE_FLOOR),
                                width=180, command=self._oled_idle_changed,
                                **self.skin.slider_style())
         slider.set(int(dim.get("idle_sec", DIMMER_IDLE_DEFAULT)))
