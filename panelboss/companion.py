@@ -8,19 +8,19 @@ longer exists. The replacement is the native-messaging companion
 the app's own doorway file, and the eye (videoeye) reads it. There is
 no [videodim].enabled / flag_families rail any more - a stale config
 key parses without surprise (the normalizer's own honesty law) but this
-module no longer reads those words into a card. The card's live words
-now answer from what the extension's API CAN send (capability
-discovery), not what a flagged browser used to mean.
+module no longer reads those words into a card.
 
 The card (ui/window/_oled.py, the fourth card of the oled tab) uses:
-`on` for the switch, `say` for its live words, and `veil_now` for the
-manual one-shot. No watchdog, no relaunch logic - the rail is the
-owner's word, and the loop thread answers it.
+`on` for the switch, `say` for its live words, `veil_now` for the manual
+one-shot, and `caps_words` for the capability-discovery line - what the
+extension's API CAN send, discovered by nmhost.capabilities() asking the
+host directly (the owner's mandate, closed for real Oct 16: the host's
+self-description is READ, not assumed).
 """
 
 import time
 
-from . import videoeye
+from . import nmhost, videoeye
 
 # the family keys the extension may stamp - the eye's vocabulary. The
 # row's family answer rides the extension's UA tell (OPR/ Edg/ Chrome/),
@@ -44,6 +44,24 @@ def door_dir():
     browser's download dir. A string, never a surprise - the card
     renders it verbatim."""
     return videoeye.RECT_PATH
+
+
+def caps_words(force=False):
+    """The capability-discovery line, from asking the host directly
+    (nmhost.capabilities): what the API CAN send - the ops and the veil
+    fields - or the honest not-installed words when host.json is absent
+    or the host is wedged. force re-asks (the card's explicit re-check).
+    Never raises: a dead host is words, not a crash."""
+    caps = nmhost.capabilities(force=force)
+    if caps is None:
+        return nmhost.NOT_INSTALLED
+    opnames = nmhost.ops(caps)
+    fields = nmhost.veil_fields(caps)
+    line = "buddy API: " + ", ".join(opnames) if opnames else \
+        "buddy API: (no ops)"
+    if fields:
+        line += " - veil sends " + "/".join(fields)
+    return line
 
 
 def _vd(cfg):

@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["PANELBOSS_CONFIG_DIR"] = tempfile.mkdtemp(prefix="panelboss_cmp_")
@@ -119,6 +120,87 @@ try:
           "door_dir() answers the redirected doorway path")
 finally:
     videoeye.RECT_PATH = _real_rect
+
+# --- capability discovery (the owner's mandate, Oct 16 close) ---------
+# The card asks the HOST what the API can send, not a stored guess. The
+# fake host is sys.executable + a script twin that speaks the host's own
+# frame codec (native-order length prefix) and answers capabilities - so
+# the pin proves the app READ the answer, and a wedged/absent host reads
+# as the honest not-installed words, never a hang.
+from panelboss import nmhost   # noqa: E402
+
+_fake_host = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
+                          "fakehost.py")
+with open(_fake_host, "w", encoding="utf-8") as f:
+    f.write(
+        'import json, struct, sys\n'
+        'n = struct.unpack("@I", sys.stdin.buffer.read(4))[0]\n'
+        'sys.stdin.buffer.read(n)\n'
+        'caps = {"op": "capabilities", "protocol": "panelboss-v1",\n'
+        '        "host": "com.nocterrible.panelboss",\n'
+        '        "ops": ["capabilities", "veil"],\n'
+        '        "veil": {"fields": ["rect", "dpr", "paused",\n'
+        '                            "scroll", "view", "bounds",\n'
+        '                            "family", "ts"]}}\n'
+        'out = json.dumps(caps).encode()\n'
+        'sys.stdout.buffer.write(struct.pack("@I", len(out)) + out)\n'
+        'sys.stdout.buffer.flush()\n')
+
+_real_host_json = nmhost.HOST_JSON
+_real_ask = nmhost._ask
+nmhost.HOST_JSON = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
+                                "host.json")
+with open(nmhost.HOST_JSON, "w", encoding="utf-8") as f:
+    json.dump({"path": _fake_host}, f)      # the twin stands in as the
+                                             # "exe" - the seam is the
+                                             # spawn, redone below
+nmhost._ask = lambda exe: _real_ask(sys.executable, _fake_host)
+nmhost._cache.update(until=0.0, caps=None)
+try:
+    # absent host.json first: no file, honest words, never a spawn
+    nmhost.HOST_JSON = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
+                                    "no-host.json")
+    nmhost._cache.update(until=0.0, caps=None)
+    check(companion.caps_words() == nmhost.NOT_INSTALLED,
+          "no host installed answers the honest not-installed words")
+    check(nmhost.capabilities() is None,
+          "capabilities() answers None on an absent host")
+
+    # the fake twin answers: caps_words reads the ops and veil fields
+    nmhost.HOST_JSON = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
+                                    "host.json")
+    nmhost._cache.update(until=0.0, caps=None)
+    caps = nmhost.capabilities()
+    check(caps is not None and caps.get("protocol") == "panelboss-v1"
+          and "veil" in caps.get("ops", ()),
+          "capabilities() spawns the host and reads the framed reply")
+    words = companion.caps_words()
+    check(words.startswith("buddy API: capabilities, veil")
+          and "rect" in words and "family" in words,
+          "caps_words renders the ops list and the veil field names: "
+          "%r" % (words,))
+    check(companion.caps_words() == words,
+          "the capsule answer is cached (the TTL holds between beats)")
+
+    # the wedged-host law: a path that answers nothing must time out
+    # into None, never hang the beat
+    wedged = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
+                          "wedged.py")
+    with open(wedged, "w", encoding="utf-8") as f:
+        f.write("import time\ntime.sleep(30)\n")
+    with open(nmhost.HOST_JSON, "w", encoding="utf-8") as f:
+        json.dump({"path": wedged}, f)
+    nmhost._cache.update(until=0.0, caps=None)
+    nmhost._ask = lambda exe: _real_ask(sys.executable, wedged)
+    t0 = time.monotonic()
+    check(nmhost.capabilities() is None,
+          "a wedged host answers None")
+    check(time.monotonic() - t0 < 5.0,
+          "a wedged host is killed inside the timeout, never a hang")
+finally:
+    nmhost._ask = _real_ask
+    nmhost.HOST_JSON = _real_host_json
+    nmhost._cache.update(until=0.0, caps=None)
 
 print("COMPANION-PIN OK (%d)" % len(passed) if not fails
       else "COMPANION-PIN FAILED: %s" % fails)

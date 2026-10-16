@@ -75,6 +75,15 @@ $key = "HKCU:\Software\Google\Chrome\NativeMessagingHosts\$HOSTNAME"
 New-Item -Path $key -Force | Out-Null
 Set-ItemProperty -Path $key -Name '(default)' -Value $manifestPath
 
+# 4. tell PANELBOSS where the host exe lives: the app reads capability
+# discovery from this exe (host.json is the doorway's neighbor, so the
+# app queries the host it installed - the owner's "PanelBoss reads what
+# the API can send" mandate).
+$appdir = Join-Path $env:APPDATA 'PanelBoss'
+New-Item -Path $appdir -Force | Out-Null
+@{ path = $hostExe } | ConvertTo-Json | Set-Content `
+    -Path (Join-Path $appdir 'host.json') -Encoding UTF8
+
 if (-not $ExtensionId) {
     Write-Output ('host installed, but the extension id is still the placeholder - rerun with -ExtensionId <id from the browser extensions page>')
 } else {

@@ -151,6 +151,11 @@ TIP_COMP = {
             "no pairing, no token; the browser's install check is "
             "the whole handshake. install the host once (see the "
             "extension's README).",
+    "caps": "what the buddy's API CAN send, read from the host "
+            "itself (the open-API ruling: discover, never assume). "
+            "no host installed reads as the honest words - run "
+            "extension\\host\\install_host.ps1 to register it. this "
+            "line re-checks on the veil button and the switch.",
 }
 
 
@@ -830,15 +835,28 @@ class _OledMixin:
                      justify="left", anchor="w",
                      **self.skin.text_style("sub")).grid(
             row=0, column=1, columnspan=2, sticky="e")
+
+        # the capability-discovery line: what the buddy's API CAN send,
+        # READ from the host (nmhost.capabilities), never assumed. The
+        # card asks the host directly - the owner's mandate, and the
+        # one place the "what can it do" question is answered on-screen.
+        row = self._row(box, " ", TIP_COMP["caps"], hint_chars=42)
+        self.oled_comp_caps = ctk.CTkLabel(
+            row, font=self.skin.font(11), wraplength=420,
+            justify="left", anchor="w", **self.skin.text_style("sub"))
+        self.oled_comp_caps.grid(row=0, column=1, columnspan=2,
+                                 sticky="e")
         self._comp_words()
 
     def _comp_words(self):
         """The status line, on the dimmer poll's beat: companion.say
-        for the rail and the doorway - the only channel the card
-        offers. Junk shapes read as words."""
+        for the rail and the doorway, companion.caps_words for the
+        discovered API surface. Junk shapes read as words."""
         if getattr(self, "oled_comp_say", None) is None:
             return
         set_text(self.oled_comp_say, companion.say(self.cfg))
+        if getattr(self, "oled_comp_caps", None) is not None:
+            set_text(self.oled_comp_caps, companion.caps_words())
 
     def _oled_comp_changed(self):
         # one gesture, one key: [videodim].on is the single consent
@@ -851,8 +869,12 @@ class _OledMixin:
 
     def _oled_comp_veil(self):
         # the one-shot answers in the status line itself (the wash
-        # button's idiom): the rect it saw, or the no-click words
+        # button's idiom): the rect it saw, or the no-click words; the
+        # explicit click also re-checks what the API can send (force).
         set_text(self.oled_comp_say, companion.veil_now(self.cfg))
+        if getattr(self, "oled_comp_caps", None) is not None:
+            set_text(self.oled_comp_caps, companion.caps_words(
+                force=True))
 
     def _sync_companion_switches(self):
         """Knob-lie belt (_shell.SWITCH_SYNC): the master switch

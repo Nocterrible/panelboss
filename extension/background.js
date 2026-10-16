@@ -124,8 +124,8 @@ async function veil(_tab) {
 
   try {
     const ans = await sendNative({ op: "veil", payload: row }, 5000);
-    say(ans && ans.ok ? "veiled" : "nm");
-  } catch (e) {
+    say(ans && ans.ok ? "veil" : "nm");   // "veil" not "veiled": the
+  } catch (e) {                           // badge clips past 4 chars
     say(e && e.badge ? e.badge : "nm");
   }
 }

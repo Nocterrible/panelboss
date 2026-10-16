@@ -43,6 +43,20 @@ it), `view` the inner `[width, height]`, `bounds` the window's outer
 `left/top/width/height` in DIP px, `family` one of `chrome` / `edge` /
 `opera_gx`, `ts` the wall-clock seconds stamp.
 
+### How PanelBoss reads it (the capability-discovery close)
+
+The host is the API, and PanelBoss asks it directly — the app does *not*
+know which browser or extension build is installed; it spawns the same
+exe `install_host.ps1` built, feeds `{"op":"capabilities"}`, reads the
+framed reply (native-order 4-byte length prefix, 2 s timeout, cached for
+a few minutes), and the Movie theater card renders what the API **can**
+send (the `ops` list and the `veil` fields). `install_host.ps1` writes
+the exe's path to `%APPDATA%\PanelBoss\host.json` (the doorway's
+neighbor) so the app knows where to ask. No host → the card says so
+plainly ("run extension\host\install_host.ps1"), never a guess.
+(`panelboss/nmhost.py` is the reader; the card's line is
+`companion.caps_words()`.)
+
 ## The three dead shapes (do not re-derive)
 
 The history that earned native messaging its place — measured, not
@@ -78,9 +92,10 @@ is `panelboss_host.py`, frozen to `panelboss-host.exe` by
    manifest ships with a placeholder and the host refuses everyone.
 
 The click needs a video tab: one press measures, hands the row to the
-host, and the icon answers on itself with a word — `veiled` (geometry
-written), `novid` (no `<video>`), `ask`/`slow`/`win`/`nm` (which step
-refused; `nm` = the native host is missing or the id doesn't match).
+host, and the icon answers on itself with a word — `veil` (geometry
+written; the badge clips past four chars, so the success word is short),
+`novid` (no `<video>`), `ask`/`slow`/`win`/`nm` (which step refused;
+`nm` = the native host is missing or the id doesn't match).
 The doorway is `%APPDATA%\PanelBoss\rect` — **fixed**, not the browser's
 download dir: the downloads writer (v0.2) needed the "shelf law" to find
 where chrome.downloads had *actually* put the file; the native host
