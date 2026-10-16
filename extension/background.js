@@ -1,30 +1,26 @@
-/* PanelBoss Companion - the manual "veil this video" trigger, v0.1.1.
+/* PanelBoss Companion - the manual "veil this video" trigger, v0.2.0.
  *
- * One click on the toolbar icon, once, no timers, no pumps: attach
- * the debugger to the active tab, ask the SAME question PanelBoss
- * asks over the debug port (the RECT_JS below is the byte-twin of
- * panelboss/videoeye.py's constant - the suite pins it), and write
- * the answer to the bridge file via chrome.downloads (the zero-
- * native-host-plumbing writer: the blob lands at
- * <Downloads>\PanelBoss\rect, where PanelBoss also reads; the
- * %APPDATA%\PanelBoss\rect doorway waits for the future native
- * host - see README, including the two manifest shapes that died
- * on this Edge today and why the next lane should not retry them).
+ * One click on the toolbar icon, once, no timers, no pumps: ask the
+ * active tab ONE question with chrome.scripting - the same class of
+ * call every ad blocker uses to find things on a page (the owner's
+ * ruling, Oct 16, after v0.1.1's debugger route proved it can hold a
+ * silent, banner-raising conversation with Opera: "we need to not do
+ * that this way if we can avoid it"). The answer is the SAME string
+ * the RECT_JS constant holds - the byte-twin of panelboss/videoeye.py's
+ * constant (the suite pins the pairing) - and the geometry lands in
+ * the bridge file via chrome.downloads (the zero-native-host-plumbing
+ * writer: the blob lands at <browser download dir>\PanelBoss\rect,
+ * where PanelBoss reads; the %APPDATA%\PanelBoss\rect doorway waits
+ * for the future native host - see README, including the two manifest
+ * shapes that died on this Edge and why the next lane should not
+ * retry them).
  *
- * The debugger rides the click only: detach the moment the answer
- * lands. chrome.windows.get carries the outer window bounds (DIP
- * px) so PanelBoss can fold content space to physical desktop px
- * exactly like the Browser.getWindowBounds path does.
- *
- * v0.1.1 (Oct 16, the owner's silent first click): every way this
- * flow can now die answers with its OWN badge word - the old build
- * labeled every attach failure 'busy' (honest only when DevTools
- * owned the tab) and died wordless after the attach, which is
- * exactly the no-evidence state the owner found (the debugging
- * banner up, no file, no word). The awaits that can HANG (Opera's
- * CDP can hold a question forever) run behind withTimeout: the
- * banner must never outlive the click's own patience, and the
- * finally-detach stays the one door out.
+ * NO DEBUGGER, NO BANNER, NO PORT: nothing to attach, nothing that
+ * can outlive the click, nothing that tells the page a measuring tool
+ * arrived. The awaits still ride withTimeout - every way this flow can
+ * die answers with its own badge word (att/ask/slow/novid/json/win/dl
+ * /veiled), because the v0.1.0 build's silent wordless death is the
+ * reason the word list exists at all.
  */
 const RECT_JS = "(function(){var v=document.querySelector('video');return v?JSON.stringify({rect:v.getBoundingClientRect(),dpr:window.devicePixelRatio,paused:v.paused,scroll:[window.scrollX,window.scrollY],view:[window.innerWidth,window.innerHeight]}):'null';})()";
 
@@ -51,66 +47,54 @@ function withTimeout(p, ms, word) {
 async function veil(_tab) {
   const tab = _tab && _tab.id !== undefined ? _tab : await activeTab();
   if (!tab || tab.id === undefined) return;
+  let inj;
   try {
-    await chrome.debugger.attach({tabId: tab.id}, "1.3");
+    // the ad-blocker class of call: one function, serialized into the
+    // tab's world, its return value handed back. The function is
+    // SELF-CONTAINED (executeScript serializes it alone - no closures
+    // ride), so the eye's own string comes in as an ARG and eval runs
+    // it there; the suite pins that the shipped string is byte-exact.
+    inj = await withTimeout(chrome.scripting.executeScript({
+      target: {tabId: tab.id, injectImmediately: true},
+      func: (src) => eval(src),
+      args: [RECT_JS],
+    }), 5000, "slow");
   } catch (e) {
-    // 'busy' is reserved for the truth it names (DevTools owns the
-    // tab); any OTHER handshake refusal is its own word now, because
-    // the old catch-all made every attach death look like the one
-    // the user could fix themselves (measured Oct 16: banner UP
-    // after the click, so attach is NOT our failure on GX - but the
-    // next family that blocks the API will name itself here).
-    say(/being debugged|Cannot access a chrome/i.test(String(e && e.message))
-        ? "busy" : "att");
-    return;
+    say("ask");                // the injection itself was refused
+    return;                    // (restricted page, or a browser that
+}                              // says no to scripting)
+  const v = inj && inj[0] && inj[0].result;
+  if (!v || v === "null") {
+    say("novid");              // the page answers no video element:
+    return;                    // nothing to veil, nothing to write
   }
+  let row;
+  try { row = JSON.parse(v); }
+  catch (e) { say("json"); return; }
+  let win;
   try {
-    let r;
-    try {
-      r = await withTimeout(chrome.debugger.sendCommand(
-          {tabId: tab.id}, "Runtime.evaluate",
-          {expression: RECT_JS, returnByValue: true}), 5000, "slow");
-    } catch (e) {
-      say(e && e.badge ? e.badge : "ask");    // 'slow' = Opera held
-      return;                                // the question open;
-    }                                        // 'ask' = the answer
-                                               // was refused
-    const v = r && r.result && r.result.value;
-    if (!v || v === "null") {
-      say("novid");            // the page answers no video element:
-      return;                  // nothing to veil, nothing to write
-    }
-    let row;
-    try { row = JSON.parse(v); }
-    catch (e) { say("json"); return; }
-    let win;
-    try {
-      win = await withTimeout(chrome.windows.get(tab.windowId),
-                              5000, "slow");
-    } catch (e) {
-      say("win");              // the desk bounds are the one thing
-      return;                  // the fold cannot be computed without
-    }
-    row.bounds = {left: win.left, top: win.top,
-                  width: win.width, height: win.height};
-    row.family = FAMILY;
-    row.ts = Date.now() / 1000;
-    const blob = new Blob([JSON.stringify(row) + "\n"],
-                          {type: "application/octet-stream"});
-    const url = URL.createObjectURL(blob);
-    try {
-      await chrome.downloads.download({
-        url, filename: "PanelBoss/rect", saveAs: false,
-        conflictAction: "overwrite"});
-      say("veiled");
-    } catch (e) {
-      say("dl");               // the download was REFUSED (a blocked
-    }                          // downloads permission reads exactly
-  } finally {                  // like this word, and reads like
-    // NOTHING when you have no
-    try { await chrome.debugger.detach({tabId: tab.id}); } catch (e) {}
-  }                            // word at all
-}
+    win = await withTimeout(chrome.windows.get(tab.windowId),
+                            5000, "slow");
+  } catch (e) {
+    say("win");                // the desk bounds are the one thing
+    return;                    // the fold cannot be computed without
+  }
+  row.bounds = {left: win.left, top: win.top,
+                width: win.width, height: win.height};
+  row.family = FAMILY;
+  row.ts = Date.now() / 1000;
+  const blob = new Blob([JSON.stringify(row) + "\n"],
+                        {type: "application/octet-stream"});
+  const url = URL.createObjectURL(blob);
+  try {
+    await chrome.downloads.download({
+      url, filename: "PanelBoss/rect", saveAs: false,
+      conflictAction: "overwrite"});
+    say("veiled");
+  } catch (e) {
+    say("dl");                 // the download was REFUSED (a blocked
+  }                            // downloads permission reads exactly
+}                              // like this word
 
 function say(word) {
   try {
