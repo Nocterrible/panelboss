@@ -122,35 +122,103 @@ class _ModeMixin:
     def _profile_create(self):
         # the create-now verb must die LOUD like its blank-profile
         # sibling, never silent in pythonw: profiles.create() calls
-        # capture() -> wm.monitors(), a real driver read that can raise
-        # mid-enumeration; an unguarded raise lands in the Tk callback
-        # and the event loop swallows it whole - the button looked dead
-        # (the same silent-ignorance class as the consent switch). The
-        # failure goes to the gray status line (R8); nothing raises.
+        # capture() -> wm.list_windows(), a walk of EVERY window on
+        # the box. Until Oct-16 that walk ran on the Tk thread and
+        # froze the whole UI for hours: title reads SEND to own-process
+        # windows (the hider strips) and the hider-paint thread was
+        # not pumping - py-spy caught the deadlock, both frames. The
+        # title reads now carry a deadline (_inspect.win_title) AND
+        # the verb rides a worker like its apply sibling below: no
+        # walk belongs on the pump. An unguarded raise lands in the Tk
+        # callback and the event loop swallows it whole - the button
+        # looked dead (the same silent-ignorance class as the consent
+        # switch). The failure goes to the gray status line (R8);
+        # nothing raises.
         name = (self._prof_name.get() or "").strip()
         if not name:
             self._prof_msg = "give it a name first"
             self._status_lbl.configure(text=self._prof_msg)
             return
-        try:
-            profiles.create(self._prof_data, name)
-            # the primitive returns the dict it stored; a save that
-            # could not write still leaves the in-memory card, so the
-            # picker is rebuilt from the data the store now holds -
-            # exactly one default-filled entry for the fresh name
-            self.profile_menu.configure(values=[profiles.NEW] + sorted(
-                self._prof_data["profiles"]))
-            self.profile_menu.set(name)
-            self._profile_picked(name)
-        except Exception as e:
-            # the create pane builds _status_lbl and NEVER _mode_status
-            # (_fill_monitors early-returns on prof None), so routing
-            # through _mode_fail would die into _mode_fail's own
-            # except-pass - the exact silent vanish this guard exists to
-            # cure. Report on the label that EXISTS here, mirroring the
-            # empty-name branch above (gate finding, the real fix).
-            self._prof_msg = "create profile: %s" % e
+        if getattr(self, "_applying", False):        # one desktop verb at
+            self._prof_msg = ("already working the desktop - one apply "
+                              "at a time")            # a time (shared flag:
             self._status_lbl.configure(text=self._prof_msg)
+            return                                    # capture and apply
+                                                      # contend the same desk)
+        self._applying = True
+        self._apply_buttons("disabled")               # the visible lock,
+        #                                             the same list apply
+        #                                             uses - see _apply_buttons
+        self._prof_msg = "capturing..."
+        self._status_lbl.configure(text=self._prof_msg)
+
+        def work():
+            try:
+                profiles.create(self._prof_data, name)
+                err = None
+            except Exception as e:                    # the worker confesses
+                log.exception("profile capture died for '%s'", name)
+                err = "create profile: %s" % e
+
+            def done():
+                if not getattr(self, "_applying", False):
+                    return             # already landed (belt + timer
+                self._apply_buttons("normal")
+                self._applying = False
+                self._prof_msg = err or ""
+                # GHOST-LAW TOLERANCE for the WHOLE visual half (mirrors
+                # _apply_buttons' ghost policy): the queue-fallback drain
+                # can land mid-replacement - the captured pane is a
+                # superseded render's ghost and its paint must not eat
+                # the state above (the lock) or below (the selection).
+                # Measured Oct-16: power_assistant's re-render killed
+                # the anchor between the menu and the repaint; the suite
+                # died, not the ghost. (power_assistant, Oct 16)
+                try:
+                    if err is None:
+                        try:
+                            self.profile_menu.configure(values=[profiles.NEW] + sorted(
+                                self._prof_data["profiles"]))
+                            self.profile_menu.set(name)
+                        except (tk.TclError, RuntimeError):
+                            pass     # superseded menu: the repaint below
+                                     # builds the picker from the store
+                        self._profile_picked(name)
+                    else:
+                        # the create pane builds _status_lbl and NEVER _mode_status
+                        # (_fill_monitors early-returns on prof None), so routing
+                        # through _mode_fail would die into _mode_fail's own
+                        # except-pass - the exact silent vanish this guard exists
+                        # to cure. Report on the label that EXISTS here (gate
+                        # finding, the real fix).
+                        self._status_lbl.configure(text=self._prof_msg)
+                except (tk.TclError, RuntimeError):
+                    log.exception("capture paint superseded for '%s' - "
+                                  "the store holds the truth, the next "
+                                  "render will show it", name)
+                if err is None:
+                    self._prof_sel = name   # _profile_picked records this
+                                            # first; idempotent belt for
+                                            # the mid-render ghost
+            try:
+                self.after(0, done)
+            except (tk.TclError, RuntimeError):       # the sibling's measured
+                # the capture ran - the worker                 dead-root class
+                log.exception("profile capture done() lost the marshal "
+                              "for '%s'", name)
+                # RuntimeError here is the Oct-14 class: the verb was
+                # invoked BEFORE the mainloop existed (the boot probes
+                # drive it exactly this way) and createcommand refused
+                # the cross-thread registration. The queue is the same
+                # marshal with no registration: the tick chain drains
+                # it the moment any pump runs. (tk.TclError = a truly
+                # dead root: no drain will ever run either, the log
+                # above is then the whole truth.)
+                try:
+                    self.ui_events.put(("later", done))
+                except Exception:
+                    pass
+        threading.Thread(target=work, daemon=True).start()
 
 
     def _prof_blank(self):

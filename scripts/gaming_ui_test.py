@@ -399,6 +399,13 @@ def check():
             # never built (the bite, named by the watchdog census)
             app._prof_name.insert(0, "9b desk")
             app._profile_create()
+            # THE PUMP LAW (Oct-16 worker-ization): done() lands on a
+            # cross-thread after; the selection returns only when it runs.
+            _t0p = time.time()
+            while time.time() - _t0p < 5.0 and getattr(app, "_applying",
+                                                       False):
+                app.update()
+                time.sleep(0.02)
             app._profiles_render()
             for flip in (True, False):
                 cfg["power"]["hold_display"] = flip

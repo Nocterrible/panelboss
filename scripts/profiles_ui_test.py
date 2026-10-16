@@ -324,6 +324,18 @@ def check():
             app._prof_name.delete(0, "end")
             app._prof_name.insert(0, "willfail")
             app._profile_create()          # must NOT raise, must report
+            # THE PUMP LAW (check_8c's, applied to capture since Oct-16
+            # worker-ization): done() arrives on a cross-thread after,
+            # so an instant read sees only "capturing...". Park here -
+            # the fake must stay swapped until done() lands, or the
+            # worker reads the RESTORED PF.create and really stores it.
+            _t0p = time.time()
+            while time.time() - _t0p < 5.0 and getattr(app, "_applying",
+                                                       False):
+                app.update()
+                time.sleep(0.02)
+            assert not getattr(app, "_applying", False), \
+                "the capture worker never reported done() (5 s bound)"
             app.update_idletasks()
         finally:
             PF.create = _real_create
@@ -341,7 +353,14 @@ def check():
         app._prof_name.delete(0, "end")
         app._prof_name.insert(0, "captured")
         app._profile_create()
+        _t0p = time.time()
+        while time.time() - _t0p < 5.0 and getattr(app, "_applying",
+                                                   False):
+            app.update()
+            time.sleep(0.02)
         app.update_idletasks()
+        assert not getattr(app, "_applying", False), \
+            "the capture worker never reported done() (5 s bound)"
         store = _store()
         assert "captured" in store["profiles"], list(store["profiles"])
         _cap = store["profiles"]["captured"]

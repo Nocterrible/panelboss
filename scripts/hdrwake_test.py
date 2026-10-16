@@ -123,6 +123,13 @@ def check():
         app = W.SettingsWindow(cfg, fm, queue.Queue())
         app._prof_name.insert(0, "wake desk")
         app._profile_create()            # boot render walked, MainThread
+        # THE PUMP LAW (Oct-16 worker-ization): the selection returns
+        # only when done() lands on the cross-thread after.
+        _t0p = time.time()
+        while time.time() - _t0p < 5.0 and getattr(app, "_applying",
+                                                   False):
+            app.update()
+            time.sleep(0.02)
         app._show_tab("monitor profiles")
         app.update()
         base = len(CALLS)

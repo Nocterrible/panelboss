@@ -235,10 +235,18 @@ class _ProfilesMixin:
                 border_color=self.skin.border_raised,
                 corner_radius=self.skin.radius)
             self._prof_name.pack(side="left")
-            ctk.CTkButton(line, text="capture this desktop", width=150,
-                          command=self._profile_create,
-                          **self.skin.secondary()).pack(side="left",
-                                                        padx=(theme.S_FIELD, 0))
+            # THE CAPTURE FREEZE (Oct-16, py-spy proven): this verb walks
+            # every window on the box and now runs on a worker with the
+            # SAME lock as the apply row - so it registers in _apply_btns
+            # like its siblings (below, the saved-pane twin keeps the
+            # tuple fresh across renders).
+            btn_capture = ctk.CTkButton(line, text="capture this desktop",
+                                        width=150,
+                                        command=self._profile_create,
+                                        **self.skin.secondary())
+            self._prof_create_btn = btn_capture
+            self._apply_btns = (btn_capture,)
+            btn_capture.pack(side="left", padx=(theme.S_FIELD, 0))
             self._status_lbl = ctk.CTkLabel(
                 self._prof_detail, text=self._prof_msg,
                 font=self.skin.font(11), wraplength=560, justify="left",
@@ -321,7 +329,8 @@ class _ProfilesMixin:
         # tuple is rebuilt on EVERY render exactly as before, so the
         # clone rides the same apply lock for its whole life.
         self._apply_btns = (btn_last, btn_named, btn_wins,
-                            getattr(self, "restore_wins_button", None))
+                            getattr(self, "restore_wins_button", None),
+                            getattr(self, "_prof_create_btn", None))
         # THE VOICE LIVES AT THE GAZE (loud-voice wave, Oct 14): the
         # status label is built DIRECTLY UNDER the apply buttons, before
         # the restore section - the create-new pane's label placement is

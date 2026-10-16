@@ -528,6 +528,13 @@ def check():
         assert app.rescue_button.winfo_manager() != ""
         app._prof_name.insert(0, "test desk")
         app._profile_create()
+        # THE PUMP LAW (Oct-16 worker-ization): done() lands on a
+        # cross-thread after; the selection returns only when it runs.
+        _t0p = time.time()
+        while time.time() - _t0p < 5.0 and getattr(app, "_applying",
+                                                   False):
+            app.update()
+            time.sleep(0.02)
         app.update_idletasks()
         assert app._prof_sel == "test desk"
         assert "test desk" in app.profile_menu.cget("values")
@@ -925,11 +932,25 @@ def check():
         _fail("check")
 
 
+_PA_EVS, _PA_AWAIT = [], {"n": 0}
+
+
 def after_install():
+    # Oct-16 workerization: the capture verb walks the desk on a
+    # WORKER, so check's tail (where the power-assistant click posts
+    # its event) can land AFTER this timer's +1800 ms birthright -
+    # re-entrancy that the synchronous era never had. Wait for the
+    # event instead of assuming the pump ordering: every hop drains
+    # what exists (events accumulate, none may be lost to a discard),
+    # the 5 s bound keeps a real loss loud.
+    while not fm.events.empty():
+        _PA_EVS.append(fm.events.get())
+    if ("power_assistant", True) not in _PA_EVS and _PA_AWAIT["n"] < 50:
+        _PA_AWAIT["n"] += 1
+        app.after(100, after_install)
+        return
     try:
-        evs = []
-        while not fm.events.empty():
-            evs.append(fm.events.get())
+        evs = _PA_EVS
         assert ("power_assistant", True) in evs, evs
         assert cfg["power"]["assistant_task"] is True
         ow = app._ov_win

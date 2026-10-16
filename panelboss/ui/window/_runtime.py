@@ -125,6 +125,16 @@ class _RuntimeMixin:
                 except Exception:
                     log.exception("tray restore_windows lost in the "
                                   "window pump")
+            if message == "later":
+                # the queue-side fallback for a worker's done() marshal
+                # when the pump thread was not yet in its loop (the
+                # Oct-14 marshal law, queue form): the value IS the
+                # callable, run on the pump. A dead root means no drain
+                # runs, and the loss stays honest.
+                try:
+                    _value()
+                except Exception:
+                    log.exception("later() lost in the window pump")
             if message == "assistant_truth":
                 self._assistant_truth(_value)
             if message == "assistant_ui":

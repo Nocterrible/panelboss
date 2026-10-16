@@ -13,7 +13,7 @@ skin can draw pink boxes without window.py knowing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import logging
 
@@ -90,12 +90,23 @@ class Skin:
     # chrome
     radius: int = 10
     font_family: str = ""            # empty = the CTk default font
+    _fonts: list = field(default_factory=list)
 
     def font(self, size=14, weight="normal"):
         if self.font_family:
-            return ctk.CTkFont(family=self.font_family, size=size,
-                               weight=weight)
-        return ctk.CTkFont(size=size, weight=weight)
+            f = ctk.CTkFont(family=self.font_family, size=size,
+                            weight=weight)
+        else:
+            f = ctk.CTkFont(size=size, weight=weight)
+        # STRONG ref, held for the process: a main-interpreter Font
+        # finalized on a worker thread runs __del__ -> tk.call back
+        # into the OWNING interpreter - measured Oct-16 (py-spy): that
+        # exact frame froze hider-paint mid-paint and deadlocked the
+        # capture walk on the Tk thread. A list of fonts costs bytes;
+        # the GC edge it kills cost an afternoon. (Debugger dose 3:
+        # the class is now structurally dead, not merely bounded.)
+        self._fonts.append(f)
+        return f
 
     # -- style kwargs, one per widget kind, so window.py stays generic --
     def panel_style(self):
