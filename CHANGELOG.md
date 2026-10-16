@@ -3,27 +3,28 @@
 ## 0.4.0 (in development)
 
 - Video dim (the dim-around-the-playing-video eye): with [videodim]
-  on (default OFF - off means no sockets, no file reads, nothing),
-  PanelBoss reads the playing video's rect from the browser's
-  Chrome DevTools debug port (wm/_cdp: stdlib-only RFC 6455, no
-  pip websockets) and lays exactly four dark veils around it -
-  clamped per monitor, so a straddling video keeps its seam column
-  bright while both panels frame it. The foreground browser gets no
-  exclusion: the hole is the rect, not the window - the browser's
-  own chrome dims too, and the plain per-window veils stand down on
-  a covered panel (they would stack under the frame). The veil
-  borrows the dimmer's level and ramp rules; a stopped or vanished
-  video unfurls down that ramp, never a blink. The companion
-  extension (extension/) carries the manual "veil this video"
-  trigger: one toolbar click writes the same row to the bridge file
-  with zero native-host plumbing (chrome.downloads). Supports
-  Chromium-based browsers with the buddy extension installed
-  (experimental).
-  The decode-counter gate ships NEXT, once measured. (The
-  Browser.getWindowBounds fold, the /json/version brand decide, and
-  the two dead native-host manifest shapes are logged in the audit
-  punchlist; window.screenX measures (0,0) lies on occluded windows
-  - the CDP call is the anchor.)
+  on (default OFF - off means no file reads, nothing), PanelBoss
+  reads the playing video's rect from the buddy extension (extension/)
+  through its LOCAL NATIVE HOST: one toolbar click measures the first
+  <video> with chrome.scripting (a static bundled function, the
+  ad-blocker class of call - no eval, no debugger, no banner), hands
+  the row to the host over connectNative, and the host writes the
+  app's own doorway file (%APPDATA%\PanelBoss\rect, a fixed path).
+  The eye folds the row (viewport CSS px + devicePixelRatio +
+  self-measured window bounds) to physical desktop px and lays exactly
+  four dark veils around it - clamped per monitor, so a straddling
+  video keeps its seam column bright while both panels frame it. The
+  foreground browser gets no exclusion: the hole is the rect, not the
+  window - the browser's own chrome dims too, and the plain per-window
+  veils stand down on a covered panel. The veil borrows the dimmer's
+  level and ramp rules; a stopped or vanished video unfurls down that
+  ramp, never a blink. THE API IS OPEN (MIT): the host's capabilities
+  op self-describes what the extension can send, the extension's id is
+  the only ACL (no pairing, no token), and any project may consume it.
+  The debug-port lane (wm/_cdp) and the chrome.downloads file bridge
+  are RETIRED and removed - the port handed any local process full CDP
+  (the infostealer classic), and the downloads writer's shelf-scanning
+  died with the fixed doorway the native host writes.
 - Panel refresh (OLED tab, second card): micro-jog steps the app's
   covers around a zero-drift ring every 5-180 minutes (1-8 px), and a
   manual 'run wash now' button lights one opted-in monitor white for
