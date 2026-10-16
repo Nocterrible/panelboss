@@ -110,6 +110,17 @@ WM_WTSSESSION_CHANGE = 0x02A2  # wParam is the session STATE change -
 WTS_SESSION_UNLOCK = 0x08      # wtsapi3.h (its sibling LOCK is 0x07;
                                # the names are the numbers' only
                                # source worth trusting at this FFI)
+WTS_CONSOLE_CONNECT = 0x01     # the transport flips (wtsapi3.h): a
+WTS_CONSOLE_DISCONNECT = 0x02  # session changing transport - or any
+WTS_REMOTE_CONNECT = 0x03      # session coming and going - changes
+WTS_REMOTE_DISCONNECT = 0x04   # the DESK: the RDP canvas appears and
+                               # vanishes with the attach, so every
+                               # flip re-mints the display set (the
+                               # pump routes all four to
+                               # _display_moved; lParam carries the
+                               # sessionId, the old idiom read it
+                               # from wParam - the id rode the wrong
+                               # parameter)
 NOTIFY_FOR_THIS_SESSION = 0    # the register flag: a tray app lives
                                # in the owner's session and needs no
                                # other one's news
@@ -560,8 +571,12 @@ class Display(threading.Thread):
                                   exc_info=True)
                 elif msg.message == WM_WTSSESSION_CHANGE:
                     # the lock-aware lift (lock-on-away): posted by
-                    # the session itself, deaf-desk or not
-                    self._session_change(msg.wParam)
+                    # the session itself, deaf-desk or not. wParam is
+                    # the EVENT, lParam the sessionId (the widened
+                    # call below carries both; the old idiom dropped
+                    # the lParam and the lock/unlock read rode the
+                    # wrong parameter's coattails)
+                    self._session_change(msg.wParam, msg.lParam)
                 u32.DefWindowProcW(msg.hWnd, msg.message, msg.wParam,
                                    msg.lParam)
             self._service_ears()               # the engine's arm notes
@@ -606,16 +621,26 @@ class Display(threading.Thread):
         self.last_event = time.monotonic()
         self.queue.put(("monitor", float(flag), self.last_event))
 
-    def _session_change(self, wparam):
-        """One WM_WTSSESSION_CHANGE: the UNLOCK word lifts the spell
+    def _session_change(self, wparam, lparam=0):
+        """One WM_WTSSESSION_CHANGE: wParam the EVENT, lParam the
+        sessionId (the default keeps every single-arg call site -
+        incl. the suite's - working). The UNLOCK word lifts the spell
         through the locked desktop - the raw ears are per-desktop and
         deaf behind Winlogon, so this is the one knock the locked
         desk can still make (the camera eye makes another; the spell
         answers to neither the mouse nor the faith). LOCK is ignored:
         the spell is already dark, and re-darking a dark desk is
-        noise."""
+        noise. The transport flips (console/remote connect and
+        disconnect) RE-DERIVE the desk: the display set re-mints
+        wholesale when the RDP canvas appears or vanishes - the same
+        re-derive idiom the display-change ear rides."""
         if wparam == WTS_SESSION_UNLOCK:
             self.queue.put(("session_unlock", 1.0, time.monotonic()))
+        elif wparam in (WTS_CONSOLE_CONNECT, WTS_CONSOLE_DISCONNECT,
+                        WTS_REMOTE_CONNECT, WTS_REMOTE_DISCONNECT):
+            log.info("session %s: transport flip %#x, re-deriving the "
+                     "desk", lparam or "?", wparam)
+            self._display_moved()
 
     # -------------------------------------------------------- the lift ears --
     def _pump_pause(self):
