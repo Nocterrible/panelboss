@@ -222,6 +222,40 @@ def check():
             app._prof_create_btn in app._apply_btns, \
             "capture button not in _apply_btns: the worker-ized capture " \
             "verb would run un-locked"
+        # THE LEAVE-RESET (owner fix, Oct 16): the detection preview
+        # must not be the bitmap the tab switch carries. Full cycle:
+        # draw one, leave (the CURRENT slot's ts is CONSUMED), a new
+        # capture while hidden may NOT rebuild the picture (the tick
+        # gates on the tab), and the return draws the newest frame on
+        # its next tick.
+        import numpy as _np
+        _fr = _np.zeros((8, 8, 3), dtype=_np.uint8)
+        fm.framebox.put(_fr, [], [])
+        app._tab = "detection"
+        app._draw(fm.framebox.get())
+        assert app._ctkimg is not None, "the draw path itself is broken"
+        _ts1 = app._shown_ts
+        app._preview_leave()
+        assert app._ctkimg is None and app._shown_ts == _ts1, \
+            "leave left the bitmap or the ts unconsumed"
+        _fr2 = _np.zeros((8, 8, 3), dtype=_np.uint8)
+        _fr2[0, 0] = 255
+        from panelboss.state import _preview as _pstate
+        _real_t = _pstate.time
+        _pstate.time = type("T", (), {"monotonic": lambda: _ts1 + 1.0})
+        fm.framebox.put(_fr2, [], [])                   # a capture that
+        _pstate.time = _real_t                          # happened AFTER
+        # (monotonic is coarse on this box: two puts microseconds apart
+        # can share a stamp, and an EQUAL stamp is not "newer" - the
+        # state module's time is faked for the put alone)
+        app._tab = "general"
+        app._tick_inner()
+        assert app._ctkimg is None, \
+            "a hidden poll smuggled a fresh bitmap in before the return"
+        app._tab = "detection"
+        app._tick_inner()
+        assert app._ctkimg is not None, \
+            "the return did not draw the newest frame on its first tick"
         app.destroy()
         print("[PASS] the settings window survives its own constellation "
               "(painter waits, default root is the window, poke opens it)")

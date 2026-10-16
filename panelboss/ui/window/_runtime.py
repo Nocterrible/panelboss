@@ -72,7 +72,12 @@ class _RuntimeMixin:
         self._drain_ui_events()
         slot = self.monitor.framebox.get()
         if slot is not None and slot[3] != self._shown_ts:
-            self._draw(slot)
+            if self._tab == "detection":
+                self._draw(slot)
+            # else: the detection tab is AWAY (the owner's leave-reset,
+            # _preview_leave): the well shows the placeholder and the
+            # new frame's bitmap is built by the FIRST tick after the
+            # tab returns, not smuggled in by a hidden poll.
         elif slot is None and self._shown_ts is not None:
             # the cleared slot (a list change, _drain_ui_events) is
             # the reset signal: a None arm that only SKIPS the redraw

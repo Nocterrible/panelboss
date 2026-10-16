@@ -489,6 +489,13 @@ class SettingsWindow(
             if self._tab == key:
                 page.tkraise()           # THE SWITCH - restack, instant
                 page.sync_region()       # belt for the wheel: geometry
+                if key != "detection" and hasattr(self, "preview_label"):
+                    # THE OWNER'S LEAVE-RESET (Oct 16): the detection
+                    # tab's preview bitmap is the heaviest picture in
+                    # the window; leaving parks it on the placeholder
+                    # and it does not come back until the NEXT CAPTURE
+                    # after the tab does (see _preview_leave).
+                    self._preview_leave()
 
 
     def _sync_slider_wheels(self):

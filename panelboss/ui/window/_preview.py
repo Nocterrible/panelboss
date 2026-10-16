@@ -513,6 +513,26 @@ class _CameraMixin:
                  "previous device's frame")
 
 
+    def _preview_leave(self):
+        """The owner's tab-change fix (Oct 16): the last drawn preview
+        is the heaviest bitmap in the window and the switch repaint
+        carried it every time (the detection tab still felt slow after
+        the atomic swap). On leaving the tab the well resets to the
+        PLACEHOLDER (never image=None - the Oct 13 freeze's law) and
+        the CURRENT slot's timestamp is CONSUMED, so nothing repaints
+        until the NEXT CAPTURE after the tab comes back; the tick's
+        draw branch gates on the tab, so hidden polls may not smuggle
+        a fresh bitmap in before the return. Until the camera speaks
+        again the info line tells the truth."""
+        slot = self.monitor.framebox.get()
+        self._shown_ts = slot[3] if slot is not None else None
+        self._ctkimg = None
+        self._preview_placeholder()
+        self.preview_info.configure(
+            text="preview rests while the tab is away - the next "
+                 "frame will show here")
+
+
     def _draw(self, slot):
         frame, boxes, scores, ts = slot
         self._shown_ts = ts
