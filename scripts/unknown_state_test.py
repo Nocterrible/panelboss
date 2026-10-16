@@ -123,6 +123,13 @@ display.wake = lambda *a, **k: sent.append("wake")
 display.turn_off = lambda *a, **k: sent.append("off")
 display.set_hold = lambda *a, **k: None
 display.foreground_is_fullscreen = lambda: False
+from panelboss import wm as _wm                      # the away engine's
+_wm.session_is_remote = lambda: False   # transport ear: these are the
+#                                       LOCAL-desk laws, and the box
+#                                       running them may BE a remote
+#                                       session (the Oct-15 exemption
+#                                       would otherwise stand the
+#                                       broadcast down on its merits)
 
 m = PresenceMonitor(cfg, detector=None)
 m._release_camera = lambda: None
