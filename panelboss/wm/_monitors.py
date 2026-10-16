@@ -25,11 +25,25 @@ def _short_id(monitor_id):
     return str(monitor_id)[:24]
 
 
+def _row_is_virtual(adapter_id):
+    """Is this row a virtual (software-emitted) canvas, not a panel on
+    a physical bus? The bus-root test, measured live on this box:
+    RDP = SWD\\REMOTEDISPLAYENUM\\RDPIDD..., every name-able indirect
+    = ROOT\\DISPLAY\\, real panels = PCI\\VEN_. Slots renumber (KVM),
+    names LIE (any IddCx driver picks its own token), and the
+    physical-monitor DDC door LIES (the fake bus answers nphys=1,
+    reachable=True) - the bus root is the only survivor."""
+    a = str(adapter_id or "").upper().replace("#", "\\")
+    return not a.startswith(("PCI\\", "ACPI\\"))
+
+
 def monitors():
     """Every attached monitor as {id, short, gdi, x, y, w, h, rate,
-    bits, primary}. The identity is the MONITOR DeviceID (EDID-derived
-    serial/model), not the \\.\DISPLAYn slot - slots get reshuffled
-    by reconnect storms, the panel's own ID does not."""
+    bits, primary, adapter_id, virtual}. The identity is the MONITOR
+    DeviceID (EDID-derived serial/model), not the \\.\DISPLAYn slot -
+    slots get reshuffled by reconnect storms, the panel's own ID does
+    not. The virtual flag is the row's bus-root truth: every
+    per-monitor consumer reads m["virtual"] for free."""
     out = []
     i = 0
     while True:
@@ -61,7 +75,9 @@ def monitors():
                     "rate": int(dm.dmDisplayFrequency),
                     "bits": int(dm.dmBitsPerPel),
                     "primary": bool(d.StateFlags
-                                    & DISPLAY_DEVICE_PRIMARY_DEVICE)})
+                                    & DISPLAY_DEVICE_PRIMARY_DEVICE),
+                    "adapter_id": d.DeviceID,
+                    "virtual": _row_is_virtual(d.DeviceID)})
     return out
 
 

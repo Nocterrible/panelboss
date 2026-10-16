@@ -53,7 +53,8 @@ import time
 from ctypes import wintypes
 
 from . import (_bright, _detect, _displaycfg, _hdr, _inspect,
-               _monitors, _overlay, _rescue, _restore, _sdc, _winapi)
+               _monitors, _overlay, _rescue, _restore, _sessions, _sdc,
+               _winapi)
 
 from ._winapi import (DEVMODEW, DISPLAY_DEVICEW,
                       DISPLAY_DEVICE_ATTACHED_TO_DESKTOP,
@@ -77,6 +78,9 @@ from ._inspect import (_class_name, _cloaked, _facts, _proc_info,
 
 from ._monitors import (_shell32, _short_id, fingerprint, launch,
                         list_windows, monitor_for, monitors)
+
+from ._sessions import (WTS_SESSION_INFOW, session_connected,
+                        session_is_remote)
 
 from ._displaycfg import (CDS_NORESET, CDS_SET_PRIMARY, CDS_TEST,
                           CDS_UPDATEREGISTRY, DM_DISPLAYFREQUENCY,
@@ -139,13 +143,14 @@ __all__ = [
     "fingerprint", "has_xinput", "k32", "launch", "list_windows",
     "log", "lost", "monitor_for", "monitors", "offered_modes",
     "place", "proc_name", "press_keys", "rescue_lost", "restore",
-    "restore_async", "set_mode", "sizeof", "snapshot", "threading",
-    "time", "true_rect", "u32", "wait_settled", "wanted", "win_title",
+    "restore_async", "set_mode", "session_connected", "session_is_remote",
+    "sizeof", "snapshot", "threading", "time", "true_rect", "u32",
+    "wait_settled", "wanted", "win_title", "WTS_SESSION_INFOW",
     "wintypes",
 ]
 
 _FANOUT = (_winapi, _inspect, _monitors, _displaycfg, _hdr, _rescue,
-           _restore, _detect, _bright, _overlay, _sdc)
+           _restore, _detect, _bright, _overlay, _sdc, _sessions)
 
 
 class _WmPackage(type(sys.modules[__name__])):
