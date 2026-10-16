@@ -1730,3 +1730,14 @@ UI process would have hung on it too; the deadline, not the boundary,
 is the cure. Split stays open as design direction, not tonight's fix.
 Live repro owed by owner: capture click with hider armed -> instant
 "capturing...", profile lands < 2 s (was: dead UI for hours).
+
+## DOCTRINE (owner, Oct 16, mid-flicker-task): the settings-app veil is
+## a SERVANT, not sacred. "I don't care about the veil machinery at all
+## in the settings app - that's only there to try and hide paints,
+## destroy it if it no longer hides paints." Its Oct-15 event-driven-lift
+## law was engineering for the veil's own correctness; the owner's frame
+## is the goal, not the mechanism: if repaints become atomic by
+## construction, the veil machinery (widget, watchdog, hold budgets,
+## lift choreography) goes. The DIMMER veils (oled feature, dimmer.py)
+## are unrelated - those dim monitors, they do not hide paints. Judge
+## survival by what a capture still shows, not by what the code protects.
