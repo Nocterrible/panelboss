@@ -114,6 +114,28 @@ def check():
         assert app.state() != "withdrawn", "the poke did not open the window"
         assert os.path.getmtime(ack) >= os.path.getmtime(poke) - 0.5, \
             "the poke ack did not land"
+        # the reskin pin (UI-1c, owner Oct 15): the built oled tab
+        # carries its four card titles verbatim - the rename is
+        # proven by the suite, not by eyes on an RDP bitmap. Exact
+        # label texts only (the status line legitimately carries
+        # "video-dim off" words from the module's own say()).
+        _t = []
+
+        def _titles(w):
+            for c in w.winfo_children():
+                try:
+                    x = c.cget("text")
+                except Exception:
+                    x = None
+                if isinstance(x, str) and x:
+                    _t.append(x)
+                _titles(c)
+        _titles(app.pages["oled"].inner)
+        for want in ("taskbar hider", "panel refresh",
+                     "background dimmer", "Movie theater mode"):
+            assert want in _t, "the oled tab lost the %r card" % want
+        assert "video-dim" not in _t and "Video-dim" not in _t, \
+            "the renamed card still answers an old title label"
         app.destroy()
         print("[PASS] the settings window survives its own constellation "
               "(painter waits, default root is the window, poke opens it)")

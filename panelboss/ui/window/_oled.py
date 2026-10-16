@@ -129,7 +129,7 @@ TIP_DIM = {
 
 
 TIP_COMP = {
-    "on": "arm the video-dim eye: an idle desk dims everything but "
+    "on": "arm movie theater mode: an idle desk dims everything but "
           "the playing video - the frame lands around the rect and "
           "the browser's chrome dims with it. off is the root law: "
           "no socket opens, no file is read, nothing happens. the "
@@ -788,11 +788,12 @@ class _OledMixin:
                      ("opera_gx", "opera gx"))
 
     def _build_companion(self, parent):
-        box = self._card(parent, "video-dim",
+        box = self._card(parent, "Movie theater mode",
                          "the eye that dims the desk around the "
                          "video - by bridge, or by the port you "
                          "agree to open")
-        row = self._row(box, "Video-dim", TIP_COMP["on"], hint_chars=42)
+        row = self._row(box, "Movie theater mode", TIP_COMP["on"],
+                        hint_chars=42)
         self.oled_comp_box = ctk.CTkSwitch(
             row, text="", font=self.skin.font(12),
             command=self._oled_comp_changed, **self.skin.switch_style())
