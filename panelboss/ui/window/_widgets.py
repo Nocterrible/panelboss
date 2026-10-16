@@ -326,24 +326,31 @@ class _WidgetsMixin:
         to both page edges - every tab rides this, so the eye finds the
         grid without hunting.
 
-        Why grid + `uniform` and not pack+expand: pack hands equal shares
-        of the LEFTOVER to its -expand siblings, so two columns with
-        different content requests land different widths (measured on the
-        wide-geometry shot: 904 vs 812 at a 1804 px window). `uniform`
-        makes the widths equal BY CONSTRUCTION, whatever the content
-        asks for. The width option below is only a build-time hint; the
-        fitted wrap (_fit_wrap) is what keeps text honest when a column
-        is narrow, so no minsize is pinned - a small window shrinks both
-        columns together instead of clipping the right one."""
+        Why pack + `expand` and NOT grid + `uniform` - the one place the
+        toolkit won: gaming_ui_test calls _gaming_section(page.inner)
+        DIRECTLY, i.e. the page's own container is a contract that must
+        still accept a later pack() (its second-column law then measures
+        two side-by-side children). grid at that level turns any such
+        call into "cannot use geometry manager pack inside ... which
+        already has slaves managed by grid" - a hard TclError, caught by
+        the suite (rc=1, deterministic). So the page keeps pack, and the
+        equality comes from pack's own rule instead: every -expand
+        sibling gets an equal share of the LEFTOVER, so two columns with
+        the SAME requested width land identical. The width below is that
+        request; the residual is honest and measured - when one column's
+        CONTENT is wider than this floor the two diverge (904 vs 812 at
+        1804 px, the wide-geometry shot), and at the owner's recalled
+        1165 px window both sides sit far above the floor and read equal.
+        Closing that residual properly means either a fixed-width card
+        grid (which clips the right column on a narrow window) or a
+        page-level rewrite the suite's direct-call contract forbids -
+        both worse than the 5% asymmetry. Recorded, not papered over."""
         g = theme.S_SECTION if gutter is None else gutter
         floor = HINT_WRAP + 2 * theme.S_SECTION
-        parent.grid_rowconfigure(0, weight=1)
-        parent.grid_columnconfigure(0, weight=1, uniform="pbcol")
-        parent.grid_columnconfigure(1, weight=1, uniform="pbcol")
         left = ctk.CTkFrame(parent, width=floor, fg_color="transparent")
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, g))
+        left.pack(side="left", fill="both", expand=True)
         right = ctk.CTkFrame(parent, width=floor, fg_color="transparent")
-        right.grid(row=0, column=1, sticky="nsew")
+        right.pack(side="left", fill="both", expand=True, padx=(g, 0))
         return left, right
 
     def _card(self, parent, title, sub=""):

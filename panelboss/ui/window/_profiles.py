@@ -41,9 +41,7 @@ class _ProfilesMixin:
         # the eye finds the grid without hunting.
         gcol, gright = self._two_columns(page)
         # the two column frames the suite knows by name stay PACK-managed
-        # (profiles_ui_test asserts winfo_manager() == "pack") - they are
-        # now transparent wrappers inside the grid's equal columns, which
-        # is what actually makes the widths equal.
+        # (profiles_ui_test asserts winfo_manager() == "pack")
         col = ctk.CTkFrame(gcol, fg_color="transparent")
         col.pack(fill="both", expand=True)
         self._prof_left = col
