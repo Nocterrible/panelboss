@@ -89,9 +89,19 @@ class Skin:
     # -- style kwargs, one per widget kind, so window.py stays generic --
     def panel_style(self):
         # elevation = contrast tiers + a 1px border DARKER than the
-        # card, never a shadow (the Monitorian/PowerToys recipe)
+        # card, never a shadow (the Monitorian/PowerToys recipe).
+        # FLAT (owner Oct 15): corner_radius=0, NOT self.radius - the
+        # rounded-card LOOK is gone entirely. A zero radius draws a
+        # pure rectangle: CTk fakes rounded corners by painting four
+        # "background_corner_*" patches with the REMEMBERED parent
+        # color (draw_engine.draw_background_corners), and those
+        # patches are the white-canvas seams the owner saw when the
+        # remembered color drifted from the true parent. Radius 0
+        # leaves nothing to patch and no patch to go stale, so the
+        # card fill CANNOT mismatch its canvas - the uniformity rule
+        # is satisfied by construction, not by matching.
         return dict(fg_color=self.panel, border_color=self.border,
-                    border_width=1, corner_radius=self.radius)
+                    border_width=1, corner_radius=0)
 
     def primary(self):
         return dict(fg_color=self.accent, hover_color=self.accent_hover,
