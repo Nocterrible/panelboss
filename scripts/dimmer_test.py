@@ -635,7 +635,9 @@ rec = Recorder().install("config")
 config._live_shorts_saved = config._live_shorts
 config._live_shorts = lambda: ["AOC2790"]
 try:
-    n = config.normalize_dimmer({"on": "yes", "idle_sec": 9999,
+    n = config.normalize_dimmer({"on": "yes", "idle_sec": 9999,  # over
+                                 # both ceilings - clamps to the
+                                 # ceiling whatever the number
                                  "ramp_sec": 2, "level": 200,
                                  "monitors": {"AOC2790": True,
                                               "GONE": True,
@@ -646,7 +648,7 @@ try:
                                  "apps": {"chrome.exe": True,
                                           "JUNK": 7},
                                  "bound": ["ctrl", 5]})
-    assert n["on"] is False and n["idle_sec"] == 3600 and \
+    assert n["on"] is False and n["idle_sec"] == config.DIMMER_IDLE_CEIL and \
         n["ramp_sec"] == 2 and n["level"] == 90 and \
         n["monitors"] == {"AOC2790": True, "GONE": True} and \
         n["always"] == {"AOC2790": True, "GONE": False} and \

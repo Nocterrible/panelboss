@@ -948,12 +948,13 @@ DIMMER_IDLE_FLOOR = 0            # the rail reaches zero and MEANS it (the
                                  # accident - at 0 the veil births on the
                                  # first beat, the foreground and audible
                                  # exemptions still bow to it)
-DIMMER_IDLE_CEIL = 600           # 10 min: past that the walk happened
-                             # long ago and a longer rail is a rail of
-                             # dead pixels (owner UAT, Oct 15: 3600 is
-                             # absurd); the normalize clamp keeps the
-                             # rail honest, the value survives at the
-                             # ceiling, not the slider
+DIMMER_IDLE_CEIL = 300           # 5 min, owner ruling (Oct 15, twice
+                             # corrected: 3600 was absurd, 600 still
+                             # a rumor): past five minutes of
+                             # stillness the veil is a done deal and
+                             # the rest of the rail is dead pixels;
+                             # a hand-set larger value clamps honest
+                             # at the ceiling
 DIMMER_IDLE_DEFAULT = 120
 DIMMER_RAMP_FLOOR = 0            # the rail reaches zero and MEANS it: at
                                  # 0 the drop is immediate (owner ruling,
