@@ -25,6 +25,7 @@ import customtkinter as ctk
 from .. import theme
 from ... import profiles, wm
 from ._constants import TIPS, HDR_ASK_LABELS, HDR_MENU_ORDER
+from ._present import present
 from ._widgets import SkewCombo, _fresh_pin_edit
 
 log = logging.getLogger("ui")
@@ -153,6 +154,11 @@ class _ProfilesMixin:
             self._page_region()   # same rule as _repaint: the whole
             #                   body just swapped - re-measure (see
             #                   scroll_probe, Oct 12)
+            present(self._body)   # ONE synchronous repaint of the swapped
+            #                   pane: the fresh widgets map here, and
+            #                   presenting them now (not on the next tick)
+            #                   is what keeps the swap a single frame
+            #                   instead of the old/new mix the owner saw
 
 
     def _repaint(self, *names):
@@ -206,6 +212,12 @@ class _ProfilesMixin:
         #                           coalesced <Configure>s can leave a
         #                           stale region and the owner's dead
         #                           wheel (scroll_probe, Oct 12)
+        present(self._body)         # ONE synchronous repaint of the
+        #                           swapped section: pack-new-then-
+        #                           destroy-old leaves both generations
+        #                           mapped for an instant, and presenting
+        #                           now collapses that instant to a single
+        #                           complete frame
 
 
     def _page_region(self):

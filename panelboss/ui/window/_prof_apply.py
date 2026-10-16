@@ -205,6 +205,14 @@ class _ModeMixin:
                     self._prof_sel = name   # _profile_picked records this
                                             # first; idempotent belt for
                                             # the mid-render ghost
+                    # THE READABLE BEAT (owner Oct 16: "capturing..." was
+                    # never readable - the worker reports in ~100 ms and
+                    # the old code blanked the say-line the same instant).
+                    # A success now leaves a DURABLE line naming what
+                    # landed, and it stays until the next interaction (any
+                    # later action overwrites it) - honest beats a timer.
+                    self._prof_msg = self._captured_note(name)
+                    self._fill_status()
             try:
                 self.after(0, done)
             except (tk.TclError, RuntimeError):       # the sibling's measured
@@ -272,6 +280,14 @@ class _ModeMixin:
         except Exception as e:
             self._mode_fail("add panel: %s" % e)
 
+
+    def _captured_note(self, name):
+        """The durable success line after a capture (readable-beat law):
+        counts come from the store, so the words match what landed."""
+        prof = (self._prof_data.get("profiles") or {}).get(name) or {}
+        return ("captured: %s  -  %d panel(s), %d pinned window(s)"
+                % (name, len(prof.get("displays") or []),
+                   len(prof.get("wins") or [])))
 
     def _mode_res(self, mon_id, res_text):
         """R1: the resolution changed; keep the saved rate when the new
