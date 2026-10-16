@@ -202,9 +202,19 @@ def check():
             _I.u32 = _real_u32
         _top.destroy()
         _f0 = len(theme.MODERN._fonts)
+        theme.MODERN.font(size=11)                   # may be the cached one
+        assert len(theme.MODERN._fonts) == _f0 or \
+            len(theme.MODERN._fonts) == _f0 + 1, \
+            "font cache grew by more than one"
         _f = theme.MODERN.font(size=11)
-        assert len(theme.MODERN._fonts) == _f0 + 1, \
-            "skin.font does not hold the font (the GC cross-thread edge)"
+        assert theme.MODERN._fonts.get(
+            (theme.MODERN.font_family, 11, "normal")) is _f, \
+            "skin.font returned an UNREMEMBERED font (the GC edge is alive)"
+        import gc as _gc
+        del _f
+        _gc.collect()                                # and only the dict
+        assert theme.MODERN._fonts.get(              # keeps it alive
+            (theme.MODERN.font_family, 11, "normal")) is not None
         app._profile_picked(PF.NEW)            # the create-now pane (the
         #                                      only one that builds the
         #                                      capture button)

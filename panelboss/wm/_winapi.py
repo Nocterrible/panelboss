@@ -213,7 +213,11 @@ _TYPED = {
 for _name, _args in _TYPED.items():
     getattr(u32, str(_name)).argtypes = list(_args)
 del _name, _args
-u32.SendMessageTimeoutW.restype = ctypes.c_long   # 0 = refused or timed out
+u32.SendMessageTimeoutW.restype = ctypes.c_long   # 0 = refused or timed
+#   out. DWORD_PTR would be the full-width answer; c_long truncates the
+#   VALUE above 2**31 on x64 - harmless at every call site here (all
+#   test truthiness: a title's char count, or the broadcast's ignored
+#   result), WRONG for a future caller that needs the real LRESULT.
 
 WM_GETTEXT = 0x000D
 SMTO_ABORTIFHUNG = 0x0002     # SMTO_NORMAL is 0x0000; the constant in

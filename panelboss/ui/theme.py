@@ -90,22 +90,26 @@ class Skin:
     # chrome
     radius: int = 10
     font_family: str = ""            # empty = the CTk default font
-    _fonts: list = field(default_factory=list)
+    _fonts: dict = field(default_factory=dict)   # (family,size,weight) ->
+                                                 # the ONE font, held forever
 
     def font(self, size=14, weight="normal"):
-        if self.font_family:
-            f = ctk.CTkFont(family=self.font_family, size=size,
-                            weight=weight)
-        else:
-            f = ctk.CTkFont(size=size, weight=weight)
-        # STRONG ref, held for the process: a main-interpreter Font
-        # finalized on a worker thread runs __del__ -> tk.call back
-        # into the OWNING interpreter - measured Oct-16 (py-spy): that
-        # exact frame froze hider-paint mid-paint and deadlocked the
-        # capture walk on the Tk thread. A list of fonts costs bytes;
-        # the GC edge it kills cost an afternoon. (Debugger dose 3:
-        # the class is now structurally dead, not merely bounded.)
-        self._fonts.append(f)
+        # STRONG ref, held for the process, ONE per (family,size,weight):
+        # a main-interpreter Font finalized on a worker thread runs
+        # __del__ -> tk.call back into the OWNING interpreter - measured
+        # Oct-16 (py-spy): that exact frame froze hider-paint mid-paint
+        # and deadlocked the capture walk on the Tk thread. The dict
+        # makes the class structurally dead (reviewer finding 3: a bare
+        # append-list leaked a Font per widget per re-render in a
+        # long-lived tray session; CTkFont objects are value-equal for
+        # the same spec, so caching is free).
+        fam = self.font_family
+        key = (fam, size, weight)
+        f = self._fonts.get(key)
+        if f is None:
+            f = (ctk.CTkFont(family=fam, size=size, weight=weight)
+                 if fam else ctk.CTkFont(size=size, weight=weight))
+            self._fonts[key] = f
         return f
 
     # -- style kwargs, one per widget kind, so window.py stays generic --

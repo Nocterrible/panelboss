@@ -145,12 +145,17 @@ class _ModeMixin:
             self._status_lbl.configure(text=self._prof_msg)
             return                                    # capture and apply
                                                       # contend the same desk)
-        self._applying = True
+        # The sibling's documented law (see _profile_apply: the flag
+        # goes up LAST): a raise on the way in must not wedge the pane
+        # into permanent "already working" - so every paint above this
+        # line is plain, and the first thing that CAN fail from a
+        # thread (starting it) comes after the lock is held.
+        self._prof_msg = "capturing..."
+        self._status_lbl.configure(text=self._prof_msg)
         self._apply_buttons("disabled")               # the visible lock,
         #                                             the same list apply
         #                                             uses - see _apply_buttons
-        self._prof_msg = "capturing..."
-        self._status_lbl.configure(text=self._prof_msg)
+        self._applying = True
 
         def work():
             try:
@@ -162,7 +167,7 @@ class _ModeMixin:
 
             def done():
                 if not getattr(self, "_applying", False):
-                    return             # already landed (belt + timer
+                    return             # already landed (belt + timer both
                 self._apply_buttons("normal")
                 self._applying = False
                 self._prof_msg = err or ""
