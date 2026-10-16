@@ -15,35 +15,36 @@ browser with the flag). This extension is the manual trigger and the
 future DRM/content-script seat — it is not required for the automatic
 veil.
 
-## Loading it in Opera GX (the shipped route)
+## Load it (measured on Opera GX, Oct 15)
 
-Opera GX reads Chrome extensions through the **Chrome AI / Chrome
-App Launcher-style "Install Chrome Extensions" add-on** from the Opera
-add-ons store:
+1. Open `opera://extensions` and enable **Download from Chrome Web
+   Store** (Opera's Chrome-extension door; with it off there is no
+   unpacked door at all).
+2. **Load unpacked** appears - point it at this folder (the one
+   holding `manifest.json`). Pin the icon (puzzle-piece → PanelBoss
+   Companion).
+3. Once published, the Chrome Web Store route replaces steps 1-2
+   (Opera installs it through the same door); the unpacked route
+   stays the developer's.
 
-1. Install the "Install Chrome Extensions" add-on from
-   `addons.opera.com` (search "Chrome extensions" there).
-2. Open this folder's parent in the loader: Menu → Extensions →
-   ⚙ (Manage Extensions in Opera / the add-on's own "Load unpacked"
-   affordance) → pick `extension/` (the folder holding
-   `manifest.json`).
-3. Pin the icon (puzzle-piece → PanelBoss Companion). One click on it
-   inside a YouTube/Netflix/Twitch/Vimeo/Disney+/Prime Video tab
-   writes the bridge file; PanelBoss's video eye picks the click up on
-   its next tick (freshest source wins, ties the file's).
+The click itself needs a video tab: one press of the icon writes the
+bridge file (a rect rides `Downloads\PanelBoss\rect`, the
+zero-plumbing writer); PanelBoss's video eye picks the click up on
+its next tick (freshest source wins, ties the file's).
 
-## The measured dev-mode fact (Oct 15, this Edge)
+**The dev-mode caveat (measured, twice this week):** an unpacked
+load is **silently ignored** without developer mode - the flag or the
+button lands, the extension does not, and nothing says so (Edge 156
+with `--load-extension`; Opera GX keeps the same discipline behind
+its Chrome door). When the feature "does nothing", check the toggle
+before suspecting the code.
 
-`--load-extension=<dir>` on **Edge 156 is silently ignored** unless
-the profile has *developer mode* enabled in `edge://extensions` —
-the flag lands, the extension does not, and nothing says so. That
-is why the shipped install path is the store/loader flow (or the
-`edge://extensions` → "Load unpacked" button with the developer-mode
-toggle ON), not a launch flag: a flag-launched extension on a
-developer-mode-off profile reads as "the feature is broken" when
-the truth is one silent policy. (Opera GX carries the same discipline
-through its Chrome-extension add-on; enable developer mode there
-before expecting an unpacked load.)
+**The id is the ACL.** The extension id on the browser's details page
+is the bridge's access-control entry: the native host (when it
+lands) accepts *that exact origin* and nothing else - the open-API
+ruling (Oct 15): the schema ships open, any project may consume the
+rect, and the browser's own install check is the whole handshake. No
+pairing, no token, no app allow-list.
 
 ## v1 manifest notes
 

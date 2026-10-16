@@ -253,6 +253,10 @@ class SettingsWindow(
                              "_sync_editor_switches"),
         "power plan": ("_sync_power_switches", "_sync_gaming_switches"),
         "general": ("_sync_general_switches",),
+        # the oled pane's first table entry (Oct 15, the companion
+        # card): the next switch in the house joins for free by
+        # riding its pane's entry - this is that law applied
+        "oled": ("_sync_companion_switches",),
     }
 
     def _drain_ui_events(self):
