@@ -178,7 +178,11 @@ def _fold(row, bounds):
 class _Family:
     """One browser family's door: the port probe, the page attach,
     the truth call, the last good row. Every failure lands in `say`,
-    never in an exception; the loop thread owns this object alone."""
+    never in an exception; the loop thread owns this object alone -
+    with one documented guest: the Tk-side companion.veil_now may
+    also write row/ts as one-shot feed pairs (GIL-atomic stores; a
+    torn pair costs at most one grace-window, and the tick's own
+    bridge fold re-lands the same row the next beat and heals it)."""
 
     def __init__(self, name):
         self.name = name

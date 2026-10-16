@@ -843,7 +843,8 @@ class _OledMixin:
             self._comp_beat = getattr(self, "_comp_beat", 0) + 1
             if self._comp_beat % 4 == 1:
                 try:
-                    self._comp_probe = videoeye.probe() or {}
+                    p = videoeye.probe()
+                    self._comp_probe = p if isinstance(p, dict) else {}
                 except Exception:
                     log.debug("companion probe failed", exc_info=True)
                     self._comp_probe = {}
