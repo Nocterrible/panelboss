@@ -16,8 +16,9 @@
   video unfurls down that ramp, never a blink. The companion
   extension (extension/) carries the manual "veil this video"
   trigger: one toolbar click writes the same row to the bridge file
-  with zero native-host plumbing (chrome.downloads). Opera GX is
-  the first-tested browser; Chrome and Edge share the port path.
+  with zero native-host plumbing (chrome.downloads). Supports
+  Chromium-based browsers with the buddy extension installed
+  (experimental).
   The decode-counter gate ships NEXT, once measured. (The
   Browser.getWindowBounds fold, the /json/version brand decide, and
   the two dead native-host manifest shapes are logged in the audit
