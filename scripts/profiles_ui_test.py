@@ -76,6 +76,17 @@ WM.offered_modes = lambda gdi, limit=400: (
     ["100x100@75", "100x100@120", "200x200@75", "200x200@120"])
 WM.foreground = lambda: None
 
+# the optional IR bridge is not this probe's subject, and its
+# enumeration is the documented poison-per-process on this vcam-heavy
+# desk (watchdog.py:65, camera.hello_ir_names): the boot identity
+# fanout calls rows_from on the tk thread, and a stalled IR join parks
+# main 20 s - long enough to starve the refusal's 5 s bound when the
+# oled tab's companion card (Oct 15) shifts the boot pump into the
+# NVIDIA warm-up window. The window_boot_test idiom, inherited whole.
+from panelboss import camera as cam                       # noqa: E402
+cam.optional_present = lambda pkg: False
+cam.hello_ir_names = lambda: []
+
 # pre-seed the store: an 'offline' profile holding only MONITOR\OFF, a
 # panel that is NOT on the live desk - the editor renders it offline
 _SEED = {"profiles": {
