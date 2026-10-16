@@ -30,8 +30,9 @@ words live in companion.py; the fold lives in videoeye.py.
 import json
 import os
 import struct
-import subprocess
 import time
+
+from . import _spawn
 
 # where install_host.ps1 records the host exe path - the doorway's
 # neighbor, so it dies and lives with the same app-owned folder.
@@ -75,9 +76,9 @@ def _ask(exe, *extra):
     data = json.dumps({"op": "capabilities"}).encode("utf-8")
     framed = struct.pack("@I", len(data)) + data
     try:
-        done = subprocess.run([exe, *extra], input=framed,
-                              capture_output=True, timeout=CAP_TIMEOUT)
-    except (OSError, subprocess.TimeoutExpired):
+        done = _spawn.run([exe, *extra], input=framed,
+                          capture_output=True, timeout=CAP_TIMEOUT)
+    except (OSError, _spawn.subprocess.TimeoutExpired):
         return None
     out = done.stdout
     if len(out) < 4:
