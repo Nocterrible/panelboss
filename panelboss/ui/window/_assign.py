@@ -674,7 +674,7 @@ class SetupWindow(ctk.CTkToplevel):
             head += "  ·  %s" % error        # sentence instead
         ctk.CTkLabel(card, text=head, font=self.skin.font(12, "bold"),
                      **self.skin.text_style()).pack(
-            anchor="w", padx=theme.S_FIELD, pady=(theme.S_FIELD, 0))
+            anchor="w", padx=theme.S_SECTION, pady=(theme.S_ROW, 0))
         shot = ctk.CTkLabel(card, text="")
         if frame is not None:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -689,9 +689,9 @@ class SetupWindow(ctk.CTkToplevel):
             shot.configure(text="request timed out - non-responsive",
                            font=self.skin.font(11),
                            **self.skin.text_style("sub"))
-        shot.pack(anchor="w", padx=theme.S_FIELD, pady=theme.S_FIELD // 2)
+        shot.pack(anchor="w", padx=theme.S_SECTION, pady=theme.S_FIELD)
         line = ctk.CTkFrame(card, fg_color="transparent")
-        line.pack(fill="x", padx=theme.S_FIELD, pady=(0, theme.S_FIELD))
+        line.pack(fill="x", padx=theme.S_SECTION, pady=(0, theme.S_ROW))
         entry = ctk.CTkEntry(line, font=self.skin.font(12))
         entry.insert(0, spec["prefill"])
         entry.pack(side="left", fill="x", expand=True)
