@@ -10,6 +10,7 @@ from .. import display
 from .. import dimmer
 from .. import hider
 from .. import jog
+from .. import videoeye
 from ._preview import FrameBox
 
 log = logging.getLogger("state")
@@ -160,6 +161,13 @@ class _BootMixin:
                                            # already this beat's and the
                                            # census must not see a
                                            # half-moved desk
+        videoeye.tick(self.cfg, now)       # the video eye reads the desk
+                                           # AFTER the veils took the
+                                           # last answer: one beat of
+                                           # latency at most (0.2 s),
+                                           # and a dead port may not
+                                           # stall the camera phase
+                                           # machine behind it
         if self.quit:
             return
         self._apply_hold(now)                # the policy is asserted every
