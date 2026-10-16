@@ -521,7 +521,7 @@ try:
                        "wait": 10}]}
 
     def run7(mutate=None, refuse="", wake_after=None, login=False,
-             seed_login=None):
+             seed_login=None, scope="full"):
         tmp7 = tempfile.mkdtemp()
         pr = dict(prof7)
         row = dict(prof7["wins"][0])
@@ -562,8 +562,23 @@ try:
         profiles.wm = w7
         w7.t0 = profiles.time.monotonic()
         ok7, say7, info7 = profiles.apply(profiles.load(tmp7), "p",
-                                          login=login, dir=tmp7)
+                                          login=login, dir=tmp7,
+                                          scope=scope)
         return ok7, say7, info7, w7
+
+    # 6b2) THE OWNER'S ONE-CLICK PARTIAL (Oct 16): a scope="windows"
+    # apply - the verb the profiles card's new "restore my windows"
+    # button rides - SPAWNS the missing app and seats it exactly as the
+    # full apply does, while never asking a driver anything. This is the
+    # whole engine-side surface of that button: the shape already
+    # existed, so the button adds none. (Its answer is the shared say
+    # path's own "monitors untouched (windows only)" line, pinned here.)
+    ok7, say7, info7, w7 = run7(wake_after=1, scope="windows")
+    assert ok7 and w7.launches == [r"C:\x\opera.exe"], (say7, w7.launches)
+    assert w7.placed == [(7, (10, 10, 100, 100))], w7.placed
+    assert "monitors untouched" in say7, say7
+    assert w7.entries == [], "windows-only asked the drivers"
+    assert info7["no_shows"] == [], info7
 
     # wakes on the next poll: the exe ran once, the window was moved,
     # and the wait ended the moment it showed - not a second longer

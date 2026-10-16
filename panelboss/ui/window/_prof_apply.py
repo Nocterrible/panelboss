@@ -329,7 +329,15 @@ class _ModeMixin:
             except Exception:
                 pass                  # a mid-teardown window has no picker
 
-    def _profile_apply(self, force=False):
+    def _profile_apply(self, force=False, scope="full"):
+        """One click, one reshuffle. `scope` is passed straight through to
+        profiles.apply: "full" is the whole desk, "windows" is the partial
+        the owner asked for by name on Oct 16 ("applies the window layout
+        from the captured layout and opens missing windows") - the engine
+        already runs exactly that leg, spawns what is missing and places
+        it the moment it wakes. The route, the lock, the say line, the
+        refuse balloon and the no-shows dialog are shared by every scope
+        on purpose: a third entry button must not grow a third dialect."""
         # the reshuffle takes seconds (modes, settle-poll, windows
         # and maybe a 30 s wait for a pinned app to wake), and Tk
         # must not sit frozen through any of it
@@ -343,7 +351,7 @@ class _ModeMixin:
         # mid-apply, and the outcome belongs to the one that was applied
         self._apply_buttons("disabled")              # the visible lock (see
         # _apply_buttons); the re-entrancy guard above is the belt for
-        # the two entry buttons themselves. The flag goes up LAST: a
+        # the entry buttons themselves. The flag goes up LAST: a
         # raise on the way in must not wedge the pane into permanent
         # "already reshaping"
         self._applying = True
@@ -354,7 +362,8 @@ class _ModeMixin:
         def work():
             try:
                 ok, text, info = profiles.apply(data, name,
-                                                best_effort=force)
+                                                best_effort=force,
+                                                scope=scope)
                 log.info("profile '%s' %s: %s", name,
                          "applied" if ok else "refused", text)
                 failed = None

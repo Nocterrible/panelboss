@@ -287,6 +287,25 @@ class _ProfilesMixin:
                                  command=lambda: self._profile_apply(False),
                                  **self.skin.primary())
         btn_last.pack(side="left")
+        # THE OWNER'S ONE CLICK (Oct 16): "applies the window layout from
+        # the captured layout and opens missing windows". The verb already
+        # exists - scope="windows" runs the windows leg alone (monitors
+        # untouched) and its pins still spawn what is missing and place it
+        # the moment it wakes (profiles.apply's open leg, pinned by
+        # profiles_test 6b/6c) - so this button adds no engine code and no
+        # new dialect: it rides the same _profile_apply, which means the
+        # say line, the refusal balloon, the no-shows dialog and the apply
+        # lock are the same words and the same code as "apply profile".
+        # Wording: the label is the owner's own phrase; the app's scope
+        # vocabulary calls this "windows only (pinned apps)" and the
+        # packet's suggested "re-arm + open" names nothing that exists in
+        # this UI (there is no arming anywhere in the apply row), so the
+        # owner's words win.
+        btn_wins = ctk.CTkButton(
+            btns, text="restore my windows", width=150,
+            command=lambda: self._profile_apply(False, scope="windows"),
+            **self.skin.secondary())
+        btn_wins.pack(side="left", padx=(theme.S_FIELD, 0))
         btn_named = None
         if gate:
             btn_named = ctk.CTkButton(
@@ -297,7 +316,7 @@ class _ProfilesMixin:
         # C5b's disclosed interim retired here: the refs survive each
         # render (stored every paint), so _apply_buttons can lock the
         # real entry buttons instead of only the picker
-        self._apply_btns = (btn_last, btn_named)
+        self._apply_btns = (btn_last, btn_named, btn_wins)
         # THE VOICE LIVES AT THE GAZE (loud-voice wave, Oct 14): the
         # status label is built DIRECTLY UNDER the apply buttons, before
         # the restore section - the create-new pane's label placement is
