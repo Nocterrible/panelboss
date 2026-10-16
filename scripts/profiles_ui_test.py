@@ -24,6 +24,8 @@ from panelboss import profiles as PF
 from panelboss import wm as WM
 from panelboss.wm import _displaycfg as DC    # the fake speaks the
 #                                       engine's REAL refusal words (Oct 14)
+import pystray                              # the tray pin below walks
+                                             # the real menu tree by class
 
 cfg = config.get_config(verbose=False)
 
@@ -62,6 +64,34 @@ WM.list_windows = lambda: []
 WM.launch = lambda exe: ""
 WM.rescue_lost = lambda: []
 WM.place = lambda h, r, z=False: "ok"
+# THE PLACEMENT TRIO (owner request, Oct 16): the tray menu carries both
+# window verbs as standalone items - rescue FIRST, restore SECOND. The
+# boot probe fakes the tray (no pystray pump), so its half of the pin
+# lands here, where a real Tray object is cheap to build off-pump.
+from panelboss import tray as _TRAY                       # noqa: E402
+
+
+def _tray_items(menu):
+    out = []
+    for it in menu.items:
+        if isinstance(it, pystray.MenuItem):
+            # pystray 0.19.5 stores the label as a wrapped callable
+            # (self._text); .text answers the plain string
+            out.append(str(it.text))
+        elif isinstance(it, pystray.Menu):
+            out.extend(_tray_items(it))
+    return out
+
+
+_t = _TRAY.Tray(__import__("queue").Queue(), cfg,
+                ui_events=__import__("queue").Queue())
+_tray_labels = _tray_items(_t._build_menu())
+assert "rescue my windows" in _tray_labels and \
+    "restore my windows" in _tray_labels, \
+    "the tray menu lost a window verb: %r" % _tray_labels
+assert _tray_labels.index("rescue my windows") < \
+    _tray_labels.index("restore my windows"), \
+    "the tray menu must keep rescue first, restore second"
 WM.hdr_states = lambda: [{"gdi": r"\\.\DISPLAY1", "model": "T1",
                           "supported": False, "state": "off",
                           "mode": 0, "precise": True},

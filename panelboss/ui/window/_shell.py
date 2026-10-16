@@ -715,6 +715,23 @@ class SettingsWindow(
         self.rescue_button.bind(
             "<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
         self._hint(cell, TIPS["profile_rescue"])
+        # THE OWNER'S PLACEMENT TRIO (Oct 16): the profiles card's
+        # "restore my windows" gets a CLONE on this row, beside the
+        # rescue it sits next to. Same route as the card's button -
+        # _profile_apply(False, scope="windows") applies the captured
+        # layout's windows leg alone and opens what is missing; the
+        # lock, say line and refusal balloon are the apply path's own.
+        # No new state: the card's live truth source is _prof_sel (set
+        # by the picker's command), and _profile_apply reads exactly
+        # that, so the clone resolves the same profile with nothing of
+        # its own. It joins _apply_btns EXACTLY as the card's does -
+        # the tuple is rebuilt every pane render (the card's law), so
+        # the clone re-joins there and rides the same lock for its life.
+        self.restore_wins_button = ctk.CTkButton(
+            self._actions, text="restore my windows", width=150,
+            command=lambda: self._profile_apply(False, scope="windows"),
+            **self.skin.secondary())
+        self.restore_wins_button.pack(side="left", padx=(theme.S_FIELD, 0))
         right = ctk.CTkFrame(self._actions, fg_color="transparent")
         right.pack(side="right")
         self.quit_button = ctk.CTkButton(

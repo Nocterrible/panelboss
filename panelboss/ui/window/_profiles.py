@@ -315,8 +315,13 @@ class _ProfilesMixin:
             btn_named.pack(side="left", padx=(theme.S_FIELD, 0))
         # C5b's disclosed interim retired here: the refs survive each
         # render (stored every paint), so _apply_buttons can lock the
-        # real entry buttons instead of only the picker
-        self._apply_btns = (btn_last, btn_named, btn_wins)
+        # real entry buttons instead of only the picker. The top bar's
+        # restore clone (the placement trio, Oct 16) joins through its
+        # own slot - getattr keeps pre-clone renders honest, and the
+        # tuple is rebuilt on EVERY render exactly as before, so the
+        # clone rides the same apply lock for its whole life.
+        self._apply_btns = (btn_last, btn_named, btn_wins,
+                            getattr(self, "restore_wins_button", None))
         # THE VOICE LIVES AT THE GAZE (loud-voice wave, Oct 14): the
         # status label is built DIRECTLY UNDER the apply buttons, before
         # the restore section - the create-new pane's label placement is

@@ -111,6 +111,20 @@ class _RuntimeMixin:
                 # spend the owner's one ceremony)
                 self._show_first(manual=True)
                 self.focus_force()
+            if message == "restore_windows":
+                # the tray's 'restore my windows' (the placement trio,
+                # Oct 16): the same route as the profiles card's button
+                # - scope="windows" applies the captured layout's
+                # windows leg alone and opens what is missing. The
+                # lock, say line and refusal balloon are the apply
+                # path's own; the pane repaints even when its tab is
+                # hidden, because the voice must reach a gaze that is
+                # not looking at the profiles tab right now.
+                try:
+                    self._profile_apply(False, scope="windows")
+                except Exception:
+                    log.exception("tray restore_windows lost in the "
+                                  "window pump")
             if message == "assistant_truth":
                 self._assistant_truth(_value)
             if message == "assistant_ui":

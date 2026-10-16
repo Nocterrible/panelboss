@@ -424,6 +424,17 @@ class Tray(threading.Thread):
         slow submenus."""
         return [
             pystray.Menu.SEPARATOR,
+            # the owner's placement trio (Oct 16): the two window verbs
+            # ride the tray as standalone items, rescue FIRST and
+            # restore SECOND, the same order the actions bar keeps.
+            # rescue is a pure wm call (the same one the window's panic
+            # button makes) and needs no window; restore is a profile
+            # apply and the profile lives in the window's pane, so it
+            # rides the ui_events queue like "open settings" does: with
+            # no window (the headless tray, cli._drive) it is a one-word
+            # log line, never a crash.
+            pystray.MenuItem("rescue my windows", action=self._rescue),
+            pystray.MenuItem("restore my windows", action=self._restore_wins),
             pystray.MenuItem("Pause", action=self._pause),
             pystray.MenuItem("Resume", action=self._resume),
             pystray.MenuItem("Pause auto re-off",
@@ -607,6 +618,33 @@ class Tray(threading.Thread):
 
     def _pause(self, icon=None):
         self.events.put(("pause", True))
+
+    def _rescue(self, icon=None):
+        """The tray's panic button: the same pure-wm verb the window's
+        rescue button calls (wm.rescue_lost touches no Tk state), with
+        the outcome in the log either way - pythonw has no console, so
+        the log IS the say line."""
+        from . import wm
+        try:
+            brought = wm.rescue_lost()
+        except Exception as e:
+            log.warning("tray rescue: %s", e)
+            return
+        log.info("tray rescue: %s",
+                 "brought back: %s" % ", ".join(brought)[:120]
+                 if brought else "nothing was off screen")
+
+    def _restore_wins(self, icon=None):
+        """Marshal to the Tk thread through the window's ui_events pump
+        (the "open"/"startup" idiom): the worker-thread rule at the top
+        of this module says the tray touches no display and no Tk widget
+        directly; the window's drain applies the route with its lock,
+        say line and balloon. Headless (no window listening): the honest
+        word, one log line - _settings' no-ui_events shape."""
+        if self.ui_events is None:
+            log.info("restore my windows: no window open")
+            return
+        self.ui_events.put(("restore_windows", None))
 
     def _resume(self, icon=None):
         self.events.put(("pause", False))

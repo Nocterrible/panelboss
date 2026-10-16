@@ -136,6 +136,36 @@ def check():
             assert want in _t, "the oled tab lost the %r card" % want
         assert "video-dim" not in _t and "Video-dim" not in _t, \
             "the renamed card still answers an old title label"
+        # THE PLACEMENT TRIO (owner request, Oct 16): the top bar's
+        # actions row carries BOTH window verbs as standalone buttons,
+        # rescue FIRST and restore SECOND - exact labels only (the
+        # owner's status-line lesson: no substring checks), and the
+        # order is pinned by the children list, not by a set. The tray
+        # menu is faked here (no pystray pump in this probe), so its
+        # half of the pin lands in profiles_ui_test instead.
+        _kids = app._actions.winfo_children()
+        _labels = []
+        for _c in _kids:
+            try:
+                _x = _c.cget("text")
+            except Exception:
+                _x = None
+            if isinstance(_x, str) and _x:
+                _labels.append(_x)
+            for _g in _c.winfo_children():
+                try:
+                    _y = _g.cget("text")
+                except Exception:
+                    _y = None
+                if isinstance(_y, str) and _y:
+                    _labels.append(_y)
+        assert "rescue my lost windows" in _labels and \
+            "restore my windows" in _labels, \
+            "the actions row lost a window verb: %r" % _labels
+        _ri = _labels.index("rescue my lost windows")
+        _oi = _labels.index("restore my windows")
+        assert _ri < _oi, \
+            "the actions row must keep rescue first, restore second"
         app.destroy()
         print("[PASS] the settings window survives its own constellation "
               "(painter waits, default root is the window, poke opens it)")
