@@ -132,26 +132,25 @@ TIP_COMP = {
     "on": "arm movie theater mode: an idle desk dims everything but "
           "the playing video - the frame lands around the rect and "
           "the browser's chrome dims with it. off is the root law: "
-          "no socket opens, no file is read, nothing happens. the "
-          "eye learns the video's place from the buddy "
-          "extension's bridge file: no flag, no port.",
-    "status": "live words: the rail's state and the bridge file's "
-              "last click, refreshed on the dimmer's own beat. the "
-              "manual veil answers here too. a missing answer "
-              "reads as words, never a crash.",
-    "veil": "manual one-shot over the bridge channel only: no "
-            "flag, no port, no daemon. click the buddy "
-            "extension's icon on a video tab, then this: "
-            "PanelBoss reads what the click wrote, folds the rect "
-            "to the desk the same way the port path does, and "
-            "answers here with what it saw (a rect, or no "
-            "bridge). the dimmer's next tick frames it.",
-    "path": "where the extension ships, inside this app's own "
-            "tree (load it unpacked - see its README). the id on "
-            "the browser's details page IS the bridge's ACL: an "
-            "exact origin by the open-API ruling - no pairing, no "
-            "token. any process on this desk may read an open "
-            "port; the ACL is who may write the bridge.",
+          "no file is read, nothing happens. the eye learns the "
+          "video's place from the buddy extension's native host: "
+          "no flag, no port, no debugger.",
+    "status": "live words: the consent rail and the buddy "
+              "extension's last click, refreshed on the dimmer's "
+              "own beat. the manual veil answers here too. a "
+              "missing answer reads as words, never a crash.",
+    "veil": "manual one-shot through the native host only: click "
+            "the buddy extension's icon on a video tab, then this. "
+            "PanelBoss reads what the host wrote to the app's own "
+            "doorway, folds the rect to the desk, and answers here "
+            "with what it saw (a rect, or no click). the dimmer's "
+            "next tick frames it.",
+    "path": "the doorway the extension's native host writes: the "
+            "app's own folder, a fixed path, every browser, every "
+            "download config. the extension's id is the only ACL - "
+            "no pairing, no token; the browser's install check is "
+            "the whole handshake. install the host once (see the "
+            "extension's README).",
 }
 
 
@@ -778,21 +777,17 @@ class _OledMixin:
         dimmer.set_paused(bool(self.oled_pause_box.get()))
 
     # ------------------------------------------------------------------
-    # fourth card: the video-dim companion (Oct 15). The rail is the
-    # dossier's: [videodim] enabled is the opt-in, flag_families the
-    # launch-with-port list (config.py:433/450) - and the card says
-    # plainly what a flag costs. The master switch is a truth switch
-    # (the _power idiom: knob from cfg, BOTH branches) and rides the
-    # _shell.SWITCH_SYNC dispatch, so hide/show can never leave it
-    # drawing a lying knob. The status line rides the dimmer poll's
-    # own beat; every answer renders from .get chains - a missing
-    # key is words, never a crash.
+    # fourth card: the video-dim companion (Oct 15; native-messaging
+    # reality Oct 16). There is one consent key: [videodim].on. The
+    # geometry arrives from the buddy extension through its local native
+    # host (extension/), which writes the app's own doorway file - there
+    # is no debug port, no flag list, no opt-in rail beyond the one
+    # switch. The master switch is a truth switch (the _power idiom:
+    # knob from cfg, BOTH branches) and rides the _shell.SWITCH_SYNC
+    # dispatch, so hide/show can never leave it drawing a lying knob.
+    # The status line rides the dimmer poll's own beat; every answer
+    # renders from .get chains - a missing key is words, never a crash.
     # ------------------------------------------------------------------
-    _CMP_FAMILIES = (("chrome", "chrome"), ("edge", "edge"),
-                     ("opera_gx", "opera gx"))  # the port-era families:
-    # no longer rendered (owner's second purge, Oct 16 - the debug port
-    # left the user surface); kept ONLY so a config that predates the
-    # ruling still parses through companion.families without surprise.
 
     def _build_companion(self, parent):
         box = self._card(parent, "Movie theater mode",
@@ -811,17 +806,15 @@ class _OledMixin:
 
         # THE DEBUG PORT IS GONE FROM THE SURFACE (owner, Oct 16,
         # second instruction): the per-family checkboxes made the dead
-        # route look alive - the flag path restarts a browser with a
-        # port open to every local process, the infostealer classic
-        # the retire dossier was written about. The engine keeps the
-        # reader (config keys, companion.families, videoeye.probe) so
-        # a pre-ruling config never surprises anyone; the card simply
-        # no longer offers the trade.
+        # route look alive - the flag path restarted a browser with a
+        # port open to every local process, the infostealer classic.
+        # The native-messaging host answers instead: the extension's id
+        # is the only ACL, the host writes the app's doorway.
 
         row = self._row(box, "veil this video", TIP_COMP["veil"],
                         hint_chars=42)
         self.oled_comp_btn = ctk.CTkButton(
-            row, text="read the bridge", height=26, width=120,
+            row, text="veil now", height=26, width=120,
             command=self._oled_comp_veil, **self.skin.secondary())
         self.oled_comp_btn.grid(row=0, column=1, sticky="e")
         self.oled_comp_say = ctk.CTkLabel(row, font=self.skin.font(11),
@@ -830,10 +823,9 @@ class _OledMixin:
                                           **self.skin.text_style("sub"))
         self.oled_comp_say.grid(row=0, column=2, sticky="e",
                                 padx=(theme.S_FIELD, 0))
-        # (the port-era probe state died with the checkboxes, Oct 16)
 
         row = self._row(box, " ", TIP_COMP["path"], hint_chars=42)
-        ctk.CTkLabel(row, text=companion.EXT_DIR,
+        ctk.CTkLabel(row, text=companion.door_dir(),
                      font=self.skin.font(11), wraplength=420,
                      justify="left", anchor="w",
                      **self.skin.text_style("sub")).grid(
@@ -842,33 +834,31 @@ class _OledMixin:
 
     def _comp_words(self):
         """The status line, on the dimmer poll's beat: companion.say
-        for the rail and the bridge - the bridge channel's words, the
-        only channel the card offers since the Oct-16 purge. Junk
-        shapes read as words."""
+        for the rail and the doorway - the only channel the card
+        offers. Junk shapes read as words."""
         if getattr(self, "oled_comp_say", None) is None:
             return
         set_text(self.oled_comp_say, companion.say(self.cfg))
 
     def _oled_comp_changed(self):
-        # one gesture, both keys: the consent the engine gates on and
-        # the companion's rail (the pair the retire cleanup wrote -
-        # companion_retire_cleanup.py:14-15)
+        # one gesture, one key: [videodim].on is the single consent
+        # the engine gates on - there is no companion rail to pair it
+        # with any more (the enabled/flag_families pair retired Oct 16).
         vd = self.cfg.setdefault("videodim", {})
         vd["on"] = bool(self.oled_comp_box.get())
-        vd["enabled"] = vd["on"]
         self._save()
         self._comp_words()
 
     def _oled_comp_veil(self):
         # the one-shot answers in the status line itself (the wash
-        # button's idiom): the rect it saw, or the no-bridge words
+        # button's idiom): the rect it saw, or the no-click words
         set_text(self.oled_comp_say, companion.veil_now(self.cfg))
 
     def _sync_companion_switches(self):
         """Knob-lie belt (_shell.SWITCH_SYNC): the master switch
         painted from the rail at settled geometry - both branches, no
-        commands fired (the _power idiom's law). The flag boxes left
-        the surface Oct 16 with the port purge."""
+        commands fired (the _power idiom's law). There is no flag box
+        to sync any more, only the one consent switch."""
         on = (self.cfg.get("videodim") or {}).get("on") is True
         self.oled_comp_box.select() if on \
             else self.oled_comp_box.deselect()
