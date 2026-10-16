@@ -64,6 +64,56 @@ BRIDGES = (os.environ.get("APPDATA", "") + r"\PanelBoss\rect",
                                            # is chrome.downloads: the
                                            # extension writes here
                                            # with no native host
+# But chrome.downloads resolves its filename against EACH BROWSER's own
+# download directory, not the OS Downloads folder (measured Oct 16: this
+# desk's Opera GX is configured to C:\FastDLs, and a click there landed
+# on a shelf the reader never checked). The candidate list is therefore
+# extended at read time from every known browser's Preferences - see
+# _download_bridges.
+_DL_RE = None                              # compiled lazily; re is rare
+
+_BRIDGE_TTL = 60.0
+_bridge_cache = {"until": 0.0, "paths": ()}
+
+
+def _download_bridges(now):
+    """Every Chromium-family browser on this box gets its Preferences
+    regex-scanned ONCE A MINUTE (the eye runs per beat; re-reading a
+    multi-MB JSON every second would be the tail wagging the eye) for
+    download.default_directory, and each answer joins the shelves the
+    bridge click is looked for on. A browser-less box, an unreadable
+    file, and a config without the key all answer zero extra paths,
+    never an error."""
+    global _DL_RE
+    if _DL_RE is None:
+        import re
+        _DL_RE = re.compile(r'"default_directory":"((?:[^"\\]|\\.)*)"')
+    if now < _bridge_cache["until"]:
+        return _bridge_cache["paths"]
+    out = list(BRIDGES)
+    for root in PROFILES.values():
+        for name in ("Preferences", "Secure Preferences"):
+            for prof in ("Default", ""):          # the profile lives
+                try:                              # under Default on
+                    with open(os.path.join(root, prof, name),
+                              encoding="utf-8",   # every family here
+                              errors="replace") as f:
+                        m = _DL_RE.search(f.read())
+                except OSError:
+                    continue
+                if not m:
+                    continue
+                try:
+                    d = json.loads('"' + m.group(1) + '"')  # unescape
+                except ValueError:
+                    continue
+                out.append(os.path.join(d, "PanelBoss", "rect"))
+    _bridge_cache["until"] = now + _BRIDGE_TTL
+    _bridge_cache["paths"] = tuple(dict.fromkeys(out))   # dedupe, the
+    return _bridge_cache["paths"]                        # appdata door
+                                                         # stays first
+
+
 TICK = 0.5                 # s: one port probe per family per this,
                            # backed off on misses (a dark port may
                            # never stall the loop)
@@ -100,7 +150,7 @@ def _bridge(now, wall):
     rows and file rows age on ONE ruler. Missing/broken/empty all
     read None - a manual trigger may not cost the port a beat."""
     path, mtime = None, 0.0
-    for p in BRIDGES:
+    for p in _download_bridges(wall):
         try:
             m = os.path.getmtime(p)
         except OSError:

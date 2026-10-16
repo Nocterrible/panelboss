@@ -21,6 +21,12 @@ NOWHERE = os.path.join(os.environ.get("TEMP", "."), "pb-no-bridge-file")
 if os.path.exists(NOWHERE):
     os.remove(NOWHERE)
 videoeye.BRIDGES = (NOWHERE,)            # one door, the test's own
+_DL_REAL = videoeye._download_bridges    # kept for the shelf pin (21)
+videoeye._download_bridges = lambda now: videoeye.BRIDGES   # the shelf
+# scan (Oct 16) reads REAL browser Preferences files; inside this suite
+# the fake seam owns the doors, and pin 21 drives the real function on
+# a temp profile so the owner's actual C:\FastDLs config never decides
+# whether the suite passes.
 
 
 def ok(name):
@@ -423,6 +429,34 @@ assert set(MAN["permissions"]) == {"debugger", "nativeMessaging",
 assert MAN["host_permissions"] == ["<all_urls>"]
 ok("the extension carries the eye's OWN string verbatim, and the "
    "manifest says what the code uses (downloads for the v1 writer)")
+
+# 21. THE SHELF LAW (measured Oct 16): chrome.downloads resolves the
+#     click's filename against EACH BROWSER's own download directory -
+#     this desk's Opera GX writes C:\FastDLs, and the naive Downloads
+#     assumption left a perfectly good bridge file unread on disk. The
+#     reader scans every known browser's Preferences for
+#     download.default_directory (once a minute, never per beat) and
+#     each answer joins the shelves.
+import tempfile as _tf
+_shelf = _tf.mkdtemp(prefix="pb-shelf-")
+os.makedirs(os.path.join(_shelf, "Default"))
+with open(os.path.join(_shelf, "Default", "Preferences"), "w",
+          encoding="utf-8") as f:
+    f.write('{"download":{"default_directory":"C:\\\\FastDLs"},'
+            '"x":1}')
+_old_prof, _old_cache = videoeye.PROFILES, dict(videoeye._bridge_cache)
+videoeye.PROFILES = {"fake": _shelf}
+videoeye._bridge_cache.update(until=0.0, paths=())
+_got = _DL_REAL(1_000_000.0)
+videoeye.PROFILES, videoeye._bridge_cache = _old_prof, _old_cache
+assert _got[0] == NOWHERE and \
+    os.path.join("C:\\FastDLs", "PanelBoss", "rect") in _got, _got
+videoeye._bridge_cache.update(until=0.0, paths=())   # the TTL is the
+#     scan's own hygiene: the suite's faked clock must not bank a
+#     minute onto the next (real) read.
+ok("the shelf law: the click's file is looked for where the browser's "
+   "OWN download directory says it lands (FastDLs found), the appdata "
+   "door stays first, and the cache resets after the pin")
 
 if os.path.exists(videoeye.BRIDGES[0]):
     os.remove(videoeye.BRIDGES[0])
