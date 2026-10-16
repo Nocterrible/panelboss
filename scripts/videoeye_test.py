@@ -424,8 +424,11 @@ assert 'const RECT_JS = "%s";' % videoeye.RECT_JS in BG
 MAN = json.load(open(os.path.join("extension", "manifest.json"),
                      encoding="utf-8"))
 assert MAN["manifest_version"] == 3
-assert set(MAN["permissions"]) == {"debugger", "nativeMessaging",
-                                   "tabs", "downloads"}
+assert set(MAN["permissions"]) == {"debugger", "tabs", "downloads"}  # nativeMessaging left Oct 16, the
+# gate's nit 2: the manifest's own law is "carries its stated word"
+# and no call site sends a native message - the host is a documented
+# FUTURE doorway (the %APPDATA%\PanelBoss\rect reader), not a
+# permission the code uses today.
 assert MAN["host_permissions"] == ["<all_urls>"]
 ok("the extension carries the eye's OWN string verbatim, and the "
    "manifest says what the code uses (downloads for the v1 writer)")

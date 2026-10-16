@@ -153,8 +153,12 @@ def _bridge(now, wall):
     for p in _download_bridges(wall):
         try:
             m = os.path.getmtime(p)
-        except OSError:
-            continue
+        except (OSError, ValueError):   # ValueError: a garbage-matched
+            continue                    # default_directory with a NUL
+                                        # escape reaches getmtime as an
+                                        # embedded-null path (gate nit
+                                        # 1, Oct 16) - one miss, loud
+                                        # nowhere, the eye keeps beats
         if m >= mtime:
             path, mtime = p, m
     if path is None:
