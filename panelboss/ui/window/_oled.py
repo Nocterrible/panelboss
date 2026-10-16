@@ -167,7 +167,18 @@ TIP_COMP = {
 class _OledMixin:
     # ------------------------------------------------------------------ oled --
     def _build_oled(self, parent):
-        box = self._card(parent, "taskbar hider",
+        # the two-column law (owner, Oct 15), the power tab's idiom at
+        # _power.py:46: fixed-width side-packed columns; the ScrollHost
+        # scrolls the rest. LEFT: hider over dimmer - the pixels that
+        # rest; RIGHT: the refresh card over the veil card - the pixels
+        # that move. 560/520: the card sub's own 480 wrap (HINT_WRAP)
+        # needs 488 of inner room, and the 520 column supplies exactly
+        # it. Pack order is the owner's cell order, column by column.
+        col = ctk.CTkFrame(parent, width=560, fg_color="transparent")
+        col.pack(side="left", fill="y")
+        col2 = ctk.CTkFrame(parent, width=520, fg_color="transparent")
+        col2.pack(side="left", fill="y")
+        box = self._card(col, "taskbar hider",
                          "a painted strip that keeps the bar's pixels "
                          "from aging in place")
         self._oled_box = box
@@ -241,7 +252,9 @@ class _OledMixin:
                                      **self.skin.text_style("sub"))
         self.oled_say.grid(row=0, column=1, sticky="e")
         self._oled_host = parent
-        self._build_refresh(self._oled_host)   # second card, same tab
+        self._build_refresh(col2)               # right column, top cell
+        self._build_dimmer(col)                 # left column, under the hider
+        self._build_companion(col2)             # right column, under the jog
         self._oled_sync()
 
     # ------------------------------------------------------- refresh --
@@ -336,7 +349,6 @@ class _OledMixin:
                                       **self.skin.text_style("sub"))
         self.oled_say2.grid(row=0, column=2, sticky="e",
                             padx=(theme.S_FIELD, 0))
-        self._build_dimmer(parent)       # third card, same tab
 
     def _oled_jog_changed(self):
         self.cfg.setdefault("jog", {})["on"] = bool(
@@ -586,7 +598,6 @@ class _OledMixin:
         self.oled_pause_box.grid(row=0, column=1, sticky="e")
         self._dim_words()
         self.after(1000, self._dim_poll)
-        self._build_companion(parent)   # fourth card, same tab
 
     def _dim_poll(self):
         """The confession and the pause switch follow the engine
