@@ -1702,3 +1702,31 @@ life desk (office, remote, sleep, replug) catches its unknown cousins.
 Owner ruling recorded: between the trial and the ship sits a burn-in
 period of days - FINAL STATE, no more feature traffic - and nothing
 goes out before it. The feature freeze is the point, not the delay.
+
+## DOSSIER: the capture freeze (Oct 16) - CLASS LEDGER, third bite
+Symptom: click "capture this desktop" -> UI frozen hours; hider stuck ON,
+dimmer fine. Debugger caught it live (py-spy x2, byte-identical frames +
+native): Tk thread deadlocked in GetWindowTextLengthW -> SendMessageW to
+the app's OWN hider-paint thread, which was blocked in Font.__del__ ->
+tk.call back to the Tk thread. Closed circle. Raymond Chen's rule explains
+the asymmetry (own-process windows SEND, foreign windows read the cache).
+CURE (e0de9f4, gauntlet-green): dose 1 own-process titles ride
+SendMessageTimeoutW(SMTO_ABORTIFHUNG, 1500 ms, honest empty) - and the
+display.py SMTO_NORMAL constant (held 0x0002 = ABORTIFHUNG since first
+write) renamed to what it is; dose 2 capture worker-ized like its apply
+sibling (done() ghost-tolerant, ui_events ("later") belt for the pre-
+mainloop marshal class); dose 3 skin FONTS ARE A CACHE (strong refs -
+the GC cross-thread class structurally dead). Five suites grew the
+bounded pump (the file's own 8c law). The reviewer's first finding
+became the fix's second dose: the strong-ref LIST leaked a CTkFont per
+widget per re-render in a tray session - caught before ship.
+CLASS: blocking cross-thread Tk calls without deadlines on the pump
+thread - bite 3 (wake-freeze, Oct 15 editor destroy, this). Debugger's
+verdict PATCH; recurrence of a 4th bite -> REFACTOR class (one inter-
+preter + queue-only data) = the owner's UI-process-isolation instinct
+expressed inside the app. PROCESS-SPLIT EVIDENCE: one blocking edge was
+a cross-PROCESS SendMessage (to a foreign frozen window) - a separate
+UI process would have hung on it too; the deadline, not the boundary,
+is the cure. Split stays open as design direction, not tonight's fix.
+Live repro owed by owner: capture click with hider armed -> instant
+"capturing...", profile lands < 2 s (was: dead UI for hours).
