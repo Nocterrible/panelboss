@@ -217,14 +217,12 @@ class SettingsWindow(
         was_mapped = self.state() != "withdrawn"
         if not self._manual_open_done:
             self._veil("PanelBoss", full=True)
-            self._unveil_job = self.after(300, self._unveil)
             if manual:
                 self._manual_open_done = True
             self.deiconify()
         else:
             if manual and not was_mapped:
                 self._veil("PanelBoss", full=True)
-                self._unveil_job = self.after(300, self._unveil)
             self.deiconify()
             self.lift()
         # knob-lie belt (second corpse, the owner's bar-was-on catch):
@@ -240,6 +238,19 @@ class SettingsWindow(
         if not was_mapped or getattr(self, "_veil_lbl", None) is not None:
             self.after(0, self._repaint_switches)
             self.after(0, self._sync_slider_wheels)
+            # event-driven lift (SMOOTH, owner Oct 15): the old timed
+            # 300 ms lift raced the first geometry flush - the repaint
+            # above calls update_idletasks() which does the deferred
+            # profiles/editor render, measured ~950-1000 ms on this
+            # host - so the veil dropped mid-sweep and the owner saw
+            # the repaint. The lift now chains ONTO the flush's own
+            # after(0), in schedule order: repaint, slide sync, then
+            # unveil. No clock guesses the flush's cost; the lift
+            # fires the moment the work is done. A re-veil mid-flight
+            # still cancels this job through the same _unveil_job slot
+            # (_veil's cancel arm), and the watchdog keeps the 3 s
+            # backstop for a flush that wedges.
+            self._unveil_job = self.after(0, self._unveil)
 
 
     # -------------------------------------------------- switch repaint --
@@ -487,13 +498,17 @@ class SettingsWindow(
         self.configure(fg_color=self.skin.bg)
         self._shown_ts = None                # repaint the preview fresh
         self.build_all()
-        self._unveil_job = self.after(300, self._unveil)  # the rebuild's
-        # own veil lifts from its OWN fresh after on the tracked slot -
-        # the same one _show_first arms, so a re-veil can cancel it,
-        # never a bare untracked after; the 300 ms also covers the
-        # post-rebuild paint burst the cover-frame exists for. A raise
-        # inside build_all leaves the veil to the 3 s watchdog, same
-        # failure path as the old bare _unveil() tail.
+        # the rebuild's own veil lifts event-driven (SMOOTH, Oct 15):
+        # chained onto the same flush the show path uses - the deferred
+        # profiles/editor render lives in the first update_idletasks
+        # after build, and a fixed 300 ms guess can drop the cover mid-
+        # sweep exactly as it did at boot. _repaint_switches does that
+        # flush behind the veil, then the unveil rides the NEXT after(0)
+        # in schedule order, still on the tracked _unveil_job slot so a
+        # re-veil can cancel it; the 3 s watchdog stays the backstop.
+        self.after(0, self._repaint_switches)
+        self.after(0, self._sync_slider_wheels)
+        self._unveil_job = self.after(0, self._unveil)
 
 
     # ------------------------------------------------------------ top bar --
