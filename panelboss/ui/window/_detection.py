@@ -155,7 +155,10 @@ class _DetectionMixin:
         canvas = getattr(widget, "_canvas", None)
         if wheel is not None and canvas is not None:
             try:
-                if state == "disabled":
+                # the timers-tab lesson (Oct 15): the re-enable arm
+                # re-armed what the scroll law unbound - the swap obeys
+                # the same authority as the belt
+                if state == "disabled" or not theme.SCROLL_SLIDERS:
                     canvas.unbind("<MouseWheel>")
                 else:
                     canvas.bind("<MouseWheel>", wheel)

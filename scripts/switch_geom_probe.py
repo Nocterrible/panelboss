@@ -167,27 +167,26 @@ def check():
             "the reveal missed the new ON truth"
         print("[PASS] truth switches paint their knob after they know "
               "their size (show seam + tab arm)")
-        # the scroll law (owner UAT, Oct 15): the wheel belongs to the
-        # window, not to the value under the cursor - every real slider
-        # in the tree hands its canvas's <MouseWheel> back. The walk is
-        # the probe's own (the belt ran at show and at the tab reveal
-        # above); a bound canvas answers with a callback string, an
-        # unbound one with "".
-        def _wheel_bound(w):
-            bad = []
-            if isinstance(w, W.ctk.CTkSlider):
-                cv = getattr(w, "_canvas", None)
-                if cv is not None and bool(cv.bind("<MouseWheel>")):
-                    bad.append(w)
+        # the scroll law vs the re-sync arm (the consent walker re-arms
+        # the wheel on EVERY cameras post): the law must survive the
+        # app's own paint cycle, and a hidden bound slider is a
+        # landmine the mode picker re-arms.
+        app.ui_events.put(("cameras", []))
+        app._drain_ui_events()
+        def _law_sliders(w):
+            out = [w] if isinstance(w, W.ctk.CTkSlider) and \
+                getattr(w, "_canvas", None) is not None and \
+                bool(w._canvas.bind("<MouseWheel>")) else []
             for c in w.winfo_children():
-                bad.extend(_wheel_bound(c))
-            return bad
-        live = [w for w in _wheel_bound(app)
-                if w.winfo_exists() and w.winfo_ismapped()]
+                out.extend(_law_sliders(c))
+            return out
+        live = [s for host in app.pages.values()
+                for s in _law_sliders(host.inner)]
         assert not live, \
-            "%d live slider(s) still answer the mouse wheel" % len(live)
-        print("[PASS] the scroll law: no live slider keeps its "
-              "<MouseWheel> binding")
+            "%d slider(s) answer the mouse wheel after a consent re-sync" \
+            % len(live)
+        print("[PASS] the scroll law: no slider keeps its "
+              "<MouseWheel> binding across the app's own re-sync")
     except Exception:
         FAILED.append("check")
         __import__("traceback").print_exc()

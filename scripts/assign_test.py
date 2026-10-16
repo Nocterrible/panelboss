@@ -536,6 +536,11 @@ try:
         pass
 
     _walk = _Walker()
+    # the three legs exercise the swap machinery, which is live only
+    # with per-slider wheels: the scroll law's default (False) makes
+    # the swap unbind both arms - so the machinery runs True, and the
+    # law leg gets the restored default.
+    theme.SCROLL_SLIDERS = True
     _walk._gate_widgets(_gate, "normal")
     _sl._canvas.event_generate("<MouseWheel>", delta=120)
     _hw.update()
@@ -551,6 +556,16 @@ try:
     _hw.update()
     check(_sl.get() != _v1,
           "the RE-ENABLED slider answers the wheel again (no steal)")
+    theme.SCROLL_SLIDERS = False
+    _walk._gate_widgets(_gate, "normal")       # the re-enabled slider...
+    # the law's own baseline: the wrap's last leg moved the value, so
+    # _v1 is re-sampled here - the check below is the law, "the wheel
+    # does not move it"
+    _v1 = _sl.get()
+    _sl._canvas.event_generate("<MouseWheel>", delta=120); _hw.update()
+    check(_sl.get() == _v1,
+          "...stays wheel-silent under the scroll law (the gate swap "
+          "obeys SCROLL_SLIDERS too, the timers-tab lesson)")
     _retire(_hw)
 except Exception as _exc:
     if isinstance(_exc, AssertionError):
