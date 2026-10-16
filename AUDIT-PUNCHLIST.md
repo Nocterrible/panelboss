@@ -1669,3 +1669,14 @@ and 14 hold both the single-monitor four and the straddle six).
 getBoundingClientRect is VIEWPORT space: the scroll pair rides the
 row for the DRM future and does NOT shift the veil (pin 6).
 PAUSED IS NOT LIVE: the feature dims playback, not posters (pin 7).
+
+## CARD SHIP DIED SILENTLY (Oct 15, ~18:3x) — the third zero-byte lane
+of the day. Capped lanes normally force a text handoff (the two
+step-cap lanes today did exactly that); this one COMPLETED with no
+text at all and committed NOTHING (tip still ebff8b1, worktree clean,
+companion.py absent). The failure mode is the Oct-13 class, one layer
+up: a continuation guard kills the session, and the runner reports
+'completed' without the report. Countermeasure, immediate: the card
+re-issue runs as a FOREGROUND dispatch — a lane that dies in the
+foreground dies audibly in my window, where the loss is visible
+instead of discovered by the next audit.
