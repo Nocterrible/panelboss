@@ -446,6 +446,16 @@ class Veils:
                 st["rect"] = rect
                 st["mon"] = short                      # its own panel
                 self._paint(hwnd, rect, a)             # we followed
+            elif st.get("frame"):
+                # THEATER RE-PIN (Oct-16 UAT cure): an unchanged frame
+                # piece still rides the paint queue EVERY tick - a
+                # plain veil survives re-activations pinned to its own
+                # window, but a frame piece owns nothing, and the first
+                # click on the browser buries it (the UAT bite: the
+                # ring was painted, measured, and invisible). One
+                # SetWindowPos per piece per beat is the honest cost
+                # of the replacement law.
+                self._paint(hwnd, rect, a)
         ramp = max(0, min(60, int(d.get("ramp_sec", 8))))   # belt:
         #                                                normalize
         #                                                already
@@ -533,9 +543,11 @@ class Veils:
         pieces (the rect touching an edge) drop; the full ring is
         FOUR, an edge kiss is three, a panel-covering rect is none.
         Keys are synthetic NEGATIVE ints: the painter takes
-        (hwnd, rect, alpha) and keys nothing off hwnd realism (the
-        z-pin reads the dead anchor and skips - the frame sits in
-        the plain band, documented at the class)."""
+        (hwnd, rect, alpha) and keys nothing off hwnd realism - and
+        the negative key IS the law the pump obeys (Oct-16 buried-ring
+        cure): _zpin's synthetic-anchor branch pins the piece to the
+        top of the ORDINARY band on every paint, and the tick re-queues
+        unchanged pieces every beat, so no activation buries the ring."""
         out = {}
         if vrect is None:
             return out
@@ -787,6 +799,21 @@ def _zpin(win, target_hwnd):
     vanished this tick) costs one cosmetic beat and the next paint
     follows the window anyway."""
     try:
+        if target_hwnd is not None and int(target_hwnd) <= 0:
+            # SYNTHETIC ANCHOR (theater pieces, Oct-16 UAT cure): the
+            # frame OWNS no window - it REPLACES the panel's veils - so
+            # there is no owner to sit under. Its band is the top of
+            # the ORDINARY band: SetWindowPos HWND_TOP (0) parks ours
+            # below the real topmost band (taskbar, always-on-top apps)
+            # and above every ordinary window - which is exactly the
+            # theater law: darken the browser the movie plays in, never
+            # the desk's chrome. The tick re-pins frame pieces every
+            # beat, so a fresh activation cannot bury them (the UAT
+            # bite: painted, pixel-exact, invisible under the browser).
+            win.update_idletasks()
+            h = _u32.GetAncestor(win.winfo_id(), GA_ROOT) or win.winfo_id()
+            _setwindowpos(h, 0, 0, 0, 0, _SWP_ZPIN)
+            return
         if not _iswindow(target_hwnd):
             return                       # dead anchor: skip, never straggle
         ex = _u32.GetWindowLongW(target_hwnd, GWL_EXSTYLE)

@@ -217,9 +217,12 @@ class Rec:
     def __init__(self):
         self.painted = {}
         self.gone = []
+        self.calls = []      # every paint ever queued (the re-pin pin
+                             # counts beats, the dict only holds states)
 
     def paint(self, hwnd, rect, alpha):
         self.painted[hwnd] = (rect, alpha)
+        self.calls.append((hwnd, rect, alpha))
 
     def unveil(self, hwnd):
         self.painted.pop(hwnd, None)
@@ -426,6 +429,31 @@ assert 'op !== "measure"' in CJ or 'msg.op !== "measure"' in CJ
 ok("the background folds the content-script's automatic lane and the "
    "test button reaches the tab's own measure via tabs.sendMessage - no "
    "scripting, no eval, one measure in content.js")
+
+
+# THEATER RE-PIN (Oct-16 UAT cure, the invisible-ring bite): an
+# unchanged frame piece must ride the paint queue EVERY tick - a plain
+# veil survives re-activations by being pinned to its own window, a
+# frame piece owns nothing, and the first browser activation buries it
+# under the very window it exists to darken (the pieces were painted,
+# measured pixel-exact, and invisible). The negative-key re-queue is
+# the contract; the real-window half (SetWindowPos HWND_TOP in _zpin's
+# synthetic branch) is the owner's UAT to confirm.
+f = Frame([w(1)], idle=999.0)
+RECT[0] = (100, 100, 600, 300)
+f.tick(100)
+assert len(f.rec.calls) == 4, f.rec.calls          # birth paints
+assert all(h < 0 for h, _, _ in f.rec.calls), \
+    ("frame pieces ride negative synthetic keys (the pump's synthetic-"
+     "anchor branch is their only raise path)")
+f.tick(101)                                        # NOTHING changed
+assert len(f.rec.calls) == 8, f.rec.calls          # re-pinned, not frozen
+assert [c[0] for c in f.rec.calls[4:]] == [c[0] for c in f.rec.calls[:4]], \
+    "the re-pin re-queues the SAME four pieces"
+assert [c[1] for c in f.rec.calls[4:]] == [c[1] for c in f.rec.calls[:4]], \
+    "at the SAME rects - the re-pin is pure z-order (geometry unchanged)"
+ok("an unchanged frame re-pins every tick - the buried-ring bite has "
+   "a teeth-mark in the suite now")
 
 
 if os.path.exists(videoeye.RECT_PATH):
