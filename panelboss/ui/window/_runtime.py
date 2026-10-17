@@ -8,6 +8,7 @@ import logging
 import queue
 import time
 
+from ... import wm
 from ._widgets import set_text
 
 log = logging.getLogger("ui")
@@ -34,12 +35,55 @@ class _RuntimeMixin:
             return
         try:
             self._tick_inner()
+            now = time.monotonic()
+            if now - getattr(self, "_desk_fp_t", 0.0) >= 2.0:
+                self._desk_fp_t = now
+                self._desk_check()
         except Exception:
             log.exception("ui tick failed; the loop goes on")
         try:
             self.after(90, self._tick_ui)
         except Exception:
             pass                        # the window was destroyed
+
+
+    # ------------------------------------------------------- desk ear --
+    # The engine re-enumerates its desk every tick and hot-plug-robust
+    # it is; the CARDS froze (the owner's zero-monitor boot, Oct 17 -
+    # the window opened onto no panels and every monitor row stayed
+    # born-empty). The ear: the pump asks wm.fingerprint() every 2 s
+    # (one Enum pass - the suite drives it for exactly that); on any
+    # change the monitor-row sections discard and refill from cfg.
+    # The belt: the away card's button, for the swap no fingerprint
+    # can see - an identical-model panel behind a KVM.
+    MONITOR_ROW_REBUILDERS = ("_away_rebuild_rows", "_gaming_rebuild_rows",
+                              "_oled_rebuild_rows", "_profiles_render")
+
+    def refresh_monitor_rows(self, why="desk ear"):
+        """Every monitor-row card re-reads the desk. One broken
+        section must not strand the others (per-section guard); the
+        log line names the trigger so a button-mash is honest in the
+        transcript."""
+        for name in self.MONITOR_ROW_REBUILDERS:
+            fn = getattr(self, name, None)
+            if fn is None:
+                continue
+            try:
+                fn()
+            except Exception:
+                log.warning("the %s section refused its desk rebuild",
+                            name, exc_info=True)
+        log.info("ui: monitor rows rebuilt (%s)", why)
+
+    def _desk_check(self):
+        fp = wm.fingerprint()
+        was = getattr(self, "_desk_fp", None)
+        self._desk_fp = fp
+        if was is None:
+            return                       # seed; a boot-time desk is
+        #                                 today's truth, not a change
+        if fp != was:
+            self.refresh_monitor_rows()
 
 
     def _tick_inner(self):

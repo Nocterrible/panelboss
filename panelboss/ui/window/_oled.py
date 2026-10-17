@@ -236,32 +236,15 @@ class _OledMixin:
         self.oled_on_box.grid(row=0, column=1, sticky="e")
 
         # one opt-in row per live panel (the away card's idiom, dupes
-        # disambiguated by the gdi slot the rows already carry)
-        self._oled_rows = {}
+        # disambiguated by the gdi slot the rows already carry) - and
+        # like the away card's, inside THEIR OWN frame: the desk can
+        # change under a living window (the owner's zero-monitor boot,
+        # Oct 17) and every monitor row on this tab is discard-and-
+        # refill now, one idiom, four sections.
+        self._oled_row_frame = ctk.CTkFrame(box, fg_color="transparent")
+        self._oled_row_frame.pack(anchor="w", fill="x")
+        self._oled_fill_rows()
         hid = self.cfg.setdefault("hider", {})
-        _live = wm.monitors()
-        base = [m.get("short") or m.get("id") for m in _live]
-        dupes = {b for b in base if base.count(b) > 1}
-        for m, short in zip(_live, base):
-            label = short
-            if short in dupes:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
-            label = label + desk_position(
-                [(mm.get("x", 0), mm.get("y", 0), mm.get("w", 0),
-                  mm.get("h", 0)) for mm in _live],
-                m.get("x", 0), m.get("y", 0), m.get("w", 0), m.get("h", 0))
-            row = self._row(box, label, TIP["row"], hint_chars=42)
-            box2 = ctk.CTkCheckBox(
-                row, text="strip", command=lambda s=short: self._oled_row_changed(s),
-                font=self.skin.font(12), checkbox_width=18, checkbox_height=18,
-                border_color=self.skin.border_raised,
-                fg_color=self.skin.accent, hover_color=self.skin.accent,
-                text_color=self.skin.text, text_color_disabled=self.skin.txt3)
-            box2.set(bool((hid.get("monitors") or {}).get(short)))
-            box2.grid(row=0, column=1, sticky="e")
-            self._oled_rows[short] = box2
 
         row = self._row(box, "reveal", TIP["reveal"], hint_chars=42)
         self.oled_reveal_button = ctk.CTkSegmentedButton(
@@ -300,6 +283,210 @@ class _OledMixin:
         self._build_companion(col2)             # right column, under the jog
         self._oled_sync()
 
+    # ------------------------------------------------- monitor rows --
+    # Four sections, one idiom (the _cam_rows discard-and-refill): the
+    # widgets are disposable, cfg is the truth, and the desk is allowed
+    # to change under a living window (owner's zero-monitor boot,
+    # Oct 17). Each fill re-derives its own dupes/labels from the
+    # fresh enumeration; nothing cached survives the swap.
+
+    def _oled_fill_rows(self):
+        for widget in self._oled_row_frame.winfo_children():
+            widget.destroy()
+        self._oled_rows = {}
+        hid = self.cfg.setdefault("hider", {})
+        _live = wm.monitors()
+        base = [m.get("short") or m.get("id") for m in _live]
+        dupes = {b for b in base if base.count(b) > 1}
+        for m, short in zip(_live, base):
+            label = short
+            if short in dupes:
+                label = "%s (%s)" % (
+                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
+                    [-1] or "?")
+            label = label + desk_position(
+                [(mm.get("x", 0), mm.get("y", 0), mm.get("w", 0),
+                  mm.get("h", 0)) for mm in _live],
+                m.get("x", 0), m.get("y", 0), m.get("w", 0), m.get("h", 0))
+            row = self._row(self._oled_row_frame, label, TIP["row"],
+                            hint_chars=42)
+            box2 = ctk.CTkCheckBox(
+                row, text="strip",
+                command=lambda s=short: self._oled_row_changed(s),
+                font=self.skin.font(12), checkbox_width=18,
+                checkbox_height=18,
+                border_color=self.skin.border_raised,
+                fg_color=self.skin.accent, hover_color=self.skin.accent,
+                text_color=self.skin.text,
+                text_color_disabled=self.skin.txt3)
+            box2.set(bool((hid.get("monitors") or {}).get(short)))
+            box2.grid(row=0, column=1, sticky="e")
+            self._oled_rows[short] = box2
+
+    def _jog_fill_rows(self):
+        for widget in self._jog_row_frame.winfo_children():
+            widget.destroy()
+        self._jog_rows = {}
+        jog_cfg = self.cfg.setdefault("jog", {})
+        base = [m.get("short") or m.get("id") for m in wm.monitors()]
+        dupes = {b for b in base if base.count(b) > 1}
+        for m, short in zip(wm.monitors(), base):
+            label = short
+            if short in dupes:
+                label = "%s (%s)" % (
+                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
+                    [-1] or "?")
+            row = self._row(self._jog_row_frame, label, TIP_JO["row"],
+                            hint_chars=42)
+            box2 = ctk.CTkCheckBox(
+                row, text="jog",
+                command=lambda s=short: self._oled_jog_row_changed(s),
+                font=self.skin.font(12), checkbox_width=18,
+                checkbox_height=18,
+                border_color=self.skin.border_raised,
+                fg_color=self.skin.accent, hover_color=self.skin.accent,
+                text_color=self.skin.text, text_color_disabled=self.skin.txt3)
+            box2.set(bool((jog_cfg.get("monitors") or {}).get(short)))
+            box2.grid(row=0, column=1, sticky="e")
+            self._jog_rows[short] = box2
+
+    def _dim_fill_rows(self):
+        for widget in self._dim_row_frame.winfo_children():
+            widget.destroy()
+        self._dim_rows = {}
+        self._dim_always = {}
+        self._dim_level = {}
+        dim = self.cfg.setdefault("dimmer", {})
+        base = [m.get("short") or m.get("id") for m in wm.monitors()]
+        dupes = {b for b in base if base.count(b) > 1}
+        for m, short in zip(wm.monitors(), base):
+            label = short
+            if short in dupes:
+                label = "%s (%s)" % (
+                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
+                    [-1] or "?")
+            row = self._row(self._dim_row_frame, label, TIP_DIM["row"],
+                            hint_chars=42)
+            box2 = ctk.CTkCheckBox(
+                row, text="dim",
+                command=lambda s=short: self._oled_dim_row_changed(s),
+                font=self.skin.font(12), checkbox_width=18,
+                checkbox_height=18,
+                border_color=self.skin.border_raised,
+                fg_color=self.skin.accent, hover_color=self.skin.accent,
+                text_color=self.skin.text,
+                text_color_disabled=self.skin.txt3)
+            box2.set(bool((dim.get("monitors") or {}).get(short)))
+            box2.grid(row=0, column=1, sticky="e")
+            self._dim_rows[short] = box2
+            # the Oct-15 always sub-mode, per row - the same opt-in
+            # discipline as the strip's reveal scope: it only ever
+            # modifies a row that is already opted in
+            abox = ctk.CTkCheckBox(
+                row, text="always",
+                command=lambda s=short: self._oled_dim_always_changed(s),
+                font=self.skin.font(12), checkbox_width=18,
+                checkbox_height=18,
+                border_color=self.skin.border_raised,
+                fg_color=self.skin.accent, hover_color=self.skin.accent,
+                text_color=self.skin.text,
+                text_color_disabled=self.skin.txt3)
+            abox.set(bool((dim.get("always") or {}).get(short)))
+            abox.grid(row=0, column=2, sticky="e",
+                      padx=(theme.S_FIELD, 0))
+            # the same hover-tip path _row wires on its label
+            abox.bind("<Enter>",
+                      lambda e=None, b=abox: self.tips._schedule(
+                          TIP_DIM["always"], b), add="+")
+            abox.bind("<Leave>",
+                      lambda e=None: self.tips._hide_soon(), add="+")
+            self._dim_always[short] = abox
+            # the per-panel veil percent (the Oct-16 wave absorbs the
+            # ADDON entry - panels answer differently): the row opens
+            # at the card's "veil level" and the FIRST move saves
+            # dimmer.levels[short]; an untouched panel keeps following
+            # the global (the honest absent-key law).
+            srow = self._row(self._dim_row_frame, "%s veil %%" % label,
+                             TIP_DIM["row_level"], hint_chars=42)
+            lv = (dim.get("levels") or {}).get(short)
+            if lv is None:
+                lv = int(dim.get("level", DIMMER_LEVEL_DEFAULT))
+            slabel = ctk.CTkLabel(srow, font=self.skin.font(12),
+                                  **self.skin.text_style("sub"))
+            sslider = ctk.CTkSlider(
+                srow, from_=DIMMER_LEVEL_FLOOR, to=DIMMER_LEVEL_CEIL,
+                number_of_steps=DIMMER_LEVEL_CEIL - DIMMER_LEVEL_FLOOR,
+                width=180,
+                command=lambda v, s=short:
+                self._oled_dim_level_changed(s, v),
+                **self.skin.slider_style())
+            sslider.set(int(lv))
+            sslider.grid(row=0, column=1, sticky="e")
+            slabel.configure(text="%s%%" % int(lv))
+            slabel.grid(row=0, column=2, sticky="e",
+                        padx=(theme.S_FIELD, 0))
+            self._dim_level[short] = (sslider, slabel)
+
+    def _comp_fill_rows(self):
+        for widget in self._comp_row_frame.winfo_children():
+            widget.destroy()
+        self._comp_mon_rows = {}
+        vdm = (self.cfg.setdefault("videodim", {})).get("monitors") or {}
+        base_c = [m.get("short") or m.get("id") for m in wm.monitors()]
+        dupes_c = {b for b in base_c if base_c.count(b) > 1}
+        for m, short in zip(wm.monitors(), base_c):
+            label = short
+            if short in dupes_c:
+                label = "%s (%s)" % (
+                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
+                    [-1] or "?")
+            crow = self._row(self._comp_row_frame, " ", TIP_COMP["mons"],
+                             hint_chars=42)
+            cbox = ctk.CTkCheckBox(
+                crow, text="theater on " + label,
+                command=lambda s=short: self._oled_comp_row_changed(s),
+                font=self.skin.font(12), checkbox_width=18,
+                checkbox_height=18, border_color=self.skin.border_raised,
+                fg_color=self.skin.accent, hover_color=self.skin.accent,
+                text_color=self.skin.text,
+                text_color_disabled=self.skin.txt3)
+            r = vdm.get(short)
+            r = r if isinstance(r, dict) else {}
+            cbox.set(bool(r.get("on", True)))
+            cbox.grid(row=0, column=1, sticky="e")
+            lvl = r.get("level")
+            if lvl is None:
+                lvl = int((self.cfg.get("videodim") or {}).get(
+                    "level", VIDEODIM_LEVEL_DEFAULT))
+            cslider = ctk.CTkSlider(
+                crow, from_=VIDEODIM_LEVEL_FLOOR,
+                to=VIDEODIM_LEVEL_CEIL,
+                number_of_steps=VIDEODIM_LEVEL_CEIL -
+                                VIDEODIM_LEVEL_FLOOR,
+                width=140,
+                command=lambda v, s=short:
+                self._oled_comp_row_level_changed(s, v),
+                **self.skin.slider_style())
+            cslider.set(int(lvl))
+            cslider.grid(row=0, column=2, sticky="e",
+                         padx=(theme.S_FIELD, 0))
+            clabel = ctk.CTkLabel(crow, font=self.skin.font(12),
+                                  **self.skin.text_style("sub"))
+            clabel.configure(text="%s%%" % int(lvl))
+            clabel.grid(row=0, column=3, sticky="e",
+                        padx=(theme.S_FIELD, 0))
+            self._comp_mon_rows[short] = (cbox, cslider, clabel)
+
+    def _oled_rebuild_rows(self):
+        """The oled tab's share of the desk refresh: four sections,
+        then the sync walker re-grays what the mode and consent say
+        must not speak (a fresh row never outranks gray-not-lie)."""
+        self._oled_fill_rows()
+        self._jog_fill_rows()
+        self._dim_fill_rows()
+        self._comp_fill_rows()
+        self._oled_sync()
+
     # ------------------------------------------------------- refresh --
     JOG_BY_LABEL = {"move pixels": "shuffle", "wash pixels": "wash"}
 
@@ -317,28 +504,10 @@ class _OledMixin:
         self.oled_jog_box.set(bool((self.cfg.get("jog") or {}).get("on")))
         self.oled_jog_box.grid(row=0, column=1, sticky="e")
 
-        self._jog_rows = {}
+        self._jog_row_frame = ctk.CTkFrame(box, fg_color="transparent")
+        self._jog_row_frame.pack(anchor="w", fill="x")
+        self._jog_fill_rows()
         jog_cfg = self.cfg.setdefault("jog", {})
-        base = [m.get("short") or m.get("id") for m in wm.monitors()]
-        dupes = {b for b in base if base.count(b) > 1}
-        for m, short in zip(wm.monitors(), base):
-            label = short
-            if short in dupes:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
-            row = self._row(box, label, TIP_JO["row"], hint_chars=42)
-            box2 = ctk.CTkCheckBox(
-                row, text="jog",
-                command=lambda s=short: self._oled_jog_row_changed(s),
-                font=self.skin.font(12), checkbox_width=18,
-                checkbox_height=18,
-                border_color=self.skin.border_raised,
-                fg_color=self.skin.accent, hover_color=self.skin.accent,
-                text_color=self.skin.text, text_color_disabled=self.skin.txt3)
-            box2.set(bool((jog_cfg.get("monitors") or {}).get(short)))
-            box2.grid(row=0, column=1, sticky="e")
-            self._jog_rows[short] = box2
 
         row = self._row(box, "refresh mode", TIP_JO["mode"], hint_chars=42)
         self.oled_jog_mode = ctk.CTkSegmentedButton(
@@ -501,78 +670,10 @@ class _OledMixin:
                                    .get("on")))
         self.oled_dim_box.grid(row=0, column=1, sticky="e")
 
-        self._dim_rows = {}
-        self._dim_always = {}
-        self._dim_level = {}
+        self._dim_row_frame = ctk.CTkFrame(box, fg_color="transparent")
+        self._dim_row_frame.pack(anchor="w", fill="x")
+        self._dim_fill_rows()
         dim = self.cfg.setdefault("dimmer", {})
-        base = [m.get("short") or m.get("id") for m in wm.monitors()]
-        dupes = {b for b in base if base.count(b) > 1}
-        for m, short in zip(wm.monitors(), base):
-            label = short
-            if short in dupes:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
-            row = self._row(box, label, TIP_DIM["row"], hint_chars=42)
-            box2 = ctk.CTkCheckBox(
-                row, text="dim",
-                command=lambda s=short: self._oled_dim_row_changed(s),
-                font=self.skin.font(12), checkbox_width=18,
-                checkbox_height=18,
-                border_color=self.skin.border_raised,
-                fg_color=self.skin.accent, hover_color=self.skin.accent,
-                text_color=self.skin.text,
-                text_color_disabled=self.skin.txt3)
-            box2.set(bool((dim.get("monitors") or {}).get(short)))
-            box2.grid(row=0, column=1, sticky="e")
-            self._dim_rows[short] = box2
-            # the Oct-15 always sub-mode, per row - the same opt-in
-            # discipline as the strip's reveal scope: it only ever
-            # modifies a row that is already opted in
-            abox = ctk.CTkCheckBox(
-                row, text="always",
-                command=lambda s=short: self._oled_dim_always_changed(s),
-                font=self.skin.font(12), checkbox_width=18,
-                checkbox_height=18,
-                border_color=self.skin.border_raised,
-                fg_color=self.skin.accent, hover_color=self.skin.accent,
-                text_color=self.skin.text,
-                text_color_disabled=self.skin.txt3)
-            abox.set(bool((dim.get("always") or {}).get(short)))
-            abox.grid(row=0, column=2, sticky="e",
-                      padx=(theme.S_FIELD, 0))
-            # the same hover-tip path _row wires on its label
-            abox.bind("<Enter>",
-                      lambda e=None, b=abox: self.tips._schedule(
-                          TIP_DIM["always"], b), add="+")
-            abox.bind("<Leave>",
-                      lambda e=None: self.tips._hide_soon(), add="+")
-            self._dim_always[short] = abox
-            # the per-panel veil percent (the Oct-16 wave absorbs the
-            # ADDON entry - panels answer differently): the row opens
-            # at the card's "veil level" and the FIRST move saves
-            # dimmer.levels[short]; an untouched panel keeps following
-            # the global (the honest absent-key law).
-            srow = self._row(box, "%s veil %%" % label,
-                             TIP_DIM["row_level"], hint_chars=42)
-            lv = (dim.get("levels") or {}).get(short)
-            if lv is None:
-                lv = int(dim.get("level", DIMMER_LEVEL_DEFAULT))
-            slabel = ctk.CTkLabel(srow, font=self.skin.font(12),
-                                  **self.skin.text_style("sub"))
-            sslider = ctk.CTkSlider(
-                srow, from_=DIMMER_LEVEL_FLOOR, to=DIMMER_LEVEL_CEIL,
-                number_of_steps=DIMMER_LEVEL_CEIL - DIMMER_LEVEL_FLOOR,
-                width=180,
-                command=lambda v, s=short:
-                self._oled_dim_level_changed(s, v),
-                **self.skin.slider_style())
-            sslider.set(int(lv))
-            sslider.grid(row=0, column=1, sticky="e")
-            slabel.configure(text="%s%%" % int(lv))
-            slabel.grid(row=0, column=2, sticky="e",
-                        padx=(theme.S_FIELD, 0))
-            self._dim_level[short] = (sslider, slabel)
 
         row = self._row(box, "dim after", TIP_DIM["idle"],
                         hint_chars=42)
@@ -1004,51 +1105,9 @@ class _OledMixin:
         # percent: it opens at the global "veil level" and the first
         # move stores the row (an untouched slider = follow the
         # global, the honest absent-key law).
-        self._comp_mon_rows = {}
-        vdm = (self.cfg.setdefault("videodim", {})).get("monitors") or {}
-        base_c = [m.get("short") or m.get("id") for m in wm.monitors()]
-        dupes_c = {b for b in base_c if base_c.count(b) > 1}
-        for m, short in zip(wm.monitors(), base_c):
-            label = short
-            if short in dupes_c:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
-            crow = self._row(box, " ", TIP_COMP["mons"], hint_chars=42)
-            cbox = ctk.CTkCheckBox(
-                crow, text="theater on " + label,
-                command=lambda s=short: self._oled_comp_row_changed(s),
-                font=self.skin.font(12), checkbox_width=18,
-                checkbox_height=18, border_color=self.skin.border_raised,
-                fg_color=self.skin.accent, hover_color=self.skin.accent,
-                text_color=self.skin.text,
-                text_color_disabled=self.skin.txt3)
-            r = vdm.get(short)
-            r = r if isinstance(r, dict) else {}
-            cbox.set(bool(r.get("on", True)))
-            cbox.grid(row=0, column=1, sticky="e")
-            lvl = r.get("level")
-            if lvl is None:
-                lvl = int((self.cfg.get("videodim") or {}).get(
-                    "level", VIDEODIM_LEVEL_DEFAULT))
-            cslider = ctk.CTkSlider(
-                crow, from_=VIDEODIM_LEVEL_FLOOR,
-                to=VIDEODIM_LEVEL_CEIL,
-                number_of_steps=VIDEODIM_LEVEL_CEIL -
-                                VIDEODIM_LEVEL_FLOOR,
-                width=140,
-                command=lambda v, s=short:
-                self._oled_comp_row_level_changed(s, v),
-                **self.skin.slider_style())
-            cslider.set(int(lvl))
-            cslider.grid(row=0, column=2, sticky="e",
-                         padx=(theme.S_FIELD, 0))
-            clabel = ctk.CTkLabel(crow, font=self.skin.font(12),
-                                  **self.skin.text_style("sub"))
-            clabel.configure(text="%s%%" % int(lvl))
-            clabel.grid(row=0, column=3, sticky="e",
-                        padx=(theme.S_FIELD, 0))
-            self._comp_mon_rows[short] = (cbox, cslider, clabel)
+        self._comp_row_frame = ctk.CTkFrame(box, fg_color="transparent")
+        self._comp_row_frame.pack(anchor="w", fill="x")
+        self._comp_fill_rows()
 
         # THE DEBUG PORT IS GONE FROM THE SURFACE (owner, Oct 16,
         # second instruction): the per-family checkboxes made the dead

@@ -95,7 +95,17 @@ def check():
         threading.Thread(target=hider.boot, daemon=True,
                          name="monitor").start()
         time.sleep(0.3)                    # the worker was FIRST
-        app = W.SettingsWindow(cfg, fm, queue.Queue())
+        _desk0 = WM.monitors
+        WM.monitors = lambda: []           # THE OWNER SCENARIO (Oct 17):
+        #                             the app opened with NO monitors
+        #                             attached - every card must still
+        #                             build, and the desk ear must be
+        #                             able to fill it when the desk
+        #                             returns
+        try:
+            app = W.SettingsWindow(cfg, fm, queue.Queue())
+        finally:
+            WM.monitors = _desk0
         assert app.state() == "withdrawn"
         assert getattr(app, "kofi_button", None) is not None, \
             "the window died at the kofi cup again"
@@ -113,6 +123,44 @@ def check():
         time.sleep(0.4)
         assert tk._default_root is app, \
             "the painter's root stole the default after the birth"
+        # (i) the desk-less boot drew the static world: NO monitor
+        # rows, but every desk-INDEPENDENT control exists (the deep-
+        # sleep slider is not a monitor; it survived without them)
+        assert app._away_rows == {}, app._away_rows
+        assert app._oled_rows == {} and app._jog_rows == {} and \
+            app._dim_rows == {} and app._comp_mon_rows == {}, \
+            "the oled tab froze rows onto an empty desk"
+        assert app.gaming_menus == {}, \
+            "the gaming card grew rows out of nothing"
+        assert getattr(app, "away_deep_slider", None) is not None
+        assert getattr(app, "away_refresh_btn", None) is not None
+        # (ii) the desk returns: the fanout (what the 2 s fingerprint
+        # poll calls; the test drives the seam directly because its
+        # fingerprint fake is a constant by design - the source pin
+        # below is what proves the poll is wired to it)
+        app.refresh_monitor_rows()
+        app.update_idletasks()
+        assert list(app._away_rows) == ["T"], app._away_rows
+        assert list(app._oled_rows) == ["T"] and \
+            list(app._jog_rows) == ["T"] and \
+            list(app._dim_rows) == ["T"] and \
+            list(app._comp_mon_rows) == ["T"], \
+            "one desk panel, one row per card"
+        assert list(app.gaming_menus) == ["T"], app.gaming_menus
+        # (iii) idempotent: a second refresh swaps rows, never stacks
+        n0 = len(app._away_row_frame.winfo_children())
+        app.refresh_monitor_rows()
+        app.update_idletasks()
+        assert len(app._away_row_frame.winfo_children()) == n0, \
+            "the refresh stacks instead of swapping"
+        # the ear is on the pump (the suite's static-ban idiom): the
+        # tick reads the fingerprint and calls the fanout on a change
+        _rt = open(os.path.join(os.path.dirname(os.path.dirname(
+                       os.path.abspath(__file__))),
+                       "panelboss", "ui", "window", "_runtime.py"),
+                   encoding="utf-8").read()
+        assert "_desk_check()" in _rt and "fingerprint" in _rt, \
+            "the desk ear is not wired to the pump"
         # the handoff's winner side: the loser's stamp opens THIS
         # window through the tray's own manual seam and reads the ack
         poke = os.path.join(config.CONFIG_DIR, "poke")
@@ -171,7 +219,7 @@ def check():
                 _titles2(c)
         _titles2(app.pages["detection"].inner)
         for want in ("deep sleep after", "lock when away starts",
-                     "never"):
+                     "never", "refresh monitors"):
             assert want in _t2, \
                 "the detection tab lost the away card's %r" % want
         # THE HELPER-INSTALL VERB (Oct 16): the doorway row's button

@@ -65,6 +65,14 @@ def off_choice(bright, gdi):
     return vals
 
 TIP = {
+    "refresh": "the monitor rows in this window follow the desk: a "
+               "panel that joins or leaves is noticed within two "
+               "seconds and the cards re-read. The button forces the "
+               "same re-read by hand - an identical-model panel "
+               "swapped behind a KVM changes nothing observable, so "
+               "this is the belt the poll cannot wear. Nothing here "
+               "edits a setting you made: the rows show what the "
+               "config already says.",
     "mode": "off: the displays get the real power broadcast, exactly "
             "as always. dim: the panels STAY AWAKE and the app paints "
             "the dark - no cold re-enumeration on wake (the 16-38 s "
@@ -188,10 +196,46 @@ class _AwayMixin:
         self.away_deep_slider.grid(row=0, column=2, sticky="e")
         self._away_deep_say()
 
-        # one row per live panel, the profile list's idiom
-        self._away_rows = {}
+        # one row per live panel, the profile list's idiom - inside
+        # THEIR OWN frame: the desk can change under a living window
+        # (the owner's zero-monitor boot, Oct 17), and the rebuild
+        # discards and refills that frame without touching the
+        # desk-independent rows above or the countdown below. One
+        # idiom for the whole window now: _cam_rows'
+        # destroy-children-then-rebuild, the values live in cfg, the
+        # widgets are disposable.
+        self._away_row_frame = ctk.CTkFrame(box, fg_color="transparent")
+        self._away_row_frame.pack(anchor="w", fill="x")
         self._away_jobs = {}          # short -> {"timer", "rec"}
         self._away_says = {}          # short -> status word to show
+        self._away_fill_rows()
+        # the manual ear (owner, Oct 17): the poll catches a swap by
+        # its fingerprint within two seconds, but an identical-model
+        # panel behind a KVM changes NOTHING observable - the button
+        # is the belt the law cannot automate
+        brow = self._row(box, "panels come and go", TIP["refresh"],
+                         hint_chars=42)
+        self.away_refresh_btn = ctk.CTkButton(
+            brow, text="refresh monitors", width=140,
+            command=lambda: self.refresh_monitor_rows("away card button"),
+            **self.skin.secondary())
+        self.away_refresh_btn.grid(row=0, column=1, sticky="e")
+        self._away_cd = ctk.CTkLabel(box, text="", font=self.skin.font(12),
+                                     **self.skin.text_style("sub"))
+        self._away_cd.pack(anchor="e", pady=(2, 0))
+        self._away_cd_left = 0
+        self._away_cd_job = None            # the after-idle of ONE chain
+        self._away_sync()
+        self.after(900, self._away_poll)
+
+    def _away_fill_rows(self):
+        """Discard-and-refill (the _cam_rows idiom): every live panel
+        owns a row in the card's row frame; the settings the rows
+        edit come from cfg, so a rebuild cannot lie and cannot lose
+        an answer."""
+        for widget in self._away_row_frame.winfo_children():
+            widget.destroy()
+        self._away_rows = {}
         _live = wm.monitors()
         base = [m.get("short") or m.get("id") for m in _live]
         dupes = {b for b in base if base.count(b) > 1}
@@ -205,7 +249,8 @@ class _AwayMixin:
                 [(mm.get("x", 0), mm.get("y", 0), mm.get("w", 0),
                   mm.get("h", 0)) for mm in _live],
                 m.get("x", 0), m.get("y", 0), m.get("w", 0), m.get("h", 0))
-            row = self._row(box, label, TIP["row"], hint_chars=42)
+            row = self._row(self._away_row_frame, label, TIP["row"],
+                            hint_chars=42)
             vals = off_choice(wm._bright, m["gdi"])
             seg = ctk.CTkSegmentedButton(
                 row, values=vals, height=26, width=200,
@@ -261,7 +306,8 @@ class _AwayMixin:
                                     self._away_preview_clicked(s),
                                     **self.skin.secondary())
             preview.grid(row=0, column=4, sticky="e", padx=(6, 0))
-            say = ctk.CTkLabel(box, text="", font=self.skin.font(10),
+            say = ctk.CTkLabel(self._away_row_frame, text="",
+                               font=self.skin.font(10),
                                wraplength=350, justify="left", anchor="w",
                                **self.skin.text_style("sub"))
             self._away_rows[short] = {"row": row, "seg": seg,
@@ -269,13 +315,18 @@ class _AwayMixin:
                                       "preview": preview, "say": say,
                                       "gdi": m["gdi"]}
             say.pack(anchor="w")
-        self._away_cd = ctk.CTkLabel(box, text="", font=self.skin.font(12),
-                                     **self.skin.text_style("sub"))
-        self._away_cd.pack(anchor="e", pady=(2, 0))
-        self._away_cd_left = 0
-        self._away_cd_job = None            # the after-idle of ONE chain
         self._away_sync()
-        self.after(900, self._away_poll)
+
+    def _away_rebuild_rows(self):
+        """The desk moved, or the button said so. A live preview is
+        cancelled through its OWN cancel path first (the panel gets
+        its brightness back BEFORE its editor row dies - the row is
+        disposable, the applied effect is not), then discard-refill.
+        The _away_done guard for a gone row (r is None) covers the
+        after(0) hop the manual cancel takes."""
+        for short, job in list(self._away_jobs.items()):
+            self._away_expiry(short, job["rec"], manual=True)
+        self._away_fill_rows()
 
     def _away_countdown(self):
         """The off preview's seconds, on the settings window - the

@@ -55,7 +55,11 @@ Snooze, start with Windows, Quit).
 The window has five tabbed cards: detection, monitor profiles, power
 plan, oled, general. Everything applies live: controls write the
 config the engine reads every tick. And no camera opens until you
-say so: the detection tab's switch is consent, not decoration.
+say so: the detection tab's switch is consent, not decoration. The
+monitor rows follow your desk: plug something in or pull it out and
+every card re-reads within two seconds; the away card's refresh
+button forces the re-read by hand, for the swap a fingerprint cannot
+see (the identical twin behind a KVM).
 
 ## Features
 

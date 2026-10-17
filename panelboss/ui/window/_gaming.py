@@ -62,87 +62,12 @@ class _GamingMixin:
             self.gaming_switch.deselect()
         # one row per live panel: the game rate first, the rate the
         # desktop gets back second - both only among the rates that
-        # panel's driver offers
-        self.gaming_menus = {}
-        # the per-panel color selector (amendment 8) rides the
-        # desktop-rate row of every panel a PRECISE driver read says
-        # can do HDR; nowhere else - an absent selector is the
-        # honest answer, a grayed one is a lie awaiting a driver
-        # update
-        self.gaming_hdr_menus = {}
-        caps = wm.hdr_caps()
-        for m in wm.monitors():
-            # the driver's offered rates may be EMPTY (a silent or
-            # fictional driver - the RDP session display lists one
-            # made-up mode at best); the row still renders, because the
-            # enforcement reads desktop_hz/game_hz per panel regardless
-            # of whether the driver lists the rate (wanted_hz falls back
-            # to the panel's current mode). A saved rate rides its menu
-            # even when the driver stopped listing it, so a hand-set or
-            # previously-chosen rate is never invisible; junk entries
-            # die by name at the config normalize boundary (hzmap), the
-            # same law as every other map - the menu only ever shows
-            # what survived that filter.
-            hz = self._offered_hz(m)
-            gs = (g.get("game_hz") or {}).get(m["short"])
-            ds = (g.get("desktop_hz") or {}).get(m["short"])
-            game_hz = sorted(set(hz) | ({gs} if isinstance(gs, int) else set()))
-            desk_hz = sorted(set(hz) | ({ds} if isinstance(ds, int) else set()))
-            row = self._row(box, "%s - game rate" % m["short"],
-                            TIPS["gaming_rates"])
-            # 'VRR (pin max)' is not a rate: it declares the panel's
-            # scanout belongs to the driver's variable rate, so the
-            # watcher never flips it (and pins it at its max outside
-            # games). The card's first entry stays 'auto' - the game
-            # menu has no 'keep' (that is the desktop menu's word)
-            game_vals = ["auto", "VRR (pin max)"] + [str(v) for v in game_hz]
-            game_menu = SkewCombo(
-                row, values=game_vals, width=120,
-                command=lambda v, s=m["short"]:
-                self._gaming_game_hz(s, v),
-                **self.skin.menu_style())
-            stored = gs
-            # a stored 'vrr' shows as its menu label; anything else
-            # shows its own string, falling back to the default the
-            # same way the desktop menu does
-            shown = ("VRR (pin max)"
-                     if str(stored).strip().lower() == "vrr"
-                     else str(stored))
-            game_menu.set(shown if stored is not None
-                          and shown in game_vals[1:] else "auto")
-            game_menu.grid(row=0, column=1, sticky="e")
-            row = self._row(box, "%s - desktop rate" % m["short"],
-                            TIPS["gaming_rates"])
-            # 'keep' is not a rate, it is the ABSENCE of a rule - the
-            # menu must show that truth, not a fake '60' that config
-            # never agreed to (this exact lie is why the feature
-            # looked broken: menus showed 60, cfg said {}, nothing was
-            # configured, the watcher correctly held nothing)
-            desk_vals = ["keep"] + [str(v) for v in desk_hz]
-            desk_menu = SkewCombo(
-                row, values=desk_vals, width=100,
-                command=lambda v, s=m["short"]:
-                self._gaming_desk_hz(s, v),
-                **self.skin.menu_style())
-            stored = ds
-            desk_menu.set(str(stored) if stored is not None
-                          and str(stored) in desk_vals[1:] else "keep")
-            desk_menu.grid(row=0, column=1, sticky="e")
-            if caps.get(m["gdi"]):
-                hdr_menu = SkewCombo(
-                    row, values=[lab for lab, _ in HDR_SET_LABELS],
-                    width=90,
-                    command=lambda v, s=m["short"]:
-                    self._gaming_hdr(s, v),
-                    **self.skin.menu_style())
-                stored = (g.get("hdr") or {}).get(m["short"])
-                hdr_menu.set("hdr on" if stored is True
-                             else "hdr off" if stored is False
-                             else "keep")
-                hdr_menu.grid(row=0, column=2, sticky="e",
-                              padx=(theme.S_FIELD, 0))
-                self.gaming_hdr_menus[m["short"]] = hdr_menu
-            self.gaming_menus[m["short"]] = (game_menu, desk_menu)
+        # panel's driver offers. In their OWN frame: the desk can
+        # change under a living window (Oct 17), and the fill is
+        # discard-and-refill like the away rows.
+        self.gaming_row_frame = ctk.CTkFrame(box, fg_color="transparent")
+        self.gaming_row_frame.pack(anchor="w", fill="x")
+        self._gaming_fill_rows()
         # the two exe lists: one name per line, and the lines ARE the
         # list - the commit on focus-out is the save
         row = self._row(box, "games (one exe per line)",
@@ -201,6 +126,99 @@ class _GamingMixin:
         self.plan_entry.grid(row=0, column=1, sticky="e")
         self.plan_entry.bind("<<FocusOut>>", self._gaming_plan_commit)
 
+
+    def _gaming_fill_rows(self):
+        """Discard-and-refill (the _away/_cam_rows idiom): one rate
+        pair per live panel, into the card's row frame; the answers
+        come from cfg and the driver, never from the dying widgets."""
+        g = self.cfg.setdefault("gaming", {})
+        for widget in self.gaming_row_frame.winfo_children():
+            widget.destroy()
+        self.gaming_menus = {}
+        # the per-panel color selector (amendment 8) rides the
+        # desktop-rate row of every panel a PRECISE driver read says
+        # can do HDR; nowhere else - an absent selector is the
+        # honest answer, a grayed one is a lie awaiting a driver
+        # update
+        self.gaming_hdr_menus = {}
+        caps = wm.hdr_caps()
+        for m in wm.monitors():
+            # the driver's offered rates may be EMPTY (a silent or
+            # fictional driver - the RDP session display lists one
+            # made-up mode at best); the row still renders, because the
+            # enforcement reads desktop_hz/game_hz per panel regardless
+            # of whether the driver lists the rate (wanted_hz falls back
+            # to the panel's current mode). A saved rate rides its menu
+            # even when the driver stopped listing it, so a hand-set or
+            # previously-chosen rate is never invisible; junk entries
+            # die by name at the config normalize boundary (hzmap), the
+            # same law as every other map - the menu only ever shows
+            # what survived that filter.
+            hz = self._offered_hz(m)
+            gs = (g.get("game_hz") or {}).get(m["short"])
+            ds = (g.get("desktop_hz") or {}).get(m["short"])
+            game_hz = sorted(set(hz) | ({gs} if isinstance(gs, int) else set()))
+            desk_hz = sorted(set(hz) | ({ds} if isinstance(ds, int) else set()))
+            row = self._row(self.gaming_row_frame,
+                            "%s - game rate" % m["short"],
+                            TIPS["gaming_rates"])
+            # 'VRR (pin max)' is not a rate: it declares the panel's
+            # scanout belongs to the driver's variable rate, so the
+            # watcher never flips it (and pins it at its max outside
+            # games). The card's first entry stays 'auto' - the game
+            # menu has no 'keep' (that is the desktop menu's word)
+            game_vals = ["auto", "VRR (pin max)"] + [str(v) for v in game_hz]
+            game_menu = SkewCombo(
+                row, values=game_vals, width=120,
+                command=lambda v, s=m["short"]:
+                self._gaming_game_hz(s, v),
+                **self.skin.menu_style())
+            stored = gs
+            # a stored 'vrr' shows as its menu label; anything else
+            # shows its own string, falling back to the default the
+            # same way the desktop menu does
+            shown = ("VRR (pin max)"
+                     if str(stored).strip().lower() == "vrr"
+                     else str(stored))
+            game_menu.set(shown if stored is not None
+                          and shown in game_vals[1:] else "auto")
+            game_menu.grid(row=0, column=1, sticky="e")
+            row = self._row(self.gaming_row_frame,
+                            "%s - desktop rate" % m["short"],
+                            TIPS["gaming_rates"])
+            # 'keep' is not a rate, it is the ABSENCE of a rule - the
+            # menu must show that truth, not a fake '60' that config
+            # never agreed to (this exact lie is why the feature
+            # looked broken: menus showed 60, cfg said {}, nothing was
+            # configured, the watcher correctly held nothing)
+            desk_vals = ["keep"] + [str(v) for v in desk_hz]
+            desk_menu = SkewCombo(
+                row, values=desk_vals, width=100,
+                command=lambda v, s=m["short"]:
+                self._gaming_desk_hz(s, v),
+                **self.skin.menu_style())
+            stored = ds
+            desk_menu.set(str(stored) if stored is not None
+                          and str(stored) in desk_vals[1:] else "keep")
+            desk_menu.grid(row=0, column=1, sticky="e")
+            if caps.get(m["gdi"]):
+                hdr_menu = SkewCombo(
+                    row, values=[lab for lab, _ in HDR_SET_LABELS],
+                    width=90,
+                    command=lambda v, s=m["short"]:
+                    self._gaming_hdr(s, v),
+                    **self.skin.menu_style())
+                stored = (g.get("hdr") or {}).get(m["short"])
+                hdr_menu.set("hdr on" if stored is True
+                             else "hdr off" if stored is False
+                             else "keep")
+                hdr_menu.grid(row=0, column=2, sticky="e",
+                              padx=(theme.S_FIELD, 0))
+                self.gaming_hdr_menus[m["short"]] = hdr_menu
+            self.gaming_menus[m["short"]] = (game_menu, desk_menu)
+
+    def _gaming_rebuild_rows(self):
+        self._gaming_fill_rows()
 
     @staticmethod
     def _offered_hz(m):
