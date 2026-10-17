@@ -23,6 +23,8 @@ from ...config import (DIMMER_IDLE_CEIL, DIMMER_IDLE_DEFAULT,
                        DIMMER_LEVEL_DEFAULT, DIMMER_LEVEL_FLOOR,
                        DIMMER_RAMP_CEIL, DIMMER_RAMP_DEFAULT,
                        DIMMER_RAMP_FLOOR)
+from ...config import (VIDEODIM_IDLE_CEIL, VIDEODIM_IDLE_DEFAULT,
+                       VIDEODIM_IDLE_FLOOR)
 from ...config import HOLD_SEC_CEIL, HOLD_SEC_FLOOR, HOLD_SEC_DEFAULT
 from ...config import (JOG_CYCLE_CEIL, JOG_CYCLE_DEFAULT,
                    JOG_CYCLE_FLOOR, JOG_STEP_CEIL,
@@ -129,22 +131,20 @@ TIP_DIM = {
 
 
 TIP_COMP = {
-    "on": "arm movie theater mode: an idle desk dims everything but "
-          "the playing video - the frame lands around the rect and "
-          "the browser's chrome dims with it. off is the root law: "
-          "no file is read, nothing happens. the eye learns the "
-          "video's place from the buddy extension's native host: "
-          "no flag, no port, no debugger.",
+    "on": "arm movie theater mode: a desk still for the \"veil after\" "
+          "wait dims everything but the PLAYING video - the frame lands "
+          "around the rect and the browser's chrome dims with it. off "
+          "is the root law: no file is read, nothing happens. the eye "
+          "learns the video's place from the buddy extension's native "
+          "host: no flag, no port, no debugger.",
     "status": "live words: the consent rail and the buddy "
-              "extension's last click, refreshed on the dimmer's "
-              "own beat. the manual veil answers here too. a "
-              "missing answer reads as words, never a crash.",
-    "veil": "manual one-shot through the native host only: click "
-            "the buddy extension's icon on a video tab, then this. "
-            "PanelBoss reads what the host wrote to the app's own "
-            "doorway, folds the rect to the desk, and answers here "
-            "with what it saw (a rect, or no click). the dimmer's "
-            "next tick frames it.",
+              "extension's last push, refreshed on the dimmer's "
+              "own beat. the test-the-geometry answer lands here "
+              "too. a missing answer reads as words, never a crash.",
+    "veil": "test the geometry: measure the video on the clicked tab "
+            "right now, one shot, no waiting on the idle rail. this "
+            "is the calibration/test gesture - the FEATURE is the "
+            "automatic lane (playing AND still), not this button.",
     "path": "the doorway the extension's native host writes: the "
             "app's own folder, a fixed path, every browser, every "
             "download config. the extension's id is the only ACL - "
@@ -156,6 +156,12 @@ TIP_COMP = {
             "no host installed reads as the honest words - run "
             "extension\\host\\install_host.ps1 to register it. this "
             "line re-checks on the veil button and the switch.",
+    "delay": "veil after: the desk frames a PLAYING video only once "
+             "the input has been still this long - the dimmer's "
+             "\"dim after\" shape, one knob for the on-delay and the "
+             "re-arm (any mouse/keyboard move drops the veil until "
+             "this passes again). 0 means instant. a film's sound "
+             "never lifts the theater veils.",
 }
 
 
@@ -809,6 +815,30 @@ class _OledMixin:
                                         {}).get("on") is True \
             else self.oled_comp_box.deselect()
 
+        # "veil after" - the automatic lane's IDLE rail, the dimmer's
+        # idle_sec sibling (owner, Oct 16: "same as window dimming" and
+        # "if the user moves mouse veil drops until x secs"): a playing
+        # video frames the desk only when the input has been still this
+        # long. ONE knob for the on-delay and the re-arm - the dimmer's
+        # symmetric shape. Sound never lifts the theater veils.
+        row = self._row(box, "veil after", TIP_COMP["delay"],
+                        hint_chars=42)
+        self.oled_vee_delay_label = ctk.CTkLabel(
+            row, font=self.skin.font(12), **self.skin.text_style("sub"))
+        slider = ctk.CTkSlider(
+            row, from_=VIDEODIM_IDLE_FLOOR, to=VIDEODIM_IDLE_CEIL,
+            number_of_steps=VIDEODIM_IDLE_CEIL - VIDEODIM_IDLE_FLOOR,
+            width=180, command=self._oled_comp_delay_changed,
+            **self.skin.slider_style())
+        slider.set(int((self.cfg.get("videodim") or {}).get(
+            "idle_sec", VIDEODIM_IDLE_DEFAULT)))
+        slider.grid(row=0, column=1, sticky="e")
+        self.oled_vee_delay_label.configure(
+            text="%s s" % int((self.cfg.get("videodim") or {}).get(
+                "idle_sec", VIDEODIM_IDLE_DEFAULT)))
+        self.oled_vee_delay_label.grid(row=0, column=2, sticky="e",
+                                       padx=(theme.S_FIELD, 0))
+
         # THE DEBUG PORT IS GONE FROM THE SURFACE (owner, Oct 16,
         # second instruction): the per-family checkboxes made the dead
         # route look alive - the flag path restarted a browser with a
@@ -816,10 +846,10 @@ class _OledMixin:
         # The native-messaging host answers instead: the extension's id
         # is the only ACL, the host writes the app's doorway.
 
-        row = self._row(box, "veil this video", TIP_COMP["veil"],
+        row = self._row(box, "test the geometry", TIP_COMP["veil"],
                         hint_chars=42)
         self.oled_comp_btn = ctk.CTkButton(
-            row, text="veil now", height=26, width=120,
+            row, text="measure now", height=26, width=120,
             command=self._oled_comp_veil, **self.skin.secondary())
         self.oled_comp_btn.grid(row=0, column=1, sticky="e")
         self.oled_comp_say = ctk.CTkLabel(row, font=self.skin.font(11),
@@ -870,6 +900,13 @@ class _OledMixin:
         vd["on"] = bool(self.oled_comp_box.get())
         self._save()
         self._comp_words(force=True)
+
+    def _oled_comp_delay_changed(self, value):
+        # [videodim].idle_sec - the automatic lane's ONE idle knob (the
+        # dimmer's idle_sec sibling): on-delay and re-arm, symmetric.
+        self.cfg.setdefault("videodim", {})["idle_sec"] = int(round(value))
+        self.oled_vee_delay_label.configure(text="%s s" % round(value))
+        self._save()
 
     def _oled_comp_veil(self):
         # the one-shot answers in the status line itself (the wash

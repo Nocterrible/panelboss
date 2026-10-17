@@ -47,16 +47,22 @@ RECT_PATH = os.path.join(os.environ.get("APPDATA", ""), "PanelBoss",
 
 # the self-describing answer: what this host understands. PanelBoss
 # reads this the same way any other consumer would - discover what the
-# API can send, never assume a file on a shelf.
+# API can send, never assume a file on a shelf. "auto" announces the
+# AUTOMATIC lane (v0.4): the content script pushes on video play /
+# pause / ended with no click; "click" is the manual calibration
+# gesture. The veil fields list the full row either lane ships.
 CAPABILITIES = {
     "op": "capabilities",
     "protocol": "panelboss-v1",
     "host": HOST_NAME,
     "ops": ["capabilities", "veil"],
+    "auto": {"trigger": "video play", "pause": "veil lifts",
+             "ended": "veil lifts"},
     "veil": {
         "fields": ["rect", "dpr", "paused", "scroll", "view",
-                   "bounds", "family", "ts"],
+                   "bounds", "family", "lane", "ts"],
         "rect": ["left", "top", "width", "height"],
+        "lane": ["click", "auto"],
     },
 }
 

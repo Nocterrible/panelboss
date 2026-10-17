@@ -1,9 +1,28 @@
 {
   "manifest_version": 3,
   "name": "PanelBoss Companion",
-  "version": "0.3.0",
-  "description": "Measure the playing video on a page and hand the geometry to PanelBoss's Movie theater mode through a local native host. No network calls, no timers.",
+  "version": "0.4.0",
+  "description": "Frame the playing video for PanelBoss's Movie theater mode: a video starts playing and the desk dims around it, no click. Local native host only - no network, no timers.",
   "permissions": ["scripting", "activeTab", "nativeMessaging"],
   "background": { "service_worker": "background.js" },
-  "action": { "default_title": "PanelBoss: veil this video" }
+  "action": { "default_title": "PanelBoss: veil this video" },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.twitch.tv/*",
+        "*://*.vimeo.com/*",
+        "*://*.dailymotion.com/*",
+        "*://*.netflix.com/*",
+        "*://*.disneyplus.com/*",
+        "*://*.primevideo.com/*",
+        "*://*.hulu.com/*",
+        "*://*.max.com/*",
+        "*://*.peacocktv.com/*",
+        "*://*.paramountplus.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }

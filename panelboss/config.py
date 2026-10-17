@@ -458,6 +458,26 @@ DEFAULTS = {
                                    # (a vanished rect is a stopped
                                    # video: the dimmer's ramp retracts
                                    # the frame); clamped 0..60
+        "idle_sec": 15,            # THE AUTOMATIC LANE'S CONJUNCTION
+                                   # (owner, Oct 16: "same as window
+                                   # dimming"): the theater veil frames
+                                   # the video only when a video is
+                                   # PLAYING AND the desk input has
+                                   # been still this long - the
+                                   # dimmer's idle_sec sibling, one
+                                   # knob, pointer/keyboard only (a
+                                   # film's SOUND never lifts the
+                                   # theater veils - sound is the
+                                   # movie's whole context). 15 s is
+                                   # the honest default: the mouse
+                                   # goes still while the intro runs,
+                                   # and a quick scrub doesn't black
+                                   # the screen; 0 = instant, clamped
+                                   # 0..300 like the sibling. The
+                                   # click lane (the demoted
+                                   # test-the-geometry gesture) never
+                                   # waits on this - it measures
+                                   # immediately.
     },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
@@ -1067,17 +1087,23 @@ VIDEODIM_MIN_FLOOR = 0             # a zero min means "trust every
 VIDEODIM_MIN_CEIL = 4_000_000      #   rect" - legal, not a mistake
 VIDEODIM_GRACE_FLOOR = 0
 VIDEODIM_GRACE_CEIL = 60
+VIDEODIM_IDLE_FLOOR = 0            # the "veil after stillness" rail (the
+VIDEODIM_IDLE_CEIL = 300           #   dimmer's idle_sec sibling): 0 =
+                                   #   instant, 300 = 5 min (past it the
+                                   #   rail is dead pixels)
+VIDEODIM_IDLE_DEFAULT = 15
 
 
 def normalize_videodim(value):
-    """[videodim] in its in-memory shape: {on, min_rect_px, grace_s}.
-    The same honesty law as normalize_dimmer, mirrored: a bad on warns
-    and folds to False (the default-off root - the feature sleeps until
-    the owner wakes it), the rails clamp in silence. The retired keys
-    (enabled / flag_families / sites, the debug-flag rail) are dropped
-    here: a config written before the Oct-16 retirement still loads,
-    but the words no longer shape anything - the companion's geometry
-    is the extension's API, not a flagged browser."""
+    """[videodim] in its in-memory shape: {on, min_rect_px, grace_s,
+    idle_sec}. The same honesty law as normalize_dimmer, mirrored: a bad
+    on warns and folds to False (the default-off root - the feature
+    sleeps until the owner wakes it), the rails clamp in silence. The
+    retired keys (enabled / flag_families / sites, the debug-flag rail)
+    are dropped here: a config written before the Oct-16 retirement
+    still loads, but the words no longer shape anything - the
+    companion's geometry is the extension's API, not a flagged browser.
+    """
     value = value if isinstance(value, dict) else {}
     on = value.get("on", False)
     if not isinstance(on, bool):
@@ -1095,7 +1121,14 @@ def normalize_videodim(value):
     except (TypeError, ValueError):
         grace = DEFAULTS["videodim"]["grace_s"]
     grace = max(VIDEODIM_GRACE_FLOOR, min(VIDEODIM_GRACE_CEIL, grace))
-    return {"on": on, "min_rect_px": mins, "grace_s": grace}
+    try:
+        idle = int(value.get("idle_sec",
+                             DEFAULTS["videodim"]["idle_sec"]))
+    except (TypeError, ValueError):
+        idle = DEFAULTS["videodim"]["idle_sec"]
+    idle = max(VIDEODIM_IDLE_FLOOR, min(VIDEODIM_IDLE_CEIL, idle))
+    return {"on": on, "min_rect_px": mins, "grace_s": grace,
+            "idle_sec": idle}
 
 
 def _live_shorts():

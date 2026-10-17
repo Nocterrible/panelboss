@@ -18,6 +18,7 @@ host directly (the owner's mandate, closed for real Oct 16: the host's
 self-description is READ, not assumed).
 """
 
+import os
 import time
 
 from . import nmhost, videoeye
@@ -28,10 +29,39 @@ from . import nmhost, videoeye
 # never a stored list.
 FAMILIES = ("chrome", "edge", "opera_gx")
 
-# the exact no-bridge words (the button's and the say line's): pinned
-# by scripts/companion_test.py so they never drift under the card
+# the exact words the card's say line answers, each a DISTINCT reason -
+# the owner's Oct 16 catch: a stale row shared its words with a
+# malformed one, and the absent doorway read like a fault, not an
+# installation step. Three reasons, three sentences:
 NO_BRIDGE = ("no companion click yet - the buddy's icon writes it "
              "on click")
+NO_BUDDY = ("the buddy's helper is not installed - load the extension "
+            "and run extension\\host\\install_host.ps1")
+JUNK_WORDS = "the companion answered junk"
+# the staleness horizon: a row older than this reads as "hours old",
+# not "live". The eye's grace_s (default 3 s) lifts the veil long
+# before; this is the CARD's honest age, sized to the owner's sense of
+# "I watched a video yesterday and the card still pretends it is live".
+STALE_HORIZON = 3600.0      # s: one hour - past this, "hours old"
+
+
+def _reason(now):
+    """Why the card's say line says what it says, as one of three
+    words - absent (no doorway), junk (unreadable), stale (readable but
+    older than STALE_HORIZON), fresh (readable and recent). The eye's
+    own _read returns None for BOTH absent and junk, so this module
+    stats the file itself to tell those apart - a fault must not wear
+    an installation story's words."""
+    try:
+        age = now - os.path.getmtime(videoeye.RECT_PATH)
+    except OSError:
+        return "absent", None
+    row = bridge_state()
+    if not isinstance(row, dict):
+        return "junk", None
+    if age > STALE_HORIZON:
+        return "stale", row
+    return "fresh", row
 
 # the off words, carrier of the default-off law: off means the eye
 # never reads, the click is not honored, and the card says so plainly
@@ -48,10 +78,10 @@ def door_dir():
 
 def caps_words(force=False):
     """The capability-discovery line, from asking the host directly
-    (nmhost.capabilities): what the API CAN send - the ops and the veil
-    fields - or the honest not-installed words when host.json is absent
-    or the host is wedged. force re-asks (the card's explicit re-check).
-    Never raises: a dead host is words, not a crash."""
+    (nmhost.capabilities): what the API CAN send - the ops, the veil
+    fields, and whether the buddy pushes on its own (the "auto" lane) -
+    or the honest not-installed words when host.json is absent. force
+    re-asks (the card's explicit re-check). Never raises."""
     caps = nmhost.capabilities(force=force)
     if caps is None:
         return nmhost.NOT_INSTALLED
@@ -68,6 +98,9 @@ def _caps_line(caps):
                    if isinstance(x, str))
     line = "buddy API: " + ", ".join(opnames) if opnames else \
         "buddy API: (no ops)"
+    if isinstance(caps.get("auto"), dict):
+        line += ", auto on play"    # the v0.4 lane: the buddy pushes
+                                     # on its own, no click
     if fields:
         line += " - veil sends " + "/".join(fields)
     return line
@@ -106,27 +139,39 @@ def _fmt(v):
     return str(int(v)) if isinstance(v, (int, float)) else "?"
 
 
-def _bridge_words(row):
-    """A row (or None) as honest words; every key read with a default,
-    so a row written by a future extension build raises neither the
-    card nor the poll."""
+def _bridge_words(reason, row):
+    """A reason word + row as the card's honest say line. Each reason
+    is its own sentence - a stale row does not wear a malformed one's
+    words, and the absent doorway reads as an installation step, not a
+    fault."""
+    if reason == "absent":
+        return NO_BUDDY
+    if reason == "junk":
+        return JUNK_WORDS
+    if reason == "stale":
+        return ("the last geometry is hours old - play a video or "
+                "click the buddy")
     if not isinstance(row, dict):
-        return NO_BRIDGE
+        return NO_BUDDY
     r = row.get("rect") if isinstance(row.get("rect"), dict) else {}
-    return "companion: %sx%s at %s,%s%s" % (
+    lane = " (auto)" if row.get("lane") == "auto" else ""
+    return "companion: %sx%s at %s,%s%s%s" % (
         _fmt(r.get("width")), _fmt(r.get("height")),
         _fmt(r.get("left")), _fmt(r.get("top")),
-        " (paused)" if row.get("paused") else "")
+        " (paused)" if row.get("paused") else "", lane)
 
 
 def say(cfg):
     """One line of words for the card's say line, from the rail alone.
     Junk config reads as the off words, never an exception; off answers
     before any file is touched - the default-off root binds the card
-    too: no reads, nothing."""
+    too: no reads, nothing. On, the line names the reason: not installed
+    (an instruction), junk (a fault), stale (self-healing, plays on the
+    next push), or the fresh geometry."""
     if not on(cfg):
         return OFF_WORDS
-    return _bridge_words(bridge_state())
+    reason, row = _reason(time.monotonic())
+    return _bridge_words(reason, row)
 
 
 def veil_now(cfg):
@@ -138,15 +183,22 @@ def veil_now(cfg):
     state freshest-wins so the dimmer's NEXT tick frames it: the
     on-gate and the liveness law stay the engine's to apply, re-checked
     by nobody here. Answers the words the card's say line shows: a
-    rect, or NO_BRIDGE."""
-    row = bridge_state()
+    rect, or the reason (absent/junk/stale)."""
+    reason, row = _reason(time.monotonic())
+    if reason == "absent":
+        return NO_BUDDY
+    if reason == "junk":
+        return JUNK_WORDS
+    if reason == "stale":
+        return ("the last geometry is hours old - play a video or "
+                "click the buddy")
     if not isinstance(row, dict):
-        return NO_BRIDGE
+        return NO_BUDDY
     fam = row.get("family") if row.get("family") in FAMILIES \
         else FAMILIES[0]
     rect = videoeye._rect_px(row)
     if rect is None:
-        return "the companion answered junk - no rect to veil"
+        return "the companion's row carries no placeable rect"
     geo = "rect %sx%s at %s,%s" % (rect[2], rect[3], rect[0], rect[1])
     if not on(cfg):
         return "saw the " + geo + " - the eye is unarmed, no frame " \

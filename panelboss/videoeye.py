@@ -53,7 +53,6 @@ def door_path(env=None):
 
 RECT_PATH = door_path()
 
-TICK = 0.5                 # s: one doorway read per this, never more
 DEFAULT_GRACE = 3.0        # s: [videodim].grace_s rules
 DEFAULT_MIN = 200000       #   the shipped defaults it normalizes to
 
@@ -86,6 +85,7 @@ def _read(now, wall):
                "scroll": row.get("scroll") or [0, 0],
                "view": row.get("view"),
                "family": row.get("family"),
+               "lane": row.get("lane") or "auto",
                "bounds": row.get("bounds"),
                "ts": now - max(0.0, wall - mtime), "src": "companion"}
     except (ValueError, KeyError, TypeError):
@@ -162,10 +162,27 @@ def tick(cfg, now):
 
 def video_rect(cfg, now=None):
     """The dimmer's door: the live PHYSICAL rect (x, y, w, h) of a
-    playing video - not paused, big enough for min_rect_px (the
-    ad-banner line of defense), fresh within grace_s. Any failure
-    anywhere is None; the dimmer holds it one tick and its ramp
-    retracts the veil (the vanished rect is a stopped video)."""
+    PLAYING video - not paused, big enough for min_rect_px (the
+    ad-banner line of defense). This door knows ONE thing: "is a video
+    playing, and where." The INPUT-IDLE conjunction (the theater veil
+    requires the desk still) is the DIMMER's law, applied at
+    dimmer._live_rect where the idle clock lives - not here; the eye
+    must never grow a timer.
+
+    Two lanes, two freshness laws:
+      - CLICK (lane "click"): a one-shot snapshot, good for grace_s -
+        the owner's demoted test-the-geometry gesture.
+      - AUTO (lane "auto"): the extension pushes on play AND pause/end;
+        a playing video emits no further events, so a paused:false auto
+        row is a durable STATE, not a snapshot. It stays live until a
+        paused:true push (pause/end) or the app restarts - no short
+        grace ages out a movie mid-roll. A browser that dies mid-play
+        without a pause/end leaves the row; the DIMMER's idle gate
+        drops the frame the moment the owner touches the desk, so the
+        stale row costs nothing.
+
+    Any failure anywhere is None; the dimmer holds it one tick and its
+    ramp retracts the veil."""
     now = time.monotonic() if now is None else now
     vd = cfg.get("videodim") or {}
     if not vd.get("on"):
@@ -175,10 +192,13 @@ def video_rect(cfg, now=None):
     best = None
     for fam, st in _STATE.items():
         row = st.get("row")
-        if row is None or now - st["ts"] > grace:
+        if row is None:
             continue
         if row.get("paused"):
-            continue
+            continue                    # pause/end lifts immediately
+        if row.get("lane") == "click":
+            if now - st["ts"] > grace:
+                continue                # a snapshot ages out on grace
         rect = _rect_px(row)
         if rect is None or rect[2] * rect[3] < mins:
             continue

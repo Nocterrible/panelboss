@@ -54,32 +54,33 @@ videoeye.time = CLK
 
 def row(x=100, y=200, w=800, h=450, dpr=1, paused=False,
         scroll=(0, 0), view=(1584, 649), bounds=(600, 200, 1600, 900),
-        family="chrome", age=0.0):
+        family="chrome", age=0.0, lane="click"):
     return {"rect": {"left": x, "top": y, "width": w, "height": h},
             "dpr": dpr, "paused": paused, "scroll": list(scroll),
             "view": list(view),
             "bounds": {"left": bounds[0], "top": bounds[1],
                        "width": bounds[2], "height": bounds[3]},
-            "family": family, "ts": CLK.wall - age}
+            "family": family, "lane": lane, "ts": CLK.wall - age}
 
 
 def door(rect, view=(1920, 1080), bounds=(0, 0, 1920, 1080), age=0.0,
-         dpr=1, paused=False, family="chrome"):
+         dpr=1, paused=False, family="chrome", lane="click"):
     body = {"rect": {"left": rect[0], "top": rect[1],
                      "width": rect[2], "height": rect[3]},
             "dpr": dpr, "paused": paused, "scroll": [0, 0],
             "view": list(view),
             "bounds": {"left": bounds[0], "top": bounds[1],
                        "width": bounds[2], "height": bounds[3]},
-            "family": family, "ts": CLK.wall - age}
+            "family": family, "lane": lane, "ts": CLK.wall - age}
     with open(videoeye.RECT_PATH, "w", encoding="utf-8") as f:
         f.write(json.dumps(body) + "\n")
     stamp = CLK.wall - age
     os.utime(videoeye.RECT_PATH, (stamp, stamp))
 
 
-def vcfg(on=True, grace=3, mins=200000):
-    return {"videodim": {"on": on, "min_rect_px": mins, "grace_s": grace}}
+def vcfg(on=True, grace=3, mins=200000, delay=0):
+    return {"videodim": {"on": on, "min_rect_px": mins, "grace_s": grace,
+                         "delay_s": delay}}
 
 
 # ---------------------------------------------------------------- pins
@@ -159,6 +160,30 @@ assert videoeye.video_rect(vcfg(), CLK.monotonic()) is not None
 CLK.advance(1.5)
 assert videoeye.video_rect(vcfg(), CLK.monotonic()) is None
 ok("a stale doorway holds the rect for grace_s and lets it go after")
+
+# 8b. the AUTO lane is a durable STATE, not a snapshot: a paused:false
+#     auto row does NOT age out on grace_s - a movie plays for minutes
+#     with no further event, and the eye must not retract it. The IDLE
+#     conjunction (playing AND still) lives in the DIMMER, not here.
+videoeye._STATE.clear()
+door((100, 200, 800, 450), bounds=(600, 200, 1600, 900), lane="auto")
+videoeye.tick(vcfg(), CLK.monotonic())
+assert videoeye.video_rect(vcfg(), CLK.monotonic()) is not None
+CLK.advance(30.0)               # way past grace_s - the movie still plays
+assert videoeye.video_rect(vcfg(), CLK.monotonic()) is not None
+ok("an auto playing row persists past grace_s (a movie is a state, "
+   "not a 3 s snapshot); the idle gate lives in the dimmer")
+
+# 8c. the CLICK lane is a snapshot: it ages out on grace_s (measure
+#     once, see the rect - the demoted test-the-geometry gesture)
+videoeye._STATE.clear()
+door((100, 200, 800, 450), bounds=(600, 200, 1600, 900), lane="click")
+videoeye.tick(vcfg(), CLK.monotonic())
+assert videoeye.video_rect(vcfg(), CLK.monotonic()) is not None
+CLK.advance(4.0)
+assert videoeye.video_rect(vcfg(), CLK.monotonic()) is None
+ok("a click snapshot ages out on grace_s - the test gesture measures "
+   "once and goes")
 
 # 9. freshest across families wins: the newest family's row is the one
 #    the dimmer frames (the extension swings a family on its UA tell)
@@ -275,13 +300,15 @@ ok("no live rect means no negative keys: the plain dimmer behaves as "
 
 # --- config: the rails at the boundary --------------------------------
 n = config.normalize_videodim({"on": "yes", "min_rect_px": 9e9,
-                               "grace_s": -2})
+                               "grace_s": -2, "delay_s": 9999})
 assert n["on"] is False and n["min_rect_px"] == 4_000_000 \
-    and n["grace_s"] == 0
+    and n["grace_s"] == 0 and n["delay_s"] == 300
 d = config.normalize_videodim({})
-assert d == {"on": False, "min_rect_px": 200000, "grace_s": 3}
-ok("normalize_videodim: bad on warns and folds, the rails clamp, "
-   "absent is dark")
+assert d == {"on": False, "min_rect_px": 200000, "grace_s": 3,
+             "delay_s": 3}
+assert config.normalize_videodim({"delay_s": -5})["delay_s"] == 0
+ok("normalize_videodim: bad on warns and folds, the rails clamp "
+   "(delay_s 0..300, absent = 3), absent is dark")
 
 # --- the wire: the manifest carries the native-messaging law ----------
 MAN = json.load(open(os.path.join("extension", "manifest.json"),
@@ -290,15 +317,20 @@ assert MAN["manifest_version"] == 3
 assert set(MAN["permissions"]) == {"scripting", "activeTab",
                                    "nativeMessaging"}
 assert "host_permissions" not in MAN
-ok("the manifest says what the native-messaging host uses: scripting + "
-   "activeTab + nativeMessaging, no <all_urls>, no downloads, no tabs")
+cs = MAN.get("content_scripts")
+assert cs and cs[0]["js"] == ["content.js"]
+assert "://*.youtube.com/*" in cs[0]["matches"]
+assert "<all_urls>" not in cs[0]["matches"]
+ok("the manifest carries the content script on a SITE LIST (no "
+   "<all_urls>), scripting + activeTab + nativeMessaging only")
 BG = open(os.path.join("extension", "background.js"),
           encoding="utf-8").read()
 assert "function measureVideo()" in BG
-assert "eval(" not in BG and "eval(" not in BG
+assert "eval(" not in BG
 assert "chrome.runtime.connectNative" in BG
-ok("the measure is a static bundled function (no eval call) handed to "
-   "the native host over connectNative")
+assert "onMessage" in BG and "lane" in BG
+ok("the measure is a static bundled function handed to the native host, "
+   "and the background folds the content-script's automatic lane")
 
 if os.path.exists(videoeye.RECT_PATH):
     os.remove(videoeye.RECT_PATH)

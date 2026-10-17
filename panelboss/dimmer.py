@@ -451,12 +451,33 @@ class Veils:
         paused desk, a raising eye - all read as "no rect". The
         liveness law itself (not paused, big enough, fresh within
         grace) is the eye's: videoeye.video_rect applies the
-        [videodim] rails, so this FSM re-checks nothing."""
+        [videodim] rails, so this FSM re-checks nothing.
+
+        THE AUTOMATIC CONJUNCTION (owner, Oct 16): the theater veil
+        frames the video only when it is PLAYING AND the desk has been
+        input-still for [videodim].idle_sec - the dimmer's own idle
+        spell, one knob, same clock (self._idle()). Sound is EXEMPT:
+        a film's audio must not lift the theater veils, so the lift
+        gate is the POINTER/KEYBOARD idle clock (GetLastInputInfo) and
+        NOTHING else - the frame pieces are painted directly into
+        `qualified` (the tick's frame loop), bypassing the `_exempt`
+        sound ledger that lifts the PLAIN per-window veils. The dimmer
+        pause still outranks the frame (it is the whole-field law).
+        """
         if self._video is None or _PAUSED or not (
                 (cfg.get("videodim") or {}).get("on")):
             return None                  # pause outranks the frame too
             #                            # (the whole-field law, the
             #                            # always rows' own shape)
+        idle_s = float((cfg.get("videodim") or {}).get(
+            "idle_sec", 15))         # 15 = VIDEODIM_IDLE_DEFAULT (the
+                                     #   constant's twin here; this
+                                     #   module imports config lazily)
+        try:
+            if self._idle() < idle_s:
+                return None          # the desk is being USED: no frame
+        except Exception:
+            return None              # a dead idle clock is a dead frame
         try:
             return self._video(cfg, now)
         except Exception:
