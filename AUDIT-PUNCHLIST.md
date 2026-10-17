@@ -1880,3 +1880,11 @@ from re-paying tuition.
 - STILL OPEN after the fix: owner visual on both secondaries; then the owed run_all.ps1 at push.
 
 - OPEN (found by docs wave Oct 17): Tray.set_state (state-color hook, tray.py) has ZERO callers - the palette exists, the wiring does not: the icon stays green through away/pause states. Small wave: call it from the state machine transitions (dimmer pause, away enter/exit, theater active?). Also parked: public repo URL placeholder in README (git clone <this repo>) until the repo is made public.
+
+
+## Oct 17 - MOVIE THEATER MODE: OWNER STAMP (UAT verdict)
+
+Owner, verbatim: 'Movie theater mode is a ship with my own stamp - other systems that I can't personally test aside.' Scope of the stamp: THIS desk (Win11 RDP, GX maximized, 3840x2160 dpr1 + two secondaries with divergent taskbar states), the full chain: extension -> host (webrect) -> fold -> ring/per-monitor veils -> z-law (still at rest) -> idle conjunction 1s floor -> fade default-off. NOT stamped (owner's own exclusion): other systems (dpi-scaled desks, other browsers' render-widget class names, mixed-DPI), and the non-theater systems he never UAT'd in this pass (gaming hz/hdr automation, faces, placement restore internals). Verification spine: dimmer 50 / videoeye 33 / companion 47 pins, gauntlet 51/51 ALL GREEN at 10240f1, guard scripts/theater_live.py remains the live-desk tripwire for the z-law class.
+
+Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wipe fresh-install burn-in, store submission (zip READY: dist\panelboss-companion-0.4.2.zip - unchanged since the fixer wave, extension files identical), owner icon art -> make_icon.py, README screenshots placeholders -> art, GH release + public repo, Reddit, hyper care.
+
