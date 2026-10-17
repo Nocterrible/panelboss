@@ -3,9 +3,15 @@
   "name": "PanelBoss Companion",
   "version": "0.4.0",
   "description": "Frame the playing video for PanelBoss's Movie theater mode: a video starts playing and the desk dims around it, no click. Local native host only - no network, no timers.",
-  "permissions": ["nativeMessaging"],
-  "background": { "service_worker": "background.js" },
-  "action": { "default_title": "PanelBoss: veil this video" },
+  "permissions": [
+    "nativeMessaging"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "PanelBoss: veil this video"
+  },
   "content_scripts": [
     {
       "matches": [
@@ -21,8 +27,11 @@
         "*://*.peacocktv.com/*",
         "*://*.paramountplus.com/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu0jVn7qd7JTUbwgmMdVEFr6vqndReh//Hl35XL3d7hsZG1Ef+eTMlw1k0D4i5tFZlizsZBFowyP8o6E1hE0+T3/5iwmAXvWPOYsBC8mii54TFb0m+5yfuxQwOtlw9WAyJjuKjJlpEs5Utx1STK96kEBhzK48X/NG70ANmAbUhbjEaBo9gcALjOZ9wQ5h3SCMPi37u5N9MW3hfjGIXpRfdmgyWB93PXADqwAC9OisJRDyfJgHAVT9cGj6hmDmDnYYcBoIwGthUEEteDNiH8URZFS29mspMD0iLLhCTAgBKy1BNAKbeq9DU6IYEqwHfanIEGBnI0eont6M2017xMUBbQIDAQAB"
 }

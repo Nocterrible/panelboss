@@ -228,24 +228,61 @@ finally:
     nmhost._cache.update(until=0.0, caps=None)
 
 # --- the helper-install law (Oct 16): the browser's id derivation and
-# the app's one-click. The id of an UNPACKED extension is not an
-# invention: SHA-256 over the absolute load path exactly as the
-# browser normalizes it (drive letter UPPERCASE, backslashes, UTF-8
-# bytes), first 16 bytes, each nibble mapped to 'a'+nibble -> the
-# 32-char a-p id. THE KNOWN VECTOR (the architect's, pinned first):
-#   F:\Projects\panelboss-reskin\extension
+# the app's one-click. TWO BRANCHES (Oct 16 key pin): if the manifest
+# carries "key" (base64 SPKI DER), the id is SHA-256 over the DECODED
+# KEY BYTES, first 16, nibbles a-p - permanent across folders,
+# machines, and the store. Only keyless folders use the PATH law:
+# SHA-256 over the absolute load path exactly as the browser
+# normalizes it (drive letter UPPERCASE, backslashes, UTF-8 bytes).
+# THE PERMANENT ID (key branch, companion_key.txt):
+#   extension/ (manifest carries the key)
+#     -> feolhiokchmpphlhllagimnilceldegk
+# PATH-branch vectors, pinned before the key existed and still true
+# of keyless folders (the first is the historical value of THIS folder
+# while it was keyless):
+#   sha256(rb"F:\Projects\panelboss-reskin\extension")[:16], a-p
 #     -> jagfnepkfnioappmbloibkcjofhgaaai
-# SECOND VECTOR, derived with the same law before the pin existed:
 #   sha256(b"F:\workspace").digest()[:16], nibbles a-p
 #     -> jeafefjdigahcngkajpclimdpjjamadc
 check(nmhost.derive_unpacked_id(
     r"F:\Projects\panelboss-reskin\extension")
-    == "jagfnepkfnioappmbloibkcjofhgaaai",
-    "the KNOWN VECTOR pins the id law (the browser derives the same "
-    "way; disagree with this and YOUR implementation is wrong)")
+    == "feolhiokchmpphlhllagimnilceldegk",
+    "the KEY BRANCH pins the permanent id: the manifest's key wins "
+    "over the path, so the store copy, this folder, and every machine "
+    "agree on one id (the browser derives the same way)")
+check(nmhost.derive_key_id(
+    r"F:\Projects\panelboss-reskin\extension")
+    == "feolhiokchmpphlhllagimnilceldegk",
+    "the key branch answers the id on its own, not only as a "
+    "fallthrough inside the path branch")
 check(nmhost.derive_unpacked_id(r"F:\workspace")
       == "jeafefjdigahcngkajpclimdpjjamadc",
-      "the second vector pins the same law on a second path")
+      "the path-branch vector pins the fallback law on a keyless dir "
+      "(F:\\workspace carries no manifest.json)")
+check(nmhost.derive_key_id(r"F:\workspace") is None,
+      "a keyless folder answers None from the key branch - the "
+      "fallthrough to the path law is the browser's own behavior")
+import json as _json
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "..", "extension", "manifest.json"),
+          encoding="utf-8") as _m:
+    _real_key = _json.load(_m)["key"]
+_with_key = tempfile.mkdtemp(prefix="panelboss_keydir_")
+with open(os.path.join(_with_key, "manifest.json"), "w") as _f:
+    _json.dump({"key": _real_key}, _f)
+_bad_key = tempfile.mkdtemp(prefix="panelboss_badkey_")
+with open(os.path.join(_bad_key, "manifest.json"), "w") as _f:
+    _f.write("{ not json")
+check(nmhost.derive_unpacked_id(_with_key)
+      == nmhost.derive_unpacked_id(
+          r"F:\Projects\panelboss-reskin\extension"),
+      "folder independence: a SYNTHETIC dir carrying the same key "
+      "derives the same id - this is the property that makes the pin "
+      "survive folder moves and the store")
+check(nmhost.derive_unpacked_id(_bad_key)
+      == nmhost.derive_unpacked_id(os.path.abspath(_bad_key)),
+      "a broken manifest falls through to the path law, never raises "
+      "- the same answer the keyless folder gets")
 check(nmhost.derive_unpacked_id(r"f:\workspace")
       == "jeafefjdigahcngkajpclimdpjjamadc",
       "the casing law is the NORMALIZATION, not the caller's "

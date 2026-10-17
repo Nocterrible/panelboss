@@ -36,6 +36,7 @@ fresh host's own reply, the probe being the proof-of-install. The
 card's words live in companion.py; the fold lives in videoeye.py.
 """
 
+import base64
 import hashlib
 import json
 import os
@@ -78,21 +79,32 @@ EXT_ID_RE = re.compile(r"^[a-p]{32}$")
 
 
 def derive_unpacked_id(ext_dir):
-    """The browser's unpacked-extension id for `ext_dir`, or None when
-    the dir cannot be normalized to a path. The law is on the path as
-    the browser LOADS it: the absolute path string, backslashes, the
-    drive letter as the disk spells it, UTF-8 bytes (abspath - which
-    absolutizes and collapses, but never case-folds: the on-disk
-    spelling IS the load spelling, and the id is stable per location,
-    so is the manifest's allowed_origins; move the load path and the
-    browser re-derives, and so do we). Quoting the derivation the pin
-    must not drift from:
+    """The browser's extension id for the folder `ext_dir`, or None when
+    the dir cannot be normalized. THE FULL CHROMIUM LAW HAS TWO BRANCHES
+    (learned Oct 16, when the keypair was generated for the store
+    submission): if manifest.json carries "key" (base64 DER of the
+    SubjectPublicKeyInfo), the id derives from THOSE BYTES - sha256 of
+    the decoded DER, first 16 bytes, nibble-mapped a-p - which is what
+    makes the id survive folder moves, machines, and the store itself.
+    Only WITHOUT a key does the browser fall back to the PATH law: the
+    absolute path string as loaded, UTF-8 bytes (abspath - which
+    absolutizes and collapses but never case-folds: the on-disk spelling
+    IS the load spelling; move the load path and the browser re-derives,
+    and so do we - until a key pins it). The pinned manifest now carries
+    the key, so this folder's id is the key-branch value:
+
+        ->  feolhiokchmpphlhllagimnilceldegk   (permanent, companion_key.txt)
+
+    Path-branch vectors, kept as the documented fallback behavior:
 
         sha256(os.path.abspath("F:\\Projects\\panelboss-reskin\\extension")
                .encode("utf-8"))[:16]  ->  jagfnepkfnioappmbloibkcjofhgaaai
         sha256(os.path.abspath("F:\\workspace").encode("utf-8"))[:16]
                                      ->  jeafefjdigahcngkajpclimdpjjamadc
     """
+    key_id = derive_key_id(ext_dir)
+    if key_id is not None:
+        return key_id
     p = os.path.abspath((ext_dir or "").strip())
     if not p or p == os.path.abspath(os.curdir):
         return None
@@ -101,6 +113,28 @@ def derive_unpacked_id(ext_dir):
                                        # the load spelling; the letter is
                                        # the one byte the browser fixes)
     digest = hashlib.sha256(p.encode("utf-8")).digest()[:16]
+    return "".join(chr(ord("a") + (b >> 4)) + chr(ord("a") + (b & 0xF))
+                   for b in digest)
+
+
+def derive_key_id(ext_dir):
+    """The KEY BRANCH of the id law (see derive_unpacked_id): read
+    manifest.json's "key", base64-decode to the SPKI DER, derive the id
+    from THOSE BYTES. Any failure (no manifest, no key, bad base64, bad
+    json) answers None = the path branch applies, exactly the browser's
+    own fallthrough. Never raises."""
+    try:
+        if not (ext_dir or "").strip():
+            return None      # never probe the cwd for a stray manifest
+        with open(os.path.join(os.path.abspath(ext_dir),
+                               "manifest.json"), encoding="utf-8") as f:
+            key = json.load(f).get("key")
+        if not isinstance(key, str):
+            return None
+        der = base64.b64decode(key, validate=True)
+    except Exception:
+        return None
+    digest = hashlib.sha256(der).digest()[:16]
     return "".join(chr(ord("a") + (b >> 4)) + chr(ord("a") + (b & 0xF))
                    for b in digest)
 

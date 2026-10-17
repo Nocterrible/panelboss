@@ -20,6 +20,12 @@ extension/host/panelboss-host.exe
 extension/host/build/
 extension/host/host-manifest.json
 
+# the companion's RSA private half (Oct 16 key pin) - the public half
+# lives in manifest.json, the id in companion_key.txt; losing the
+# private pem means never rotating the key, never republishing under
+# a regenerated one. It stays on the build machine, out of git.
+extension/host/companion_private_key_pkcs8.pem
+
 # optional extras
 .faces/
 

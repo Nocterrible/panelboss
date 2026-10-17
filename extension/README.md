@@ -99,6 +99,10 @@ is `panelboss_host.py`, frozen to `panelboss-host.exe` by
    exe and registers it under HKCU (no admin; Chrome, Edge, and Opera
    read the same `NativeMessagingHosts` key). Without the id the
    manifest ships with a placeholder and the host refuses everyone.
+   The manifest carries a pinned `"key"` (Oct 16), so the id is
+   permanent — `feolhiokchmpphlhllagimnilceldegk` for every folder,
+   machine, and the store copy alike — and PanelBoss's in-app install
+   button computes it for you anyway.
 
 The test button needs a video tab on the site list: one press asks the
 tab's own content script to measure, hands the row to the host, and the
