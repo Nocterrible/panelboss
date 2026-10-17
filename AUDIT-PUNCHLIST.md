@@ -1765,3 +1765,19 @@ OWNER UAT PENDING: load unpacked -> id -> install_host.ps1 -ExtensionId
 <id> -> reload the card -> video tab -> click -> badge 'veil' -> arm
 Movie theater mode -> four dark pieces frame the player; the card's
 capability line must light up the moment host.json exists.
+
+## FAILURE CLASS: the credit wall (Oct 16, owner-explained, do not re-diagnose)
+Subagent dispatches on cloud lanes can die at START with 'would exceed
+available credits given current in-flight requests'. The wording lies:
+it is NOT concurrency - it is the OPENROUTER BALANCE. Mechanism
+(owner, measured tonight): balance drops under the auto-top-up floor
+(old floor \) -> top-up fires with delay -> in the gap, requests
+refuse -> the top-up lands -> restart of the SAME dispatch works.
+Owner raised the top-up floor; recurrence now means the floor needs
+raising AGAIN, not that the fleet is oversubscribed. Fleet insurance
+that made this survivable and stays law: commit early (every salvage
+was a clean commit, zero work lost to the wall - b118c0e proves it),
+and retry-once on any dispatch that dies at START with no output (a
+wall-death never wrote anything; a retry after the balance lands is
+free). Misreading this class as a fleet bug burns an investigation
+pass; this entry is the whole diagnosis.
