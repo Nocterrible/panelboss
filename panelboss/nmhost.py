@@ -56,7 +56,15 @@ def host_path():
     path all answer None - never an exception, never a camera into the
     app's own folder."""
     try:
-        with open(HOST_JSON, encoding="utf-8") as f:
+        # utf-8-sig, not utf-8: install_host.ps1 writes this file with
+        # Windows PowerShell's Set-Content -Encoding UTF8, which EMITS
+        # A BOM (measured: EF BB BF), and json.load rejects the BOM -
+        # the freshly-installed user would read "not installed"
+        # forever, the silent-death class this design exists to kill
+        # (2nd-pass gate, finding 1, HIGH: producer/consumer gap the
+        # suite could not see - its fake host.json is Python-written,
+        # no BOM; the pin that proves the fix writes one).
+        with open(HOST_JSON, encoding="utf-8-sig") as f:
             p = json.load(f).get("path")
     except (OSError, ValueError, AttributeError):
         return None

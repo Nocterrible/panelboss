@@ -848,15 +848,19 @@ class _OledMixin:
                                  sticky="e")
         self._comp_words()
 
-    def _comp_words(self):
+    def _comp_words(self, force=False):
         """The status line, on the dimmer poll's beat: companion.say
         for the rail and the doorway, companion.caps_words for the
-        discovered API surface. Junk shapes read as words."""
+        discovered API surface. Junk shapes read as words. force
+        re-asks the host (the switch and the veil button earn it -
+        the tip promises a re-check there, gate 2nd-pass finding 3;
+        a wedged host costs its bounded 2 s ON THE CLICK, never on
+        the silent beat)."""
         if getattr(self, "oled_comp_say", None) is None:
             return
         set_text(self.oled_comp_say, companion.say(self.cfg))
         if getattr(self, "oled_comp_caps", None) is not None:
-            set_text(self.oled_comp_caps, companion.caps_words())
+            set_text(self.oled_comp_caps, companion.caps_words(force=force))
 
     def _oled_comp_changed(self):
         # one gesture, one key: [videodim].on is the single consent
@@ -865,7 +869,7 @@ class _OledMixin:
         vd = self.cfg.setdefault("videodim", {})
         vd["on"] = bool(self.oled_comp_box.get())
         self._save()
-        self._comp_words()
+        self._comp_words(force=True)
 
     def _oled_comp_veil(self):
         # the one-shot answers in the status line itself (the wash

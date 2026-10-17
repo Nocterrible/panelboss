@@ -169,7 +169,22 @@ try:
     # the fake twin answers: caps_words reads the ops and veil fields
     nmhost.HOST_JSON = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
                                     "host.json")
+    # THE BOM PIN (2nd-pass gate finding 1, HIGH): install_host.ps1
+    # writes host.json with Windows PowerShell's Set-Content -Encoding
+    # UTF8, which EMITS A BOM (measured EF BB BF on this box). The
+    # reader must tolerate it - a BOM-rejecting reader would tell the
+    # FRESHLY INSTALLED user "not installed" forever, and this suite
+    # could never see it because Python's json.dump writes no BOM.
+    with open(nmhost.HOST_JSON, "wb") as f:
+        f.write(b"\xef\xbb\xbf" + json.dumps({"path": _fake_host}).
+                encode("utf-8"))
     nmhost._cache.update(until=0.0, caps=None)
+    check(nmhost.capabilities() is not None,
+          "a BOM'd host.json (PowerShell's Set-Format UTF8 signature) "
+          "reads like any other - the installer and the reader speak "
+          "one file")
+    with open(nmhost.HOST_JSON, "w", encoding="utf-8") as f:
+        json.dump({"path": _fake_host}, f)
     caps = nmhost.capabilities()
     check(caps is not None and caps.get("protocol") == "panelboss-v1"
           and "veil" in caps.get("ops", ()),
@@ -181,6 +196,14 @@ try:
           "%r" % (words,))
     check(companion.caps_words() == words,
           "the capsule answer is cached (the TTL holds between beats)")
+
+    # JUNK MEMBERS (2nd-pass gate finding 2): a well-shaped reply with
+    # rotten contents - {"ops":[1,2]} - must read as words, never a
+    # TypeError out of a function that promises it never raises.
+    check(companion._caps_line({"ops": [1, 2],
+                                "veil": {"fields": ["rect", None]}})
+          == "buddy API: (no ops) - veil sends rect",
+          "junk members inside a well-shaped list answer honest words")
 
     # the wedged-host law: a path that answers nothing must time out
     # into None, never hang the beat

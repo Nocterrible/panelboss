@@ -55,8 +55,17 @@ def caps_words(force=False):
     caps = nmhost.capabilities(force=force)
     if caps is None:
         return nmhost.NOT_INSTALLED
-    opnames = nmhost.ops(caps)
-    fields = nmhost.veil_fields(caps)
+    return _caps_line(caps)
+
+
+def _caps_line(caps):
+    """Render a capabilities dict (junk welcome) as the honest line.
+    GATE 2nd-PASS, finding 2: junk members inside a well-shaped list
+    ({"ops":[1,2]}) must not TypeError their way out of a function
+    whose docstring promises it never raises - keep strings only."""
+    opnames = tuple(x for x in nmhost.ops(caps) if isinstance(x, str))
+    fields = tuple(x for x in nmhost.veil_fields(caps)
+                   if isinstance(x, str))
     line = "buddy API: " + ", ".join(opnames) if opnames else \
         "buddy API: (no ops)"
     if fields:
