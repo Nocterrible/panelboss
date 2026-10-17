@@ -1,4 +1,4 @@
-"""Package the companion extension for Chrome Web Store upload (Oct 16).
+"""Package the companion extension for Chrome Web Store upload.
 
 The store zip is the LOADABLE files only: manifest.json, background.js,
 content.js, and icons/ once the art lands. The host/ tree is PanelBoss's
@@ -6,39 +6,59 @@ own install payload (the button ships it), README.md is store listing
 prose - neither belongs in the crx. Files sit at the zip ROOT (the
 store rejects a wrapping folder).
 
-The manifest must carry "key" (the Oct 16 pin): without it the store
-copy would get a publisher-derived id that no longer matches the
-registry allow-list the install button writes. This script refuses -
-not warns - a keyless manifest for exactly that reason.
+ID STABILITY (the Oct 17 store lesson - the paperwork, not the plan,
+was wrong): the repo manifest carries "key" (the public half) so an
+UNPACKED dev load derives the SAME id the install button registers. But
+the store REJECTS a "key" field on the FIRST upload - it wants the
+PRIVATE key instead, as a file named key.pem at the zip root; it then
+derives the id from THAT key (the same key), so the published id equals
+the predicted feolhiok... This script: strips "key" from the zip's
+manifest COPY, adds key.pem (the private half), and leaves the repo
+manifest's key intact for dev. The private pem is the sole artifact this
+build reads from the gitignored host/ dir - the store owns the private
+key after first upload, so key.pem rides only on the FIRST submission
+(a --reupload flag omits it for later versions).
 
-Run:  .venv\\Scripts\\python.exe scripts\\package_extension.py
+Run:  .venv\\Scripts\\python.exe scripts\\package_extension.py [--reupload]
 Out:  dist\\panelboss-companion-<version>.zip
 """
 import json
 import os
+import shutil
 import sys
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXT = os.path.join(ROOT, "extension")
 OUT = os.path.join(ROOT, "dist")
+PRIVATE = os.path.join(EXT, "host", "companion_private_key_pkcs8.pem")
 
 LOADABLE = ["manifest.json", "background.js", "content.js"]
+DESC_MAX = 132      # the store's own cap on the manifest description
 
 
 def main():
+    reupload = "--reupload" in sys.argv
     manifest_path = os.path.join(EXT, "manifest.json")
     with open(manifest_path, encoding="utf-8") as f:
         manifest = json.load(f)
 
-    missing = [n for n in LOADABLE if not os.path.isfile(os.path.join(EXT, n))]
+    missing = [n for n in LOADABLE
+               if not os.path.isfile(os.path.join(EXT, n))]
     if missing:
         sys.exit("refusing: loadable files missing from extension\\: "
                  + ", ".join(missing))
-    if not manifest.get("key"):
-        sys.exit("refusing: manifest carries no \"key\" - an unpinned "
-                 "store copy gets a different id than the install "
-                 "button registers (see companion_key.txt)")
+    if "key" not in manifest:
+        sys.exit("refusing: repo manifest carries no \"key\" - unpacked "
+                 "dev loads get a path-derived id that no longer matches "
+                 "the install button (see companion_key.txt)")
+    if len(manifest.get("description", "")) > DESC_MAX:
+        sys.exit("refusing: manifest description is %d chars, the store "
+                 "caps at %d" % (len(manifest["description"]), DESC_MAX))
+    if not reupload and not os.path.isfile(PRIVATE):
+        sys.exit("refusing: first upload needs the private key at "
+                 "%s to ship as key.pem (pass --reupload if the item "
+                 "already exists in the store)" % PRIVATE)
 
     version = manifest["version"]
     os.makedirs(OUT, exist_ok=True)
@@ -50,20 +70,35 @@ def main():
         for png in sorted(os.listdir(icons)):
             if png.lower().endswith(".png"):
                 names.append(os.path.join("icons", png).replace("\\", "/"))
+    if not reupload:
+        names.append("key.pem")
 
-    # the teeth go BEFORE the write: nothing host-shaped or pem-shaped can
-    # enter the name list in the first place (the reviewer caught that an
-    # after-the-fact assert would only be asserting the whitelist back)
+    # the teeth BEFORE the write: nothing host-shaped may enter; the
+    # ONLY .pem allowed is the root key.pem (the store's first-upload
+    # id mechanism) - the private key never travels any other way.
     for name in names:
-        assert "host/" not in name and not name.endswith(".pem"), name
+        assert "host/" not in name, name
+        assert name == "key.pem" or not name.endswith(".pem"), name
+
+    # the zip's manifest COPY has the key stripped (the store rejects
+    # it on first upload); the repo file keeps it for unpacked dev.
+    zip_manifest = {k: v for k, v in manifest.items() if k != "key"}
 
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as z:
         for name in names:
-            z.write(os.path.join(EXT, *name.split("/")), name)
+            if name == "manifest.json":
+                z.writestr("manifest.json",
+                           json.dumps(zip_manifest, indent=2) + "\n")
+            elif name == "key.pem":
+                z.write(PRIVATE, "key.pem")
+            else:
+                z.write(os.path.join(EXT, *name.split("/")), name)
 
     print("wrote", out_path)
     print("contains:", ", ".join(names))
-    print("store id (permanent, key-pinned):",
+    print("mode:", "REUPLOAD (no key.pem - store already has the key)"
+          if reupload else "FIRST UPLOAD (key.pem included)")
+    print("store id (from key.pem = predicted):",
           __import__("panelboss.nmhost", fromlist=["x"])
           .derive_key_id(EXT))
 
