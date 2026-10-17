@@ -167,6 +167,11 @@ TIP_COMP = {
              "percent - the theater's OWN darkness, not the idle "
              "dimmer's number. the movie can go darker (or lighter) "
              "than the plain idle veils.",
+    "fade": "off (the default): the frame is GONE the moment you "
+            "touch the mouse or press a key - no fade, no ceremony. "
+            "on: the theater joins the ramp family - one beat of "
+            "hold, then the frame retracts gently over the dimmer's "
+            "\"fade within\" ramp, never a blink.",
 }
 
 
@@ -871,6 +876,22 @@ class _OledMixin:
         self.oled_vee_level_label.grid(row=0, column=2, sticky="e",
                                        padx=(theme.S_FIELD, 0))
 
+        # "fade out" - the theater retract style (owner, Oct 16: "I
+        # don't like the fade, so I won't use it - but having the
+        # option is the right move"): OFF by default, the frame is
+        # gone the tick input returns; ON opts into the ramp family
+        # (one-tick hold, retract over the dimmer's ramp, no blink).
+        row = self._row(box, "fade out", TIP_COMP["fade"],
+                        hint_chars=42)
+        self.oled_comp_fade = ctk.CTkSwitch(
+            row, text="", font=self.skin.font(12),
+            command=self._oled_comp_fade_changed,
+            **self.skin.switch_style())
+        self.oled_comp_fade.select() if (self.cfg.get("videodim") or
+                                         {}).get("fade") is True \
+            else self.oled_comp_fade.deselect()
+        self.oled_comp_fade.grid(row=0, column=1, sticky="e")
+
         # THE DEBUG PORT IS GONE FROM THE SURFACE (owner, Oct 16,
         # second instruction): the per-family checkboxes made the dead
         # route look alive - the flag path restarted a browser with a
@@ -948,6 +969,11 @@ class _OledMixin:
         self.oled_vee_level_label.configure(text="%s%%" % round(value))
         self._save()
 
+    def _oled_comp_fade_changed(self):
+        vd = self.cfg.setdefault("videodim", {})
+        vd["fade"] = bool(self.oled_comp_fade.get())
+        self._save()
+
     def _oled_comp_veil(self):
         # the one-shot answers in the status line itself (the wash
         # button's idiom): the rect it saw, or the no-click words; the
@@ -958,10 +984,13 @@ class _OledMixin:
                 force=True))
 
     def _sync_companion_switches(self):
-        """Knob-lie belt (_shell.SWITCH_SYNC): the master switch
-        painted from the rail at settled geometry - both branches, no
-        commands fired (the _power idiom's law). There is no flag box
-        to sync any more, only the one consent switch."""
-        on = (self.cfg.get("videodim") or {}).get("on") is True
+        """Knob-lie belt (_shell.SWITCH_SYNC): the master switch and
+        the fade switch painted from the rail at settled geometry -
+        both branches, no commands fired (the _power idiom's law)."""
+        vd = self.cfg.get("videodim") or {}
+        on = vd.get("on") is True
         self.oled_comp_box.select() if on \
             else self.oled_comp_box.deselect()
+        fade = vd.get("fade") is True
+        self.oled_comp_fade.select() if fade \
+            else self.oled_comp_fade.deselect()

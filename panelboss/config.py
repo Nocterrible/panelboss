@@ -486,6 +486,14 @@ DEFAULTS = {
                                    # lighter) than the plain idle veils.
                                    # Sibling of the dimmer's level,
                                    # clamped 10..90 like it.
+         "fade": False,             # retract style (owner, Oct 16: "I
+                                    # don't like the fade, so I won't use it -
+                                    # but having the option is the right
+                                    # move): default OFF - input returns,
+                                    # the frame is GONE this tick; true
+                                    # opts into the ramp family (one-tick
+                                    # hold, retract over the dimmer's
+                                    # ramp).
     },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
@@ -1146,8 +1154,17 @@ def normalize_videodim(value):
     except (TypeError, ValueError):
         level = DEFAULTS["videodim"]["level"]
     level = max(VIDEODIM_LEVEL_FLOOR, min(VIDEODIM_LEVEL_CEIL, level))
+    # fade: the theater retract style (owner, Oct 16). STRICT bool,
+    # absent/junk = False = frame vanishes the tick input returns;
+    # true opts into the ramp family. Junk warns like `on` does -
+    # it is a behavior switch, not a rail.
+    fade = value.get("fade", False)
+    if not isinstance(fade, bool):
+        log.warning("videodim fade %r is not a bool; the frame drops "
+                    "without a fade", fade)
+        fade = False
     return {"on": on, "min_rect_px": mins, "grace_s": grace,
-            "idle_sec": idle, "level": level}
+            "idle_sec": idle, "level": level, "fade": fade}
 
 
 def _live_shorts():

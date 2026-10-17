@@ -241,12 +241,14 @@ class Frame:
     theater veil's idle conjunction reads .idle; the plain veil's sound
     exemption reads .audio. Both are per-tick mutable so the suite can
     drive the three beats and the sound/touch edges without a browser."""
-    def __init__(self, wins=None, idle=0.0, audio=None, vlevel=30):
+    def __init__(self, wins=None, idle=0.0, audio=None, vlevel=30,
+                 vfade=False):
         self.wins = wins or []
         self.rec = Rec()
         self.idle = idle
         self.audio = audio if audio is not None else set()
         self.vlevel = vlevel
+        self.vfade = vfade
         self.v = dimmer.Veils(lambda: self.wins, lambda: self.audio,
                               lambda: self.idle, self.rec.paint,
                               self.rec.unveil,
@@ -262,7 +264,8 @@ class Frame:
                                 "level": level, "bound": None},
                      "videodim": {"on": True, "min_rect_px": 1,
                                   "grace_s": 3, "idle_sec": vidle,
-                                  "level": self.vlevel}},
+                                  "level": self.vlevel,
+                                  "fade": self.vfade}},
                     now)
 
 
@@ -324,15 +327,32 @@ f.idle = 6.0                          # the desk sits still past the rail
 f.tick(101, vidle=5)                  # frame lands
 assert len(f.rec.painted) == 4, f.rec.painted
 f.idle = 1.0                          # a pointer move: input returns
-f.tick(102, vidle=5)                  # frame drops (the ramp's first
-assert len(f.rec.painted) == 4        # step is the one-tick hold)
-f.tick(110, vidle=5)                  # and retracts fully (still 1 s <
-assert f.rec.painted == {}, f.rec.painted   # 5 s: no re-arm mid-ramp)
-f.idle = 6.0                          # stillness passes X AGAIN
-f.tick(111, vidle=5)                  # frame re-arms - the SAME rail,
-assert len(f.rec.painted) == 4        # no second knob
-ok("the three beats: on after X still, drop the tick input returns, "
-   "re-arm after X again - one symmetric rail")
+f.tick(102, vidle=5)                  # FADE OFF (the default, owner
+assert f.rec.painted == {}, f.rec.painted   # Oct 16): the frame is
+f.tick(103, vidle=5)                  # GONE this tick and stays gone
+assert len(f.rec.painted) == 0        # while the desk is under X
+f.idle = 6.0                          # stillness passes X AGAIN: the
+f.tick(104, vidle=5)                  # SAME rail re-arms, no second
+assert len(f.rec.painted) == 4        # knob
+ok("the three beats: on after X still, drop the tick input returns "
+   "(fade off, the default), re-arm after X again - one symmetric rail")
+
+# 15b. THE FADE OPTION, other side: fade=True opts the theater into
+#      the ramp family - the first step is the one-tick hold (the
+#      eye's fail-open law), then gradual retract, no blink.
+fb = Frame([w(1)], idle=0.0, vlevel=30, vfade=True)
+RECT[0] = (100, 100, 600, 300)
+fb.tick(120, vidle=5)
+fb.idle = 6.0
+fb.tick(121, vidle=5)
+assert len(fb.rec.painted) == 4, fb.rec.painted
+fb.idle = 1.0
+fb.tick(122, vidle=5)                 # fade ON: still painted, dying
+assert len(fb.rec.painted) == 4       # has begun (one-tick hold)
+fb.tick(130, vidle=5)
+assert fb.rec.painted == {}, fb.rec.painted
+ok("fade=true rides the ramp family: one-tick hold then retract - "
+   "the theater opt-in beside the owner's no-fade default")
 
 # 16. THE SOUND EXEMPTION: a film's audio must not lift the theater
 #     frame - the drive is the pointer/keyboard idle clock only. Sound
@@ -372,7 +392,7 @@ assert n["on"] is False and n["min_rect_px"] == 4_000_000 \
     and n["level"] == 10, n
 d = config.normalize_videodim({})
 assert d == {"on": False, "min_rect_px": 200000, "grace_s": 3,
-             "idle_sec": 15, "level": 20}, d
+             "idle_sec": 15, "level": 20, "fade": False}, d
 assert config.normalize_videodim({"idle_sec": -5})["idle_sec"] == 0
 assert config.normalize_videodim({"level": 999})["level"] == 90
 ok("normalize_videodim: bad on warns and folds, the rails clamp "

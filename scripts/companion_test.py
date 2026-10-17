@@ -64,7 +64,7 @@ n = config.normalize_videodim({"on": "junk", "enabled": True,
                                "flag_families": ["chrome"],
                                "sites": ["youtube.com"]})
 check(n == {"on": False, "min_rect_px": 200000, "grace_s": 3,
-            "idle_sec": 15, "level": 20},
+            "idle_sec": 15, "level": 20, "fade": False},
       "junk on folds to False and the retired keys never survive the "
       "normalizer")
 

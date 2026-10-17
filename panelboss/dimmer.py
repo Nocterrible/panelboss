@@ -335,7 +335,7 @@ class Veils:
         for pid in stale:
             del self._exempt[pid]
         if not dimming:
-            self._fade(d, now)
+            self._fade(d, now, cfg.get("videodim"))
             return
         try:
             wins = self._windows()
@@ -365,7 +365,7 @@ class Veils:
             if not dimming:
                 # the focus landed on the last always panel and the
                 # desk is not idle: the field fades out soft
-                self._fade(d, now)
+                self._fade(d, now, cfg.get("videodim"))
                 return
         apps = d.get("apps") or {}
         qualified = {}
@@ -454,20 +454,21 @@ class Veils:
             if hwnd in qualified:
                 continue
             if st.get("frame"):
-                self._fade_one(now, hwnd, st, ramp)   # a vanished
-                #                                    # rect is a
-                #                                    # stopped video:
-                #                                    # the RAMP pulls
-                #                                    # the frame back
-                #                                    # (its first step
-                #                                    # is the one-tick
-                #                                    # hold the eye's
-                #                                    # fail-open
-                #                                    # promise names,
-                #                                    # ramp 0 drops
-                #                                    # now - the fade
-                #                                    # rules apply
-                #                                    # UNCHANGED)
+                # THE FADE-OFF OPTION (owner, Oct 16: "I don't like
+                # the fade, so I won't use it - but having the option
+                # is the right move"): [videodim] fade is a strict
+                # bool, DEFAULT OFF - input returns, the frame
+                # vanishes THIS TICK like every other drop. fade=true
+                # opts the theater into the ramp family (one-tick
+                # hold, retract over ramp_sec, no blink).
+                if (cfg.get("videodim") or {}).get("fade") is True:
+                    self._fade_one(now, hwnd, st, ramp)
+                else:
+                    self._drop(hwnd)
+                # (the old ramp-only law - "a vanished rect is a
+                # stopped video, the RAMP pulls the frame back, its
+                # first step the one-tick hold" - survives ONLY as
+                # the fade=true branch above)
             elif st["mon"] in dimming:
                 self._drop(hwnd)        # disqualified ON A DIMMING
                                         # PANEL: the veil is GONE
@@ -572,12 +573,23 @@ class Veils:
             key = self._frames[(short, side)] = -(len(self._frames) + 1)
         return key
 
-    def _fade(self, d, now):
+    def _fade(self, d, now, videodim=None):
         """The whole field goes soft: every live veil takes one step
-        down the ramp."""
+        down the ramp. THE FADE OPTION applies HERE too (owner, Oct 16
+        - the first cut patched only the qualified-shrink path and the
+        field-gone path ramped the frame anyway, caught by the suite
+        pin): a frame piece under [videodim] fade=False is dropped
+        this tick, like every other drop. The dimmer's own ramp is
+        untouched; a None videodim (a caller without the section)
+        means the dimmer's own veils only, and no frame exists to
+        disagree about."""
         ramp = max(0, min(60, int(d.get("ramp_sec", 8))))
+        vfade = (videodim or {}).get("fade") is True
         for hwnd, st in list(self._live.items()):
-            self._fade_one(now, hwnd, st, ramp)
+            if st.get("frame") and not vfade:
+                self._drop(hwnd)
+            else:
+                self._fade_one(now, hwnd, st, ramp)
 
     def _fade_one(self, now, hwnd, st, ramp):
         """One veil, one step. ramp 0 is the Oct-15 ruling (the rail
