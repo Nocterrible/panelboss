@@ -1741,3 +1741,27 @@ Live repro owed by owner: capture click with hider armed -> instant
 ## lift choreography) goes. The DIMMER veils (oled feature, dimmer.py)
 ## are unrelated - those dim monitors, they do not hide paints. Judge
 ## survival by what a capture still shows, not by what the code protects.
+
+## DOSSIER: the companion, store-grade (Oct 16, fixer tranche, tip bb6bbd0)
+Channel: chrome.runtime.connectNative <-> stdlib-only host exe (one file,
+no net, no port), frames native-order length-prefixed JSON (the LE lore
+was wrong-law, fixed @I), veil op writes %APPDATA%\PanelBoss\rect,
+capabilities op DISCOVERED BY THE APP (nmhost.py: spawn the exe recorded
+in %APPDATA%\PanelBoss\host.json, 2 s kill-on-timeout, TTL cache, stat-
+not-spawn when absent). The card answers "buddy API: ..." from the
+reply - the owner's 'we'll make panelboss read what the api is capable
+of' is now literally true, not commit-poetry (gate round 1 caught the
+poetry; round 2 caught the PowerShell BOM the producer/consumer pair
+hid - utf-8-sig + a real-BOM pin). DEAD SHAPES total: cmd-wrapper host,
+pythonw-token host, chrome.debugger click (banner + silent hang, owner
+killed on sight), downloads-file bridge (store-hostile, shelf-dependent
+- shelf law itself retired), debug port (dormant engine, off the UI).
+_cdp.py deleted, config [videodim] = {on, min_rect_px, grace_s}, old
+keys parse away. Installer validates the 32-char a-p id shape before
+registering (a typo used to read 'nm' forever). STORE TEXT lives in
+extension/README.md (scripting/activeTab/nativeMessaging, one-line
+justifications; zip WITHOUT host/, the app ships the host).
+OWNER UAT PENDING: load unpacked -> id -> install_host.ps1 -ExtensionId
+<id> -> reload the card -> video tab -> click -> badge 'veil' -> arm
+Movie theater mode -> four dark pieces frame the player; the card's
+capability line must light up the moment host.json exists.
