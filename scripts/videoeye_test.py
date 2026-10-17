@@ -455,6 +455,63 @@ assert [c[1] for c in f.rec.calls[4:]] == [c[1] for c in f.rec.calls[:4]], \
 ok("an unchanged frame re-pins every tick - the buried-ring bite has "
    "a teeth-mark in the suite now")
 
+# 25. THE ARITY+BAND PIN (cappy packet, Oct-16): the first cure called
+#     SetWindowPos with SIX args - ctypes raised TypeError inside the
+#     branch's silent swallow and the raise never reached Win32. The
+#     spy records the exact call; the law is SEVEN args and
+#     HWND_TOPMOST (-1): a background process cannot restack into the
+#     top of the ORDINARY band over the foreground window (measured:
+#     ok=1, still under; AttachThreadInput does not lift the clamp).
+_real_swp = dimmer._setwindowpos
+_swp_calls = []
+dimmer._setwindowpos = lambda *a: _swp_calls.append(a)
+
+
+class _StubWin:
+    _pb_rect = (0, 0, 64, 64)
+
+    def update_idletasks(self):
+        pass
+
+    def winfo_id(self):
+        return 0x12345                # a fake child id: GetAncestor
+                                      # answers 0, the branch falls
+                                      # back to winfo_id() itself
+
+
+dimmer._zpin(_StubWin(), -1)
+assert _swp_calls, "the synthetic branch must actually CALL the verb"
+first = _swp_calls[0]
+assert len(first) == 7, "SetWindowPos takes 7 args; a 6-arg call dies " \
+    "in ctypes before Win32 ever sees it (the Oct-16 wave-killer)"
+assert first[1] == -1, "the theater band is TOPMOST (-1): HWND_TOP " \
+    "lands under the foreground browser - measured, not theorized"
+dimmer._setwindowpos = _real_swp
+ok("the synthetic pin calls the verb with SEVEN args and HWND_TOPMOST "
+   "- the arity bug and the band bug both have a teeth-mark now")
+
+# 25b. the live half: the real verb on a real Tk window sets the
+#      topmost bit (the branch is proven against Win32 itself, not
+#      only against the spy).
+import tkinter as _tk
+_root = _tk.Tk()
+_root.withdraw()
+_top = _tk.Toplevel(_root)
+_top.overrideredirect(True)
+_top.geometry("64x64+80+80")
+_top.deiconify()
+_top.update_idletasks()
+_h = dimmer._u32.GetAncestor(_top.winfo_id(), dimmer.GA_ROOT) \
+    or _top.winfo_id()
+assert dimmer._u32.SetWindowPos(_h, -1, 0, 0, 0, 0, dimmer._SWP_ZPIN), \
+    "the real SetWindowPos with the branch's arg list must succeed"
+assert dimmer._u32.GetWindowLongW(_h, dimmer.GWL_EXSTYLE) & dimmer.WS_EX_TOPMOST, \
+    "and the window must CARRY the topmost bit afterwards"
+_top.destroy()
+_root.destroy()
+ok("the branch's exact verb lifts a real window into the topmost band "
+   "(Win32 itself as the witness)")
+
 
 if os.path.exists(videoeye.RECT_PATH):
     os.remove(videoeye.RECT_PATH)

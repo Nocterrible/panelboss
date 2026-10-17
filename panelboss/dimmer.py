@@ -132,7 +132,19 @@ GW_HWNDPREV = 3
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _FADE_LEVELS = (1.0, 2.0 / 3.0, 1.0 / 3.0)   # THREE steps, then gone
 _SWP_ZPIN = 0x213   # NOSIZE | NOMOVE | NOACTIVATE | NOOWNERZORDER: a
-                    # z-move that moves nothing, touches nothing else
+                   # z-move that moves nothing, touches nothing else
+# Warn-once for the pin's swallow (Oct-16, cappy): the TypeError that
+# hid a dead theater cure for a whole wave died SILENT inside _zpin's
+# except - a refused band law is cosmetic, but it must confess ONCE.
+# ONE FLAG PER BRANCH (gate finding 1): a benign plain-anchor dead-
+# window race must never re-silence the theater branch's confession.
+_PIN_WARNED = [False]
+_PIN_WARNED_PLAIN = [False]
+# The taskbar exclusion for theater pieces: primary + per-monitor tray
+# classes; the pieces anchor UNDER the tray occupying their own
+# monitor row so the desk's chrome is never darkened (cappy packet).
+_TRAY_CLASSES = ("Shell_TrayWnd", "Shell_SecondaryTrayWnd")
+_TRAY_CACHE = {"until": 0.0, "rows": []}   # rows: [(hwnd, left, right)]
 
 _u32 = ctypes.WinDLL("user32", use_last_error=True)   # the pin law is
 _u32.SetWindowLongW.restype = ctypes.c_long            # self-pinned
@@ -781,6 +793,37 @@ def _clickthrough(win):
         pass                             # click-through degrades
 
 
+def _tray_above(rect):
+    """The taskbar window covering the piece's monitor ROW, or None.
+    Enumerates the two tray classes at most every 5 s (the desk's
+    chrome rarely restacks; a re-pin beat must not pay a full
+    enumeration every 0.2 s). ROW matching is horizontal: a tray is
+    this piece's chrome when its x-span overlaps the piece's - the
+    monitors of a desk have disjoint x-spans, the taskbars sit at the
+    bottom of each row where the pieces' union reaches anyway."""
+    now = time.monotonic()
+    if now >= _TRAY_CACHE["until"]:
+        rows = []
+
+        @_WNDENUMPROC
+        def cb(hwnd, _l):
+            if _u32.IsWindowVisible(hwnd):
+                buf = ctypes.create_unicode_buffer(256)
+                _u32.GetClassNameW(hwnd, buf)
+                if buf.value in _TRAY_CLASSES:
+                    r = _RECT()
+                    if _u32.GetWindowRect(hwnd, ctypes.byref(r)):
+                        rows.append((hwnd, r.l, r.r))
+            return 1
+        _u32.EnumWindows(cb, 0)
+        _TRAY_CACHE.update(until=now + 5.0, rows=rows)
+    x0, _, w, _ = rect
+    for hwnd, left, right in _TRAY_CACHE["rows"]:
+        if min(right, x0 + w) - max(left, x0) > 0:
+            return hwnd
+    return None
+
+
 def _zpin(win, target_hwnd):
     """The layering law (gate finding 1): the veil sits IMMEDIATELY
     ABOVE ITS OWN WINDOW, band-matched - never in the topmost band,
@@ -800,19 +843,43 @@ def _zpin(win, target_hwnd):
     follows the window anyway."""
     try:
         if target_hwnd is not None and int(target_hwnd) <= 0:
-            # SYNTHETIC ANCHOR (theater pieces, Oct-16 UAT cure): the
-            # frame OWNS no window - it REPLACES the panel's veils - so
-            # there is no owner to sit under. Its band is the top of
-            # the ORDINARY band: SetWindowPos HWND_TOP (0) parks ours
-            # below the real topmost band (taskbar, always-on-top apps)
-            # and above every ordinary window - which is exactly the
-            # theater law: darken the browser the movie plays in, never
-            # the desk's chrome. The tick re-pins frame pieces every
-            # beat, so a fresh activation cannot bury them (the UAT
-            # bite: painted, pixel-exact, invisible under the browser).
-            win.update_idletasks()
-            h = _u32.GetAncestor(win.winfo_id(), GA_ROOT) or win.winfo_id()
-            _setwindowpos(h, 0, 0, 0, 0, _SWP_ZPIN)
+            # SYNTHETIC ANCHOR (theater pieces) - THE BAND LAW, as
+            # measured on the owner's desk (Oct-16 cappy): a background
+            # process CANNOT restack into the top of the ORDINARY band
+            # over the foreground window - HWND_TOP answers success and
+            # the piece stays under the browser forever (foreground
+            # lock; AttachThreadInput does not lift it). The TOPMOST
+            # band is the only band a background raiser wins, and the
+            # taskbar exclusion rides inside it: anchor under the tray
+            # of this piece's own monitor row (slide one slot down via
+            # GW_HWNDPREV), so the desk's chrome never darkens. The
+            # tick re-pins frame pieces every beat (Veils.tick), and
+            # EVERY SetWindowPos here carries SEVEN args - the six-arg
+            # call of the first cure died as a ctypes TypeError in the
+            # swallow below and cost a full wave (warn-once, per
+            # branch: one benign plain-anchor race must never re-
+            # silence the theater's own confession - gate finding 1).
+            try:
+                win.update_idletasks()
+                h = (_u32.GetAncestor(win.winfo_id(), GA_ROOT)
+                     or win.winfo_id())
+                if not _setwindowpos(h, -1, 0, 0, 0, 0, _SWP_ZPIN):
+                    raise OSError("SetWindowPos(HWND_TOPMOST) refused")
+                tray = _tray_above(getattr(win, "_pb_rect", None)
+                                   or (0, 0, 0, 0))
+                if tray is not None:
+                    above = _getwindow(tray, GW_HWNDPREV)
+                    if above:
+                        _setwindowpos(h, above, 0, 0, 0, 0, _SWP_ZPIN)
+            except Exception:
+                if not _PIN_WARNED[0]:
+                    _PIN_WARNED[0] = True
+                    log.warning("dimmer: the THEATER piece pin raised "
+                                "or was refused; the ring may sit under "
+                                "the browser (videoeye_test pin 25, "
+                                "scripts/theater_live.py name the law)")
+            # no tray (locked workstation, odd shell): the piece stays
+            # at top of the topmost band - confessed, one-line degrade.
             return
         if not _iswindow(target_hwnd):
             return                       # dead anchor: skip, never straggle
@@ -823,7 +890,10 @@ def _zpin(win, target_hwnd):
         above = _getwindow(target_hwnd, GW_HWNDPREV)
         _setwindowpos(h, above, 0, 0, 0, 0, _SWP_ZPIN)
     except Exception:                    # the veil still dims; only
-        pass                             # the layering degrades
+        if not _PIN_WARNED_PLAIN[0]:     # the layering degrades - the
+            _PIN_WARNED_PLAIN[0] = True  # plain branch's OWN once.
+            log.warning("dimmer: the plain veil pin raised; the "
+                        "layering degrades (once per process)")
 
 
 def _run_painter():
