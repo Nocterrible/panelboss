@@ -8,6 +8,11 @@
  * whole extension: the automatic lane reads it on play/pause/ended,
  * and the test button (background.js, action.onClicked) asks for it
  * via chrome.runtime.sendMessage({op:"measure"}).
+ * ADMITTED (the gate, Oct 16): content_scripts defaults all_frames
+ * false, so this is a TOP-FRAME measure - a player inside an iframe
+ * (twitch embeds, SPA shells) is off the map SILENTLY. The honest
+ * word lives here and in the README rather than in a feature: the
+ * iframe lane rides the DRM dossier, not this wave.
  *
  * EVENT-DRIVEN, no timers, no pumps: a video "play" event is exactly
  * the timer this extension is NOT allowed to write. On play it measures

@@ -105,10 +105,14 @@ tab's own content script to measure, hands the row to the host, and the
 icon answers on itself with a word — `veil` (geometry written; the badge
 clips past four chars, so the success word is short), `novid` (no
 `<video>`), `site` (the tab is off the site list, so no content script
-lives there), `slow`/`win`/`nm` (which step refused; `nm` = the native
+lives there; a present-but-stalled script answers `slow` instead, the
+gate's word-split so a hang is never misread as absence), `slow`/`win`/`nm` (which step refused; `nm` = the native
 host is missing or the id doesn't match). The automatic lane is quiet by
 design — a page push must not nag; the veil either lands or the app's
-grace retracts it.
+grace retracts it. TOP-FRAME LAW: content_scripts ships `all_frames`
+false, so the measure is top-frame only — a player inside an iframe
+(twitch embeds, SPA shells) is off the map SILENTLY; the honest word
+for that is this paragraph, and the fix rides the DRM dossier.
 The doorway is `%APPDATA%\PanelBoss\rect` — **fixed**, not the browser's
 download dir: the downloads writer (v0.2) needed the "shelf law" to find
 where chrome.downloads had *actually* put the file; the native host

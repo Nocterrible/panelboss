@@ -121,11 +121,14 @@ async function veil(_tab) {
   try {
     row = await withTimeout(
       chrome.tabs.sendMessage(tab.id, { op: "measure" }),
-      5000, "site");
-  } catch (e) {
-    say("site");                   // no content script on this tab:
-    return;                        // off the site list, not a video site
-  }
+      5000, "slow");            // timeout is SLOWNESS, not absence -
+  } catch (e) {                 // the gate's finding 3: one word for
+    say(e && e.badge ? e.badge : // both made a present-but-stalled
+        "site");                // content script read as off-list.
+    return;                     // The timeout pre-labels (badge) and
+  }                             // wins; true absence (no content
+                                // script to answer) carries no badge
+                                // and keeps the honest 'site'.
   if (!row) {
     say("novid");                  // no <video> element: nothing to
     return;                        // veil, nothing to send

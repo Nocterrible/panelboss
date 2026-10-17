@@ -247,8 +247,17 @@ class Veils:
     its alpha (the stratum's own no-stacking law). The foreground
     gets NO exclusion on those panels: the browser's own chrome
     dims too - the hole is the rect, not the window. The frame's
-    alpha is the shared [dimmer] level and the fade/ramp rules
-    apply unchanged; a gone rect rides the RAMP, not a blink."""
+    alpha is its OWN [videodim] level (the theater rail, default
+    20 - NOT the idle dimmer's shared level; the Oct-16 replacement
+    wave) and the fade/ramp rules apply unchanged; a gone rect
+    rides the RAMP, not a blink. ADMITTED EDGE (the gate, Oct 16):
+    'covered' is derived from EXISTING pieces - a video rect that
+    COVERS ITS WHOLE PANEL draws no pieces (a panel-covering rect
+    is none), so that panel is not covered and a plain veil can
+    dim the movie itself once the panel qualifies. Geometry not
+    changed for it (the case is a fullscreen player, which dims
+    itself into blackness anyway); admitted here so the next
+    reviewer reads the law, not a mystery."""
 
     def __init__(self, windows, audio, idle, paint, unveil,
                  video=None, monitors=None):
