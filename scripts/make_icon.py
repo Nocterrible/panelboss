@@ -19,7 +19,7 @@ import os
 import sys
 
 sys.path.insert(0, ".")
-from PIL import Image, ImageDraw                     # noqa: E402
+from PIL import Image, ImageDraw, ImageFilter       # noqa: E402
 
 PAGE = "#17181A"        # theme.py PAGE
 FRAME = "#3a3f44"       # the LED bezel
@@ -43,6 +43,7 @@ def _fill_holes(im, rest="#f2f4f5", min_area_pct=1.0):
     px = im.load()
     seen = bytearray(w * h)
     total = w * h
+    rest_rgb = tuple(int(rest[i:i + 2], 16) for i in (1, 3, 5)) + (255,)
     for i in range(total):
         if seen[i] or px[i % w, i // w][3] >= 128:
             continue
@@ -68,16 +69,60 @@ def _fill_holes(im, rest="#f2f4f5", min_area_pct=1.0):
         if touches or len(comp) * 100.0 < min_area_pct * total:
             continue
         for p in comp:
-            px[p % w, p // w] = rest
+            px[p % w, p // w] = rest_rgb
     return im
 
 
+def _rescue_alpha(im):
+    """Flattened-art rescue (the Oct 17 lesson: the owner's export
+    route hands over a JPG - alpha baked into a checkerboard). The
+    art's palette makes the keying trivial: every DARK neutral pixel
+    (value < 130) is the art itself (its grays run black..charcoal);
+    every LIGHT neutral (>= 130) is the baked checkerboard - the two
+    tones were (200,200,200) and (255,255,255), and the file carries
+    zero colored pixels, so no watermark competes for the light end.
+    A pixel cannot be both art and light-neutral here; if a future
+    master introduces pale art, the key gets palette input instead
+    of folklore. Returns the RGBA image with real alpha restored."""
+    w, h = im.size
+    px = im.load()
+    out = Image.new("RGBA", (w, h))
+    o = out.load()
+    keyed = 0
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y][:3]
+            if max(r, g, b) - min(r, g, b) <= 24 and min(r, g, b) >= 90:
+                o[x, y] = (0, 0, 0, 0)     # transparency returns
+                keyed += 1
+            else:
+                o[x, y] = (r, g, b, 255)
+    print("rescued alpha: %d of %d px keyed back to transparent"
+          % (keyed, w * h))
+    return out
+
+
 def draw_master():
-    """The owner's master.png when it exists (centered, square), or
-    the programmatic interim draw below it."""
-    path = os.path.join("assets", "master.png")
-    if os.path.isfile(path):
-        im = Image.open(path).convert("RGBA")
+    """The owner's master (assets/master.png, or a flattened
+    assets/master.jpg that gets its alpha rescued - both centered
+    and square-coerced), else the programmatic interim draw below."""
+    png = os.path.join("assets", "master.png")
+    jpg = os.path.join("assets", "master.jpg")
+    src = png if os.path.isfile(png) else (jpg if os.path.isfile(jpg)
+                                           else None)
+    if src is not None:
+        im = Image.open(src)
+        hist = im.convert("RGBA").getchannel("A").histogram()
+        has_alpha = sum(hist[:255]) > 0      # any non-opaque px at all
+        im = im.convert("RGBA")
+        if src == jpg or not has_alpha:
+            # median BEFORE keying: JPEG ringing around the baked
+            # checkerboard sits in the art's own charcoal band and
+            # would survive the key as speckle; a 3x3 majority pass
+            # erases the ringing (which is thin) and keeps the art
+            # (whose strokes at this size are thick).
+            im = im.filter(ImageFilter.MedianFilter(3))
+            im = _rescue_alpha(im.convert("RGB"))
         s = min(im.size)
         im = im.crop(((im.width - s) // 2, (im.height - s) // 2,
                       (im.width - s) // 2 + s,
