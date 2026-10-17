@@ -382,11 +382,32 @@ class Veils:
                 continue     # VIDEO MODE (the class docstring): the
             #                 # frame owns this panel and a window
             #                 # veil under it would STACK its alpha
-            #                 # (the stratum's own no-stacking law)
+            #                 # (the stratum's own no-stacking law).
+            #                 # REPLACEMENT SEAM (owner, Oct 16): while
+            #                 # the theater frame lives, its panel is a
+            #                 # COVERED panel for the plain-veil law -
+            #                 # a second idle veil must NOT pop over the
+            #                 # movie while the rest of the desk dims.
+            #                 # This JOINS (never parallels) the
+            #                 # per-window audio exemption below: a
+            #                 # SOUNDING movie browser is already exempt
+            #                 # by pid, but a SILENT mid-scene stretch
+            #                 # ages the browser out of _exempt after
+            #                 # SETTLE_SEC - this panel/region skip is
+            #                 # the sound-independent backstop that
+            #                 # holds during exactly that settle edge.
             if w["monitor"] not in dimming:
                 continue
             if w["pid"] in self._exempt:
-                continue
+                continue        # SOUND-EXEMPTION SEAM for the PLAIN
+            #                   # veils: a sounding pid keeps ITS OWN
+            #                   # window bright (per-window, not
+            #                   # desk-wide), with a SETTLE_SEC hold
+            #                   # after it goes quiet. The theater frame
+            #                   # NEVER consults _exempt - its lift is
+            #                   # the pointer/keyboard idle gate in
+            #                   # _live_rect (GetLastInputInfo), so a
+            #                   # film's audio cannot kill the veil.
             qualified[w["hwnd"]] = ((x, y, cw, ch), w["monitor"])
         for key, piece in frame.items():
             qualified[key] = piece      # the frame rides the SAME
@@ -394,21 +415,28 @@ class Veils:
             #                           # (the rect moves, the pieces
             #                           # re-clip), shared level alpha
         alpha = d.get("level", 20) / 100.0
+        # The theater pieces draw at THEIR OWN darkness (the owner's
+        # Oct-16 "veil level" rail), NOT the idle dimmer's level: a
+        # movie frame may be darker or lighter than the plain veils.
+        # Same clamp family as the dimmer's level (10..90).
+        valpha = int((cfg.get("videodim") or {}).get("level", 20)) \
+            / 100.0
         for hwnd, (rect, short) in qualified.items():
             st = self._live.get(hwnd)
+            a = valpha if hwnd in frame else alpha
             if st is None:
-                self._live[hwnd] = {"rect": rect, "alpha": alpha,
+                self._live[hwnd] = {"rect": rect, "alpha": a,
                                     "die": None, "mon": short,
                                     "frame": hwnd in frame}
-                self._paint(hwnd, rect, alpha)
-            elif st["die"] is not None or st["alpha"] != alpha:
-                st["die"], st["alpha"] = None, alpha   # back to full
+                self._paint(hwnd, rect, a)
+            elif st["die"] is not None or st["alpha"] != a:
+                st["die"], st["alpha"] = None, a   # back to full
                 st["mon"] = short
-                self._paint(hwnd, rect, alpha)
+                self._paint(hwnd, rect, a)
             elif st["rect"] != rect:                   # it moved
                 st["rect"] = rect
                 st["mon"] = short                      # its own panel
-                self._paint(hwnd, rect, alpha)         # we followed
+                self._paint(hwnd, rect, a)             # we followed
         ramp = max(0, min(60, int(d.get("ramp_sec", 8))))   # belt:
         #                                                normalize
         #                                                already

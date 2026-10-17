@@ -33,8 +33,6 @@ FAMILIES = ("chrome", "edge", "opera_gx")
 # the owner's Oct 16 catch: a stale row shared its words with a
 # malformed one, and the absent doorway read like a fault, not an
 # installation step. Three reasons, three sentences:
-NO_BRIDGE = ("no companion click yet - the buddy's icon writes it "
-             "on click")
 NO_BUDDY = ("the buddy's helper is not installed - load the extension "
             "and run extension\\host\\install_host.ps1")
 JUNK_WORDS = "the companion answered junk"

@@ -478,6 +478,14 @@ DEFAULTS = {
                                    # test-the-geometry gesture) never
                                    # waits on this - it measures
                                    # immediately.
+        "level": 20,               # the theater pieces' OWN darkness
+                                   # (owner, Oct 16): the four dark
+                                   # pieces draw at THIS percent, not
+                                   # the idle dimmer's [dimmer].level -
+                                   # a movie veil can be darker (or
+                                   # lighter) than the plain idle veils.
+                                   # Sibling of the dimmer's level,
+                                   # clamped 10..90 like it.
     },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
@@ -1092,12 +1100,18 @@ VIDEODIM_IDLE_CEIL = 300           #   dimmer's idle_sec sibling): 0 =
                                    #   instant, 300 = 5 min (past it the
                                    #   rail is dead pixels)
 VIDEODIM_IDLE_DEFAULT = 15
+VIDEODIM_LEVEL_FLOOR = 10          # the "veil level" rail (sibling of the
+VIDEODIM_LEVEL_CEIL = 90           #   dimmer's veil level, same honesty:
+VIDEODIM_LEVEL_DEFAULT = 20        #   10..90, 20 is the Oct-15 OLED
+                                   #   ruling mirrored). The theater pieces
+                                   #   draw at THIS darkness, NOT the idle
+                                   #   dimmer's [dimmer].level number.
 
 
 def normalize_videodim(value):
     """[videodim] in its in-memory shape: {on, min_rect_px, grace_s,
-    idle_sec}. The same honesty law as normalize_dimmer, mirrored: a bad
-    on warns and folds to False (the default-off root - the feature
+    idle_sec, level}. The same honesty law as normalize_dimmer, mirrored:
+    a bad on warns and folds to False (the default-off root - the feature
     sleeps until the owner wakes it), the rails clamp in silence. The
     retired keys (enabled / flag_families / sites, the debug-flag rail)
     are dropped here: a config written before the Oct-16 retirement
@@ -1127,8 +1141,13 @@ def normalize_videodim(value):
     except (TypeError, ValueError):
         idle = DEFAULTS["videodim"]["idle_sec"]
     idle = max(VIDEODIM_IDLE_FLOOR, min(VIDEODIM_IDLE_CEIL, idle))
+    try:
+        level = int(value.get("level", DEFAULTS["videodim"]["level"]))
+    except (TypeError, ValueError):
+        level = DEFAULTS["videodim"]["level"]
+    level = max(VIDEODIM_LEVEL_FLOOR, min(VIDEODIM_LEVEL_CEIL, level))
     return {"on": on, "min_rect_px": mins, "grace_s": grace,
-            "idle_sec": idle}
+            "idle_sec": idle, "level": level}
 
 
 def _live_shorts():

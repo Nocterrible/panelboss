@@ -810,9 +810,11 @@ class _OledMixin:
 
     def _build_companion(self, parent):
         box = self._card(parent, "Movie theater mode",
-                         "the eye that dims the desk around the "
-                         "video - the buddy extension tells it "
-                         "where the video is")
+                         "a playing video dims the desk around it, "
+                         "once the input sits still for the \"veil "
+                         "after\" wait; touch lifts the frame at once "
+                         "and a film's sound never does - only the "
+                         "mouse and keys drop it")
         row = self._row(box, "Movie theater mode", TIP_COMP["on"],
                         hint_chars=42)
         self.oled_comp_box = ctk.CTkSwitch(
