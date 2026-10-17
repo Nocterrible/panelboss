@@ -245,13 +245,16 @@ class Frame:
     exemption reads .audio. Both are per-tick mutable so the suite can
     drive the three beats and the sound/touch edges without a browser."""
     def __init__(self, wins=None, idle=0.0, audio=None, vlevel=30,
-                 vfade=False):
+                 vfade=False, vmons=None):
         self.wins = wins or []
         self.rec = Rec()
         self.idle = idle
         self.audio = audio if audio is not None else set()
         self.vlevel = vlevel
         self.vfade = vfade
+        # the [videodim].monitors rows (the Oct-16 per-panel wave);
+        # {} is the legacy shape - only the video's panel is framed
+        self.vmons = vmons or {}
         self.v = dimmer.Veils(lambda: self.wins, lambda: self.audio,
                               lambda: self.idle, self.rec.paint,
                               self.rec.unveil,
@@ -268,7 +271,8 @@ class Frame:
                      "videodim": {"on": True, "min_rect_px": 1,
                                   "grace_s": 3, "idle_sec": vidle,
                                   "level": self.vlevel,
-                                  "fade": self.vfade}},
+                                  "fade": self.vfade,
+                                  "monitors": self.vmons}},
                     now)
 
 
@@ -386,21 +390,76 @@ assert sum(1 for k in keys if k < 0) == 4, keys   # exactly 4 frame pieces
 ok("theater active -> a plain veil never covers the video's panel; the "
    "rest of the desk dims (replacement seam)")
 
+# 17b. PER-PANEL THEATER (owner, Oct 16): [videodim].monitors frames an
+#      OPT-IN panel with a FULL-FIELD piece at its own level while the
+#      conjunction holds, and an on=false row strips the video's own
+#      panel - the plain veils proceed there as usual. (viii): every
+#      pin above ran with NO monitors table (the harness default {})
+#      and passed unchanged - the legacy shape is the regression proof.
+f = Frame([w(1, monitor="MONB")], idle=999.0, vmons={
+    "MONB": {"on": True, "level": 50}})
+RECT[0] = (100, 100, 600, 300)            # the video sits on MONA
+f.tick(100, vidle=5)
+pieces = {h: v for h, v in f.rec.painted.items() if h < 0}
+assert len(pieces) == 5, f.rec.painted   # 4 border pieces (MONA) +
+#                                         # one full field (MONB)
+full = [v for v in pieces.values() if v[0] == (1000, 0, 1000, 800)]
+assert len(full) == 1 and full[0][1] == 0.5, f.rec.painted
+border = [v for v in pieces.values() if v[0] != (1000, 0, 1000, 800)]
+assert len(border) == 4 and all(v[1] == 0.3 for v in border), \
+    f.rec.painted                        # the global theater level
+assert 1 not in f.rec.painted            # MONB is covered too: the
+#                                        # plain veil never stacks
+#                                        # under its full-field piece
+ok("videodim.monitors MONB: EXACTLY one full-field piece at its rect, "
+   "alpha 0.5 (per-row level), while MONA keeps its four border pieces")
+
+f = Frame([w(1)], idle=999.0, vmons={"MONA": {"on": False}})
+RECT[0] = (100, 100, 600, 300)
+f.tick(100, vidle=5, dim_on=True)
+assert f.rec.painted == {1: ((10, 10, 800, 600), 0.3)}, f.rec.painted
+ok("videodim.monitors MONA on=false: the video panel gets NO frame "
+   "and is NOT covered - the plain veils proceed there (window 1 "
+   "wears its veil)")
+
 # --- config: the rails at the boundary --------------------------------
 n = config.normalize_videodim({"on": "yes", "min_rect_px": 9e9,
                                "grace_s": -2, "idle_sec": 9999,
                                "level": -5})
 assert n["on"] is False and n["min_rect_px"] == 4_000_000 \
-    and n["grace_s"] == 0 and n["idle_sec"] == 300 \
+    and n["grace_s"] == 0 and n["idle_sec"] == 30 \
     and n["level"] == 10, n
 d = config.normalize_videodim({})
 assert d == {"on": False, "min_rect_px": 200000, "grace_s": 3,
-             "idle_sec": 15, "level": 20, "fade": False}, d
-assert config.normalize_videodim({"idle_sec": -5})["idle_sec"] == 0
+             "idle_sec": 15, "level": 20, "fade": False,
+             "monitors": {}}, d
+assert config.normalize_videodim({"idle_sec": -5})["idle_sec"] == 1
+assert config.normalize_videodim({"idle_sec": 0})["idle_sec"] == 1
 assert config.normalize_videodim({"level": 999})["level"] == 90
+# the per-panel theater rows (owner, Oct 16): a row EXISTS to opt out,
+# so `on` absent defaults True and junk on warns to True (a row no one
+# trusts may not silently strip a frame); level clamps to the theater
+# rails, absent/None/junk follows the global; the bare bool is the
+# away table's shorthand; a non-dict table is the legacy {} (the
+# dimmer's own monitors law, mirrored).
+m = config.normalize_videodim({"monitors": {
+    "MONA": {"on": False},
+    "MONB": {"level": 150},
+    "MONC": {},
+    "MOND": {"on": "junk", "level": "dark"},
+    "MONE": True}})["monitors"]
+assert m == {"MONA": {"on": False, "level": None},
+             "MONB": {"on": True, "level": 90},
+             "MONC": {"on": True, "level": None},
+             "MOND": {"on": True, "level": None},
+             "MONE": {"on": True, "level": None}}, m
+assert config.normalize_videodim({"monitors": []})["monitors"] == {}
+assert config.normalize_videodim({"monitors": {"MONA": False}})[
+    "monitors"] == {"MONA": {"on": False, "level": None}}
 ok("normalize_videodim: bad on warns and folds, the rails clamp "
-   "(idle_sec 0..300 default 15, level 10..90 default 20), absent is "
-   "dark")
+   "(idle_sec 1..30 default 15 - the owner's sticky-veil floor and "
+   "timer law, Oct 16; level 10..90 default 20), the monitors table "
+   "normalizes to {on: bool, level: int|None}, absent is dark")
 
 # --- the wire: the manifest carries the native-messaging law ----------
 MAN = json.load(open(os.path.join("extension", "manifest.json"),

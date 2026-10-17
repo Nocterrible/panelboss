@@ -56,11 +56,15 @@ def w(hwnd, pid=1, exe="notepad.exe", monitor="AOC2790",
 
 
 def cfg(on=True, monitors=None, apps=None, idle_sec=120, ramp_sec=8,
-        always=None, **kw):
+        always=None, fade=False, levels=None, **kw):
     # NO level default here (gate finding 2): the helper's old 45 was
     # the retired default wearing an honest face, and a regression of
     # the shipped 20 would have ridden under it. Every call names its
     # level; the bare-dict pin at SHIPPED-DEFAULT owns the one truth.
+    # The Oct-16 plain-lift law: fade DEFAULTS to the shipped default
+    # (False = the instant drop), so a pin that walks the RAMP family
+    # opts in with fade=True - the ramp pins pin the ramp, the (iv)
+    # pin below owns the default.
     level = kw.pop("level")
     assert not kw, "unknown cfg kwargs: %r" % (sorted(kw),)
     return {"dimmer": {"on": on,
@@ -69,6 +73,8 @@ def cfg(on=True, monitors=None, apps=None, idle_sec=120, ramp_sec=8,
                        "always": always or {},
                        "apps": apps or {}, "idle_sec": idle_sec,
                        "ramp_sec": ramp_sec, "level": level,
+                       "fade": fade,
+                       "levels": levels or {},
                        "bound": None}}
 
 
@@ -167,17 +173,20 @@ W.tick(cfg(level=30), 104.5)
 assert 9 not in W.rec.painted and 9 in W.rec.gone
 ok("a window that starts making sound un-dims the tick we learn it")
 
-# the ramp: hold, two more steps, bare by ramp_sec - never a blink
+# the ramp: hold, two more steps, bare by ramp_sec - never a blink.
+# (The Oct-16 PLAIN LIFT TOGGLE: the ramp family is now an opt-in for
+# the plain veils - fade=True is the opt-in; the shipped default drops
+# the tick input returns, pinned by (iv) below.)
 W = World([w(1), w(2)])
-W.tick(cfg(level=30), 100)
+W.tick(cfg(level=30, fade=True), 100)
 W.idle = 0.0
-W.tick(cfg(level=30), 100)
+W.tick(cfg(level=30, fade=True), 100)
 assert set(W.rec.painted) == {1, 2} and W.rec.painted[1][1] == 0.3
-W.tick(cfg(level=30), 103)
+W.tick(cfg(level=30, fade=True), 103)
 assert W.rec.painted[1][1] == 0.2     # step one of three, at 30%%
-W.tick(cfg(level=30), 106)
+W.tick(cfg(level=30, fade=True), 106)
 assert W.rec.painted[1][1] == 0.1     # step two, bare by ramp_sec
-W.tick(cfg(level=30), 108)
+W.tick(cfg(level=30, fade=True), 108)
 assert W.rec.painted == {} and 1 in W.rec.gone and 2 in W.rec.gone
 ok("the fade holds, steps twice more, and the desk is bare at ramp")
 
@@ -189,9 +198,11 @@ W.tick(cfg(level=30), 101)
 assert W.rec.painted[1][0] == (50, 60, 640, 480)
 ok("a moved window drags its veil along")
 W.idle = 0.0
-W.tick(cfg(level=30), 102)
+W.tick(cfg(level=30, fade=True), 102)   # the ramp path (opt-in): the
+#                                       # fade clock starts here...
 W.idle = 999.0
-W.tick(cfg(level=30), 103)
+W.tick(cfg(level=30, fade=True), 103)   # ...and the re-stillness
+#                                       # re-lights it MID-STEP
 assert W.rec.painted[1][1] == 0.3
 ok("a second stillness re-lights the fade mid-step")
 
@@ -481,7 +492,7 @@ ok("the z-pin: a dead anchor skips silent; a live one pins OUR root "
 # --- app or mouse isn't on that monitor"), the audible exemption
 # --- rides, and the pause clears everything. dimming is a SET.
 _AOC = {"AOC2790": True, "IOC912B": True}
-_c = cfg(level=30, monitors=_AOC, always={"IOC912B": True})
+_c = cfg(level=30, monitors=_AOC, always={"IOC912B": True}, fade=True)
 W = World([w(9, fg=True, monitor="AOC2790"),      # focus on AOC
            w(1, monitor="AOC2790"),
            w(2, monitor="IOC912B")], idle=0.0)    # desk NOT idle
@@ -539,7 +550,9 @@ ok("always is a SUB-MODE of the opt-in: an un-armed row never dims")
 # a dimming always panel does NOT freeze a returning panel's veil:
 # input back with BOTH panels always - the focus lands on IOC, so
 # IOC fades down its own ramp while AOC never blinks
-_c2 = cfg(level=30, monitors=_AOC, always={"AOC2790": True, "IOC912B": True})
+_c2 = cfg(level=30, monitors=_AOC, always={"AOC2790": True,
+                                           "IOC912B": True},
+           fade=True)
 W = World([w(1, monitor="AOC2790"), w(2, monitor="IOC912B")],
           idle=999.0)
 W.tick(_c2, 100)                         # idle: both panels full
@@ -561,20 +574,22 @@ ok("the panel that stopped dimming fades on its own edge while an "
 # --- fade arithmetic guards the /ramp by name; the drop lands THIS
 # --- tick. (The clamp rails are pinned in the normalize block above,
 # --- the card's range in the UI pin below - floor 0, ceiling 60.)
+# --- fade=True rides: the point is the RAMP-0 guard inside _fade_one,
+# --- not the new default instant path (that is (iv)'s law below).
 W = World([w(1), w(2)])
-W.tick(cfg(level=30, ramp_sec=0), 100)
+W.tick(cfg(level=30, ramp_sec=0, fade=True), 100)
 assert set(W.rec.painted) == {1, 2}
 W.idle = 0.0
-W.tick(cfg(level=30, ramp_sec=0), 100)
+W.tick(cfg(level=30, ramp_sec=0, fade=True), 100)
 assert W.rec.painted == {} and 1 in W.rec.gone and 2 in W.rec.gone
 ok("ramp 0 is the instant drop - no division, no step, this tick")
 # and a mid-fade re-stillness at ramp 0 re-lights like any other ramp
 W = World([w(1)])
-W.tick(cfg(level=30, ramp_sec=0), 100)
+W.tick(cfg(level=30, ramp_sec=0, fade=True), 100)
 W.idle = 0.0
-W.tick(cfg(level=30, ramp_sec=0), 101)
+W.tick(cfg(level=30, ramp_sec=0, fade=True), 101)
 W.idle = 999.0
-W.tick(cfg(level=30, ramp_sec=0), 102)
+W.tick(cfg(level=30, ramp_sec=0, fade=True), 102)
 assert W.rec.painted[1][1] == 0.3
 ok("stillness at ramp 0 re-lights the field like any other ramp")
 
@@ -589,6 +604,53 @@ assert W.rec.painted[1][1] == 0.2
 W.tick(cfg(level=30), 101)
 assert W.rec.painted[1][1] == 0.3
 ok("the bare-config veil sits at 20 percent; an explicit level rules")
+
+# --- (iv) THE PLAIN LIFT TOGGLE (owner, Oct 16: "60 s veil lift is
+# --- dumb"): [dimmer].fade is a strict bool, DEFAULT OFF - the panel
+# --- that stopped dimming loses its veil the SAME tick, no ramp step
+# --- recorded (a ramp step PAINTS; none appeared). fade=True keeps the
+# --- ramp family as today - pinned above by the always-panel's walk.
+_c3 = cfg(level=30, monitors=_AOC, always={"AOC2790": True,
+                                           "IOC912B": True})
+W = World([w(1, monitor="AOC2790"), w(2, monitor="IOC912B")],
+          idle=999.0)
+W.tick(_c3, 100)                         # idle: both panels full
+assert set(W.rec.painted) == {1, 2}
+W.rec.gone.clear()
+W.idle = 0.0
+W.wins = [w(9, fg=True, monitor="IOC912B"), w(1, monitor="AOC2790"),
+          w(2, monitor="IOC912B")]
+W.tick(_c3, 101)                         # IOC owns the focus now
+assert 2 not in W.rec.painted and 2 in W.rec.gone, \
+    "the plain veil ramped under the owner's no-fade default"
+assert W.rec.painted[1][1] == 0.3        # the on-duty panel never blinked
+ok("dimmer.fade default OFF: the disqualified plain veil is DROPPED "
+   "the same tick - no ramp step (the '60 s lift is dumb' law)")
+# the whole-field edge mirrors the twin: the field-gone path under the
+# default drops the plain veils THIS tick (the soft stop pinned above
+# is the fade=True law; the pause is only the stand-in for any
+# whole-field edge - input return owns the same shape)
+dimmer.set_paused(False)
+W2 = World([w(1)], idle=999.0)
+W2.tick(cfg(level=30), 100)                # birth, unpaused
+assert W2.rec.painted[1][1] == 0.3
+dimmer.set_paused(True)
+W2.tick(cfg(level=30), 101)                # the field-gone edge, fade OFF
+assert W2.rec.painted == {} and 1 in W2.rec.gone
+dimmer.set_paused(False)
+ok("the field-gone path answers the same toggle: fade OFF drops the "
+   "plain veils this tick, the ramp is the opt-in branch")
+
+# --- (v) the per-panel PLAIN level ([dimmer.levels], the Oct-16 wave
+# --- absorbing the ADDON entry - panels answer differently): the row
+# --- paints ITS panel's percent; an unlisted panel follows the global.
+W = World([w(1, monitor="AOC2790"), w(2, monitor="IOC912B")],
+          idle=999.0)
+W.tick(cfg(level=30, monitors=_AOC, levels={"AOC2790": 70}), 100)
+assert W.rec.painted[1][1] == 0.7 and W.rec.painted[2][1] == 0.3, \
+    W.rec.painted
+ok("dimmer.levels paints the panel's OWN percent (AOC2790 70 -> "
+   "0.70); the unlisted panel rides the global")
 
 # the card must SHOW both rulings: the ramp slider's floor is the
 # shared constant (it reaches 0 with the rail), the level default
@@ -639,6 +701,10 @@ try:
                                  # both ceilings - clamps to the
                                  # ceiling whatever the number
                                  "ramp_sec": 2, "level": 200,
+                                 "fade": "yes",
+                                 "levels": {"AOC2790": 70,
+                                            "GONE": 999,
+                                            "IOC912B": "dark"},
                                  "monitors": {"AOC2790": True,
                                               "GONE": True,
                                               "IOC912B": "maybe"},
@@ -652,7 +718,19 @@ try:
         n["ramp_sec"] == 2 and n["level"] == 90 and \
         n["monitors"] == {"AOC2790": True, "GONE": True} and \
         n["always"] == {"AOC2790": True, "GONE": False} and \
-        n["apps"] == {"chrome.exe": True} and n["bound"] is None
+        n["apps"] == {"chrome.exe": True} and n["bound"] is None and \
+        n["fade"] is False and \
+        n["levels"] == {"AOC2790": 70, "GONE": 90}, n
+    # the Oct-16 PLAIN LIFT TOGGLE (owner: "60 s veil lift is dumb"):
+    # the default is the instant drop, true rides the ramp verbatim,
+    # and junk warns naming itself (a behavior switch, not a rail)
+    assert config.normalize_dimmer({})["fade"] is False
+    assert config.normalize_dimmer({"fade": True})["fade"] is True
+    assert config.normalize_dimmer({"fade": "yes"})["fade"] is False
+    # and the per-panel levels table (the ADDON absorbed): a junk
+    # ENTRY drops in silence, a non-dict TABLE warns once
+    assert config.normalize_dimmer({"levels": 7})["levels"] == {}
+    assert "dimmer levels" in "\n".join(rec.lines)
     # the Oct-15 ramp ruling: the FLOOR moved to zero (a stored 2 is
     # now legal verbatim - nothing clamps it up), an explicit 0
     # survives, and the CEILING still rules
@@ -678,33 +756,45 @@ try:
     words = "\n".join(rec.lines)
     for needle in ("dimmer on", "is not a bool; the row is dropped",
                    "dimmer bound", "kept for when it returns",
-                   "dimmer always"):
+                   "dimmer always", "dimmer fade"):
         assert needle in words, needle
-    for needle in ("idle", "ramp", "level"):      # the rails clamp
-        assert needle not in words                # in silence, hider
+    # the rails clamp in silence (the hider law) - the needles name
+    # the FIELDS (the Oct-16 wave: bare "level" would also catch the
+    # legitimate per-panel LEVELS-table warn, a different class the
+    # block above pins on its own)
+    for needle in ("idle_sec", "ramp_sec"):
+        assert needle not in words
     d = config.normalize_dimmer({})               # law
     assert d["on"] is False and d["monitors"] == {} and \
         d["always"] == {} and d["apps"] == {} and \
-        d["idle_sec"] == 120 and d["ramp_sec"] == 8 and \
-        d["level"] == 20 and d["bound"] is None
-    ok("bad words warn and fold; the rails clamp; absent is dark; "
-       "the always table normalizes under the monitors' own law")
+        d["idle_sec"] == 60 and d["ramp_sec"] == 8 and \
+        d["level"] == 20 and d["bound"] is None and \
+        d["fade"] is False and d["levels"] == {}
+    # the Oct-16 timer law made the stock idle default (120) taller
+    # than the ceiling: it clamps to 60 IN SILENCE like any hand-set
+    # larger value - zero new warnings on an old file (the migration
+    # law), and the virgin desk dims at a minute of stillness
+    ok("bad words warn and fold; the rails clamp; absent is dark; the "
+       "always table normalizes under the monitors' own law; the fade "
+       "key is strict and the levels table clamps")
 finally:
     config._live_shorts = config._live_shorts_saved
 
 # --- the pause switch is a SOFT stop: it fades like activity does and
 # --- comes back the tick the pause lifts - no blink, no re-arming walk
+# --- (fade=True: the soft stop is the ramp family's law, the plain
+# --- default at (iv) would drop it this tick - both edges pinned)
 W = World([w(1)])
-W.tick(cfg(level=30), 100)                      # veil at full, unpaused
+W.tick(cfg(level=30, fade=True), 100)                   # veil at full, unpaused
 assert W.rec.painted[1][1] == 0.3
 dimmer.set_paused(True)
 assert dimmer.paused() is True
-W.tick(cfg(level=30), 101)                      # paused: the fade clock starts
+W.tick(cfg(level=30, fade=True), 101)     # paused: the fade clock starts
 assert W.rec.painted[1][1] == 0.3      # hold, not blink
-W.tick(cfg(level=30), 109)                      # the whole ramp: bare, not killed
+W.tick(cfg(level=30, fade=True), 109)    # the whole ramp: bare, not killed
 assert W.rec.painted == {} and 1 in W.rec.gone
 dimmer.set_paused(False)
-W.tick(cfg(level=30), 110)
+W.tick(cfg(level=30, fade=True), 110)
 assert W.rec.painted[1][1] == 0.3      # back at full, the next tick
 ok("the pause switch fades the field within ramp and lifts it back")
 

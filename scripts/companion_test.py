@@ -65,9 +65,11 @@ n = config.normalize_videodim({"on": "junk", "enabled": True,
                                "flag_families": ["chrome"],
                                "sites": ["youtube.com"]})
 check(n == {"on": False, "min_rect_px": 200000, "grace_s": 3,
-            "idle_sec": 15, "level": 20, "fade": False},
+            "idle_sec": 15, "level": 20, "fade": False,
+            "monitors": {}},
       "junk on folds to False and the retired keys never survive the "
-      "normalizer")
+      "normalizer (the per-panel monitors table defaults to the "
+      "legacy empty - the Oct-16 wave's shape)")
 
 # the companion module: junk answers the off words, never raises
 for junk in (None, {}, {"videodim": "junk"}, {"videodim": 7},

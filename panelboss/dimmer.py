@@ -262,7 +262,12 @@ class Veils:
     alpha is its OWN [videodim] level (the theater rail, default
     20 - NOT the idle dimmer's shared level; the Oct-16 replacement
     wave) and the fade/ramp rules apply unchanged; a gone rect
-    rides the RAMP, not a blink. ADMITTED EDGE (the gate, Oct 16):
+    rides the RAMP, not a blink. The Oct-16 owner wave made the
+    replacement SET opt-in per panel: a [videodim].monitors row
+    frames a non-video panel with a full-field piece at its own
+    level while the conjunction holds, and an on=false row strips
+    the pieces from the panel its own video sits on (plain veils
+    proceed there as usual). ADMITTED EDGE (the gate, Oct 16):
     'covered' is derived from EXISTING pieces - a video rect that
     COVERS ITS WHOLE PANEL draws no pieces (a panel-covering rect
     is none), so that panel is not covered and a plain veil can
@@ -286,9 +291,17 @@ class Veils:
 
     def tick(self, cfg, now):
         d = cfg.get("dimmer") or {}
+        vd = cfg.get("videodim") or {}
+        # The theater pieces draw at THEIR OWN darkness (the owner's
+        # Oct-16 "veil level" rail), NOT the idle dimmer's level: a
+        # movie frame may be darker or lighter than the plain veils.
+        # Same clamp family as the dimmer's level (10..90). Hoisted
+        # above the geometry call (the Oct-16 per-panel wave): the
+        # full-field opt-in rows need it as their follow-global default.
+        valpha = int(vd.get("level", 20)) / 100.0
         vrect = self._live_rect(cfg, now)
-        frame = self._frame_pieces(vrect)
-        covered = {short for _, short in frame.values()}
+        frame = self._frame_pieces(vrect, vd.get("monitors"), valpha)
+        covered = {short for _, short, _a in frame.values()}
         rows = d.get("monitors") or {}
         opted = {s for s, v in rows.items() if v}
         if (not d.get("on") or not opted) and not covered:
@@ -429,22 +442,29 @@ class Veils:
             #                   # the pointer/keyboard idle gate in
             #                   # _live_rect (GetLastInputInfo), so a
             #                   # film's audio cannot kill the veil.
-            qualified[w["hwnd"]] = ((x, y, cw, ch), w["monitor"])
+            qualified[w["hwnd"]] = ((x, y, cw, ch), w["monitor"],
+                                    None)   # the alpha slot is the
+            #                               # frame's own (the Oct-16
+            #                               # per-panel pieces); a
+            #                               # plain veil takes its
+            #                               # percent in the paint
+            #                               # loop below
         for key, piece in frame.items():
             qualified[key] = piece      # the frame rides the SAME
             #                           # paint loop: birth, follow
             #                           # (the rect moves, the pieces
-            #                           # re-clip), shared level alpha
-        alpha = d.get("level", 20) / 100.0
-        # The theater pieces draw at THEIR OWN darkness (the owner's
-        # Oct-16 "veil level" rail), NOT the idle dimmer's level: a
-        # movie frame may be darker or lighter than the plain veils.
-        # Same clamp family as the dimmer's level (10..90).
-        valpha = int((cfg.get("videodim") or {}).get("level", 20)) \
-            / 100.0
-        for hwnd, (rect, short) in qualified.items():
+            #                           # re-clip), and each piece
+            #                           # carries its OWN alpha (the
+            #                           # Oct-16 per-panel wave)
+        # the per-panel PLAIN level ([dimmer.levels], the Oct-16 wave
+        # absorbing the ADDON entry): a row paints ITS panel at its own
+        # percent; an unlisted panel follows the global rail (absent
+        # table is EXACTLY the old shared `alpha`).
+        levels = d.get("levels") or {}
+        for hwnd, (rect, short, a) in qualified.items():
             st = self._live.get(hwnd)
-            a = valpha if hwnd in frame else alpha
+            if hwnd not in frame:
+                a = levels.get(short, d.get("level", 20)) / 100.0
             if st is None:
                 self._live[hwnd] = {"rect": rect, "alpha": a,
                                     "die": None, "mon": short,
@@ -500,11 +520,17 @@ class Veils:
                                         # edge alone
             else:
                 # the panel itself stopped dimming (input returned
-                # while an always panel keeps the field, an opt-out):
-                # that edge is an idle edge FOR THIS PANEL - fade it
-                # down, don't blink it off, and don't freeze it dark
-                # just because another panel is still working
-                self._fade_one(now, hwnd, st, ramp)
+                # while an always panel keeps the field, an opt-out).
+                # THE PLAIN LIFT TOGGLE (owner, Oct 16: "60 s veil
+                # lift is dumb"): [dimmer] fade is a strict bool,
+                # DEFAULT OFF - the veil drops the instant the desk is
+                # touched, no ramp step; fade=true keeps this edge in
+                # the ramp family (the old blink-less shape survives
+                # as the opt-in branch, twin of the theater's above).
+                if d.get("fade") is True:
+                    self._fade_one(now, hwnd, st, ramp)
+                else:
+                    self._drop(hwnd)
 
     def _live_rect(self, cfg, now):
         """The eye's door, fail-open by construction: no seam, a
@@ -545,7 +571,7 @@ class Veils:
                         "this tick (fail-open)")
             return None
 
-    def _frame_pieces(self, vrect):
+    def _frame_pieces(self, vrect, mons_rows=None, valpha=0.2):
         """The four dark pieces (top/bottom/left/right) around the
         live rect, CLAMPED PER MONITOR: a straddle cuts one piece
         set per panel and every piece stays inside its panel's
@@ -559,7 +585,16 @@ class Veils:
         the negative key IS the law the pump obeys (Oct-16 buried-ring
         cure): _zpin's synthetic-anchor branch pins the piece to the
         top of the ORDINARY band on every paint, and the tick re-queues
-        unchanged pieces every beat, so no activation buries the ring."""
+        unchanged pieces every beat, so no activation buries the ring.
+
+        PER-PANEL THEATER (owner, Oct 16): the values are
+        (rect, short, alpha) TRIPLES - the border pieces carry the
+        global theater alpha, and a [videodim].monitors row OPTS its
+        panel in: a panel with no video on it wears ONE full-field
+        piece at its whole rect, at the row's level (None = the
+        global). A panel whose row says on=false gets NO pieces even
+        under its own video - and it is not covered, so the plain
+        veils proceed there as usual."""
         out = {}
         if vrect is None:
             return out
@@ -570,25 +605,48 @@ class Veils:
             mons = self._mons()
         except Exception:
             return out                  # no desk, no frame: fail-open
+        rows = {}
+        for short, row in (mons_rows or {}).items():
+            short = str(short).strip()
+            if not short:
+                continue
+            if isinstance(row, bool):
+                row = {"on": row}       # the away table's shorthand
+            if isinstance(row, dict):
+                rows[short] = row
         for m in mons:
             mx, my, mw, mh = m["x"], m["y"], m["w"], m["h"]
+            s = str(m["short"])
+            row = rows.get(s)
+            if row is not None and row.get("on", True) is False:
+                continue                # the panel opted OUT of the
+                #                       # theater: no pieces under its
+                #                       # own video, and no full field
             ix0, iy0 = max(rx, mx), max(ry, my)
             ix1, iy1 = min(rx + rw, mx + mw), min(ry + rh, my + mh)
             if ix0 >= ix1 or iy0 >= iy1:
+                if row is not None:
+                    # the opt-in's shape: the panel is the piece - the
+                    # whole field, no hole (no video px lives here
+                    # while the conjunction holds)
+                    lvl = row.get("level")
+                    out[self._fkey(s, "full")] = (
+                        (mx, my, mw, mh), s,
+                        valpha if lvl is None else lvl / 100.0)
                 continue                # the rect is off this panel
-            s = m["short"]
             if iy0 > my:
-                out[self._fkey(s, "t")] = ((mx, my, mw, iy0 - my), s)
+                out[self._fkey(s, "t")] = ((mx, my, mw, iy0 - my), s,
+                                           valpha)
             if iy1 < my + mh:
                 out[self._fkey(s, "b")] = ((mx, iy1, mw,
-                                            my + mh - iy1), s)
+                                            my + mh - iy1), s, valpha)
             if ix0 > mx:
                 out[self._fkey(s, "l")] = ((mx, iy0, ix0 - mx,
-                                            iy1 - iy0), s)
+                                            iy1 - iy0), s, valpha)
             if ix1 < mx + mw:
                 out[self._fkey(s, "r")] = ((ix1, iy0,
                                             mx + mw - ix1,
-                                            iy1 - iy0), s)
+                                            iy1 - iy0), s, valpha)
         return out
 
     def _fkey(self, short, side):
@@ -598,22 +656,32 @@ class Veils:
         return key
 
     def _fade(self, d, now, videodim=None):
-        """The whole field goes soft: every live veil takes one step
-        down the ramp. THE FADE OPTION applies HERE too (owner, Oct 16
-        - the first cut patched only the qualified-shrink path and the
-        field-gone path ramped the frame anyway, caught by the suite
-        pin): a frame piece under [videodim] fade=False is dropped
-        this tick, like every other drop. The dimmer's own ramp is
-        untouched; a None videodim (a caller without the section)
-        means the dimmer's own veils only, and no frame exists to
-        disagree about."""
+        """The whole field goes soft - or goes bare THIS TICK, per the
+        owner's two fade keys (Oct 16). THE FADE OPTION applies HERE
+        too (the first cut patched only the qualified-shrink path and
+        the field-gone path ramped the frame anyway, caught by the
+        suite pin): a frame piece under [videodim] fade=False is
+        dropped this tick, and the PLAIN veils answer their OWN twin -
+        [dimmer] fade=False (the default) drops them this tick, true
+        keeps the ramp family. A None videodim (a caller without the
+        section) means the dimmer's own veils only, and no frame
+        exists to disagree about."""
         ramp = max(0, min(60, int(d.get("ramp_sec", 8))))
         vfade = (videodim or {}).get("fade") is True
         for hwnd, st in list(self._live.items()):
-            if st.get("frame") and not vfade:
-                self._drop(hwnd)
+            if st.get("frame"):
+                # the theater keeps consulting [videodim].fade exactly
+                # as the Oct-16 wave left it - two owners' words, two
+                # keys
+                if vfade:
+                    self._fade_one(now, hwnd, st, ramp)
+                else:
+                    self._drop(hwnd)
             else:
-                self._fade_one(now, hwnd, st, ramp)
+                if (d or {}).get("fade") is True:
+                    self._fade_one(now, hwnd, st, ramp)
+                else:
+                    self._drop(hwnd)
 
     def _fade_one(self, now, hwnd, st, ramp):
         """One veil, one step. ramp 0 is the Oct-15 ruling (the rail

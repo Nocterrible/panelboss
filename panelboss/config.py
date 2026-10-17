@@ -410,15 +410,33 @@ DEFAULTS = {
                                    # foreground and the audible
                                    # exemptions; false is the plain law
         "idle_sec": 120,          # input stillness before veils may birth;
-                                   # clamped 0..3600 (silent clamp rails;
+                                   # clamped 0..60 (silent clamp rails;
                                    # 0 = the rail reaches zero and means
-                                   # it, the ramp's law - Oct 15 UAT)
+                                   # it, the ramp's law - Oct 15 UAT;
+                                   # the ceiling moved 300 -> 60 on the
+                                   # owner's timer law, Oct 16)
         "ramp_sec": 8,            # the fade-out after input returns;
                                    # clamped 0..60 (0 = the drop is
                                    # immediate, a ruling not an accident)
+        "fade": False,            # the PLAIN veil's lift style (owner,
+                                   # Oct 16: "60 s veil lift is dumb"):
+                                   # default OFF - input returns, the
+                                   # veil is GONE this tick; true opts
+                                   # the plain field into the ramp
+                                   # family (the theater's own "fade"
+                                   # key is the sibling below)
         "level": 20,              # veil darkness in percent; clamped
                                    # 10..90 (Oct-15 OLED ruling: 45 was
                                    # aggressive on a dark desk)
+        "levels": {},             # {EDID short: int} - the per-panel
+                                   # veil percent (owner, Oct 16, the
+                                   # ADDON entry absorbed: panels answer
+                                   # differently - 49%% goes DARK on
+                                   # DELA283 and is barely a tint on
+                                   # IOC912B); a row overrides
+                                   # [dimmer].level for ITS panel,
+                                   # clamped to the same rails; an
+                                   # unlisted panel follows the global
         "apps": {},               # {exe-basename-lower: bool} - the
                                    # exclusion table (bool rows, junk
                                    # warn+drop, unknown kept)
@@ -472,8 +490,13 @@ DEFAULTS = {
                                    # the honest default: the mouse
                                    # goes still while the intro runs,
                                    # and a quick scrub doesn't black
-                                   # the screen; 0 = instant, clamped
-                                   # 0..300 like the sibling. The
+                                   # the screen; 1 s is the rail's FLOOR
+                                   # (owner, Oct 16: at 0 the veil never
+                                   # lifts - rect updates stop re-
+                                   # birthing and the ring sticks),
+                                   # clamped 1..30 (the owner's timer
+                                   # law: the 5 min ceiling was dead
+                                   # pixels for a theater veil). The
                                    # click lane (the demoted
                                    # test-the-geometry gesture) never
                                    # waits on this - it measures
@@ -494,6 +517,18 @@ DEFAULTS = {
                                     # opts into the ramp family (one-tick
                                     # hold, retract over the dimmer's
                                     # ramp).
+        "monitors": {},             # {EDID short: {"on": bool, "level":
+                                    # int}} - the per-panel theater rows
+                                    # (owner, Oct 16): a row's panel
+                                    # wears a FULL-FIELD theater veil
+                                    # while the conjunction holds, at
+                                    # its own level (absent level =
+                                    # follow [videodim].level); on =
+                                    # false strips the frame from the
+                                    # panel its OWN video sits on (the
+                                    # plain veils proceed there). An
+                                    # absent row is the legacy shape:
+                                    # only the video's panel is framed.
     },
     "restore": {
         "enabled": False,       # the pre-armed lever (General tab): a
@@ -976,13 +1011,13 @@ DIMMER_IDLE_FLOOR = 0            # the rail reaches zero and MEANS it (the
                                  # accident - at 0 the veil births on the
                                  # first beat, the foreground and audible
                                  # exemptions still bow to it)
-DIMMER_IDLE_CEIL = 300           # 5 min, owner ruling (Oct 15, twice
-                             # corrected: 3600 was absurd, 600 still
-                             # a rumor): past five minutes of
-                             # stillness the veil is a done deal and
-                             # the rest of the rail is dead pixels;
-                             # a hand-set larger value clamps honest
-                             # at the ceiling
+DIMMER_IDLE_CEIL = 60            # 60 s, owner timer law (Oct 16: the
+                              # 5 min the Oct-15 ruling left was still
+                              # dead pixels for an idle veil - the
+                              # slider's 5 min max became 60 s): past
+                              # a minute of stillness the veil is a
+                              # done deal; a hand-set larger value
+                              # clamps honest at the ceiling
 DIMMER_IDLE_DEFAULT = 120
 DIMMER_RAMP_FLOOR = 0            # the rail reaches zero and MEANS it: at
                                  # 0 the drop is immediate (owner ruling,
@@ -998,8 +1033,8 @@ DIMMER_LEVEL_DEFAULT = 20        # the Oct-15 OLED ruling: 45 was
 
 def normalize_dimmer(value):
     """[dimmer] in its in-memory shape: {on, monitors, always,
-    idle_sec, ramp_sec, level, apps, bound}. normalize_jog's honesty,
-    mirrored:
+    idle_sec, ramp_sec, level, fade, levels, apps, bound}. normalize_jog's
+    honesty, mirrored:
     a bad on warns and folds to False (the default-off law), the rails
     clamp in silence (the hider's hold_sec law - a slider that clamps
     must not confess at load), and the row tables fail open: a
@@ -1031,6 +1066,17 @@ def normalize_dimmer(value):
     except (TypeError, ValueError):
         level = DIMMER_LEVEL_DEFAULT
     level = max(DIMMER_LEVEL_FLOOR, min(DIMMER_LEVEL_CEIL, level))
+    # fade: the PLAIN veil's lift style (owner, Oct 16: "60 s veil lift
+    # is dumb"). STRICT bool, absent/junk = False = the veil is GONE the
+    # tick input returns; true opts the plain field into the ramp
+    # family. Junk warns like `on` does - it is a behavior switch, not
+    # a rail. The videodim fade block below is the twin, word for word
+    # in tone: two owners' words, two keys, one shape.
+    fade = value.get("fade", False)
+    if not isinstance(fade, bool):
+        log.warning("dimmer fade %r is not a bool; the veil drops "
+                    "without a fade", fade)
+        fade = False
     rows = {}
     raw = value.get("monitors")
     try:
@@ -1082,6 +1128,29 @@ def normalize_dimmer(value):
             else:
                 log.warning("dimmer app %r: %r is not a bool; the "
                             "row is dropped", name, row)
+    # [dimmer.levels]: the per-panel veil percent (owner, Oct 16, the
+    # ADDON absorbed - panels answer differently). {short: int} clamped
+    # to the level rails; a junk ENTRY is dropped in silence (the rail
+    # law - a clamp must not confess at load), a non-dict TABLE warns
+    # once naming itself. An unlisted panel follows [dimmer].level:
+    # absent is EXACTLY today's behavior.
+    levels = {}
+    raw = value.get("levels")
+    if raw is not None:
+        if not isinstance(raw, dict):
+            log.warning("dimmer levels %r is not a table; every panel "
+                        "keeps the global veil", raw)
+        else:
+            for short, row in raw.items():
+                short = str(short).strip()
+                if not short:
+                    continue
+                try:
+                    lv = int(row)
+                except (TypeError, ValueError):
+                    continue
+                levels[short] = max(DIMMER_LEVEL_FLOOR,
+                                    min(DIMMER_LEVEL_CEIL, lv))
     bound = value.get("bound")
     if isinstance(bound, (list, tuple)) and len(bound) == 2:
         try:
@@ -1096,6 +1165,7 @@ def normalize_dimmer(value):
         bound = None
     return {"on": on, "monitors": rows, "always": always,
             "idle_sec": idle, "ramp_sec": ramp, "level": level,
+            "fade": fade, "levels": levels,
             "apps": apps, "bound": bound}
 
 
@@ -1103,10 +1173,17 @@ VIDEODIM_MIN_FLOOR = 0             # a zero min means "trust every
 VIDEODIM_MIN_CEIL = 4_000_000      #   rect" - legal, not a mistake
 VIDEODIM_GRACE_FLOOR = 0
 VIDEODIM_GRACE_CEIL = 60
-VIDEODIM_IDLE_FLOOR = 0            # the "veil after stillness" rail (the
-VIDEODIM_IDLE_CEIL = 300           #   dimmer's idle_sec sibling): 0 =
-                                   #   instant, 300 = 5 min (past it the
-                                   #   rail is dead pixels)
+VIDEODIM_IDLE_FLOOR = 1            # the "veil after stillness" rail (the
+                                    #   dimmer's idle_sec sibling): the
+                                    #   owner's 1 s FLOOR (Oct 16: at 0
+                                    #   the veil NEVER lifts, so rect
+                                    #   updates stop re-birthing and the
+                                    #   ring sticks at its first geometry
+                                    #   - the sticky-veil class; 1 s is
+                                    #   the honest land time, not a delay)
+VIDEODIM_IDLE_CEIL = 30            #   30 s (owner timer law, Oct 16:
+                                    #   the slider's 5 min max was dead
+                                    #   pixels for a theater veil)
 VIDEODIM_IDLE_DEFAULT = 15
 VIDEODIM_LEVEL_FLOOR = 10          # the "veil level" rail (sibling of the
 VIDEODIM_LEVEL_CEIL = 90           #   dimmer's veil level, same honesty:
@@ -1118,7 +1195,8 @@ VIDEODIM_LEVEL_DEFAULT = 20        #   10..90, 20 is the Oct-15 OLED
 
 def normalize_videodim(value):
     """[videodim] in its in-memory shape: {on, min_rect_px, grace_s,
-    idle_sec, level}. The same honesty law as normalize_dimmer, mirrored:
+    idle_sec, level, fade, monitors}. The same honesty law as
+    normalize_dimmer, mirrored:
     a bad on warns and folds to False (the default-off root - the feature
     sleeps until the owner wakes it), the rails clamp in silence. The
     retired keys (enabled / flag_families / sites, the debug-flag rail)
@@ -1163,8 +1241,43 @@ def normalize_videodim(value):
         log.warning("videodim fade %r is not a bool; the frame drops "
                     "without a fade", fade)
         fade = False
+    # monitors: the per-panel theater rows (owner, Oct 16). A row is
+    # the EDID short -> {"on": bool, "level": int|None}. on absent is
+    # True: a row EXISTS to opt out too, so the stock word is consent.
+    # Junk on warns and defaults True (the panel keeps its theater - an
+    # untrusted row may not silently strip the frame). level clamps to
+    # the theater rails; absent, None, or junk means follow
+    # [videodim].level. A bare bool row is the away table's shorthand.
+    # Absent/empty/non-dict is {} - the legacy shape: only the video's
+    # panel is framed, every pre-wave config behaves exactly as today.
+    mons = {}
+    raw = value.get("monitors")
+    if isinstance(raw, dict):
+        for short, row in raw.items():
+            short = str(short).strip()
+            if not short:
+                continue
+            if isinstance(row, bool):
+                row = {"on": row}
+            if not isinstance(row, dict):
+                continue
+            on = row.get("on", True)
+            if not isinstance(on, bool):
+                log.warning("videodim monitor %r: on %r is not a bool; "
+                            "the panel keeps its theater", short, on)
+                on = True
+            level = row.get("level")
+            if level is not None:
+                try:
+                    level = max(VIDEODIM_LEVEL_FLOOR,
+                                min(VIDEODIM_LEVEL_CEIL, int(level)))
+                except (TypeError, ValueError):
+                    level = None      # the silent clamp family: junk
+                                      # follows the global veil
+            mons[short] = {"on": on, "level": level}
     return {"on": on, "min_rect_px": mins, "grace_s": grace,
-            "idle_sec": idle, "level": level, "fade": fade}
+            "idle_sec": idle, "level": level, "fade": fade,
+            "monitors": mons}
 
 
 def _live_shorts():
