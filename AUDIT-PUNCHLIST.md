@@ -1797,3 +1797,25 @@ same question asked (one video frame straddling two panels with
 different veil darkness will LOOK wrong - the straddle seam knows both
 panels; decide then whether theater uses the brighter of the two, an
 average, or its own per-panel row too - do not half-do it).
+
+## THE ROADMAP (owner, Oct 16, verbatim order - this IS the release plan)
+1. Owner verifies Movie theater mode (the UAT above).
+2. MAKE THE MSI. Wipe the owner's profile. COMPLETELY FRESH INSTALL from
+   the MSI. Run it for DAYS looking for bugs (the burn-in - final state,
+   the freeze is the point). Owner makes an app icon during this window.
+3. When bug-found stops: integrate the icons where they belong (app icon
+   into the exe/shortcuts, tray icon into the tray), update the GitHub
+   README, get the extension on the Chrome Web Store (the store text is
+   already written in extension/README.md; zip WITHOUT host/, the app
+   installs the host).
+4. Update the MSI (icons + any burn-in learnings), cut a GitHub RELEASE
+   carrying the MSI, set the repo PUBLIC.
+5. Owner hits Reddit with the link. Promotion is the owner's channel.
+6. HYPER CARE after that (rapid-response phase: fixes ship fast, the
+   fleet knows).
+Preparation already banked toward step 2: the six MSI laws live above
+(this file), the companion installer is now a CARD BUTTON (no console
+needed by a fresh user - the fresh-install trial will prove it), the
+start-menu entry exists (the MSI replaces it with the registered kind),
+the credit-wall and dead-transport dossiers keep the next architect
+from re-paying tuition.
