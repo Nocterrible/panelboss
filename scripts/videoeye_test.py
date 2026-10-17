@@ -5,9 +5,12 @@ viewport-space judgment), the liveness gates (paused, min_rect_px, the
 grace), freshest-wins across families - and the Veils frame: four pieces
 clamped per monitor, the straddle covering BOTH panels with no sliver on
 the video column, plain veils skipped on the covered panels only, the
-ramp retraction, the pause. Every door is a fake seam (the doorway path,
-monitors, the clock) - no browser, no Tk, app-up and headless alike,
-the dimmer_test family's idiom.
+ramp retraction, the pause, the THREE-BEAT idle conjunction (on after X,
+drop on input, re-arm after X), the sound exemption (a film's audio does
+NOT lift the theater frame), and the replacement seam (theater active ->
+a plain idle veil never covers that region). Every door is a fake seam
+(the doorway path, monitors, the clock) - no browser, no Tk, app-up and
+headless alike, the dimmer_test family's idiom.
 """
 import json
 import os
@@ -78,9 +81,9 @@ def door(rect, view=(1920, 1080), bounds=(0, 0, 1920, 1080), age=0.0,
     os.utime(videoeye.RECT_PATH, (stamp, stamp))
 
 
-def vcfg(on=True, grace=3, mins=200000, delay=0):
+def vcfg(on=True, grace=3, mins=200000, idle=15, level=20):
     return {"videodim": {"on": on, "min_rect_px": mins, "grace_s": grace,
-                         "delay_s": delay}}
+                         "idle_sec": idle, "level": level}}
 
 
 # ---------------------------------------------------------------- pins
@@ -233,17 +236,24 @@ RECT = [None]
 
 
 class Frame:
-    def __init__(self, wins=None, idle=0.0):
+    """The fake desk: an idle clock (mutable via .idle), an audio set
+    (mutable via .audio), and the video eye seam fixed to RECT[0]. The
+    theater veil's idle conjunction reads .idle; the plain veil's sound
+    exemption reads .audio. Both are per-tick mutable so the suite can
+    drive the three beats and the sound/touch edges without a browser."""
+    def __init__(self, wins=None, idle=0.0, audio=None, vlevel=30):
         self.wins = wins or []
         self.rec = Rec()
         self.idle = idle
-        self.v = dimmer.Veils(lambda: self.wins, lambda: set(),
+        self.audio = audio if audio is not None else set()
+        self.vlevel = vlevel
+        self.v = dimmer.Veils(lambda: self.wins, lambda: self.audio,
                               lambda: self.idle, self.rec.paint,
                               self.rec.unveil,
                               video=lambda cfg, now: RECT[0],
                               monitors=lambda: MON)
 
-    def tick(self, now, level=30, dim_on=True):
+    def tick(self, now, level=30, dim_on=True, vidle=0):
         self.v.tick({"dimmer": {"on": dim_on,
                                 "monitors": {"MONA": True,
                                              "MONB": True},
@@ -251,13 +261,14 @@ class Frame:
                                 "idle_sec": 120, "ramp_sec": 8,
                                 "level": level, "bound": None},
                      "videodim": {"on": True, "min_rect_px": 1,
-                                  "grace_s": 3}},
+                                  "grace_s": 3, "idle_sec": vidle,
+                                  "level": self.vlevel}},
                     now)
 
 
 # 11. one monitor, a rect fully inside: EXACTLY four pieces, the hole
-#     is the rect
-f = Frame([w(1)])
+#     is the rect (idle high so the conjunction is satisfied)
+f = Frame([w(1)], idle=999.0)
 RECT[0] = (100, 100, 600, 300)
 f.tick(100)
 assert {v[0] for v in f.rec.painted.values()} == {
@@ -267,7 +278,7 @@ ok("the frame is exactly four dark rectangles - the hole is the rect")
 
 # 12. the straddle: pieces PER MONITOR, each clamped; the seam column
 #     across the video stays bright
-f = Frame([w(1)])
+f = Frame([w(1)], idle=999.0)
 RECT[0] = (900, 200, 200, 400)
 f.tick(100)
 assert {v[0] for v in f.rec.painted.values()} == {
@@ -277,8 +288,12 @@ assert {v[0] for v in f.rec.painted.values()} == {
 ok("the straddle cuts one piece set per panel, each clamped - the seam "
    "column never darkens under the video")
 
-# 13. a gone rect is a stopped video: the frame rides the RAMP
-f = Frame([w(1)])
+# 13. a gone rect is a stopped video: the frame rides the RAMP. The
+#     desk stays "still" at 10 s - enough for the theater rail (vidle
+#     default 0) but BELOW the plain dimmer's 120 s rail, so a stopped
+#     video reads as "no frame, and not idle-dimmed either": only the
+#     frame's own ramp path is under test, no plain veil in the frame.
+f = Frame([w(1)], idle=10.0)
 RECT[0] = (100, 100, 600, 300)
 f.tick(100)
 assert len(f.rec.painted) == 4
@@ -298,39 +313,100 @@ assert set(f.rec.painted) == {1, 2}
 ok("no live rect means no negative keys: the plain dimmer behaves as "
    "before")
 
+# 15. THE THREE BEATS (the automatic lane's conjunction): a playing
+#     video frames only when the input has been still for idle_sec; any
+#     input drops it; stillness again re-arms it - ONE rail, symmetric.
+f = Frame([w(1)], idle=0.0, vlevel=30)
+RECT[0] = (100, 100, 600, 300)
+f.tick(100, vidle=5)                 # still 0 s < 5 s: NO frame
+assert f.rec.painted == {}, f.rec.painted
+f.idle = 6.0                          # the desk sits still past the rail
+f.tick(101, vidle=5)                  # frame lands
+assert len(f.rec.painted) == 4, f.rec.painted
+f.idle = 1.0                          # a pointer move: input returns
+f.tick(102, vidle=5)                  # frame drops (the ramp's first
+assert len(f.rec.painted) == 4        # step is the one-tick hold)
+f.tick(110, vidle=5)                  # and retracts fully (still 1 s <
+assert f.rec.painted == {}, f.rec.painted   # 5 s: no re-arm mid-ramp)
+f.idle = 6.0                          # stillness passes X AGAIN
+f.tick(111, vidle=5)                  # frame re-arms - the SAME rail,
+assert len(f.rec.painted) == 4        # no second knob
+ok("the three beats: on after X still, drop the tick input returns, "
+   "re-arm after X again - one symmetric rail")
+
+# 16. THE SOUND EXEMPTION: a film's audio must not lift the theater
+#     frame - the drive is the pointer/keyboard idle clock only. Sound
+#     touches the PLAIN veil's per-window exemption, never the frame.
+f = Frame([w(1)], idle=999.0, audio={1})
+RECT[0] = (100, 100, 600, 300)
+f.tick(100, vidle=5)
+assert len(f.rec.painted) == 4        # audio pid present, frame STAYS
+f.audio = {1}
+f.tick(101, vidle=5)
+assert len(f.rec.painted) == 4        # sound does not lift the frame
+ok("a film's sound never lifts the theater frame (the lift is the "
+   "pointer/keyboard idle gate, not the sound ledger)")
+
+# 17. THE REPLACEMENT SEAM: while the theater frame is ACTIVE, a plain
+#     idle veil must NOT cover that panel - the movie stays bright, the
+#     rest of the desk dims. (The browser window is exempt by pid only
+#     while it is SOUNDING; the frame's panel skip is the
+#     sound-independent backstop for a silent mid-scene stretch.)
+f = Frame([w(1), w(2, monitor="MONB")], idle=999.0)
+RECT[0] = (100, 100, 600, 300)        # the theater frame on MONA
+f.tick(100, vidle=5, dim_on=True)
+keys = f.rec.painted
+# plain window 1 (on MONA) must NOT be painted: the frame owns MONA.
+assert 1 not in keys, keys
+assert 2 in keys, keys                # window 2 on MONB dims normally
+assert sum(1 for k in keys if k < 0) == 4, keys   # exactly 4 frame pieces
+ok("theater active -> a plain veil never covers the video's panel; the "
+   "rest of the desk dims (replacement seam)")
+
 # --- config: the rails at the boundary --------------------------------
 n = config.normalize_videodim({"on": "yes", "min_rect_px": 9e9,
-                               "grace_s": -2, "delay_s": 9999})
+                               "grace_s": -2, "idle_sec": 9999,
+                               "level": -5})
 assert n["on"] is False and n["min_rect_px"] == 4_000_000 \
-    and n["grace_s"] == 0 and n["delay_s"] == 300
+    and n["grace_s"] == 0 and n["idle_sec"] == 300 \
+    and n["level"] == 10, n
 d = config.normalize_videodim({})
 assert d == {"on": False, "min_rect_px": 200000, "grace_s": 3,
-             "delay_s": 3}
-assert config.normalize_videodim({"delay_s": -5})["delay_s"] == 0
+             "idle_sec": 15, "level": 20}, d
+assert config.normalize_videodim({"idle_sec": -5})["idle_sec"] == 0
+assert config.normalize_videodim({"level": 999})["level"] == 90
 ok("normalize_videodim: bad on warns and folds, the rails clamp "
-   "(delay_s 0..300, absent = 3), absent is dark")
+   "(idle_sec 0..300 default 15, level 10..90 default 20), absent is "
+   "dark")
 
 # --- the wire: the manifest carries the native-messaging law ----------
 MAN = json.load(open(os.path.join("extension", "manifest.json"),
                      encoding="utf-8"))
 assert MAN["manifest_version"] == 3
-assert set(MAN["permissions"]) == {"scripting", "activeTab",
-                                   "nativeMessaging"}
+assert MAN["permissions"] == ["nativeMessaging"], MAN["permissions"]
 assert "host_permissions" not in MAN
 cs = MAN.get("content_scripts")
 assert cs and cs[0]["js"] == ["content.js"]
-assert "://*.youtube.com/*" in cs[0]["matches"]
+assert "*://*.youtube.com/*" in cs[0]["matches"]
 assert "<all_urls>" not in cs[0]["matches"]
-ok("the manifest carries the content script on a SITE LIST (no "
-   "<all_urls>), scripting + activeTab + nativeMessaging only")
+ok("the manifest asks nativeMessaging ONLY (the content script owns the "
+   "measure, so scripting/activeTab are gone) - no <all_urls>, no "
+   "downloads, no tabs")
 BG = open(os.path.join("extension", "background.js"),
           encoding="utf-8").read()
-assert "function measureVideo()" in BG
 assert "eval(" not in BG
 assert "chrome.runtime.connectNative" in BG
 assert "onMessage" in BG and "lane" in BG
-ok("the measure is a static bundled function handed to the native host, "
-   "and the background folds the content-script's automatic lane")
+assert "tabs.sendMessage" in BG
+assert "chrome.scripting" not in BG and "executeScript" not in BG
+assert "measureVideo" not in BG           # the static measure moved to
+CJ = open(os.path.join("extension", "content.js"),
+          encoding="utf-8").read()        # content.js as measure()
+assert 'op !== "measure"' in CJ or 'msg.op !== "measure"' in CJ
+ok("the background folds the content-script's automatic lane and the "
+   "test button reaches the tab's own measure via tabs.sendMessage - no "
+   "scripting, no eval, one measure in content.js")
+
 
 if os.path.exists(videoeye.RECT_PATH):
     os.remove(videoeye.RECT_PATH)

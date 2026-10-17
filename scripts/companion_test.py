@@ -63,7 +63,8 @@ check(c2["videodim"].get("on") is True and "enabled" not in c2["videodim"]
 n = config.normalize_videodim({"on": "junk", "enabled": True,
                                "flag_families": ["chrome"],
                                "sites": ["youtube.com"]})
-check(n == {"on": False, "min_rect_px": 200000, "grace_s": 3},
+check(n == {"on": False, "min_rect_px": 200000, "grace_s": 3,
+            "idle_sec": 15, "level": 20},
       "junk on folds to False and the retired keys never survive the "
       "normalizer")
 
@@ -88,11 +89,12 @@ videoeye.RECT_PATH = _dark
 try:
     check(companion.bridge_state() is None,
           "no doorway file answers None, never raises")
-    check(companion.say({"videodim": {"on": True}}) == companion.NO_BRIDGE,
-          "the say line names the missing click in the pinned words")
+    check(companion.say({"videodim": {"on": True}}) == companion.NO_BUDDY,
+          "the say line names the missing buddy as an installation step")
     check(companion.veil_now({"videodim": {"on": True}})
-          == companion.NO_BRIDGE,
-          "the manual one-shot on a dark desk answers NO_BRIDGE")
+          == companion.NO_BUDDY,
+          "the manual one-shot on a dark desk answers the installation "
+          "words (absent doorway), never a fault's words")
 
     # a click: a temp file through the eye's own doorway, folded to
     # physical px and fed - the button's contract
