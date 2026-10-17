@@ -76,10 +76,14 @@ def _origin(row):
 
 def _four(v):
     """A four-number [left, top, w, h] in-memory shape, or None - the
-    webrect parser (the host's measured viewport rect, PHYSICAL px)."""
+    webrect parser (the host's measured viewport rect, PHYSICAL px).
+    ZERO/NON-POSITIVE SIZE REJECTS (gate, Oct 17): a hidden/minimized
+    window's degenerate report must fall through to the origin lane,
+    not anchor a zero-offset hole."""
     if (isinstance(v, (list, tuple)) and len(v) == 4
             and all(isinstance(x, (int, float)) and not isinstance(x, bool)
-                    for x in v)):
+                    for x in v)
+            and v[2] > 0 and v[3] > 0):
         return [float(v[0]), float(v[1]), float(v[2]), float(v[3])]
     return None
 

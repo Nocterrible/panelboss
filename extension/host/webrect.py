@@ -103,11 +103,15 @@ def webrect(payload):
     the origin/bounds lanes it already has."""
     fam = payload.get("family")
     want_exe = _FAMILY_EXE.get(fam, "chrome.exe")
-    dpr = float(payload.get("dpr") or 1.0)
     view = payload.get("view")
     if not (isinstance(view, (list, tuple)) and len(view) >= 2):
         return None
     try:
+        # dpr INSIDE the try (gate, Oct 17): a junk dpr is a ValueError,
+        # and the docstring's promise is None, never a raise - a raise
+        # here once killed the whole veil write (the fail-open path of
+        # an open API is load-bearing).
+        dpr = float(payload.get("dpr") or 1.0)
         want_w = float(view[0]) * dpr
         want_h = float(view[1]) * dpr
     except (TypeError, ValueError):

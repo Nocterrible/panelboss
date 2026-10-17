@@ -116,7 +116,13 @@ def _veil(msg):
     if not isinstance(payload, dict):
         return {"op": "veil", "ok": False, "why": "payload is not an "
                 "object"}
-    wr = _webrect_mod.webrect(payload)
+    try:
+        # belt AND path (gate, Oct 17): webrect answers None on trouble;
+        # if it ever raises anyway, the veil write must still happen -
+        # the compat lanes in the fold are the ring's fallback lifeboat.
+        wr = _webrect_mod.webrect(payload)
+    except Exception:
+        wr = None
     if wr is not None:
         payload["webrect"] = wr
     try:
