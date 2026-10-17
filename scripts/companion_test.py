@@ -333,9 +333,12 @@ try:
           == os.path.dirname(sys.executable),
           "PATH is PREPENDED with the venv's Scripts dir "
           "(PyInstaller 6.22.3 lives there)")
-    check(pw[0][0][-2:] == ["-ExtensionId",
-                            "abcdefghijklmnopabcdefghijklmnop"],
-          "the resolved id reaches the installer")
+    check(pw[0][0][-3:] == ["-ExtensionId",
+                            "abcdefghijklmnopabcdefghijklmnop",
+                            "-Rebuild"],
+          "the resolved id reaches the installer, and the install "
+          "route always rebuilds (gate finding 4: a partial exe from "
+          "a killed build must not wedge reinstall behind Test-Path)")
     import codecs
     with open(nmhost.HOST_JSON, "rb") as f:
         raw = f.read()

@@ -1049,7 +1049,7 @@ class _OledMixin:
         # the flag goes up LAST, and done() marshals through after(0)
         # with the ghost-tolerance the capture verb demonstrates
         # (queue-fallback drain on a dead root - the Oct-14 class).
-        entry = (self.oled_comp_helper.get() or "").strip()
+        entry = (self.oled_comp_helper.get() or "").strip().lower()   # browser ids are a-p lowercase; a hand-typed paste   # folds (gate finding 3)
         if entry and not re.match(r"^[a-p]{32}$", entry):
             # the client-side id law: a bad shape answers a word and
             # does NOT fire the installer (the ps1's own validation is

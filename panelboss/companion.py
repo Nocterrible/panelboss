@@ -36,6 +36,25 @@ FAMILIES = ("chrome", "edge", "opera_gx")
 NO_BUDDY = ("the buddy's helper is not installed - press install the "
             "helper below (or run extension\\host\\install_host.ps1)")
 JUNK_WORDS = "the companion answered junk"
+
+
+def _no_buddy():
+    """The absent-doorway sentence is TWO sentences (gate finding 2,
+    Oct 16): helper never installed -> point at the BUTTON; helper
+    installed but the browser has never spoken -> the id mismatch
+    class, point at the OVERRIDE entry (pressing install again would
+    just re-pass the same id). The caps line beside these words is
+    the reader that distinguishes them, so the card never has to
+    guess."""
+    if nmhost.host_path() is not None:
+        return ("the helper is installed but the browser has never "
+                "spoken - if the id on your extensions page differs, "
+                "paste it in the id override and press reinstall")
+    return NO_BUDDY          # the base sentence itself (the blanket
+                             # rewrite had folded THIS one too, and
+                             # the function called itself forever -
+                             # RecursionError, caught by the suite
+                             # before anything else could)
 # the staleness horizon: a row older than this reads as "hours old",
 # not "live". The eye's grace_s (default 3 s) lifts the veil long
 # before; this is the CARD's honest age, sized to the owner's sense of
@@ -143,14 +162,17 @@ def _bridge_words(reason, row):
     words, and the absent doorway reads as an installation step, not a
     fault."""
     if reason == "absent":
-        return NO_BUDDY
+        return _no_buddy()
     if reason == "junk":
         return JUNK_WORDS
     if reason == "stale":
         return ("the last geometry is hours old - play a video or "
                 "click the buddy")
     if not isinstance(row, dict):
-        return NO_BUDDY
+        return _no_buddy()   # malformed row WITH a doorway: the same
+                             # honest fork (installed? override box.
+                             # absent? button.) - the junk words would
+                             # blame the payload for a missing one
     r = row.get("rect") if isinstance(row.get("rect"), dict) else {}
     lane = " (auto)" if row.get("lane") == "auto" else ""
     return "companion: %sx%s at %s,%s%s%s" % (
@@ -184,14 +206,17 @@ def veil_now(cfg):
     rect, or the reason (absent/junk/stale)."""
     reason, row = _reason(time.monotonic())
     if reason == "absent":
-        return NO_BUDDY
+        return _no_buddy()
     if reason == "junk":
         return JUNK_WORDS
     if reason == "stale":
         return ("the last geometry is hours old - play a video or "
                 "click the buddy")
     if not isinstance(row, dict):
-        return NO_BUDDY
+        return _no_buddy()   # malformed row WITH a doorway: the same
+                             # honest fork (installed? override box.
+                             # absent? button.) - the junk words would
+                             # blame the payload for a missing one
     fam = row.get("family") if row.get("family") in FAMILIES \
         else FAMILIES[0]
     rect = videoeye._rect_px(row)

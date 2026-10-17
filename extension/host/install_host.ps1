@@ -24,7 +24,7 @@
 # no admin. Opera GX and Edge read the SAME Google\Chrome\NativeMessaging
 # Hosts key on Windows (the Chromium base they share), so one install
 # covers every family.
-param([string]$ExtensionId = "")
+param([string]$ExtensionId = "", [switch]$Rebuild)
 
 $ErrorActionPreference = 'Stop'
 # a typo today registers a never-matching origin and reads forever as the
@@ -47,7 +47,14 @@ $py = Join-Path $repo '.venv\Scripts\python.exe'
 
 $HOSTNAME = 'com.nocterrible.panelboss'
 
-# 1. build the host exe (single file, no window, tiny - stdlib only)
+# 1. build the host exe (single file, no window, tiny - stdlib only).
+# -Rebuild deletes the exe first: a process killed mid-write leaves a
+# partial onefile that Test-Path happily reports as present, and the
+# skip-branch then wedges every reinstall on a broken binary the
+# recovery word used to have to be MANUAL about (gate finding 4, Oct 16).
+if ($Rebuild -and (Test-Path $hostExe)) {
+    Remove-Item $hostExe -Force
+}
 if (-not (Test-Path $hostExe)) {
     Write-Output 'building panelboss-host.exe (PyInstaller onefile)'
     & $py -m PyInstaller --noconfirm --clean --onefile --windowed `

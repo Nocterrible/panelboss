@@ -224,7 +224,7 @@ def install(ext_id=None):
     try:
         done = _spawn.run(["powershell", "-NoProfile", "-ExecutionPolicy",
                            "Bypass", "-File", ps1, "-ExtensionId",
-                           ext_id],
+                           ext_id, "-Rebuild"],
                           env=env, capture_output=True, text=True,
                           timeout=300)
     except _spawn.subprocess.TimeoutExpired:
@@ -251,6 +251,14 @@ def install(ext_id=None):
     # ago (the TTL would otherwise answer the stale answer).
     _cache.update(until=0.0, caps=None)
     caps = capabilities(force=True)
+    if caps is None:
+        # The onefile host EXE unpacks to temp on its first launch
+        # (and AV may inspect that unpack): the proof-of-install probe
+        # can legitimately miss a healthy host exactly once, exactly
+        # at THIS moment - the gate's finding 1 (Oct 16). One pause,
+        # one re-ask, before we blame a binary that is fine.
+        time.sleep(1.0)
+        caps = capabilities(force=True)
     if caps is None:
         return False, ("the installer reported success but the fresh "
                        "host answers no capabilities - or run "
