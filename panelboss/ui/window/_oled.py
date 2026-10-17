@@ -119,6 +119,17 @@ TIP_DIM = {
             "that blinks off is a screensaver. at zero the blink is "
             "the choice: the drop is immediate.",
     "level": "how dark the veils are, in percent.",
+    "row_level": "this panel's OWN veil percent. panels answer "
+                 "differently - the same number goes DARK on one and "
+                 "is barely a tint on another - so a panel with a row "
+                 "here ignores the global \"veil level\". the slider "
+                 "opens at the global; the first move stores this "
+                 "panel's number, and only this panel's.",
+    "lift_fade": "when off (the default), the veil drops the instant "
+                 "you touch the desk - no lift ceremony; the \"fade "
+                 "within\" ramp applies to the plain veils only when "
+                 "this is on. the theater frame has its own twin "
+                 "switch on its card.",
     "apps": "apps that never wear a veil, by exe file name as the "
             "title bar shows it (chrome.exe). the exclusion is "
             "yours, per app; it edits here, in the card.",
@@ -186,6 +197,12 @@ TIP_COMP = {
             "on: the theater joins the ramp family - one beat of "
             "hold, then the frame retracts gently over the dimmer's "
             "\"fade within\" ramp, never a blink.",
+    "mons": "per-monitor theater: the box keeps THIS panel's theater "
+            "(a video on it frames; a panel with no video wears the "
+            "full-field veil while the conjunction holds). unchecked, "
+            "the panel gets no pieces at all and dims like any idle "
+            "desk. the slider is the panel's OWN veil percent - until "
+            "you move it the panel follows the \"veil level\" above.",
 }
 
 
@@ -483,6 +500,7 @@ class _OledMixin:
 
         self._dim_rows = {}
         self._dim_always = {}
+        self._dim_level = {}
         dim = self.cfg.setdefault("dimmer", {})
         base = [m.get("short") or m.get("id") for m in wm.monitors()]
         dupes = {b for b in base if base.count(b) > 1}
@@ -527,6 +545,31 @@ class _OledMixin:
             abox.bind("<Leave>",
                       lambda e=None: self.tips._hide_soon(), add="+")
             self._dim_always[short] = abox
+            # the per-panel veil percent (the Oct-16 wave absorbs the
+            # ADDON entry - panels answer differently): the row opens
+            # at the card's "veil level" and the FIRST move saves
+            # dimmer.levels[short]; an untouched panel keeps following
+            # the global (the honest absent-key law).
+            srow = self._row(box, "%s veil %%" % label,
+                             TIP_DIM["row_level"], hint_chars=42)
+            lv = (dim.get("levels") or {}).get(short)
+            if lv is None:
+                lv = int(dim.get("level", DIMMER_LEVEL_DEFAULT))
+            slabel = ctk.CTkLabel(srow, font=self.skin.font(12),
+                                  **self.skin.text_style("sub"))
+            sslider = ctk.CTkSlider(
+                srow, from_=DIMMER_LEVEL_FLOOR, to=DIMMER_LEVEL_CEIL,
+                number_of_steps=DIMMER_LEVEL_CEIL - DIMMER_LEVEL_FLOOR,
+                width=180,
+                command=lambda v, s=short:
+                self._oled_dim_level_changed(s, v),
+                **self.skin.slider_style())
+            sslider.set(int(lv))
+            sslider.grid(row=0, column=1, sticky="e")
+            slabel.configure(text="%s%%" % int(lv))
+            slabel.grid(row=0, column=2, sticky="e",
+                        padx=(theme.S_FIELD, 0))
+            self._dim_level[short] = (sslider, slabel)
 
         row = self._row(box, "dim after", TIP_DIM["idle"],
                         hint_chars=42)
@@ -561,6 +604,25 @@ class _OledMixin:
             text="%s s" % int(dim.get("ramp_sec", DIMMER_RAMP_DEFAULT)))
         self.oled_ramp_label.grid(row=0, column=2, sticky="e",
                                   padx=(theme.S_FIELD, 0))
+        # the plain veil's lift style (owner, Oct 16: "60 s veil lift
+        # is dumb"), beside its ramp - the theater card's fade switch
+        # is the twin idiom, two keys two owners' words. OFF (the
+        # default) = the veil is gone the instant you touch the desk;
+        # the ramp to its left applies to the plain veils only when
+        # this is on.
+        self.oled_dim_lift_fade = ctk.CTkSwitch(
+            row, text="lift fade", font=self.skin.font(12),
+            command=self._oled_dim_fade_changed,
+            **self.skin.switch_style())
+        self.oled_dim_lift_fade.select() if dim.get("fade") is True \
+            else self.oled_dim_lift_fade.deselect()
+        self.oled_dim_lift_fade.grid(row=0, column=3, sticky="e",
+                                     padx=(theme.S_FIELD, 0))
+        self.oled_dim_lift_fade.bind(
+            "<Enter>", lambda e=None, b=self.oled_dim_lift_fade:
+            self.tips._schedule(TIP_DIM["lift_fade"], b), add="+")
+        self.oled_dim_lift_fade.bind(
+            "<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
 
         row = self._row(box, "veil level", TIP_DIM["level"],
                         hint_chars=42)
@@ -676,6 +738,29 @@ class _OledMixin:
             return
         self.cfg.setdefault("dimmer", {}).setdefault("always", {})[short] \
             = bool(box.get())
+        self._save()
+
+    def _oled_dim_fade_changed(self):
+        # [dimmer].fade - the plain lift toggle (owner, Oct 16: "60 s
+        # veil lift is dumb"). OFF (the stock default) = the plain
+        # veil drops the instant the desk is touched; the ramp family
+        # is the opt-in. The theater's twin switch (_oled_comp_fade_
+        # changed) is a separate key by law.
+        self.cfg.setdefault("dimmer", {})["fade"] = bool(
+            self.oled_dim_lift_fade.get())
+        self._save()
+
+    def _oled_dim_level_changed(self, short, value):
+        # [dimmer.levels] - the per-panel veil percent (the Oct-16
+        # wave absorbs the ADDON): the row stores ITS panel's number;
+        # the card's "veil level" stays the default for unlisted
+        # panels.
+        pair = self._dim_level.get(short)
+        if pair is None:
+            return
+        self.cfg.setdefault("dimmer", {}).setdefault(
+            "levels", {})[short] = int(round(value))
+        pair[1].configure(text="%s%%" % round(value))
         self._save()
 
     def _oled_idle_changed(self, value):
@@ -906,6 +991,62 @@ class _OledMixin:
             else self.oled_comp_fade.deselect()
         self.oled_comp_fade.grid(row=0, column=1, sticky="e")
 
+        # THE PER-MONITOR THEATER (owner, Oct 16): every panel gets a
+        # row. CHECKED (the default when no row exists - a row is
+        # written to opt OUT too) keeps the panel's theater: its own
+        # video frames as usual, and a panel with no video on it
+        # wears a FULL-FIELD veil while the conjunction holds. An
+        # UNCHECKED panel gets no pieces at all - a video on it dims
+        # like any idle desk. The slider is the panel's OWN veil
+        # percent: it opens at the global "veil level" and the first
+        # move stores the row (an untouched slider = follow the
+        # global, the honest absent-key law).
+        self._comp_mon_rows = {}
+        vdm = (self.cfg.setdefault("videodim", {})).get("monitors") or {}
+        base_c = [m.get("short") or m.get("id") for m in wm.monitors()]
+        dupes_c = {b for b in base_c if base_c.count(b) > 1}
+        for m, short in zip(wm.monitors(), base_c):
+            label = short
+            if short in dupes_c:
+                label = "%s (%s)" % (
+                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
+                    [-1] or "?")
+            crow = self._row(box, " ", TIP_COMP["mons"], hint_chars=42)
+            cbox = ctk.CTkCheckBox(
+                crow, text="theater on " + label,
+                command=lambda s=short: self._oled_comp_row_changed(s),
+                font=self.skin.font(12), checkbox_width=18,
+                checkbox_height=18, border_color=self.skin.border_raised,
+                fg_color=self.skin.accent, hover_color=self.skin.accent,
+                text_color=self.skin.text,
+                text_color_disabled=self.skin.txt3)
+            r = vdm.get(short)
+            r = r if isinstance(r, dict) else {}
+            cbox.set(bool(r.get("on", True)))
+            cbox.grid(row=0, column=1, sticky="e")
+            lvl = r.get("level")
+            if lvl is None:
+                lvl = int((self.cfg.get("videodim") or {}).get(
+                    "level", VIDEODIM_LEVEL_DEFAULT))
+            cslider = ctk.CTkSlider(
+                crow, from_=VIDEODIM_LEVEL_FLOOR,
+                to=VIDEODIM_LEVEL_CEIL,
+                number_of_steps=VIDEODIM_LEVEL_CEIL -
+                                VIDEODIM_LEVEL_FLOOR,
+                width=140,
+                command=lambda v, s=short:
+                self._oled_comp_row_level_changed(s, v),
+                **self.skin.slider_style())
+            cslider.set(int(lvl))
+            cslider.grid(row=0, column=2, sticky="e",
+                         padx=(theme.S_FIELD, 0))
+            clabel = ctk.CTkLabel(crow, font=self.skin.font(12),
+                                  **self.skin.text_style("sub"))
+            clabel.configure(text="%s%%" % int(lvl))
+            clabel.grid(row=0, column=3, sticky="e",
+                        padx=(theme.S_FIELD, 0))
+            self._comp_mon_rows[short] = (cbox, cslider, clabel)
+
         # THE DEBUG PORT IS GONE FROM THE SURFACE (owner, Oct 16,
         # second instruction): the per-family checkboxes made the dead
         # route look alive - the flag path restarted a browser with a
@@ -1026,6 +1167,33 @@ class _OledMixin:
     def _oled_comp_fade_changed(self):
         vd = self.cfg.setdefault("videodim", {})
         vd["fade"] = bool(self.oled_comp_fade.get())
+        self._save()
+
+    def _oled_comp_row_changed(self, short):
+        # [videodim].monitors[short].on - the per-panel theater box.
+        # The row is WRITTEN on the gesture (a checked box after an
+        # absent row stores the same True the absence meant - honest,
+        # and the opt-out becomes revocable in the same seam).
+        pair = self._comp_mon_rows.get(short)
+        if pair is None:
+            return
+        self.cfg.setdefault("videodim", {}).setdefault(
+            "monitors", {}).setdefault(short, {})["on"] = bool(
+            pair[0].get())
+        self._save()
+
+    def _oled_comp_row_level_changed(self, short, value):
+        # [videodim].monitors[short].level - the panel's OWN theater
+        # darkness. The slider opened at the global (the label shows
+        # what it shows); the first move stores the number and the
+        # panel stops following.
+        pair = self._comp_mon_rows.get(short)
+        if pair is None:
+            return
+        self.cfg.setdefault("videodim", {}).setdefault(
+            "monitors", {}).setdefault(short, {})["level"] = int(
+            round(value))
+        pair[2].configure(text="%s%%" % round(value))
         self._save()
 
     def _oled_comp_veil(self):

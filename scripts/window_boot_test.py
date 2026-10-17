@@ -145,6 +145,15 @@ def check():
             assert want in _t, "the oled tab lost the %r card" % want
         assert "video-dim" not in _t and "Video-dim" not in _t, \
             "the renamed card still answers an old title label"
+        # THE OCT-16 WAVE RENDERS ON AN EMPTY CONFIG (the migration
+        # law's UI half): the boot ran with a virgin file - no fade,
+        # no levels, no monitors anywhere - and every new widget row
+        # still drew: the plain lift-fade switch on the dim card, the
+        # fake panel's per-panel veil-% row, the per-monitor theater
+        # row (box checked by default, slider at the global). Exact
+        # labels, no substring games.
+        for want in ("lift fade", "T veil %", "theater on T"):
+            assert want in _t, "the Oct-16 wave lost %r on the card" % want
         # THE HELPER-INSTALL VERB (Oct 16): the doorway row's button
         # EXISTS on the built window - exact label, no substring
         # checks (the placement-trio lesson) - with its id-override
