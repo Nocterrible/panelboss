@@ -60,7 +60,7 @@ CAPABILITIES = {
              "ended": "veil lifts"},
     "veil": {
         "fields": ["rect", "dpr", "paused", "scroll", "view",
-                   "bounds", "family", "lane", "ts"],
+                   "origin", "bounds", "family", "lane", "ts"],
         "rect": ["left", "top", "width", "height"],
         "lane": ["click", "auto"],
     },

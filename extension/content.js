@@ -1,6 +1,7 @@
 /* PanelBoss Companion - the AUTOMATIC lane + the measure for the test
- * button, v0.4.1 (the hole follows the video - motion events re-push,
- * deduped).
+ * button, v0.4.2 (the page REPORTS its window origin - screenX/screenY
+ * - so the fold stops guessing the borders, and the scroll listener
+ * rides the CAPTURE phase so inner scrollers reach it too).
  *
  * A declared content script (manifest content_scripts.matches). It
  * already lives in the page, so it measures the <video> natively:
@@ -33,7 +34,11 @@
 // (left/top/width/height in CSS px), dpr the device pixel ratio,
 // paused the live playback state, scroll the [scrollX, scrollY] pair
 // (the future DRM lane reads document space from it), view the inner
-// [width, height] the fold's chrome correction needs.
+// [width, height] the fold's chrome correction needs, and origin the
+// window's OWN report of where its viewport sits on the desk
+// (screenX/screenY, DIP): a maximized window's borders hang OFF screen
+// (measured bounds.left=-8, Oct 16), so the fold's even-split border
+// guess is a guess and the report is the truth (v0.4.2).
 function measure() {
   const v = currentVideo();
   if (!v) return null;
@@ -43,6 +48,7 @@ function measure() {
     paused: v.paused,
     scroll: [window.scrollX, window.scrollY],
     view: [window.innerWidth, window.innerHeight],
+    origin: [window.screenX, window.screenY],
   };
 }
 
@@ -125,7 +131,13 @@ function wire() {
       attributes: true, attributeFilter: ["style", "class"] });
   // the size/position events a re-laid-out player fires outright:
   window.addEventListener("resize", onMove);
-  window.addEventListener("scroll", onMove, { passive: true });
+  // CAPTURE phase (v0.4.2): a page's own scroller (YouTube's filmstrip,
+  // any overflow container) fires scroll on the ELEMENT, and scroll
+  // does not bubble - it only traverses the capture path. A window-level
+  // listener without capture:true watched every page-level scroll and
+  // never saw the ones that move the video.
+  window.addEventListener("scroll", onMove,
+                          { passive: true, capture: true });
   document.addEventListener("fullscreenchange", onMove);
   arm();
   // a video that is ALREADY playing when the script lands (a reload

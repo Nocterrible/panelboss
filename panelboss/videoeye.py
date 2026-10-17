@@ -20,12 +20,15 @@ tick" and the dimmer's ramp retracts the veil (a vanished rect is a
 stopped video, not an event worth a dark veil).
 
 THE FOLD (content space -> physical desktop px): the page answers
-getBoundingClientRect (viewport CSS px) and devicePixelRatio. The
-viewport's own origin sits inside the window's OUTER bounds by
-(outer - inner*dpr): chrome height down top, border half-lateral. The
-row carries the bounds the extension measured (chrome.windows.get), so
-the fold anchors on those - DIP scaled by dpr, uniform-desk assumption
-(every panel on this box shares the scale; mixed-DPI desks are the
+getBoundingClientRect (viewport CSS px) and devicePixelRatio. Since
+v0.4.2 the page also REPORTS its viewport origin (window.screenX/
+screenY) - and a report beats a guess: the fold anchors on the origin
+when the row carries one, because a maximized window's borders hang
+off-screen and no even-split can know that. The row also still carries
+the bounds the extension measured (chrome.windows.get), and rows
+WITHOUT the report fold on those - the legacy lane, kept for host/
+extension pairs mid-update (DIP scaled by dpr, uniform-desk assumption:
+every panel on this box shares the scale; mixed-DPI desks are the
 future lane's). The fold math is UNCHANGED from the port era: only the
 input plumbing changed.
 
@@ -55,6 +58,19 @@ RECT_PATH = door_path()
 
 DEFAULT_GRACE = 3.0        # s: [videodim].grace_s rules
 DEFAULT_MIN = 200000       #   the shipped defaults it normalizes to
+
+
+def _origin(row):
+    """The row's viewport-origin report (screenX/screenY, DIP) in its
+    in-memory shape: a two-number list/tuple, or None. A junk origin
+    reads as NO origin - the legacy bounds lane keeps the answer (the
+    compat law for host/extension pairs mid-update)."""
+    o = row.get("origin")
+    if (isinstance(o, (list, tuple)) and len(o) == 2
+            and all(isinstance(v, (int, float))
+                    and not isinstance(v, bool) for v in o)):
+        return [float(o[0]), float(o[1])]
+    return None
 
 
 def _read(now, wall):
@@ -87,6 +103,7 @@ def _read(now, wall):
                "family": row.get("family"),
                "lane": row.get("lane") or "auto",
                "bounds": row.get("bounds"),
+               "origin": _origin(row),
                "ts": now - max(0.0, wall - mtime), "src": "companion"}
     except (ValueError, KeyError, TypeError):
         return None
@@ -123,9 +140,32 @@ def _fold(row, bounds):
 
 
 def _rect_px(row):
-    """Fold a row to physical px, anchoring on the bounds the row
-    carries (the extension measured them itself). None when the row
-    is unplaceable."""
+    """Fold a row to physical px. THE BORDER-GUESS WAS A GUESS; THE
+    ORIGIN IS A REPORT (owner UAT, Oct 16): a maximized window's
+    borders hang off-screen (live doorway row: bounds.left=-8), so the
+    even-split correction under-shoots by a few dozen px. A row that
+    carries the page's own viewport origin (window.screenX/screenY,
+    DIP, v0.4.2) folds ON THE REPORT and skips the bounds math whole:
+    x = round((origin0 + rect.left) * dpr), the same rounding the
+    legacy lane uses (round(), the one ruler - banker's ties included).
+    The bounds formula below survives ONLY as the legacy lane for
+    rows without the report (host/extension pairs mid-update). The
+    uniform-desk assumption is documented above: DIP * dpr matches
+    physical px on every non-mixed-DPI panel, and this box is 100%%.
+    None when the row is unplaceable."""
+    o = row.get("origin")
+    if o is not None:
+        try:
+            dpr = float(row.get("dpr") or 1)
+            r = row["rect"]
+            rl, rt = float(r["left"]), float(r["top"])
+            rw, rh = float(r["width"]), float(r["height"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if rw * rh <= 0:
+            return None
+        return (round((o[0] + rl) * dpr), round((o[1] + rt) * dpr),
+                round(rw * dpr), round(rh * dpr))
     b = row.get("bounds")
     if isinstance(b, dict) and all(k in b for k in
                                    ("left", "top", "width", "height")):

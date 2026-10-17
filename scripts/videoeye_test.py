@@ -67,7 +67,8 @@ def row(x=100, y=200, w=800, h=450, dpr=1, paused=False,
 
 
 def door(rect, view=(1920, 1080), bounds=(0, 0, 1920, 1080), age=0.0,
-         dpr=1, paused=False, family="chrome", lane="click"):
+         dpr=1, paused=False, family="chrome", lane="click",
+         origin=None):
     body = {"rect": {"left": rect[0], "top": rect[1],
                      "width": rect[2], "height": rect[3]},
             "dpr": dpr, "paused": paused, "scroll": [0, 0],
@@ -75,6 +76,8 @@ def door(rect, view=(1920, 1080), bounds=(0, 0, 1920, 1080), age=0.0,
             "bounds": {"left": bounds[0], "top": bounds[1],
                        "width": bounds[2], "height": bounds[3]},
             "family": family, "lane": lane, "ts": CLK.wall - age}
+    if origin is not None:
+        body["origin"] = list(origin)
     with open(videoeye.RECT_PATH, "w", encoding="utf-8") as f:
         f.write(json.dumps(body) + "\n")
     stamp = CLK.wall - age
@@ -124,6 +127,63 @@ videoeye.tick(vcfg(), CLK.monotonic())
 r = videoeye.video_rect(vcfg())
 assert r and r[2] == 800 and r[3] == 450, r
 ok("dpr is the ONE ruler: the fold is physical px, stable under dpr 2")
+
+# 4b. THE ORIGIN REPORT (the owner's border-guess cure, Oct 16 UAT): a
+#     MAXIMIZED window's borders hang OFF-screen (live doorway row:
+#     bounds.left=-8), so the even-split guess is wrong by a few dozen
+#     px. A row that REPORTS its viewport origin (window.screenX/
+#     screenY, DIP) folds on the report - the bounds math never runs.
+videoeye._STATE.clear()
+door((613.5, 68, 1840, 920), bounds=(-8, -8, 3856, 2144),
+     view=(3798, 2019), origin=(0, 117))
+videoeye.tick(vcfg(), CLK.monotonic())
+r = videoeye.video_rect(vcfg())
+#     the arithmetic, on the new law: x = round((0 + 613.5) * 1) =
+#     round(613.5) = 614 - Python's round ties to EVEN, the very
+#     round() the legacy branch uses (the fold's rounding law is
+#     round(), unchanged; an int(x+0.5) lane would say 614 too, but
+#     this pins what the CODE gives: 614); y = round((117 + 68) * 1)
+#     = 185; the size is the rect scaled, (1840, 920).
+assert r == (614, 185, 1840, 920), r
+ok("the origin report folds exact - the border-guess's few-dozen-px "
+   "bite is gone (the same row by the legacy formula lands x=634, "
+   "20 px off the truth)")
+
+# 4c. the compat lane: the SAME row without the report (no origin key,
+#     host/extension pairs mid-update) keeps the CURRENT bounds answer
+videoeye._STATE.clear()
+door((613.5, 68, 1840, 920), bounds=(-8, -8, 3856, 2144),
+     view=(3798, 2019))
+videoeye.tick(vcfg(), CLK.monotonic())
+r = videoeye.video_rect(vcfg())
+#     vx = -8 + max(0, 3856 - 3798)/2 = 21; x = round(21 + 613.5) =
+#     round(634.5) = 634 (ties to even); vy = -8 + (2144 - 2019) =
+#     117; y = round(117 + 68) = 185.
+assert r == (634, 185, 1840, 920), r
+ok("a row without the report folds the legacy bounds answer (the "
+   "compat lane is alive, pinned at the owner's exact bite)")
+
+# 4d. a junk origin reads as NO origin (_origin: two numbers or None)
+#     and the legacy lane keeps the fold - the row above pin 3, the
+#     same expected answer
+videoeye._STATE.clear()
+door((100, 200, 800, 450), bounds=(600, 200, 1600, 900),
+     view=(1584, 649), origin="junk")
+videoeye.tick(vcfg(), CLK.monotonic())
+r = videoeye.video_rect(vcfg())
+assert r == (708, 651, 800, 450), r
+ok("a junk origin is no origin: the fold falls back, never guesses")
+
+# 4e. the report under dpr 2: the DIP pair scales like everything else
+videoeye._STATE.clear()
+door((10, 20, 200, 100), dpr=2, bounds=(0, 0, 1920, 1080),
+     view=(960, 540), origin=(100, 50))
+videoeye.tick(vcfg(mins=1), CLK.monotonic())
+r = videoeye.video_rect(vcfg(mins=1))
+#     (100 + 10) * 2 = 220, (50 + 20) * 2 = 140, 200*2=400, 100*2=200
+assert r == (220, 140, 400, 200), r
+ok("origin folds physical px under dpr 2 - (110*2, 70*2, 400, 200), "
+   "the one ruler holds")
 
 # 5. the scroll pair rides the row and does NOT shift the rect
 #    (getBoundingClientRect is viewport-space)
@@ -482,12 +542,24 @@ assert "onMessage" in BG and "lane" in BG
 assert "tabs.sendMessage" in BG
 assert "chrome.scripting" not in BG and "executeScript" not in BG
 assert "measureVideo" not in BG           # the static measure moved to
+assert "origin: row.origin" in BG         # v0.4.2: the background is a
+#                                         # pass-through for the report,
+#                                         # it derives nothing
 CJ = open(os.path.join("extension", "content.js"),
           encoding="utf-8").read()        # content.js as measure()
 assert 'op !== "measure"' in CJ or 'msg.op !== "measure"' in CJ
+assert "window.screenX" in CJ             # v0.4.2: the page reports its
+#                                         # own viewport origin (a
+#                                         # maximized border hangs
+#                                         # off-screen - the guess lied)
+assert "capture: true" in CJ              # inner scrollers fire on the
+#                                         # element; scroll does not
+#                                         # bubble, it traverses capture
 ok("the background folds the content-script's automatic lane and the "
    "test button reaches the tab's own measure via tabs.sendMessage - no "
-   "scripting, no eval, one measure in content.js")
+   "scripting, no eval, one measure in content.js; v0.4.2 carries the "
+   "origin report through and the scroll listener rides the capture "
+   "phase")
 
 
 # THEATER RE-PIN (Oct-16 UAT cure, the invisible-ring bite): an

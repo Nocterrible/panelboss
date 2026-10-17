@@ -95,6 +95,8 @@ async function push(row, windowId, lane, badgeWord) {
   const payload = {
     rect: row.rect, dpr: row.dpr, paused: row.paused,
     scroll: row.scroll, view: row.view, lane: lane,
+    origin: row.origin || null,   // the window's own report (v0.4.2)
+                                  // - pass-through, never derived
     bounds: { left: win.left, top: win.top,
               width: win.width, height: win.height },
     family: FAMILY, ts: Date.now() / 1000,
