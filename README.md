@@ -67,8 +67,14 @@ is watching. Absence confirmed and the screens go dark, the same
 standby the power plan uses. Or set away mode to dim: the panels
 stay awake and the app paints the dark instead, per monitor one of
 blackout (a black overlay), dim (the panel drops to your level, 1 to
-40 percent), or off (the panel's own power code). Optional
-lock-on-away ends the spell with LockWorkStation: the panels wake to
+40 percent), or off (the panel's own power code). Set a deep-sleep
+timer and the painted dark gets a second stage: after that many
+minutes away the panels also take the power-off code, the GPU stops
+presenting, and the wake on return takes a beat longer - the trade
+for a panel that truly rested. The pointer is parked at the bottom of
+the lowest monitor when away engages, and stays there when you return:
+nobody remembers where their cursor was after leaving the room.
+Optional lock-on-away ends the spell with LockWorkStation: the panels wake to
 the lock screen, not to your desktop.
 
 ### Window dimming

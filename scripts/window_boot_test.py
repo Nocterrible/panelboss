@@ -154,6 +154,26 @@ def check():
         # labels, no substring games.
         for want in ("lift fade", "T veil %", "theater on T"):
             assert want in _t, "the Oct-16 wave lost %r on the card" % want
+        # THE AWAY CARD LIVES ON THE DETECTION TAB (salvage correction,
+        # Oct 17 - scanning the oled tab for it pins a ghost): the
+        # stage-two row and the lock box must render there on an
+        # EMPTY config, or the feature has no door.
+        _t2 = []
+
+        def _titles2(w):
+            for c in w.winfo_children():
+                try:
+                    x = c.cget("text")
+                except Exception:
+                    x = None
+                if isinstance(x, str) and x:
+                    _t2.append(x)
+                _titles2(c)
+        _titles2(app.pages["detection"].inner)
+        for want in ("deep sleep after", "lock when away starts",
+                     "never"):
+            assert want in _t2, \
+                "the detection tab lost the away card's %r" % want
         # THE HELPER-INSTALL VERB (Oct 16): the doorway row's button
         # EXISTS on the built window - exact label, no substring
         # checks (the placement-trio lesson) - with its id-override

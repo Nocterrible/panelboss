@@ -1890,3 +1890,14 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
 
 
 - TRANSIENT-POPUP law trade (gate, Oct 17): while a TASKBAR menu is open the foreground row is the dropped tray row, so always-dim panels dim blind for the menu's lifetime - judged on-principle (a menu is not a panel you are using) but named for the record. Taskbar no longer plain-veils (same law, permanent chrome).
+
+
+## Oct 17 - TWO-STAGE AWAY + CURSOR PARK (owner feature wave, in flight)
+
+- Owner laws verbatim: stage two after x minutes of away (blackout first ~15 min for the OLEDs, then full monitor power-off - GPU stops presenting, longer wake is 'a fair trade'); blackout 'is still leaving my mouse on screen' -> park the pointer at the bottom-middle of the lowest monitor on away engage; 'no restore, noone remembers where there cursor was after leaving the room.'
+- Design locked: [away].off_after_min default 0 = single-stage (byte-identical); clamp 0..240; painted modes only (off/offdisc already sleep); MONOTONIC engage clock stamped in _screens_off (the wall-clock _away_off['tried'] stamps must NEVER mix with it - the salvage caught the class before the code); heartbeat arm _away_beat rides _off_phase (every tick, poll-gate-free); the verb is the EXISTING VCP D6=4; staged GDIs recorded INTO self._away_off so the existing wake lift hands the screens back for free.
+- PARK REPLACES JAIL for painted modes: display.jail_cursor already parks at the far corner for blackout-degraded/off rows - two parks would double-fire SetCursorPos; decision: painted modes -> park (bottom-middle, the owner's exact ask), sleep modes -> jail unchanged. Pin proves EXACTLY ONE pointer move per engage through the u32 fake.
+- FLEET NOTE: this is the SECOND silent lane death today (cappy x2 earlier, coder here) - both times the continuation prompt extracted real value (this one died at zero writes with a full anchor-correction salvage: six packet lies caught pre-implementation, including the packet's own 'reuse that clock' which named a heartbeat that does not exist). The continuation-ask is the right first response to an empty completion, not a re-dispatch boot.
+- OPEN after landing: owner UAT (walk away, return before/after N; check the pointer sliver bottom-middle); MSI note for the installer wave: away defaults change only in the new key, no migration needed (absent = 0 = today).
+
+- LANE NOTE (Oct 17, gauntlet-away wave): layout_test went red on 'fingerprint empty, 0 monitors' - LAWFUL desk state, not a regression: the console had been screen-offed and no relaunch had happened, so the desktop sat on the no-panels answer (the zero-panel class the census already honors). The gauntlet needs the desk lit AND the app up; the runner ritual is now: (re)start app, wait its boot line, THEN run_all. Owner nudge (input) wakes the console; a bare Start-Process did not, this time.

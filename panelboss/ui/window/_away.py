@@ -162,6 +162,32 @@ class _AwayMixin:
                                     .get("lock")))
         self.away_lock_box.grid(row=0, column=2, sticky="e", padx=(10, 0))
 
+        # stage two (owner, Oct 17): painted dark at once, the panel's
+        # own power code after a timer. Gray-not-lie: _away_sync gates
+        # this row exactly like the lock box - a second stage on a
+        # spell that never paints is a slider that cannot speak.
+        drow = self._row(box, "deep sleep after",
+                         "stage two: after this many minutes away, the "
+                         "painted monitors get the monitor-power-off "
+                         "command - the GPU stops presenting and the "
+                         "panels rest for real; the wake on return "
+                         "takes a beat longer. blackout and dim rows "
+                         "only. The pointer is parked at the bottom of "
+                         "the lowest monitor when away engages, and "
+                         "stays there when you return.",
+                         hint_chars=42)
+        self.away_deep_value = ctk.CTkLabel(drow, font=self.skin.font(12),
+                                            **self.skin.text_style("sub"))
+        self.away_deep_value.grid(row=0, column=3, sticky="e", padx=(6, 0))
+        self.away_deep_slider = ctk.CTkSlider(
+            drow, from_=0, to=240, number_of_steps=240, width=150,
+            command=self._away_deep_changed,
+            **self.skin.slider_style())
+        self.away_deep_slider.set(
+            (self.cfg.get("away") or {}).get("off_after_min", 0))
+        self.away_deep_slider.grid(row=0, column=2, sticky="e")
+        self._away_deep_say()
+
         # one row per live panel, the profile list's idiom
         self._away_rows = {}
         self._away_jobs = {}          # short -> {"timer", "rec"}
@@ -333,6 +359,24 @@ class _AwayMixin:
                 r["value"].configure(text="%d%%" % level)
         self._save()
 
+    def _away_deep_changed(self, value):
+        # write-is-applying like every neighbour: the NEXT engage reads
+        # the count (a spell in flight keeps its stage), with one
+        # honest exception - the beat re-reads the table every tick,
+        # so a 0 written mid-spell disarms it right there
+        self.cfg.setdefault("away", {})["off_after_min"] = \
+            max(0, min(240, int(round(value))))
+        self._away_deep_say()
+        self._save()
+
+    def _away_deep_say(self):
+        mins = (self.cfg.get("away") or {}).get("off_after_min", 0)
+        try:
+            self.away_deep_value.configure(
+                text="never" if not mins else "%d min" % mins)
+        except Exception:
+            pass                          # rebuilt mid-toggle: fine
+
     # ------------------------------------------------------------------------------------------------------------------- preview --
     def _away_preview_clicked(self, short):
         job = self._away_jobs.pop(short, None)
@@ -452,6 +496,11 @@ class _AwayMixin:
                                          else "disabled")
         except Exception:
             pass                          # rebuilt mid-toggle: fine
+        for w in (self.away_deep_slider, self.away_deep_value):
+            try:
+                w.configure(state="normal" if dim else "disabled")
+            except Exception:
+                pass
         for short, r in self._away_rows.items():
             state = "normal" if dim else "disabled"
             gated = False

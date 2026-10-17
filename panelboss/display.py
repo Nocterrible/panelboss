@@ -856,6 +856,22 @@ def arm_input_lift(armed):
 _jail_saved = None
 
 
+def park_cursor(x, y):
+    """Move the pointer to ONE exact point - no save, no restore (the
+    owner's law, Oct 17: 'noone remembers where there cursor was
+    after leaving the room'). The warp never counts as input: a
+    SetCursorPos move is invisible to the raw stream (verified for
+    the jail below, same verb), so the park cannot wake what it
+    covers. A refused move is a shrug - the pointer sits where the
+    leaving hand left it, and the spell proceeds uncuffed."""
+    try:
+        u32.SetCursorPos(int(x), int(y))        # pinned at import,
+        #                              the Oct-15 freeze law
+        return True
+    except Exception:
+        return False
+
+
 def jail_cursor(rect):
     """Park the cursor at the far corner of a covered rect, ONCE per
     spell (the first covered row claims it; later ones leave the

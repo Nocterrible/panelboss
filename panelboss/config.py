@@ -327,6 +327,15 @@ DEFAULTS = {
                                 # rows get a black overlay, dim rows lose
                                 # HDR and drop to dim_level (no cold ODM
                                 # re-enumeration on wake)
+        "off_after_min": 0,     # stage two (owner, Oct 17): minutes of
+                                # continuous PAINTED away before every
+                                # painted panel ALSO gets the power-off
+                                # code - the GPU stops presenting and
+                                # the OLED rests for real; the wake
+                                # takes a beat longer (the owner's
+                                # accepted trade). 0 = never: every
+                                # spell stays the single-stage spell
+                                # it always was.
         "monitors": {},         # EDID short -> {"blackout": bool,
                                 # "off": bool, "offdisc": bool}
                                 # (normalize's shape; the loader also
@@ -811,7 +820,8 @@ def _fold_row_mode(v):
 
 
 def normalize_away(value):
-    """[away] in its in-memory shape: {mode, monitors, dim_level, lock}.
+    """[away] in its in-memory shape: {mode, monitors, dim_level, lock,
+    off_after_min}.
     A mode the engine has never heard of warns and falls back to the
     stock "off" (the file's other answers still stand); dim_level
     clamps to 1..40 (a 0%% "dim" is a blackout that lied about itself,
@@ -820,7 +830,10 @@ def normalize_away(value):
     folds to False - the default-off law: a spell that locks the
     session is consent, not a rumor); monitor rows accept the
     bare-bool shorthand (A = true means {"blackout": true}) and drop
-    malformed rows with a warning naming them."""
+    malformed rows with a warning naming them; off_after_min (the
+    stage-two deep-sleep timer) clamps to 0..240 minutes and a junk
+    value warns naming itself and folds to 0 - a timer nobody asked
+    for must never arm (the default-off law)."""
     value = value if isinstance(value, dict) else {}
     mode = value.get("mode", "off")
     if mode not in AWAY_MODES:
@@ -875,8 +888,15 @@ def normalize_away(value):
                 log.warning("away monitor %r: %r is not an away row; "
                             "the monitor keeps the dim default", short,
                             row)
+    deep = value.get("off_after_min", 0)
+    try:
+        deep = int(deep)
+    except (TypeError, ValueError):
+        log.warning("away deep-sleep timer %r is not a number; the "
+                    "spell stays single-stage", value.get("off_after_min"))
+        deep = 0
     return {"mode": mode, "monitors": rows, "dim_level": level,
-            "lock": lock}
+            "lock": lock, "off_after_min": max(0, min(240, deep))}
 
 
 HIDER_REVEALS = ("hovered", "all")   # the strip's reveal scopes

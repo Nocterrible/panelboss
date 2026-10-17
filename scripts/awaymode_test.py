@@ -315,6 +315,8 @@ def make_monitor(tmp, away, bright=None, hdrs=None, sdc=None,
              lambda rect: led.calls.append(("jail", tuple(rect))))
     led.keep(display, "unjail_cursor",
              lambda: led.calls.append(("unjail",)))
+    led.keep(display, "park_cursor",
+             lambda x, y: led.calls.append(("park", int(x), int(y))))
     led.keep(display, "set_hold", lambda *a, **k: None)
     led.keep(wm, "_sdc", sdc)               # the offdisc door, faked
     #                              like _bright: the engine re-reads
@@ -1241,11 +1243,12 @@ def test_offdisc_flavors():
     point of the widening): the power code's dark is TRUSTED - "off
     (unverified)", the register cannot certify; the disconnect's is
     PROVEN - "off (disconnected)", the CCD re-query is the witness.
-    Also pinned: the retracted row claims the jail and the summary
-    count, the wrong-victim class degrades to blackout confessed and
-    owes the lift NOTHING, and the preview walks the same door while
-    the lock interlock holds (a preview that retracted still never
-    locks)."""
+    Also pinned: the retracted row is counted in the summary and
+    claims the corner jail ONLY while no row paints (the park law,
+    Oct 17, overrode that half), the wrong-victim class degrades to
+    blackout confessed and owes the lift NOTHING, and the preview
+    walks the same door while the lock interlock holds (a preview
+    that retracted still never locks)."""
     import panelboss.display as disp
     tmp = tempfile.mkdtemp(prefix="pb_away_od")
     sdc = FakeSDC(victim={"AAA": "T-A", "CCC": "T-C"},
@@ -1268,9 +1271,11 @@ def test_offdisc_flavors():
         assert m.away_status["CCC"] == "off (unverified)", m.away_status
         assert m.away_status["BBB"] == "dim", m.away_status  # absent row
         assert sdc.retracts == ["AAA"], sdc.retracts
-        assert ("jail", (0, 0, 1920, 1080)) in m._fake["calls"], \
-            "a retracted row still claims the corner jail, once"
-        assert sum(1 for c in m._fake["calls"] if c[0] == "jail") == 1
+        assert ("park", 5020, 1918) in m._fake["calls"], \
+            "a spell with a painted row parks; the jail defers (Oct 17)"
+        assert not [c for c in m._fake["calls"] if c[0] == "jail"], \
+            "ONE pointer move per engage: the park replaces the jail " \
+            "whenever any row paints, retracted rows included"
         line = [l for l in rec.lines if l.startswith("away: dim")]
         assert len(line) == 1 and "1 disconnected" in line[0], line
         assert fake.locks == [], "no lock asked (lock off), no lock rung"
@@ -1623,6 +1628,239 @@ def test_row_shorthands():
     print("ok - row shorthands fold to the triple shape losslessly")
 
 
+def test_deep_default_single():
+    """(i) The default is a feature that does not exist: off_after_min
+    0 arms nothing - an hour of beat past the engage sends no second
+    code, and the lift rewinds the clock."""
+    import time as _t
+    tmp = tempfile.mkdtemp(prefix="pb_away_d0")
+    m = make_monitor(tmp, {"mode": "dim", "monitors": {}})
+    try:
+        assert m.cfg["away"]["off_after_min"] == 0   # normalize's answer
+        m._screens_off(1.0)
+        assert m._away_engaged is not None
+        assert m._away_staged is False
+        m._away_engaged = _t.monotonic() - 3660      # an hour away
+        m._away_beat(_t.monotonic())
+        offs = [c for c in m._fake["calls"] if c[0] == "vcp"
+                and c[3] == 0x04]
+        assert not offs, offs
+        m._away_lift()
+        assert m._away_engaged is None and m._away_staged is False
+        # the heartbeat wire itself (the _static_ban idiom): the dark-
+        # side phase must call the beat, or the feature is dead code
+        ph = open(os.path.join(os.path.dirname(os.path.dirname(
+                      os.path.abspath(__file__))),
+                      "panelboss", "state", "_phase.py"),
+                  encoding="utf-8").read()
+        assert "_away_beat(now)" in ph, \
+            "the dark-side heartbeat never calls the stage-two beat"
+        print("ok - stage two default-off: never arms, rewinds at lift, "
+              "and the heartbeat really calls it")
+    finally:
+        m._ledger.undo()
+
+
+def test_deep_fires_at_minutes():
+    """(ii) Stage two fires ONCE, at N minutes of continuous away:
+    the power-off code to every painted row, the GDIs recorded INTO
+    the wake ledger so the lift's existing walk hands D6=1 back."""
+    import time as _t
+    tmp = tempfile.mkdtemp(prefix="pb_away_df")
+    m = make_monitor(tmp, {"mode": "dim",
+                           "monitors": {"AAA": {"blackout": True}}})
+    try:
+        m.cfg["away"]["off_after_min"] = 15
+        m._screens_off(1.0)
+        m._away_engaged = _t.monotonic() - 960       # 16 min ago
+        m._away_beat(_t.monotonic())
+        for gdi in ("D1", "D2", "D3"):               # every painted row,
+            assert ("vcp", gdi, 0xD6, 0x04,          # blackout sub-mode
+                    _bright.VCP_TRIES) in m._fake["calls"], gdi
+        #                              included: it is paint too
+        offs = [c for c in m._fake["calls"] if c[0] == "vcp" and c[3] == 0x04]
+        assert len(offs) == 3, offs
+        m._away_beat(_t.monotonic())                 # once, never per tick
+        assert len([c for c in m._fake["calls"]
+                    if c[0] == "vcp" and c[3] == 0x04]) == 3
+        assert m._away_staged is True
+        assert all(gdi in m._away_off for gdi in ("D1", "D2", "D3")), \
+            "staged panels must ride the EXISTING wake walk"
+        m._away_lift()
+        for gdi in ("D1", "D2", "D3"):
+            assert ("vcp", gdi, 0xD6, 1, _bright.VCP_TRIES) in \
+                m._fake["calls"], "the hand-back is the lift's, free"
+        print("ok - stage two: fires once at N, the lift pays it back "
+              "through the machinery that predates the feature")
+    finally:
+        m._ledger.undo()
+
+
+def test_deep_early_return_costs_nothing():
+    """(iii) The walk-back: return before N and nothing happened;
+    the next spell re-arms its own clock."""
+    import time as _t
+    tmp = tempfile.mkdtemp(prefix="pb_away_de")
+    m = make_monitor(tmp, {"mode": "dim", "monitors": {}})
+    m.cfg["away"]["off_after_min"] = 15
+    try:
+        m._screens_off(1.0)
+        m._away_beat(_t.monotonic())                 # seconds, not minutes
+        assert not m._away_staged
+        offs = [c for c in m._fake["calls"] if c[0] == "vcp" and c[3] == 0x04]
+        assert not offs, offs
+        m._away_lift()
+        assert m._away_engaged is None
+        m._screens_off(2.0)                          # away again
+        assert m._away_engaged is not None
+        assert m._away_staged is False, "a re-arm restarts the timer"
+        print("ok - return before the timer costs nothing; the next "
+              "spell re-arms")
+    finally:
+        m._ledger.undo()
+
+
+def test_park_replaces_jail():
+    """(iv) The pointer law (owner, Oct 17): a painted engage parks
+    the cursor bottom-middle of the LOWEST panel, EXACTLY once; the
+    jail keeps the sleep rows it was written for. The suite desk's
+    lowest row is the portrait CCC (bottom 1920, center 5020)."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_pk")
+    m = make_monitor(tmp, {"mode": "dim", "monitors": {}})
+    try:
+        m._screens_off(1.0)
+        parks = [c for c in m._fake["calls"] if c[0] == "park"]
+        jails = [c for c in m._fake["calls"] if c[0] == "jail"]
+        assert parks == [("park", 5020, 1918)], parks
+        assert not jails, jails
+        m2 = make_monitor(tmp, {"mode": "dim",
+                                "monitors": {"AAA": {"mode": "off"}}})
+        try:
+            m2._screens_off(1.0)                     # one off row, the
+            parks2 = [c for c in m2._fake["calls"] if c[0] == "park"]
+            assert parks2 == [("park", 5020, 1918)], \
+                "one painted row is enough for the park; one move only"
+            assert not [c for c in m2._fake["calls"] if c[0] == "jail"], \
+                "the park replaces the jail for painted modes, not adds"
+        finally:
+            m2._ledger.undo()
+        m3 = make_monitor(tmp, {"mode": "off"})      # the stock path:
+        try:                                         # pointer rules
+            m3._screens_off(1.0)                     # belong to engage
+            assert not [c for c in m3._fake["calls"] if c[0] == "park"]
+        finally:
+            m3._ledger.undo()
+        print("ok - park: once, at the lawful point, replacing the "
+              "jail on painted modes; the stock path stays pointer-blind")
+    finally:
+        m._ledger.undo()
+
+
+def test_park_point_geometry():
+    """(v) The pure helper: the lowest panel wins; tied bottoms break
+    toward the panel nearest the desk's horizontal middle; the point
+    is center-x, two above the bottom edge."""
+    lowest = [{"x": -100, "y": 0, "w": 100, "h": 1200},
+              {"x": 0, "y": 0, "w": 1920, "h": 1080}]
+    assert PresenceMonitor.park_point(lowest) == (-50, 1198)
+    tied = [{"x": 0, "y": 0, "w": 400, "h": 1080},
+            {"x": 3000, "y": 20, "w": 800, "h": 1060}]
+    #               desk 0..3800, mid 1900: centers 200 vs 3400 - the
+    #               right panel sits nearer the middle, it takes the park
+    assert PresenceMonitor.park_point(tied) == (3400, 1078)
+    print("ok - park_point: lowest panel, center-x, two above the edge")
+
+
+def test_deep_ranges():
+    """(vi) The clamp and the fold the LAW promises (gate finding 4):
+    999 clamps to 240, negatives to 0, absent answers 0, and junk
+    warns NAMING ITSELF on the way down to 0."""
+    rec = Recorder()
+    clog = logging.getLogger("config")
+    was = clog.level
+    clog.setLevel(logging.WARNING)
+    clog.addHandler(rec)
+    try:
+        assert config.normalize_away(
+            {"off_after_min": 999})["off_after_min"] == 240
+        assert config.normalize_away(
+            {"off_after_min": -4})["off_after_min"] == 0
+        assert config.normalize_away({})["off_after_min"] == 0
+        assert config.normalize_away(
+            {"off_after_min": "ten"})["off_after_min"] == 0
+        assert [l for l in rec.lines if "deep-sleep timer 'ten'" in l], \
+            rec.lines
+    finally:
+        clog.setLevel(was)
+        clog.removeHandler(rec)
+    print("ok - off_after_min: clamps both ends, folds junk to 0 "
+          "naming it")
+
+
+def test_deep_stages_by_ledger_word():
+    """(vii) THE GATE FINDING (the Oct-15 class at stage two): the
+    beat walks the spell's recorded STATUS WORDS, not a config
+    re-read. A remote desk's exempt rows stand down at EVERY stage -
+    the canvas never takes a code; a refused off row degraded to
+    blackout is OUR paint on OUR glass and takes the retry at N; a
+    trusted-off row slept at t0 and gets no second code; a hot dim
+    row gets its one code at N and nothing at engage."""
+    import time as _t
+    tmp = tempfile.mkdtemp(prefix="pb_away_dl")
+    m = make_monitor(tmp, {"mode": "dim", "monitors": {}},
+                     remote=True)
+    m.cfg["away"]["off_after_min"] = 15
+    try:
+        m._screens_off(1.0)                          # remote desk: exempt
+        assert m.away_status["AAA"] == "exempt (virtual/remote)", \
+            m.away_status
+        assert m._away_engaged is not None           # armed, but the
+        #                                    walk below finds no paint
+        m._away_engaged = _t.monotonic() - 960
+        m._away_beat(_t.monotonic())
+        offs = [c for c in m._fake["calls"] if c[0] == "vcp"
+                and c[3] == 0x04]
+        assert not offs, ("the canvas took a code anyway", offs)
+        assert m._away_staged is True
+    finally:
+        m._ledger.undo()
+    m2 = make_monitor(tmp, {"mode": "dim",
+                            "monitors": {"AAA": {"mode": "off"},
+                                         "BBB": {"mode": "off"}}},
+                      bright=FakeBright({"D1": 80, "D2": 70, "D3": 50},
+                                        vcp_refuses=["D1"]))
+    m2.cfg["away"]["off_after_min"] = 15
+    try:
+        m2._screens_off(1.0)
+        assert m2.away_status["AAA"].startswith("off refused"), \
+            m2.away_status
+        assert m2.away_status["BBB"] == "off (unverified)", \
+            m2.away_status
+        m2._away_engaged = _t.monotonic() - 960
+        m2._away_beat(_t.monotonic())
+        calls = m2._fake["calls"]
+
+        def probe(gdi):
+            return ("vcp", gdi, 0xD6, 0x04, _bright.VCP_TRIES)
+        n_a = [c for c in calls if c == probe("D1")]
+        assert len(n_a) == 2, n_a            # refused at engage,
+        #                                    retried at N (the law's
+        #                                    whole point for this row)
+        n_b = [c for c in calls if c == probe("D2")]
+        assert len(n_b) == 1, n_b            # slept at t0: no second
+        n_c = [c for c in calls if c == probe("D3")]
+        assert len(n_c) == 1, n_c            # plain dim: its first
+        #                                    code arrives at N
+        assert m2._away_off.get("D1") is not None
+        m2._away_lift()
+        assert ("vcp", "D1", 0xD6, 1, _bright.VCP_TRIES) in \
+            m2._fake["calls"], "the retry's debt rides the same walk"
+        print("ok - stage two reads the LEDGER: exempt stands down, "
+              "refused retries, trusted-off rests")
+    finally:
+        m2._ledger.undo()
+
+
 def main():
     test_migration()
     test_row_shorthands()
@@ -1635,6 +1873,13 @@ def main():
     test_off_submode()
     test_boot_belt()
     test_jail_moves_cursor()
+    test_deep_default_single()
+    test_deep_fires_at_minutes()
+    test_deep_early_return_costs_nothing()
+    test_park_replaces_jail()
+    test_park_point_geometry()
+    test_deep_ranges()
+    test_deep_stages_by_ledger_word()
     test_off_preview_release()
     test_off_selectable_never_pregrayed()
     test_preview_adopt_law()

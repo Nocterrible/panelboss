@@ -110,6 +110,12 @@ class _PhaseMixin:
         if idle < 1.0:                           # typing wakes the screens;
             self._wake(now, None)                # the user is right here
             return
+        self._away_beat(now)                     # stage two, if armed:
+        #                              the painted dark's timer lives
+        #                              on the every-tick arm (gate
+        #                              finding: the poll gate would
+        #                              stretch a 15-min promise by a
+        #                              camera round's whole budget)
         if now >= self.next_poll:
             # a door camera voting at night wakes the desk (the owner
             # accepted the trade: a person at the door IS the presence

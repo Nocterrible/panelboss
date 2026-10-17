@@ -1,7 +1,9 @@
 """The away engine: dim-mode substitution for the display power verb.
 
 SIZE LAW header: this part owns the fake-off ledger and nothing else -
-and at ~515 lines (post two-flavor widening) the whole is still one
+and at ~670 lines (post the two-stage wave, owner Oct 17: the stage-
+two beat and the park helper are one law's two hands, the lift's
+ledger they ride predates both) the whole is still one
 law: the ledgers, the door
 calls and the status words interlock line-for-line,
 and splitting the prose from its call sites (or the lift from the
@@ -69,11 +71,15 @@ class _AwayMixin:
         dim_level, and the OFF rows ask the panel's own power code
         through the brightness door (no overlay - the panel IS the
         overlay; a refusal degrades that row to blackout, confessed).
-        Covered rows also bring the corner jail (display.jail_cursor:
-        the cursor parks at a covered rect's far corner, ONCE per
-        engage - SetCursorPos generates no raw input, so the jail
-        itself can never wake what it covers; the owner's request,
-        and the off/blackout rows need it equally). Returns {} when
+        Covered rows also bring the pointer law (Oct 17, two halves):
+        a spell that PAINTS parks the cursor at park_point - bottom-
+        middle of the lowest monitor, one SetCursorPos, no restore
+        (a white arrow at a black panel's corner is the most visible
+        pixel on the dark); a SLEEP-only spell keeps the corner jail
+        (display.jail_cursor: the cursor parks at a covered rect's
+        far corner, ONCE per engage - SetCursorPos generates no raw
+        input, so neither verb can wake what it covers). Returns {}
+        when
         the mode is the stock off - the caller takes the broadcast
         path untouched, and the legacy global hdr_off_when_away block
         stays readable and honored there (downgrade honesty, one
@@ -105,7 +111,9 @@ class _AwayMixin:
         self._away_disc = getattr(self, "_away_disc", None) or {}
         rows = away.get("monitors") or {}
         jail = None
-        for m in _live_desk():
+        painted = None
+        desk = _live_desk()
+        for m in desk:
             mode = _row_mode(rows, m)
             if remote and mode is not None:
                 mode = None                # the remote session exempts
@@ -138,10 +146,19 @@ class _AwayMixin:
                 # (nothing took effect - the door validated before it
                 # touched the glass, or restored its own wrong victim)
                 self._away_disc[m["gdi"]] = rec["saved"]
-            if jail is None and (mode in ("off", "offdisc") or
-                                 rec["status"].startswith("blackout")):
+            if painted is None and mode in ("blackout", "dim"):
+                # a PAINTED row (owner, Oct 17): the pointer gets the
+                # PARK, not the corner jail - a white arrow at a black
+                # panel's far corner is the most visible pixel on the
+                # dark. Bottom-middle hides it below the eye line, and
+                # under the strip where a hider runs; the jail keeps
+                # the sleep rows it was written for.
+                painted = m
+            elif jail is None and mode in ("off", "offdisc"):
                 jail = (m["x"], m["y"], m["w"], m["h"])
-        if jail:
+        if painted is not None:
+            display.park_cursor(*self.park_point(desk))
+        elif jail:
             display.jail_cursor(jail)
         display.arm_input_lift(True)
         log.info("away: dim mode, %d monitors (%d HDR off, %d VCP-off "
@@ -152,11 +169,98 @@ class _AwayMixin:
                      if s.startswith("blackout (") or
                      s.startswith("off refused") or
                      s.startswith("offdisc refused")))
+        # the stage-two clock (owner, Oct 17): MONOTONIC - the loop's
+        # own class; _away_off's wall-clock stamps are attempt DATES
+        # and the two must never be subtracted from each other. One
+        # stamp per painted engage, rewound by the lift; an engage
+        # that darked NOTHING (empty or all-virtual desk) arms nothing
+        # - the falsy return already hands the dark to the broadcast,
+        # and a clock for a spell that never painted is a lie armed.
+        if self.away_status:
+            self._away_engaged = time.monotonic()
+            self._away_staged = False
         self._away_lock(away.get("lock"))   # the spell's last chore:
         #                                   rows, jail, THEN the lock -
         #                                   a locked desktop with a
         #                                   parked cursor is harmless
         return self.away_status
+
+    @staticmethod
+    def park_point(monitors):
+        """The painted-away park point (owner, Oct 17): the bottom
+        middle of the LOWEST monitor - ties broken toward the panel
+        whose center sits nearest the desk's horizontal middle, the
+        one you look at. Two pixels in from the edge: the taskbar
+        strip, or the bezel's last line, takes the rest of the arrow.
+        No restore on return, the owner's own words: 'no restore,
+        noone remembers where there cursor was after leaving the
+        room' - a pointer teleported back under the hand is a
+        stranger's gesture; a parked one is where you left it."""
+        left = min(m["x"] for m in monitors)
+        right = max(m["x"] + m["w"] for m in monitors)
+        bottom = max(m["y"] + m["h"] for m in monitors)
+        mid = (left + right) / 2.0
+        m = min((m for m in monitors if m["y"] + m["h"] == bottom),
+                key=lambda m: abs((m["x"] + m["w"] / 2.0) - mid))
+        return (m["x"] + m["w"] // 2, m["y"] + m["h"] - 2)
+
+    def _away_beat(self, now):
+        """Stage two of the painted away spell (owner, Oct 17): the
+        blackout paints the dark but the panel still sips power; after
+        [away].off_after_min minutes of CONTINUOUS away every painted
+        row takes the same VCP power-off code the off rows ask at
+        engage - the GPU stops presenting and the OLED rests for
+        real, and the wake takes a beat longer (the accepted trade).
+        0 (the default) never arms: single-stage spells are
+        byte-identical to every spell that ran before this feature.
+        Walking back before N costs nothing; a re-arm re-stamps the
+        clock at the next engage. THE SPELL'S OWN LEDGER is the paint
+        test, not a config re-read (gate finding 1, the Oct-15 class
+        at stage two): a remote or virtual row stands down in the
+        status WORD and this walk honors it, a panel that hot-plugged
+        mid-spell never got its paint and gets no code, and a row
+        whose power code was REFUSED at engage degraded to blackout -
+        that black is our paint and its panel takes the retry at N
+        (a transient refusal at engage must not cost the owner their
+        OLED's rest). The staged GDIs are recorded INTO _away_off, so
+        the existing lift walk sends D6=1 back - the hand-lead is the
+        off rows' machinery, not a second wake. A row gone mid-spell
+        is skipped here and the lift's belt owns it after."""
+        engaged = getattr(self, "_away_engaged", None)
+        if engaged is None or getattr(self, "_away_staged", False):
+            return
+        mins = (self.cfg.get("away") or {}).get("off_after_min", 0)
+        if mins <= 0 or now - engaged < mins * 60.0:
+            return
+        from ..wm import _bright
+        PAINTED = ("blackout", "dim", "off refused", "offdisc refused")
+        by_short = {m["short"]: m for m in _live_desk()}
+        staged = 0
+        for short, word in (getattr(self, "away_status", None) or {}).items():
+            if not word.startswith(PAINTED):
+                continue                      # "off (unverified)" and
+            #                                 "off (disconnected)"
+            #                                 slept at t0; "exempt
+            #                                 (virtual/remote)" owns
+            #                                 its stand-down to the
+            #                                 word, at every stage
+            m = by_short.get(short)
+            if m is None:
+                continue                      # gone mid-spell: the
+            #                                 belt hands it back anyway
+            sent, say = _bright.vcp(m["gdi"], _bright.VCP_POWER,
+                                    _bright.VCP_POWER_OFF)
+            self._away_off[m["gdi"]] = time.time()   # dated like every
+            #                              attempt; the lift's walk is
+            #                              unconditional, refused too
+            staged += 1
+            if not sent:
+                log.warning("away: stage two on %s refused (%s) - the "
+                            "paint stands, the panel stays lit",
+                            short, say)
+        self._away_staged = True
+        log.info("away: stage two - %d painted monitor(s) given the "
+                 "power-off code after %d min away", staged, mins)
 
     def _away_lock(self, lock_on):
         """lock-on-away (owner-ruled, 2026-10-14): a real engage that
@@ -329,6 +433,11 @@ class _AwayMixin:
         the stock off spell and the never-away desk pass through
         untouched."""
         status = getattr(self, "away_status", None) or {}
+        # the stage-two clock rewinds on EVERY lift, before the no-op
+        # return (gate finding 2): an armed clock that outlives its
+        # spell is a stranger's finger on the power button
+        self._away_engaged = None
+        self._away_staged = False
         if not status:
             return ""
         from .. import display, profiles
