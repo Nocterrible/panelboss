@@ -1,29 +1,29 @@
-/* PanelBoss Companion - the AUTOMATIC lane, v0.4.0.
+/* PanelBoss Companion - the AUTOMATIC lane + the measure for the test
+ * button, v0.4.0.
  *
- * A declared content script (manifest content_scripts.matches - the
- * site list the owner reads as "the tubes people actually watch"). It
+ * A declared content script (manifest content_scripts.matches). It
  * already lives in the page, so it measures the <video> natively:
- * getBoundingClientRect is a DOM call it owns, no executeScript, no
- * activeTab, no host permission.
+ * getBoundingClientRect is a DOM call it owns. No executeScript, no
+ * activeTab, no host permission - and it is the ONE measure in the
+ * whole extension: the automatic lane reads it on play/pause/ended,
+ * and the test button (background.js, action.onClicked) asks for it
+ * via chrome.runtime.sendMessage({op:"measure"}).
  *
  * EVENT-DRIVEN, no timers, no pumps: a video "play" event is exactly
  * the timer this extension is NOT allowed to write. On play it measures
- * and asks the background for the window bounds (content scripts have
- * no chrome.windows); the background folds the row and hands it to the
- * native host. On pause/ended it sends the same row with paused:true -
- * the app's eye skips a paused row, so the veil lifts on the next tick,
+ * and sends the row to the background (chrome.runtime.sendMessage - the
+ * background folds in the window bounds and hands it to the native
+ * host). On pause/ended it sends the same row with paused:true - the
+ * app's eye skips a paused row, so the veil lifts on the next tick,
  * faster than the grace ever could.
- *
- * The click lane (background.js, action.onClicked) STAYS: it is the
- * owner's calibration gesture and the only thing the DRM lane will ever
- * get from this design. The automatic lane is the new default: a video
- * STARTS playing -> the desk frames it, no click.
  */
 
-const HOST = "com.nocterrible.panelboss";
-
-// the measure, native to the content script's world - the SAME row shape
-// the click lane ships, so the app's fold treats both identically.
+// the measure - the SAME row shape every lane ships, so the app's fold
+// treats all of them identically. rect is the video's viewport box
+// (left/top/width/height in CSS px), dpr the device pixel ratio,
+// paused the live playback state, scroll the [scrollX, scrollY] pair
+// (the future DRM lane reads document space from it), view the inner
+// [width, height] the fold's chrome correction needs.
 function measure() {
   const v = currentVideo();
   if (!v) return null;
@@ -38,7 +38,7 @@ function measure() {
 
 // the "biggest playing-ish video" is the one the user is watching, not
 // the first <video> in a sidebar (an ad-in-article timer is not the
-// feature). A paused poster with no size is not a video yet.
+// feature).
 function currentVideo() {
   const vids = Array.from(document.querySelectorAll("video"));
   if (!vids.length) return null;
@@ -88,6 +88,15 @@ function wire() {
     if (!v.paused && v.readyState >= 2) push(false);
   }
 }
+
+// the test button's question (background.js --> this page): measure
+// RIGHT NOW. Answer with the same row shape; a null row means "no
+// video here", which the background reads as its "novid" word.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || msg.op !== "measure") return;
+  sendResponse(measure());
+  return false;
+});
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", wire);

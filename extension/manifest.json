@@ -3,7 +3,7 @@
   "name": "PanelBoss Companion",
   "version": "0.4.0",
   "description": "Frame the playing video for PanelBoss's Movie theater mode: a video starts playing and the desk dims around it, no click. Local native host only - no network, no timers.",
-  "permissions": ["scripting", "activeTab", "nativeMessaging"],
+  "permissions": ["nativeMessaging"],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "PanelBoss: veil this video" },
   "content_scripts": [

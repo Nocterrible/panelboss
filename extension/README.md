@@ -1,13 +1,17 @@
-# PanelBoss Companion (extension, v0.3)
+# PanelBoss Companion (extension, v0.4)
 
-The manual "veil this video" trigger for PanelBoss's Movie theater
-mode. One click on the toolbar icon: measure the playing video with
-`chrome.scripting.executeScript` (the ad-blocker class of call, a
-static bundled function — never an eval string), hand the answer to the
-**local native host** over `chrome.runtime.connectNative`, done. The
-host writes the geometry to PanelBoss's own doorway file; PanelBoss's
-eye reads it on its next beat. No timers, no pumps, no banner, no
-network, no eval.
+The automatic lane for PanelBoss's Movie theater mode. A declared
+content script lives in the page and measures the playing video
+natively (`getBoundingClientRect` is a DOM call it owns); on
+`play`/`pause`/`ended` it hands the row to the **local native host**
+over `chrome.runtime.sendMessage` → `connectNative`, done. The host
+writes the geometry to PanelBoss's own doorway file; PanelBoss's eye
+reads it on its next beat. The toolbar icon is the demoted *test*
+gesture — measure RIGHT NOW on the clicked tab, one shot, no waiting.
+No timers, no pumps, no banner, no network, no eval, and — the big win
+of v0.4 — **no `scripting`, no `activeTab`, no `<all_urls>`**: the
+measure lives in the content script, so the manifest asks for
+`nativeMessaging` and nothing else.
 
 ## The API (open, MIT, self-describing)
 
@@ -30,18 +34,23 @@ whole handshake (no pairing, no token).
   "protocol": "panelboss-v1",
   "host": "com.nocterrible.panelboss",
   "ops": ["capabilities", "veil"],
+  "auto": { "trigger": "video play", "pause": "veil lifts",
+            "ended": "veil lifts" },
   "veil": { "fields": ["rect", "dpr", "paused", "scroll",
-                        "view", "bounds", "family", "ts"] }
+                        "view", "bounds", "family", "lane", "ts"],
+            "lane": ["click", "auto"] }
 }
 ```
 
-`veil` payload (the row the eye folds): `rect` is the first `<video>`'s
-viewport box in CSS px (`left/top/width/height`), `dpr` the device
-pixel ratio, `paused` whether playback is stopped, `scroll` the
-`[scrollX, scrollY]` pair (the future DRM lane reads document space from
-it), `view` the inner `[width, height]`, `bounds` the window's outer
-`left/top/width/height` in DIP px, `family` one of `chrome` / `edge` /
-`opera_gx`, `ts` the wall-clock seconds stamp.
+`veil` payload (the row the eye folds): `rect` is the biggest
+playing-ish `<video>`'s viewport box in CSS px (`left/top/width/
+height`), `dpr` the device pixel ratio, `paused` whether playback is
+stopped, `scroll` the `[scrollX, scrollY]` pair (the future DRM lane
+reads document space from it), `view` the inner `[width, height]`,
+`bounds` the window's outer `left/top/width/height` in DIP px, `family`
+one of `chrome` / `edge` / `opera_gx`, `lane` `click` (a one-shot test
+snapshot) or `auto` (a durable play state), `ts` the wall-clock seconds
+stamp.
 
 ### How PanelBoss reads it (the capability-discovery close)
 
@@ -91,11 +100,15 @@ is `panelboss_host.py`, frozen to `panelboss-host.exe` by
    read the same `NativeMessagingHosts` key). Without the id the
    manifest ships with a placeholder and the host refuses everyone.
 
-The click needs a video tab: one press measures, hands the row to the
-host, and the icon answers on itself with a word — `veil` (geometry
-written; the badge clips past four chars, so the success word is short),
-`novid` (no `<video>`), `ask`/`slow`/`win`/`nm` (which step refused;
-`nm` = the native host is missing or the id doesn't match).
+The test button needs a video tab on the site list: one press asks the
+tab's own content script to measure, hands the row to the host, and the
+icon answers on itself with a word — `veil` (geometry written; the badge
+clips past four chars, so the success word is short), `novid` (no
+`<video>`), `site` (the tab is off the site list, so no content script
+lives there), `slow`/`win`/`nm` (which step refused; `nm` = the native
+host is missing or the id doesn't match). The automatic lane is quiet by
+design — a page push must not nag; the veil either lands or the app's
+grace retracts it.
 The doorway is `%APPDATA%\PanelBoss\rect` — **fixed**, not the browser's
 download dir: the downloads writer (v0.2) needed the "shelf law" to find
 where chrome.downloads had *actually* put the file; the native host
