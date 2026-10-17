@@ -485,6 +485,84 @@ ok("the z-pin: a dead anchor skips silent; a live one pins OUR root "
    "under the next-up neighbour with flags 0x213, band-matched both "
    "ways, HWND_TOP at the band's head")
 
+# --- the idempotent z-re-pin (Oct-17, the owner's "flickering during
+# --- playback" on the theater's full-field piece): the synthetic
+# --- branch used to SetWindowPos BOTH calls - raise to the topmost
+# --- band, then slide under the row's tray - on EVERY beat, and the
+# --- taskbar re-asserts its perch each time a topmost window shoves
+# --- at it (the fixer measured the z-war: 5 Hz arm-wrestle over a
+# --- full-monitor layered window, the row stable at 10 Hz, so the
+# --- flicker was the re-pin, not the geometry). The new law: when
+# --- the piece is ALREADY topmost and its GW_HWNDPREV chain reaches
+# --- the tray within 5 hops, the pin no-ops - ZERO SetWindowPos
+# --- calls; otherwise it re-fires both, exactly as before. Modeled
+# --- with the same seams the z-pin pins above fake: _setwindowpos
+# --- records, _getwindow answers the z-order walk,
+# --- _u32.GetWindowLongW answers the topmost bit. Beat 1 (the desk
+# --- answers the piece is NOT in slot) must pin both; beat 2 (the
+# --- desk answers topmost + chain reaches the tray) must call zero.
+# --- A beat where the walk answers nothing (no topmost bit, or the
+# --- chain dies) re-pins: a failed check is a re-pin, never a blind
+# --- skip.
+_ZH, _TRAY_H = 0x4242, 0x1338        # the piece's root, the row's tray
+_OTHER_H = 0x2222                    # the window above the tray while
+                                      # the piece is NOT in slot (the
+                                      # slide target: h inserts below it)
+_zw = _ZWin()
+_zw._pb_rect = (0, 0, 1920, 1080)
+_zswps = []
+
+def _zswp(h, a, x, y, cx, cy, f):
+    _zswps.append((h, a, f))
+    return 1
+
+def _zgw(h, g):                        # the desk's z-order walk
+    if g != dimmer.GW_HWNDPREV:
+        return None
+    if h == _TRAY_H:
+        return _OTHER_H                # the tray's prev sibling while
+                                       # the piece is out of the slot
+    if h == _ZH:
+        return _TRAY_H if _in_slot_state["placed"] else 0x1111
+    return None                        # dead chain: the check fails open
+
+def _ztopmost(h, i):                   # the piece's ex-style bit
+    return 0x8 if (i == dimmer.GWL_EXSTYLE
+                   and _in_slot_state["topmost"]) else 0
+
+_in_slot_state = {"placed": False, "topmost": False}
+_saved = (dimmer._setwindowpos, dimmer._getwindow,
+          dimmer._tray_above, dimmer._u32.GetWindowLongW)
+try:
+    dimmer._setwindowpos = _zswp
+    dimmer._getwindow = _zgw
+    dimmer._tray_above = lambda rect: _TRAY_H
+    dimmer._u32.GetWindowLongW = _ztopmost
+    dimmer._zpin(_zw, -7)                          # beat 1: not in slot
+    assert _zswps == [(_ZH, -1, 0x213), (_ZH, _OTHER_H, 0x213)], \
+        _zswps                     # raise to topmost, then slide under
+                                   # the tray's prev sibling - the z-war
+    _zswps.clear()
+    _in_slot_state.update(placed=True, topmost=True)
+    dimmer._zpin(_zw, -7)                          # beat 2: in slot
+    assert _zswps == [], \
+        "the already-placed piece must cost ZERO SetWindowPos calls"
+    _in_slot_state.update(placed=False, topmost=True)
+    dimmer._zpin(_zw, -7)                          # buried: re-pin
+    assert len(_zswps) == 2, \
+        "a lost slot re-pins both calls, never skips"
+    _zswps.clear()
+    _in_slot_state.update(placed=True, topmost=False)
+    dimmer._zpin(_zw, -7)                          # bit lost: re-pin
+    assert len(_zswps) == 2, \
+        "a lost topmost bit re-pins, never skips"
+finally:
+    (dimmer._setwindowpos, dimmer._getwindow,
+     dimmer._tray_above, dimmer._u32.GetWindowLongW) = _saved
+ok("the theater z-re-pin is idempotent: a piece already topmost and "
+   "chained to the row's tray within 5 hops costs ZERO SetWindowPos "
+   "calls (the Oct-17 flicker cure), and any failed check re-pins")
+
 
 # --- RULING 3 (Oct-15): the per-monitor always sub-mode. An opted
 # --- row that also says always dims WITHOUT the idle clock - but the

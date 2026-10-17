@@ -607,9 +607,14 @@ ok("the background folds the content-script's automatic lane and the "
 # veil survives re-activations by being pinned to its own window, a
 # frame piece owns nothing, and the first browser activation buries it
 # under the very window it exists to darken (the pieces were painted,
-# measured pixel-exact, and invisible). The negative-key re-queue is
-# the contract; the real-window half (SetWindowPos HWND_TOP in _zpin's
-# synthetic branch) is the owner's UAT to confirm.
+# measured pixel-exact, and invisible). The negative-key re-QUEUE is
+# the contract - it survives this commit. The z CALL changed shape in
+# the Oct-17 flicker-cure commit (the owner's "flickering during
+# playback"): _zpin's synthetic branch is now IDEMPOTENT - a piece
+# already topmost and chained to its row's tray costs ZERO SetWindowPos
+# calls, so the per-beat re-pin is a no-op when nothing was buried
+# (dimmer_test.py pins the idempotent law; this pin keeps pinning the
+# queue half only). The real-window half is the owner's UAT to confirm.
 f = Frame([w(1)], idle=999.0)
 RECT[0] = (100, 100, 600, 300)
 f.tick(100)
@@ -623,8 +628,10 @@ assert [c[0] for c in f.rec.calls[4:]] == [c[0] for c in f.rec.calls[:4]], \
     "the re-pin re-queues the SAME four pieces"
 assert [c[1] for c in f.rec.calls[4:]] == [c[1] for c in f.rec.calls[:4]], \
     "at the SAME rects - the re-pin is pure z-order (geometry unchanged)"
-ok("an unchanged frame re-pins every tick - the buried-ring bite has "
-   "a teeth-mark in the suite now")
+ok("an unchanged frame RE-QUEUES every tick - the buried-ring bite has "
+   "a teeth-mark in the suite now; since the Oct-17 flicker-cure commit "
+   "the z-call is idempotent (already-placed = zero SetWindowPos, pinned "
+   "in dimmer_test), so the queue contract is what this pin asserts")
 
 # 25. THE ARITY+BAND PIN (cappy packet, Oct-16): the first cure called
 #     SetWindowPos with SIX args - ctypes raised TypeError inside the

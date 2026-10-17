@@ -902,6 +902,38 @@ def _tray_above(rect):
     return None
 
 
+def _in_slot(h, tray):
+    """The idempotent-law check for _zpin's synthetic branch (the
+    Oct-17 flicker cure, the owner's "flickering during playback"):
+    true when the piece ALREADY sits where the pin would put it - the
+    topmost bit set AND its GW_HWNDPREV chain (walked UP toward the
+    tray) reaches this row's tray within 5 hops. Immediately under
+    the tray is hop 1; a same-row sibling in between (the ring's up
+    to four frame pieces) is at most hop 4, so the 5-hop ceiling
+    covers every row shape the Veils FSM can build. A burial (the
+    piece shoved far down the band, or the topmost bit cleared)
+    answers False and the pin re-fires; a dead mid-chain GetWindow
+    answers False too - a FAILED CHECK IS A RE-PIN, never a blind
+    skip. No bookkeeping set: the walk reads the desk's own truth
+    every beat, so there is nothing to prune on unveil."""
+    try:
+        if tray is None:
+            return False
+        if not (_u32.GetWindowLongW(h, GWL_EXSTYLE) & WS_EX_TOPMOST):
+            return False
+        cur = h
+        for _ in range(5):
+            nxt = _getwindow(cur, GW_HWNDPREV)
+            if not nxt:
+                return False
+            if nxt == tray:
+                return True
+            cur = nxt
+    except Exception:
+        pass                                # a check that dies re-pins
+    return False
+
+
 def _zpin(win, target_hwnd):
     """The layering law (gate finding 1): the veil sits IMMEDIATELY
     ABOVE ITS OWN WINDOW, band-matched - never in the topmost band,
@@ -941,10 +973,24 @@ def _zpin(win, target_hwnd):
                 win.update_idletasks()
                 h = (_u32.GetAncestor(win.winfo_id(), GA_ROOT)
                      or win.winfo_id())
-                if not _setwindowpos(h, -1, 0, 0, 0, 0, _SWP_ZPIN):
-                    raise OSError("SetWindowPos(HWND_TOPMOST) refused")
                 tray = _tray_above(getattr(win, "_pb_rect", None)
                                    or (0, 0, 0, 0))
+                if _in_slot(h, tray):
+                    # IDIOT-SAFE NO-OP (Oct-17): the piece is already
+                    # topmost and its chain reaches the row's tray
+                    # within 5 hops - both SetWindowPos calls below
+                    # would land it where it already sits, and each
+                    # one re-shoves the taskbar's perch (the fixer's
+                    # measured z-war: a 5 Hz arm-wrestle over a
+                    # full-monitor layered window, row stable at
+                    # 10 Hz, so the flicker was the re-pin, not the
+                    # geometry). The no-op path skips BOTH calls -
+                    # that is the cure. Every beat that ISN'T already
+                    # placed still pins, so a real burial is caught
+                    # on the beat it happens.
+                    return
+                if not _setwindowpos(h, -1, 0, 0, 0, 0, _SWP_ZPIN):
+                    raise OSError("SetWindowPos(HWND_TOPMOST) refused")
                 if tray is not None:
                     above = _getwindow(tray, GW_HWNDPREV)
                     if above:
