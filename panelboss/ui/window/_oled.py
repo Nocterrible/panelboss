@@ -24,7 +24,8 @@ from ...config import (DIMMER_IDLE_CEIL, DIMMER_IDLE_DEFAULT,
                        DIMMER_RAMP_CEIL, DIMMER_RAMP_DEFAULT,
                        DIMMER_RAMP_FLOOR)
 from ...config import (VIDEODIM_IDLE_CEIL, VIDEODIM_IDLE_DEFAULT,
-                       VIDEODIM_IDLE_FLOOR)
+                       VIDEODIM_IDLE_FLOOR, VIDEODIM_LEVEL_CEIL,
+                       VIDEODIM_LEVEL_DEFAULT, VIDEODIM_LEVEL_FLOOR)
 from ...config import HOLD_SEC_CEIL, HOLD_SEC_FLOOR, HOLD_SEC_DEFAULT
 from ...config import (JOG_CYCLE_CEIL, JOG_CYCLE_DEFAULT,
                    JOG_CYCLE_FLOOR, JOG_STEP_CEIL,
@@ -162,6 +163,10 @@ TIP_COMP = {
              "re-arm (any mouse/keyboard move drops the veil until "
              "this passes again). 0 means instant. a film's sound "
              "never lifts the theater veils.",
+    "level": "veil level: how dark the four theater pieces are, in "
+             "percent - the theater's OWN darkness, not the idle "
+             "dimmer's number. the movie can go darker (or lighter) "
+             "than the plain idle veils.",
 }
 
 
@@ -440,7 +445,10 @@ class _OledMixin:
     def _build_dimmer(self, parent):
         box = self._card(parent, "background dimmer",
                          "an idle desk dims the windows you are not "
-                         "using; touch or sound lifts a veil at once")
+                         "using; touch lifts a veil at once, and a "
+                         "window whose process makes sound keeps its "
+                         "own light while it speaks (then for a "
+                         "settle beat after)")
         row = self._row(box, "background dimmer", TIP_DIM["on"],
                         hint_chars=42)
         self.oled_dim_box = ctk.CTkCheckBox(
@@ -839,6 +847,28 @@ class _OledMixin:
         self.oled_vee_delay_label.grid(row=0, column=2, sticky="e",
                                        padx=(theme.S_FIELD, 0))
 
+        # "veil level" - the theater pieces' OWN darkness (owner, Oct
+        # 16): the four dark pieces draw at THIS percent, not the idle
+        # dimmer's [dimmer].level. Sibling of the dimmer's veil-level
+        # rail, same clamp (10..90), same honesty.
+        row = self._row(box, "veil level", TIP_COMP["level"],
+                        hint_chars=42)
+        self.oled_vee_level_label = ctk.CTkLabel(
+            row, font=self.skin.font(12), **self.skin.text_style("sub"))
+        slider = ctk.CTkSlider(
+            row, from_=VIDEODIM_LEVEL_FLOOR, to=VIDEODIM_LEVEL_CEIL,
+            number_of_steps=VIDEODIM_LEVEL_CEIL - VIDEODIM_LEVEL_FLOOR,
+            width=180, command=self._oled_comp_level_changed,
+            **self.skin.slider_style())
+        slider.set(int((self.cfg.get("videodim") or {}).get(
+            "level", VIDEODIM_LEVEL_DEFAULT)))
+        slider.grid(row=0, column=1, sticky="e")
+        self.oled_vee_level_label.configure(
+            text="%s%%" % int((self.cfg.get("videodim") or {}).get(
+                "level", VIDEODIM_LEVEL_DEFAULT)))
+        self.oled_vee_level_label.grid(row=0, column=2, sticky="e",
+                                       padx=(theme.S_FIELD, 0))
+
         # THE DEBUG PORT IS GONE FROM THE SURFACE (owner, Oct 16,
         # second instruction): the per-family checkboxes made the dead
         # route look alive - the flag path restarted a browser with a
@@ -906,6 +936,14 @@ class _OledMixin:
         # dimmer's idle_sec sibling): on-delay and re-arm, symmetric.
         self.cfg.setdefault("videodim", {})["idle_sec"] = int(round(value))
         self.oled_vee_delay_label.configure(text="%s s" % round(value))
+        self._save()
+
+    def _oled_comp_level_changed(self, value):
+        # [videodim].level - the theater pieces' OWN darkness (the
+        # dimmer's veil-level sibling): the frame draws at THIS, not the
+        # idle dimmer's level. Clamped 10..90 by the slider's own range.
+        self.cfg.setdefault("videodim", {})["level"] = int(round(value))
+        self.oled_vee_level_label.configure(text="%s%%" % round(value))
         self._save()
 
     def _oled_comp_veil(self):
