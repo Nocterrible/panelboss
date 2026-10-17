@@ -218,7 +218,8 @@ def check():
                     _t2.append(x)
                 _titles2(c)
         _titles2(app.pages["detection"].inner)
-        for want in ("deep sleep after", "lock when away starts",
+        for want in ("deep sleep (disconnect) after",
+                     "lock when away starts",
                      "never", "refresh monitors"):
             assert want in _t2, \
                 "the detection tab lost the away card's %r" % want

@@ -174,7 +174,7 @@ class _AwayMixin:
         # own power code after a timer. Gray-not-lie: _away_sync gates
         # this row exactly like the lock box - a second stage on a
         # spell that never paints is a slider that cannot speak.
-        drow = self._row(box, "deep sleep after",
+        drow = self._row(box, "deep sleep (disconnect) after",
                          "stage two: after this many minutes away, the "
                          "painted monitors get the monitor-power-off "
                          "command - the GPU stops presenting and the "
@@ -188,7 +188,11 @@ class _AwayMixin:
                                             **self.skin.text_style("sub"))
         self.away_deep_value.grid(row=0, column=3, sticky="e", padx=(6, 0))
         self.away_deep_slider = ctk.CTkSlider(
-            drow, from_=0, to=240, number_of_steps=240, width=150,
+            drow, from_=0, to=240, number_of_steps=48, width=150,
+            # 5-minute stops (owner UAT, Oct 17): 241 positions on a
+            # 150-px slider is target practice, and nobody wants a
+            # 17-minute nap. A hand-set odd value rides the label
+            # honestly; the knob snaps to its nearest stop.
             command=self._away_deep_changed,
             **self.skin.slider_style())
         self.away_deep_slider.set(
