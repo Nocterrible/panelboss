@@ -16,6 +16,7 @@ window through the tray's own seam and answers in poke_ack.
 App-up compatible BY DESIGN (the switch_geom_probe lesson): the live
 tray app running alongside changes nothing here - no mutex, no tray,
 no camera; the config world lives in a temp dir."""
+import json
 import os
 import queue
 import sys
@@ -34,6 +35,14 @@ from panelboss import wm as WM                         # noqa: E402
 from panelboss import power                            # noqa: E402
 from panelboss import camera as cam                    # noqa: E402
 from panelboss.state import FrameBox                   # noqa: E402
+from panelboss import nmhost                           # noqa: E402
+
+# the OWNER's real helper install is not this probe's truth: redirect
+# the doorway-neighbor so the built card answers from the probe's own
+# (absent) world - the exact-label pins below must not depend on
+# whether this box has a host installed (the app-up compatibility law
+# includes the owner's %APPDATA%).
+nmhost.HOST_JSON = os.path.join(SCRATCH, "no-host.json")
 
 cfg = config.get_config(verbose=False)
 cfg["camera"]["enabled"] = False         # no real cameras in the probe
@@ -136,6 +145,44 @@ def check():
             assert want in _t, "the oled tab lost the %r card" % want
         assert "video-dim" not in _t and "Video-dim" not in _t, \
             "the renamed card still answers an old title label"
+        # THE HELPER-INSTALL VERB (Oct 16): the doorway row's button
+        # EXISTS on the built window - exact label, no substring
+        # checks (the placement-trio lesson) - with its id-override
+        # entry beside it on the same row. The label reads the honest
+        # state: install while no host is registered, reinstall once
+        # one is (the flip below walks the seam the card's own beat
+        # walks).
+        assert "install the helper" in _t, \
+            "the doorway row lost the helper-install button"
+        _hb = []
+
+        def _find_btn(w):
+            for c in w.winfo_children():
+                if c.__class__.__name__ == "CTkButton" and \
+                        c.cget("text") == "install the helper":
+                    _hb.append(c)          # the OUTER button only:
+                    continue               # CTkButton mirrors its text
+                _find_btn(c)               # onto an inner canvas child
+        _find_btn(app.pages["oled"].inner)
+        assert len(_hb) == 1, \
+            "the built window must carry exactly one helper-install " \
+            "button, got %d" % len(_hb)
+        _ent = [c for c in _hb[0].master.winfo_children()
+                if getattr(c, "_placeholder_text", None) == "id override"]
+        assert len(_ent) == 1, \
+            "the install button lost its id-override entry sibling"
+        _hjp = os.path.join(SCRATCH, "host.json")
+        with open(_hjp, "w", encoding="utf-8") as _f:
+            json.dump({"path": sys.executable}, _f)
+        nmhost.HOST_JSON = _hjp
+        app._helper_install_words()
+        assert _hb[0].cget("text") == "reinstall", \
+            "an installed host must read 'reinstall' on the button: %r" \
+            % (_hb[0].cget("text"),)
+        nmhost.HOST_JSON = os.path.join(SCRATCH, "no-host.json")
+        app._helper_install_words()
+        assert _hb[0].cget("text") == "install the helper", \
+            "the absent host must fall back to the install label"
         # THE PLACEMENT TRIO (owner request, Oct 16): the top bar's
         # actions row carries BOTH window verbs as standalone buttons,
         # rescue FIRST and restore SECOND - exact labels only (the

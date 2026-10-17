@@ -56,8 +56,8 @@ CAP_TIMEOUT = 2.0          # s: a wedged host answers nothing; kill it
 CAP_TTL = 300.0            # s: the capabilities answer is cached - the
                            # API surface changes when the host is
                            # reinstalled, not between dimmer beats
-NOT_INSTALLED = ("the buddy's helper is not installed - press the "
-                 "install the helper button above")
+NOT_INSTALLED = ("the buddy's helper is not installed - press install "
+                 "the helper above")
 
 # the installer the card's one-click runs - a module constant so a
 # suite can stand a .ps1 twin in its own temp dir (the seam is the

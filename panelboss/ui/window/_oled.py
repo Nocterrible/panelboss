@@ -931,7 +931,7 @@ class _OledMixin:
                      font=self.skin.font(11), wraplength=300,
                      justify="left", anchor="w",
                      **self.skin.text_style("sub")).grid(
-            row=0, column=0, columnspan=2, sticky="w")
+            row=0, column=1, columnspan=2, sticky="w")
         # the one-click helper install (Oct 16): the SAME script the
         # README documents, run from the app - build, register, and
         # host.json in one gesture, worker-ized like the capture verb
