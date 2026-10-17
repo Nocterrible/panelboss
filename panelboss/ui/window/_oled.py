@@ -14,10 +14,13 @@ fullscreen may slip behind it.
 """
 
 import logging
+import re
+import threading
 
+import tkinter as tk
 import customtkinter as ctk
 
-from ... import companion, dimmer, hider, jog, wm
+from ... import companion, dimmer, hider, jog, wm, nmhost
 from ...config import (DIMMER_IDLE_CEIL, DIMMER_IDLE_DEFAULT,
                        DIMMER_IDLE_FLOOR, DIMMER_LEVEL_CEIL,
                        DIMMER_LEVEL_DEFAULT, DIMMER_LEVEL_FLOOR,
@@ -151,12 +154,23 @@ TIP_COMP = {
             "download config. the extension's id is the only ACL - "
             "no pairing, no token; the browser's install check is "
             "the whole handshake. install the host once (see the "
-            "extension's README).",
+            "extension's README) - the one-click helper install "
+            "rides this row: it runs the same script the README "
+            "documents.",
+    "install": "install the buddy's helper in one click: builds "
+               "panelboss-host.exe (PyInstaller, ~40 s), registers "
+               "it under HKCU, and tells the app where it lives. "
+               "the entry is an optional id override - paste the "
+               "32-char id from the browser's extensions page; "
+               "empty derives it from the extension's own path. "
+               "a bad shape answers a word and does NOT fire the "
+               "installer. the manual route stays one line down: "
+               "extension\\host\\install_host.ps1.",
     "caps": "what the buddy's API CAN send, read from the host "
             "itself (the open-API ruling: discover, never assume). "
-            "no host installed reads as the honest words - run "
-            "extension\\host\\install_host.ps1 to register it. this "
-            "line re-checks on the veil button and the switch.",
+            "no host installed reads as the honest words - press "
+            "install above to register it. this line re-checks on "
+            "the veil button and the switch.",
     "delay": "veil after: the desk frames a PLAYING video only once "
              "the input has been still this long - the dimmer's "
              "\"dim after\" shape, one knob for the on-delay and the "
@@ -914,10 +928,32 @@ class _OledMixin:
 
         row = self._row(box, " ", TIP_COMP["path"], hint_chars=42)
         ctk.CTkLabel(row, text=companion.door_dir(),
-                     font=self.skin.font(11), wraplength=420,
+                     font=self.skin.font(11), wraplength=300,
                      justify="left", anchor="w",
                      **self.skin.text_style("sub")).grid(
-            row=0, column=1, columnspan=2, sticky="e")
+            row=0, column=0, columnspan=2, sticky="w")
+        # the one-click helper install (Oct 16): the SAME script the
+        # README documents, run from the app - build, register, and
+        # host.json in one gesture, worker-ized like the capture verb
+        # (PyInstaller takes ~40 s, a walk that belongs on no pump).
+        # The entry is an optional id override (the store-publish
+        # case); empty derives from the extension's on-disk path.
+        # The dimmer's exclusion row (entry + small verb) is the
+        # row's own rhythm - this card keeps it.
+        self.oled_comp_helper = ctk.CTkEntry(
+            row, width=150, font=self.skin.font(11),
+            placeholder_text="id override",
+            fg_color=self.skin.field_bg, border_width=1,
+            border_color=self.skin.border_raised,
+            corner_radius=self.skin.radius)
+        self.oled_comp_helper.grid(row=1, column=1, sticky="e",
+                                   pady=(theme.S_FIELD, 0))
+        self.oled_comp_inst_btn = ctk.CTkButton(
+            row, text="install the helper", height=26, width=150,
+            command=self._helper_install, **self.skin.secondary())
+        self.oled_comp_inst_btn.grid(row=1, column=2, sticky="e",
+                                     padx=(theme.S_FIELD, 0),
+                                     pady=(theme.S_FIELD, 0))
 
         # the capability-discovery line: what the buddy's API CAN send,
         # READ from the host (nmhost.capabilities), never assumed. The
@@ -930,6 +966,23 @@ class _OledMixin:
         self.oled_comp_caps.grid(row=0, column=1, columnspan=2,
                                  sticky="e")
         self._comp_words()
+        self._helper_install_words()
+
+    def _helper_install_words(self):
+        """The doorway row's button reads "install the helper" until
+        the host is INSTALLED - then "reinstall" (the same verb, the
+        manifest and host.json get rewritten, the id override still
+        stands). Never raises: a junk host.json answers the default."""
+        try:
+            installed = nmhost.host_path() is not None
+        except Exception:
+            installed = False
+        try:
+            self.oled_comp_inst_btn.configure(
+                text="reinstall" if installed else "install the helper")
+        except (tk.TclError, RuntimeError):
+            pass            # the paint superseded: the next _comp_words
+                             # beat (or a rebuild) repants from the host
 
     def _comp_words(self, force=False):
         """The status line, on the dimmer poll's beat: companion.say
@@ -942,6 +995,7 @@ class _OledMixin:
         if getattr(self, "oled_comp_say", None) is None:
             return
         set_text(self.oled_comp_say, companion.say(self.cfg))
+        self._helper_install_words()
         if getattr(self, "oled_comp_caps", None) is not None:
             set_text(self.oled_comp_caps, companion.caps_words(force=force))
 
@@ -982,6 +1036,73 @@ class _OledMixin:
         if getattr(self, "oled_comp_caps", None) is not None:
             set_text(self.oled_comp_caps, companion.caps_words(
                 force=True))
+
+    def _helper_install(self):
+        # the one-click helper install, WORKER-IZED like
+        # _profile_create's capture: PyInstaller takes ~40 s - a walk
+        # that belongs on no pump. The lock is CARD-LOCAL (the helper
+        # verb is not a desktop verb; the shared _applying flag is the
+        # capture/apply pair's, and this verb contends nothing they
+        # own). The sibling's documented laws ride verbatim: every
+        # paint above the lock is plain (a raise on the way in must
+        # not wedge the button into a permanent "already working"),
+        # the flag goes up LAST, and done() marshals through after(0)
+        # with the ghost-tolerance the capture verb demonstrates
+        # (queue-fallback drain on a dead root - the Oct-14 class).
+        entry = (self.oled_comp_helper.get() or "").strip()
+        if entry and not re.match(r"^[a-p]{32}$", entry):
+            # the client-side id law: a bad shape answers a word and
+            # does NOT fire the installer (the ps1's own validation is
+            # the same shape - this one just refuses earlier).
+            set_text(self.oled_comp_say,
+                     "bad id override - 32 lowercase a-p chars")
+            return
+        if getattr(self, "_helper_running", False):
+            set_text(self.oled_comp_say,
+                     "installing the buddy's helper...")
+            return
+        set_text(self.oled_comp_say,
+                 "installing the buddy's helper...")
+        self.oled_comp_inst_btn.configure(state="disabled")
+        self._helper_running = True
+
+        def work():
+            try:
+                ok, words = nmhost.install(entry or None)
+                err = None
+            except Exception as e:                    # the worker
+                log.exception("the helper install died in the worker")  # confesses
+                ok, err = False, "the install raised: %s" % e
+            if err:
+                words = err
+
+            def done():
+                if not getattr(self, "_helper_running", False):
+                    return             # already landed (belt + timer
+                self._helper_running = False          # both)
+                try:
+                    self.oled_comp_inst_btn.configure(state="normal")
+                    self._comp_words(force=True)      # the fresh host's
+                                                       # own caps line -
+                                                       # the probe IS the
+                                                       # proof-of-install
+                    set_text(self.oled_comp_say, words)
+                    # RESULT on the say line: success = the fresh
+                    # capability words; failure = the honest step word
+                    # + the manual ps1 route (nmhost.install's words
+                    # carry it - the console path stays documented).
+                except (tk.TclError, RuntimeError):
+                    log.exception("the helper install paint was "
+                                  "superseded (the root is a ghost) - "
+                                  "the next beat repaints")
+            try:
+                self.after(0, done)
+            except (tk.TclError, RuntimeError):
+                try:
+                    self.ui_events.put(("later", done))
+                except Exception:
+                    pass
+        threading.Thread(target=work, daemon=True).start()
 
     def _sync_companion_switches(self):
         """Knob-lie belt (_shell.SWITCH_SYNC): the master switch and
