@@ -30,16 +30,59 @@ EXT_SIZES = (16, 32, 48, 128)
 MASTER = 1024
 
 
+def _fill_holes(im, rest="#f2f4f5", min_area_pct=1.0):
+    """Pixel-art-aware screen fill: every TRANSPARENT REGION that does
+    not touch the image border is a hole (the owner's art makes the
+    screen - and the lens interiors, which read THROUGH the glasses -
+    one design: they color together). Fill each hole big enough to
+    matter with the rest color; the outside world stays transparent
+    for the shells. A hole the size of the art (missed alpha, e.g. a
+    flattened clipboard grab) fails the border test and is left
+    alone - the checkerboard impostor cannot sneak through."""
+    w, h = im.size
+    px = im.load()
+    seen = bytearray(w * h)
+    total = w * h
+    for i in range(total):
+        if seen[i] or px[i % w, i // w][3] >= 128:
+            continue
+        # BFS this transparent component
+        comp = [i]
+        seen[i] = 1
+        touches = False
+        q = 0
+        while q < len(comp):
+            p = comp[q]
+            q += 1
+            x, y = p % w, p // w
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1),
+                           (x, y + 1)):
+                if not (0 <= nx < w and 0 <= ny < h):
+                    touches = True
+                    continue
+                n = ny * w + nx
+                if seen[n] or px[nx, ny][3] >= 128:
+                    continue
+                seen[n] = 1
+                comp.append(n)
+        if touches or len(comp) * 100.0 < min_area_pct * total:
+            continue
+        for p in comp:
+            px[p % w, p // w] = rest
+    return im
+
+
 def draw_master():
-    """The interim art, or the owner's master.png when it exists
-    (assets/master.png at any size, coerced to square RGBA)."""
+    """The owner's master.png when it exists (centered, square), or
+    the programmatic interim draw below it."""
     path = os.path.join("assets", "master.png")
     if os.path.isfile(path):
         im = Image.open(path).convert("RGBA")
         s = min(im.size)
-        return im.crop(((im.width - s) // 2, (im.height - s) // 2,
-                        (im.width - s) // 2 + s,
-                        (im.height - s) // 2 + s))
+        im = im.crop(((im.width - s) // 2, (im.height - s) // 2,
+                      (im.width - s) // 2 + s,
+                      (im.height - s) // 2 + s))
+        return _fill_holes(im)
     im = Image.new("RGBA", (MASTER, MASTER))
     d = ImageDraw.Draw(im)
     r = MASTER // 8
@@ -83,7 +126,10 @@ def main():
     out = os.path.join("extension", "icons")
     os.makedirs(out, exist_ok=True)
     for s in EXT_SIZES:
-        im.resize((s, s), Image.LANCZOS).save(
+        # BOX (area average) not LANCZOS: pixel art must NOT be
+        # blur-downsampled; integer sizes stay crisp, 48 is close
+        # enough for the eye
+        im.resize((s, s), Image.BOX).save(
             os.path.join(out, "icon%d.png" % s))
     print("wrote extension/icons/", ", ".join(
         "icon%d.png" % s for s in EXT_SIZES))
