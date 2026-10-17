@@ -174,8 +174,8 @@ def main():
             break
     ref = browser or U.GetForegroundWindow()
     ref_pos = order.index(ref) if ref in order else 0
-    trays = [hwnd for hwnd, cls, rect, vis, _t, _p in wins
-             if cls in TRAY and vis]
+    trays = {hwnd: top for hwnd, cls, rect, vis, top, _p in wins
+             if cls in TRAY and vis}
     tray_spans = {hwnd: rect for hwnd, cls, rect, vis, _t,
                   _p in wins if hwnd in trays}
     mine = [(hwnd, rect, top) for hwnd, cls, rect, vis, top, pid in wins
@@ -213,6 +213,14 @@ def main():
                      and min(tray_spans[t][3], pb)
                      - max(tray_spans[t][2], pt) > 0]
         under_tray = (not row_trays) or all(pos > p for p in row_trays)
+        # TWO-LAW shape (the Oct-17 census, the dimmer's own docstring):
+        # a non-topmost row tray is the owner's per-monitor choice -
+        # the piece sits at band top ABOVE it and that is the law, so
+        # the under-tray demand applies only to topmost trays (the
+        # topmost bit is the census walk's own field, already
+        # enumerated above - the guard stays honest to the law).
+        under_tray = under_tray or not any(
+            trays[t] for t in row_trays)
         if not top or pos > ref_pos or not under_tray:
             bad += 1
             print("FAIL: piece %s rect=%s z=%d vs browser z=%d (%s) "

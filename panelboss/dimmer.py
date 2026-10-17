@@ -905,30 +905,56 @@ def _tray_above(rect):
 def _in_slot(h, tray):
     """The idempotent-law check for _zpin's synthetic branch (the
     Oct-17 flicker cure, the owner's "flickering during playback"):
-    true when the piece ALREADY sits where the pin would put it - the
-    topmost bit set AND its GW_HWNDPREV chain (walked UP toward the
-    tray) reaches this row's tray within 5 hops. Immediately under
-    the tray is hop 1; a same-row sibling in between (the ring's up
-    to four frame pieces) is at most hop 4, so the 5-hop ceiling
-    covers every row shape the Veils FSM can build. A burial (the
-    piece shoved far down the band, or the topmost bit cleared)
-    answers False and the pin re-fires; a dead mid-chain GetWindow
-    answers False too - a FAILED CHECK IS A RE-PIN, never a blind
-    skip. No bookkeeping set: the walk reads the desk's own truth
-    every beat, so there is nothing to prune on unveil. SEMANTICS
-    (gate, Oct 17): the walk tolerates ANY intermediates, including a
-    foreign always-on-top window - an activated topmost utility then
-    concedes its dimming while the chain stays short (pre-cure it was
-    re-covered within 200 ms and re-ignited the z-war every beat; for
-    the theater, peace with the shell is the point). The strictified
-    law, if the owner ever wants sibling-only: require every hop to be
-    a known piece hwnd - the painter owns the set, it is a parameter
-    away."""
+    true when the piece ALREADY sits where the pin would put it.
+    SEMANTICS (two laws, Oct-17 census - "both ioc and aoc are
+    flickering with no proper video veil"): TRAY-TOPMOST ROWS settle
+    UNDER-TRAY - the topmost bit set AND the GW_HWNDPREV chain
+    (walked UP toward the tray) reaches this row's tray within 5
+    hops; immediately under the tray is hop 1, a same-row sibling in
+    between (the ring's up to four frame pieces) is at most hop 4, so
+    the 5-hop ceiling covers every row shape the Veils FSM can build.
+    This state is REACHABLE because the slide anchors on the tray
+    hwnd itself (fix A below): the old PREV-read slide no-oped,
+    because after the raise the tray's prev WAS the piece - the
+    measured deadlock that stranded it above the chrome (right tray
+    top=True, the 5 Hz flicker). TRAY-LESS / NON-TOPMOST ROWS settle
+    at BAND TOP - a per-monitor taskbar without WS_EX_TOPMOST is the
+    owner's choice, so the piece must not bury itself under it
+    (left tray top=False, z=49: the slide put the piece in the
+    ORDINARY band, behind the maximized browser - "no proper video
+    veil"); the test is the FIRST PREV only, the topmost bit already
+    required: first-prev NULL (band top) -> True; first-prev
+    topmost -> True - a foreign topmost neighbour above us is
+    tolerated BY THE CONCESSION LAW documented below, and we never
+    re-raise under it (we do not move, so it is not re-raised over
+    us); first-prev NON-topmost -> False - a foreign ordinary window
+    sits between us and the band top, a real burial (the bit alone
+    cannot see it: a burial under non-topmost windows keeps the bit
+    set), so the pin re-fires with the raise only. Both shapes are
+    idempotent - the 5 Hz flicker class is dead for BOTH tray
+    shapes. A burial (the piece shoved far down the band, or the
+    topmost bit cleared) answers False and the pin re-fires; a dead
+    mid-chain GetWindow answers False too - a FAILED CHECK IS A
+    RE-PIN, never a blind skip. No bookkeeping set: the walk reads
+    the desk's own truth every beat, so there is nothing to prune on
+    unveil. SEMANTICS (gate, Oct 17): the walk tolerates ANY
+    intermediates, including a foreign always-on-top window - an
+    activated topmost utility then concedes its dimming while the
+    chain stays short (pre-cure it was re-covered within 200 ms and
+    re-ignited the z-war every beat; for the theater, peace with the
+    shell is the point). The strictified law, if the owner ever wants
+    sibling-only: require every hop to be a known piece hwnd - the
+    painter owns the set, it is a parameter away."""
     try:
-        if tray is None:
-            return False
         if not (_u32.GetWindowLongW(h, GWL_EXSTYLE) & WS_EX_TOPMOST):
             return False
+        if tray is None or not (_u32.GetWindowLongW(
+                tray, GWL_EXSTYLE) & WS_EX_TOPMOST):
+            first = _getwindow(h, GW_HWNDPREV)
+            if not first:
+                return True
+            return bool(_u32.GetWindowLongW(first, GWL_EXSTYLE)
+                        & WS_EX_TOPMOST)
         cur = h
         for _ in range(5):
             nxt = _getwindow(cur, GW_HWNDPREV)
@@ -999,10 +1025,24 @@ def _zpin(win, target_hwnd):
                     return
                 if not _setwindowpos(h, -1, 0, 0, 0, 0, _SWP_ZPIN):
                     raise OSError("SetWindowPos(HWND_TOPMOST) refused")
-                if tray is not None:
-                    above = _getwindow(tray, GW_HWNDPREV)
-                    if above:
-                        _setwindowpos(h, above, 0, 0, 0, 0, _SWP_ZPIN)
+                # BAND LAW (Oct-17 census): the slide runs ONLY when
+                # the tray is itself topmost and its rect overlaps
+                # the row (the overlap is _tray_above's own match); a
+                # per-monitor taskbar WITHOUT WS_EX_TOPMOST is the
+                # owner's choice - covering its strip is correct,
+                # hiding under it (ordinary band, behind the
+                # maximized browser) is the flicker class, not a
+                # chrome-darkening. A topmost tray: anchor the slide
+                # on the TRAY ITSELF - SetWindowPos places h
+                # immediately BELOW hwndInsertAfter regardless of
+                # h's current position, no self-reference possible
+                # (the old PREV-read was self-referential after the
+                # raise - the tray's prev WAS the piece - a measured
+                # no-op that stranded it above the tray; the tray
+                # itself is position-independent).
+                if tray is not None and (_u32.GetWindowLongW(
+                        tray, GWL_EXSTYLE) & WS_EX_TOPMOST):
+                    _setwindowpos(h, tray, 0, 0, 0, 0, _SWP_ZPIN)
             except Exception:
                 if not _PIN_WARNED[0]:
                     _PIN_WARNED[0] = True

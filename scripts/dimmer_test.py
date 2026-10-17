@@ -486,28 +486,27 @@ ok("the z-pin: a dead anchor skips silent; a live one pins OUR root "
    "ways, HWND_TOP at the band's head")
 
 # --- the idempotent z-re-pin (Oct-17, the owner's "flickering during
-# --- playback" on the theater's full-field piece): the synthetic
-# --- branch used to SetWindowPos BOTH calls - raise to the topmost
-# --- band, then slide under the row's tray - on EVERY beat, and the
-# --- taskbar re-asserts its perch each time a topmost window shoves
-# --- at it (the fixer measured the z-war: 5 Hz arm-wrestle over a
-# --- full-monitor layered window, the row stable at 10 Hz, so the
-# --- flicker was the re-pin, not the geometry). The new law: when
-# --- the piece is ALREADY topmost and its GW_HWNDPREV chain reaches
-# --- the tray within 5 hops, the pin no-ops - ZERO SetWindowPos
-# --- calls; otherwise it re-fires both, exactly as before. Modeled
-# --- with the same seams the z-pin pins above fake: _setwindowpos
-# --- records, _getwindow answers the z-order walk,
-# --- _u32.GetWindowLongW answers the topmost bit. Beat 1 (the desk
-# --- answers the piece is NOT in slot) must pin both; beat 2 (the
-# --- desk answers topmost + chain reaches the tray) must call zero.
-# --- A beat where the walk answers nothing (no topmost bit, or the
-# --- chain dies) re-pins: a failed check is a re-pin, never a blind
-# --- skip.
+# --- playback", then the TWO-LAW shape of the Oct-17 census: "both
+# --- ioc and aoc are flickering with no proper video veil despite
+# --- del working perfectly"). The synthetic branch used to
+# --- SetWindowPos BOTH calls - raise to the topmost band, then slide
+# --- under the row's tray - on EVERY beat, and the taskbar re-asserts
+# --- its perch each time a topmost window shoves at it (the fixer
+# --- measured the z-war: 5 Hz arm-wrestle over a full-monitor layered
+# --- window, the row stable at 10 Hz, so the flicker was the re-pin,
+# --- not the geometry). The measured census added the two root
+# --- causes: (1) the slide read the tray's PREV as its anchor - but
+# --- after the raise the tray's prev IS THE PIECE, and the no-op
+# --- stranded it above the chrome (right tray top=True); (2) a
+# --- per-monitor taskbar without WS_EX_TOPMOST is an ORDINARY-band
+# --- window - sliding under it buried the piece behind the browser
+# --- (left tray top=False). The new law: the slide anchors on the
+# --- TRAY itself (position-independent, no self-reference) and runs
+# --- ONLY for topmost trays; non-topmost/tray-less rows settle at
+# --- band top (the first-prev test). Modeled with the same seams the
+# --- z-pin pins above fake: _setwindowpos records, _getwindow answers
+# --- the z-order walk, _u32.GetWindowLongW answers the ex-style bits.
 _ZH, _TRAY_H = 0x4242, 0x1338        # the piece's root, the row's tray
-_OTHER_H = 0x2222                    # the window above the tray while
-                                      # the piece is NOT in slot (the
-                                      # slide target: h inserts below it)
 _zw = _ZWin()
 _zw._pb_rect = (0, 0, 1920, 1080)
 _zswps = []
@@ -516,52 +515,136 @@ def _zswp(h, a, x, y, cx, cy, f):
     _zswps.append((h, a, f))
     return 1
 
-def _zgw(h, g):                        # the desk's z-order walk
-    if g != dimmer.GW_HWNDPREV:
-        return None
-    if h == _TRAY_H:
-        return _OTHER_H                # the tray's prev sibling while
-                                       # the piece is out of the slot
-    if h == _ZH:
-        return _TRAY_H if _in_slot_state["placed"] else 0x1111
-    return None                        # dead chain: the check fails open
+class _ZDesk:
+    """The module's seams, scripted: the z-order walk, the ex-style
+    bits, the row's tray."""
 
-def _ztopmost(h, i):                   # the piece's ex-style bit
-    return 0x8 if (i == dimmer.GWL_EXSTYLE
-                   and _in_slot_state["topmost"]) else 0
+    def __init__(self, tray_topmost, first_prev, under, prev_topmost=True):
+        self.tray_topmost = tray_topmost
+        self.first_prev = first_prev    # the piece's first-prev hwnd
+        self.under = under              # the piece's prev == the tray
+        self.prev_topmost = prev_topmost
 
-_in_slot_state = {"placed": False, "topmost": False}
+    def getwindow(self, h, g):
+        if g != dimmer.GW_HWNDPREV:
+            return None
+        if h == _ZH:
+            return _TRAY_H if self.under else self.first_prev
+        return None                     # dead chain: the check fails open
+
+    def getlong(self, h, i):
+        if i != dimmer.GWL_EXSTYLE:
+            return 0
+        if h == _ZH:
+            return 0x8                  # the piece is topmost; law (ii)
+                                        # requires the bit in every case
+        if h == _TRAY_H:
+            return 0x8 if self.tray_topmost else 0
+        return 0x8 if (self.first_prev and self.first_prev == h
+                       and self.prev_topmost) else 0
+
+    def tray(self, rect):
+        return _TRAY_H
+
 _saved = (dimmer._setwindowpos, dimmer._getwindow,
           dimmer._tray_above, dimmer._u32.GetWindowLongW)
 try:
     dimmer._setwindowpos = _zswp
-    dimmer._getwindow = _zgw
-    dimmer._tray_above = lambda rect: _TRAY_H
-    dimmer._u32.GetWindowLongW = _ztopmost
-    dimmer._zpin(_zw, -7)                          # beat 1: not in slot
-    assert _zswps == [(_ZH, -1, 0x213), (_ZH, _OTHER_H, 0x213)], \
-        _zswps                     # raise to topmost, then slide under
-                                   # the tray's prev sibling - the z-war
+    # (iv) topmost tray, piece ABOVE the tray (the prev chain never
+    # reaches it) - the measured deadlock: the OLD code slid under
+    # the tray's PREV, which after the raise WAS THE PIECE, so the
+    # second call no-oped and the pin re-fired every beat; this
+    # assertion FAILS ON THE OLD CODE. The new law anchors the slide
+    # on the TRAY hwnd itself - exactly the pair, second insert
+    # after the tray, not its prev.
+    d = _ZDesk(True, 0x1111, False)
+    dimmer._getwindow, dimmer._tray_above = d.getwindow, d.tray
+    dimmer._u32.GetWindowLongW = d.getlong
+    dimmer._zpin(_zw, -7)
+    assert _zswps == [(_ZH, -1, 0x213), (_ZH, _TRAY_H, 0x213)], _zswps
+    # (v) the slide HAS landed: piece under the tray, first prev ==
+    # the tray - in slot, ZERO calls (the 5 Hz flicker class, dead).
     _zswps.clear()
-    _in_slot_state.update(placed=True, topmost=True)
-    dimmer._zpin(_zw, -7)                          # beat 2: in slot
+    d.under = True
+    dimmer._zpin(_zw, -7)
+    assert _zswps == [], "the under-tray piece must cost zero calls"
+    # (vi) BAND-TOP LAW: a NON-topmost tray is the owner's choice -
+    # the piece must not bury itself under it (left tray top=False,
+    # the ordinary-band burial). First-prev NULL (band top): True,
+    # ZERO calls.
+    d = _ZDesk(False, 0, False)
+    dimmer._getwindow, dimmer._tray_above = d.getwindow, d.tray
+    dimmer._u32.GetWindowLongW = d.getlong
+    dimmer._zpin(_zw, -7)
+    assert _zswps == [], "band top under a non-topmost tray: no calls"
+    # same shape, first-prev a FOREIGN TOPMOST window: tolerated by
+    # the concession law - we never re-raise under it (we don't move,
+    # so it is not re-raised over us) - ZERO calls.
+    _zswps.clear()
+    d = _ZDesk(False, 0x9999, False)
+    dimmer._getwindow, dimmer._tray_above = d.getwindow, d.tray
+    dimmer._u32.GetWindowLongW = d.getlong
+    dimmer._zpin(_zw, -7)
     assert _zswps == [], \
-        "the already-placed piece must cost ZERO SetWindowPos calls"
-    _in_slot_state.update(placed=False, topmost=True)
-    dimmer._zpin(_zw, -7)                          # buried: re-pin
-    assert len(_zswps) == 2, \
-        "a lost slot re-pins both calls, never skips"
+        "a topmost first-prev under a non-topmost tray is conceded"
+    # (vii) same row, first-prev NON-topmost: a foreign ordinary
+    # window between us and the band top is a REAL burial (the bit
+    # alone cannot see it - burial keeps the bit set) - the pin
+    # re-fires, and the pair's SECOND call (the slide) is ABSENT:
+    # no slide for non-topmost rows, exactly ONE SetWindowPos, the
+    # raise.
     _zswps.clear()
-    _in_slot_state.update(placed=True, topmost=False)
-    dimmer._zpin(_zw, -7)                          # bit lost: re-pin
-    assert len(_zswps) == 2, \
-        "a lost topmost bit re-pins, never skips"
+    d = _ZDesk(False, 0x3333, False, prev_topmost=False)
+    dimmer._getwindow, dimmer._tray_above = d.getwindow, d.tray
+    dimmer._u32.GetWindowLongW = d.getlong
+    dimmer._zpin(_zw, -7)
+    assert _zswps == [(_ZH, -1, 0x213)], \
+        "buried under a non-topmost tray: the raise, and no slide"
+    # (viii) THE a5c95c2 REGRESSION (beat 1/beat 2) under the new
+    # anchor: beat 1 not in slot -> the pair, its slide target is
+    # now the TRAY hwnd, not the tray's prev (a5c95c2 expected the
+    # prev - reworded here with the fix-A anchor); beat 2 in slot ->
+    # zero calls.
+    _zswps.clear()
+    d = _ZDesk(True, 0x1111, False)
+    dimmer._getwindow, dimmer._tray_above = d.getwindow, d.tray
+    dimmer._u32.GetWindowLongW = d.getlong
+    dimmer._zpin(_zw, -7)
+    assert _zswps == [(_ZH, -1, 0x213), (_ZH, _TRAY_H, 0x213)], _zswps
+    _zswps.clear()
+    d.under = True
+    dimmer._zpin(_zw, -7)
+    assert _zswps == [], "the beat-2 no-op of a5c95c2 must survive"
+    # a buried piece STILL gets both calls on a topmost tray (the
+    # slide reaches it back under the chrome - fix A is what makes
+    # the state reachable at all).
+    _zswps.clear()
+    d = _ZDesk(True, 0x3333, False)
+    dimmer._getwindow, dimmer._tray_above = d.getwindow, d.tray
+    dimmer._u32.GetWindowLongW = d.getlong
+    dimmer._zpin(_zw, -7)
+    assert _zswps == [(_ZH, -1, 0x213), (_ZH, _TRAY_H, 0x213)], _zswps
 finally:
     (dimmer._setwindowpos, dimmer._getwindow,
      dimmer._tray_above, dimmer._u32.GetWindowLongW) = _saved
-ok("the theater z-re-pin is idempotent: a piece already topmost and "
-   "chained to the row's tray within 5 hops costs ZERO SetWindowPos "
-   "calls (the Oct-17 flicker cure), and any failed check re-pins")
+ok("the theater z-re-pin slides the piece under the TRAY hwnd itself "
+   "when the piece sits above it - the exact pair, second call "
+   "inserting after the tray, not its prev (pin iv: the old PREV-read "
+   "anchor was the piece itself after the raise, the measured "
+   "self-no-op deadlock - this pin fails on the old code)")
+ok("a piece under its row's topmost tray is in slot: ZERO "
+   "SetWindowPos calls (pin v: the 5 Hz flicker class, dead)")
+ok("under a non-topmost tray the piece settles at band top: zero "
+   "calls at the band top, and a topmost first-prev is conceded - "
+   "we never re-raise under it (pin vi: the ordinary-band burial "
+   "is dead)")
+ok("buried under a non-topmost tray the pin re-fires the raise "
+   "ALONE - the slide is absent: no slide for non-topmost rows "
+   "(pin vii: covering the strip is the owner's choice)")
+ok("the a5c95c2 beat-1/beat-2 regression survives the new anchor: "
+   "the pair with the slide target on the TRAY hwnd (a5c95c2 "
+   "expected the prev - reworded here), then zero; a buried piece "
+   "still gets the pair (pin viii)")
 
 
 # --- RULING 3 (Oct-15): the per-monitor always sub-mode. An opted
