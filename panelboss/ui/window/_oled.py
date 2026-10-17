@@ -202,7 +202,10 @@ TIP_COMP = {
             "full-field veil while the conjunction holds). unchecked, "
             "the panel gets no pieces at all and dims like any idle "
             "desk. the slider is the panel's OWN veil percent - until "
-            "you move it the panel follows the \"veil level\" above.",
+            "you move it the panel follows the \"veil level\" above. "
+            "a panel you never touched reads checked but has no row "
+            "yet: secondary panels wear the full-field veil only once "
+            "you move one of their controls (rows save on first use).",
 }
 
 

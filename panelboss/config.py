@@ -1018,7 +1018,7 @@ DIMMER_IDLE_CEIL = 60            # 60 s, owner timer law (Oct 16: the
                               # a minute of stillness the veil is a
                               # done deal; a hand-set larger value
                               # clamps honest at the ceiling
-DIMMER_IDLE_DEFAULT = 120
+DIMMER_IDLE_DEFAULT = 60
 DIMMER_RAMP_FLOOR = 0            # the rail reaches zero and MEANS it: at
                                  # 0 the drop is immediate (owner ruling,
                                  # Oct 15 - the Veils fade guards this

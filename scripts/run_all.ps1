@@ -35,6 +35,13 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
     'camid_test.py', 'assign_test.py', 'camdiag_test.py', 'guard_test.py', 'config_norm_test.py',
     'virgin_boot_test.py', 'hdrwatch_test.py', 'hdrwake_test.py',
     'pinlifecycle_test.py', 'companions_test.py', 'camcore_probe.py',
+    'companion_test.py',            # the LIVE companion pins (47+):
+                                    # the plural file above is the Oct-12
+                                    # frame-shape probe, NOT this suite -
+                                    # the name collision hid the pin
+                                    # family from the gate all day Oct 16
+    'videoeye_test.py',             # the eye's fold/law/FSM pins (32+),
+                                    # same exclusion family
     'enumwatch_test.py',            # wave C: the enumeration's join
                                     # watchdog - a wedged door may not
                                     # eat the board (offline fake cv2)

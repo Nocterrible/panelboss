@@ -618,6 +618,18 @@ class Veils:
             mx, my, mw, mh = m["x"], m["y"], m["w"], m["h"]
             s = str(m["short"])
             row = rows.get(s)
+            # the panel's OWN darkness (gate finding 2): a stored level
+            # applies to this panel's pieces WHOLE - border ring on the
+            # video panel included, or the per-panel slider is an inert
+            # control exactly where the owner will touch it first.
+            # Clamped HERE too (latent-trap insurance, finding 5):
+            # normalize clamps at load, but the FSM is the last guard.
+            pal = valpha
+            if row is not None:
+                raw = row.get("level")
+                if isinstance(raw, (int, float)) and not isinstance(
+                        raw, bool):
+                    pal = max(10, min(90, float(raw))) / 100.0
             if row is not None and row.get("on", True) is False:
                 continue                # the panel opted OUT of the
                 #                       # theater: no pieces under its
@@ -629,24 +641,22 @@ class Veils:
                     # the opt-in's shape: the panel is the piece - the
                     # whole field, no hole (no video px lives here
                     # while the conjunction holds)
-                    lvl = row.get("level")
-                    out[self._fkey(s, "full")] = (
-                        (mx, my, mw, mh), s,
-                        valpha if lvl is None else lvl / 100.0)
+                    out[self._fkey(s, "full")] = ((mx, my, mw, mh),
+                                                  s, pal)
                 continue                # the rect is off this panel
             if iy0 > my:
                 out[self._fkey(s, "t")] = ((mx, my, mw, iy0 - my), s,
-                                           valpha)
+                                           pal)
             if iy1 < my + mh:
                 out[self._fkey(s, "b")] = ((mx, iy1, mw,
-                                            my + mh - iy1), s, valpha)
+                                            my + mh - iy1), s, pal)
             if ix0 > mx:
                 out[self._fkey(s, "l")] = ((mx, iy0, ix0 - mx,
-                                            iy1 - iy0), s, valpha)
+                                            iy1 - iy0), s, pal)
             if ix1 < mx + mw:
                 out[self._fkey(s, "r")] = ((ix1, iy0,
                                             mx + mw - ix1,
-                                            iy1 - iy0), s, valpha)
+                                            iy1 - iy0), s, pal)
         return out
 
     def _fkey(self, short, side):

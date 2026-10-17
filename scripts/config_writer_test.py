@@ -65,6 +65,26 @@ assert "[camera.off]" not in text, text
 back3 = config.get_config(dir=dirpath, verbose=False)
 assert back3["camera"]["on"] == {} and back3["camera"]["off"] == {}, \
     (back3["camera"]["on"], back3["camera"]["off"])
+# the theater/dimmer per-monitor ROWS are one level deeper still:
+# {short: {on, level}} dicts ride as [videodim.monitors.IOC912B]-style
+# sub-sub-tables (wave Oct 16/17) - if the serializer flattens them to
+# inline strings the first UI gesture's save is a silent lie
+cfg.setdefault("videodim", {})
+cfg["videodim"]["monitors"] = {"DELA283": {"on": True, "level": 55},
+                               "IOC912B": {"on": False}}
+cfg.setdefault("dimmer", {})
+cfg["dimmer"]["levels"] = {"DELA283": 66}
+config.write_config(cfg, path)
+back4 = config.get_config(dir=dirpath, verbose=False)
+# read back through NORMALIZE: a row without a level answers one with
+# an explicit None (follow-global is a value, not an absence)
+assert back4["videodim"]["monitors"] == {
+    "DELA283": {"on": True, "level": 55},
+    "IOC912B": {"on": False, "level": None}}, \
+    back4["videodim"]["monitors"]
+assert back4["dimmer"]["levels"] == {"DELA283": 66}, \
+    back4["dimmer"]["levels"]
+print("ok - per-monitor theater/dimmer rows round-trip (sub-sub-tables)")
 print("ok - dict + backslash round-trip survives write/read")
 print("ok - camera mode tables + wear-guard keys round-trip")
 os.remove(path)
