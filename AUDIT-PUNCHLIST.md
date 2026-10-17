@@ -1782,7 +1782,13 @@ wall-death never wrote anything; a retry after the balance lands is
 free). Misreading this class as a fleet bug burns an investigation
 pass; this entry is the whole diagnosis.
 
-## ADDON (owner, Oct 16, NOT NOW): per-monitor veil level
+## ADDON (owner, Oct 16, NOT NOW): per-monitor veil level — ABSORBED
+ABSORBED by the Oct-16 per-panel wave (the block below): [dimmer].
+levels per EDID token + per-panel card sliders landed for the plain
+veils, and the theater question got answered with its own per-panel
+rows ([videodim].monitors: selectability + OWN level, full-field on
+the opt-in panels - the straddle keeps its per-panel border pieces).
+What follows is the entry as parked.
 The idle dimmer's veil-level rail is ONE number for every panel - and
 panels answer differently (measured on the owner's desk: 49% goes DARK
 on DELA283 and is BARELY a tint on IOC912B - per-panel gamma/contrast
@@ -1797,6 +1803,49 @@ same question asked (one video frame straddling two panels with
 different veil darkness will LOOK wrong - the straddle seam knows both
 panels; decide then whether theater uses the brighter of the two, an
 average, or its own per-panel row too - do not half-do it).
+
+## UAT WAVE (owner, Oct 16, LANDED): the timer laws, the origin report,
+## per-panel veils (commits a0fea3e / 7935de9 / a8cfb6e)
+- TIMER LAW, theater: [videodim].idle_sec rails are 1..30 (the slider
+  max moved "5 min -> 30 s"). Provenance of the FLOOR (owner law
+  "rail MINIMUM 1 s"): at 0 the veil NEVER lifts - rect updates stop
+  re-birthing and the ring sticks at its first geometry (the sticky-
+  veil class, owner UAT Oct 16). The stock default 15 stands.
+- TIMER LAW, dimmer: [dimmer].idle_sec ceiling 300 -> 60 (owner: the
+  slider max "5 min -> 60 s"). The stock 120 now clamps honest at the
+  ceiling in silence (zero new warnings on an old file).
+- LIFT-FADE TOGGLE, default OFF ("60 s veil lift is dumb"): a new
+  [dimmer].fade strict bool; OFF = the plain veil drops the INSTANT
+  input returns (both retract paths), the "fade within" ramp applies
+  only when on; the theater's own [videodim].fade is untouched -
+  two keys, two owners' words. The dim card carries the switch.
+- PER-MONITOR THEATER LAW: [videodim].monitors rows (EDID shorts)
+  make the theater SELECTABLE per monitor with its OWN level slider
+  per monitor; a non-video panel with a row wears a FULL-FIELD theater
+  veil while the conjunction holds (row level, or the global when
+  absent); on=false strips the pieces from the panel its own video
+  sits on (plain veils proceed). Absent table = the legacy shape,
+  every pre-wave config pin passes unchanged (the regression proof
+  lives in videoeye_test).
+- PER-MONITOR PLAIN LEVELS: [dimmer.levels] {short: int}, per-panel
+  sliders on the dim card, the card's master as default (the ADDON
+  above, absorbed).
+- GEOMETRY LAW - the border-guess BECAME A REPORT: the fold's even-
+  split border correction was a GUESS and the owner's maximized window
+  proved it (measured live doorway row: bounds.left=-8 - a maximized
+  window's borders hang off-screen, the hole sat a few dozen px off).
+  content.js v0.4.2 REPORTS the viewport origin (window.screenX/
+  screenY, DIP); the fold uses the report when present
+  (x = round((origin0 + rect.left) * dpr) - the same round() as the
+  legacy lane, banker's ties included) and the bounds formula survives
+  ONLY as the compat lane for host/extension pairs mid-update. The
+  owner's bite vector is pinned both ways: report -> 614, guess ->
+  634, truth -> 614.
+- SCROLL RE-PUSH FIX: the scroll listener moves to {passive: true,
+  capture: true} - inner scrollers fire scroll on the ELEMENT and
+  scroll does not bubble (capture phase only); a visible veil now
+  re-pushes through a page-internal scroll. The 1 s idle floor stays
+  the PRIMARY cure; this is the cheap correctness.
 
 ## THE ROADMAP (owner, Oct 16, verbatim order - this IS the release plan)
 1. Owner verifies Movie theater mode (the UAT above).
