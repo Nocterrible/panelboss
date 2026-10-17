@@ -207,20 +207,23 @@ def main():
         # "own" that tray and demanded to sit under it, which the
         # topmost band cannot: the taskbar's z sits above the band).
         pl, pt, pr, pb = rect
-        row_trays = [order.index(t) for t in trays
+        row_trays = [(t, order.index(t)) for t in trays
                      if t in order and min(tray_spans[t][1], pr)
                      - max(tray_spans[t][0], pl) > 0
                      and min(tray_spans[t][3], pb)
                      - max(tray_spans[t][2], pt) > 0]
-        under_tray = (not row_trays) or all(pos > p for p in row_trays)
+        under_tray = (not row_trays) or all(pos > p for _t, p in row_trays)
         # TWO-LAW shape (the Oct-17 census, the dimmer's own docstring):
         # a non-topmost row tray is the owner's per-monitor choice -
         # the piece sits at band top ABOVE it and that is the law, so
         # the under-tray demand applies only to topmost trays (the
         # topmost bit is the census walk's own field, already
         # enumerated above - the guard stays honest to the law).
+        # (gate fix: row_trays carries (hwnd, pos) PAIRS - indexing the
+        # hwnd-keyed trays dict with z-positions KeyErrors, and it
+        # fires on exactly the rows the relaxation exists to bless.)
         under_tray = under_tray or not any(
-            trays[t] for t in row_trays)
+            trays[t] for t, _p in row_trays)
         if not top or pos > ref_pos or not under_tray:
             bad += 1
             print("FAIL: piece %s rect=%s z=%d vs browser z=%d (%s) "

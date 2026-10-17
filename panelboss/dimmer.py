@@ -322,7 +322,10 @@ class Veils:
         # INSIDE an always panel - only the idle wait is skipped -
         # and the pause clears the whole field, always rows included.
         idle_ok = (not _PAUSED
-                   and self._idle() >= d.get("idle_sec", 120))
+                   and self._idle() >= d.get("idle_sec", 60))   # 60 =
+                   # DIMMER_IDLE_DEFAULT's twin (this module imports
+                   # config lazily; the Oct-17 docs wave sutured the
+                   # stale 120 - owner timer law caps at 60)
         always = {s for s, v in (d.get("always") or {}).items()
                   if v and s in opted}
         if idle_ok:
