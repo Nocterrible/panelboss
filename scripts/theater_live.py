@@ -30,6 +30,10 @@ TRAY = ("Shell_TrayWnd", "Shell_SecondaryTrayWnd")
 ENUMPROT = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_long)
 
 
+class LASTINPUT(ctypes.Structure):
+    _fields_ = [("cb", wt.DWORD), ("dwTime", wt.DWORD)]
+
+
 def app_pids():
     """The PanelBoss process tree: the venv redirector (command line
     carries the path or run.py) plus its base child (found by
@@ -99,7 +103,12 @@ def expected_pieces(hole):
         ctypes.POINTER(wt.RECT), ctypes.c_long)
 
     def cb(h, _dc, m_rect, _mp):
-        mons.append((m_rect.left, m_rect.top, m_rect.right, m_rect.bottom))
+        # lprcMonitor is a PLAIN LPCRECT (the monitor rect, clipped by
+        # the enumeration region - we pass none, so it is whole). The
+        # first cut cast it to MONITORINFOEX and the cbSize slot ate
+        # the first field: reading left/top as cbSize/left.
+        r = m_rect.contents
+        mons.append((r.left, r.top, r.right, r.bottom))
         return 1
     U.EnumDisplayMonitors(0, 0, MONITORPROC(cb), 0)
     out = set()
@@ -120,10 +129,11 @@ def expected_pieces(hole):
 
 
 def idle_seconds():
-    li = wt.LASTINPUTINFO()
+    li = LASTINPUT()
     li.cb = ctypes.sizeof(li)
     U.GetLastInputInfo(ctypes.byref(li))
-    return (wt.GetTickCount() - li.dwTime) / 1000.0
+    tick = ctypes.windll.kernel32.GetTickCount()   # DWORD, no args
+    return (tick - li.dwTime) / 1000.0
 
 
 def main():
@@ -146,6 +156,10 @@ def main():
         return 1
     x, y, w, h = hole
     exp = expected_pieces(hole)
+    if not exp:
+        print("OK: the hole covers its whole row(s) - zero pieces is "
+              "LAWFUL (a fullscreen video needs no frame)")
+        return 0
     # The BROWSER: the visible Chromium-class window covering the
     # hole's center (all three site families share the class). The
     # foreground window was the first cut's proxy and made a console-
@@ -162,30 +176,42 @@ def main():
     ref_pos = order.index(ref) if ref in order else 0
     trays = [hwnd for hwnd, cls, rect, vis, _t, _p in wins
              if cls in TRAY and vis]
-    tray_spans = {hwnd: (rect[0], rect[2]) for hwnd, cls, rect, vis,
-                  _t, _p in wins if hwnd in trays}
-    found = [(hwnd, rect, top) for hwnd, cls, rect, vis, top, pid in wins
-             if pid in pids and cls == "TkTopLevel" and vis
-             and rect in exp]
+    tray_spans = {hwnd: rect for hwnd, cls, rect, vis, _t,
+                  _p in wins if hwnd in trays}
+    mine = [(hwnd, rect, top) for hwnd, cls, rect, vis, top, pid in wins
+            if pid in pids and cls == "TkTopLevel" and vis]
+    found = [p for p in mine if p[1] in exp]
     if not found:
         print("FAIL: no pieces at the expected rects %s - the ring is "
-              "not painted. Desk input-idle %.1f s: under "
-              "[videodim].idle_sec that absence is LAWFUL - hands off "
-              "and re-run; past the rail it is the bug (the pause? "
-              "the rail?)" % (sorted(exp)[:4], idle_seconds()))
+              "not painted. Painted pieces of ours: %s. Desk input-"
+              "idle %.1f s: under [videodim].idle_sec that absence is "
+              "LAWFUL - hands off and re-run; past the rail it is the "
+              "bug (the pause? the rail?)"
+              % (sorted(exp)[:4],
+                 sorted(r for _h, r, _t in mine)[:4], idle_seconds()))
         return 1
     missing = exp - {rect for _h, rect, _t in found}
     if missing:
-        print("FAIL: %d of %d expected pieces absent (%s) - a partial "
-              "ring is the old bite with one tooth missing"
-              % (len(missing), len(exp), sorted(missing)))
+        print("FAIL: pieces painted for a DIFFERENT rect (or partial): "
+              "expected %s, painted %s - a stale row under a live ring "
+              "is the CLIP class (the content script must re-push on "
+              "motion; reload the extension and re-check)"
+              % (sorted(exp), sorted(r for _h, r, _t in mine)))
         return 1
     bad = 0
     for hwnd, rect, top in found:
         pos = order.index(hwnd)
-        row_trays = [order[t] for t in trays
-                     if t in order and min(tray_spans[t][1], x + w)
-                     - max(tray_spans[t][0], x) > 0]
+        # the piece's own monitor ROW: x-overlap AND y-overlap with
+        # each tray (the top band of a row has no y-overlap with the
+        # row's bottom taskbar - an x-only test made every top piece
+        # "own" that tray and demanded to sit under it, which the
+        # topmost band cannot: the taskbar's z sits above the band).
+        pl, pt, pr, pb = rect
+        row_trays = [order.index(t) for t in trays
+                     if t in order and min(tray_spans[t][1], pr)
+                     - max(tray_spans[t][0], pl) > 0
+                     and min(tray_spans[t][3], pb)
+                     - max(tray_spans[t][2], pt) > 0]
         under_tray = (not row_trays) or all(pos > p for p in row_trays)
         if not top or pos > ref_pos or not under_tray:
             bad += 1

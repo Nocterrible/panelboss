@@ -21,6 +21,7 @@ os.environ["PANELBOSS_CONFIG_DIR"] = tempfile.mkdtemp(prefix="panelboss_cmp_")
 
 from panelboss import config   # noqa: E402
 from panelboss import companion   # noqa: E402
+from panelboss import nmhost   # noqa: E402
 from panelboss import videoeye   # noqa: E402
 
 fails = []
@@ -84,8 +85,16 @@ check(companion.on({"videodim": {"on": True}}) is True
 
 # redirect the doorway to a temp file the desk cannot own
 _real_rect = videoeye.RECT_PATH
+_real_host_json = nmhost.HOST_JSON
 _dark = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"], "no-rect")
 videoeye.RECT_PATH = _dark
+# AND the host registration - the _no_buddy fork (installed vs never)
+# reads host.json too, and since the owner's install button the REAL
+# one exists on a live desk: the suite must answer its own questions,
+# never the machine's. (Oct-16: the first post-install run caught this
+# isolation gap - the pin was true only on an uninstalled box.)
+nmhost.HOST_JSON = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
+                                "no-host.json")
 try:
     check(companion.bridge_state() is None,
           "no doorway file answers None, never raises")
@@ -122,6 +131,7 @@ try:
           "door_dir() answers the redirected doorway path")
 finally:
     videoeye.RECT_PATH = _real_rect
+    nmhost.HOST_JSON = _real_host_json
 
 # --- capability discovery (the owner's mandate, Oct 16 close) ---------
 # The card asks the HOST what the API can send, not a stored guess. The
