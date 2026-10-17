@@ -1781,3 +1781,19 @@ and retry-once on any dispatch that dies at START with no output (a
 wall-death never wrote anything; a retry after the balance lands is
 free). Misreading this class as a fleet bug burns an investigation
 pass; this entry is the whole diagnosis.
+
+## ADDON (owner, Oct 16, NOT NOW): per-monitor veil level
+The idle dimmer's veil-level rail is ONE number for every panel - and
+panels answer differently (measured on the owner's desk: 49% goes DARK
+on DELA283 and is BARELY a tint on IOC912B - per-panel gamma/contrast
+laws). Wanted: the veil level per monitor row (the dim card's per-panel
+rows already exist as the opt-in seam - the level rail becomes a per-
+row value with the card's master as default), config shape [dimmer.
+levels] per EDID token (identity law: tokens, not slot numbers), one
+calibration story on the card that doesn't beg for an editor (the
+'always' row is the precedent for a sub-control riding its parent's
+opt-in). Also relevant then: the THEATER veil's percent rail wants the
+same question asked (one video frame straddling two panels with
+different veil darkness will LOOK wrong - the straddle seam knows both
+panels; decide then whether theater uses the brighter of the two, an
+average, or its own per-panel row too - do not half-do it).
