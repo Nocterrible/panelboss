@@ -33,8 +33,9 @@ FAMILIES = ("chrome", "edge", "opera_gx")
 # the owner's Oct 16 catch: a stale row shared its words with a
 # malformed one, and the absent doorway read like a fault, not an
 # installation step. Three reasons, three sentences:
-NO_BUDDY = ("the buddy's helper is not installed - load the extension "
-            "and run extension\\host\\install_host.ps1")
+NO_BUDDY = ("the buddy's helper is not installed - press the "
+            "install the helper button (or run "
+            "extension\\host\\install_host.ps1)")
 JUNK_WORDS = "the companion answered junk"
 # the staleness horizon: a row older than this reads as "hours old",
 # not "live". The eye's grace_s (default 3 s) lifts the veil long

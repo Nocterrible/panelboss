@@ -23,13 +23,25 @@ the beat: read-once, kill-on-timeout, and the reply is cached with a TTL
 (installation rarely changes, and spawning an exe every beat is the tax
 this design was built to avoid).
 
-SIZE LAW (~150): ONE seam - codec, spawn-and-ask, cache. The card's
-words live in companion.py; the fold lives in videoeye.py.
+SIZE LAW (~230): ONE seam - codec, spawn-and-ask, cache, and install.
+The install seam (install, Oct 16) is the app-side one-click on top of
+the SAME script the README documents - extension\\host\\install_host.
+ps1: the id law is derived here (derive_unpacked_id, the browser's
+unpacked-extension derivation), PATH is prepended with the venv's dir
+so the installer's `python` is the venv's (PyInstaller 6.22.3 lives
+there), the installer's stdout lands in a scratch file (the owner's
+shell law: bulk noise never rides the UI line), and the result is
+re-probed with capabilities(force=True) - the success word IS the
+fresh host's own reply, the probe being the proof-of-install. The
+card's words live in companion.py; the fold lives in videoeye.py.
 """
 
+import hashlib
 import json
 import os
+import re
 import struct
+import sys
 import time
 
 from . import _spawn
@@ -44,10 +56,53 @@ CAP_TIMEOUT = 2.0          # s: a wedged host answers nothing; kill it
 CAP_TTL = 300.0            # s: the capabilities answer is cached - the
                            # API surface changes when the host is
                            # reinstalled, not between dimmer beats
-NOT_INSTALLED = ("the buddy's helper is not installed - run "
-                 "extension\\host\\install_host.ps1")
+NOT_INSTALLED = ("the buddy's helper is not installed - press the "
+                 "install the helper button above")
+
+# the installer the card's one-click runs - a module constant so a
+# suite can stand a .ps1 twin in its own temp dir (the seam is the
+# SPAWN: the fake twin runs through the real subprocess call).
+_INSTALL_PS1 = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), "extension", "host",
+    "install_host.ps1")
 
 _cache = {"until": 0.0, "caps": None}
+
+# the browser's unpacked-extension id is a derivation over the LOAD
+# PATH, not an invention: the path as the browser normalizes it (drive
+# letter UPPERCASE, backslashes, UTF-8), SHA-256, the first 16 bytes
+# mapped nibble-by-nibble into the a-p alphabet. Stable per location -
+# which is what the manifest's allowed_origins needs; move the load
+# path and the browser re-derives, and so do we.
+EXT_ID_RE = re.compile(r"^[a-p]{32}$")
+
+
+def derive_unpacked_id(ext_dir):
+    """The browser's unpacked-extension id for `ext_dir`, or None when
+    the dir cannot be normalized to a path. The law is on the path as
+    the browser LOADS it: the absolute path string, backslashes, the
+    drive letter as the disk spells it, UTF-8 bytes (abspath - which
+    absolutizes and collapses, but never case-folds: the on-disk
+    spelling IS the load spelling, and the id is stable per location,
+    so is the manifest's allowed_origins; move the load path and the
+    browser re-derives, and so do we). Quoting the derivation the pin
+    must not drift from:
+
+        sha256(os.path.abspath("F:\\Projects\\panelboss-reskin\\extension")
+               .encode("utf-8"))[:16]  ->  jagfnepkfnioappmbloibkcjofhgaaai
+        sha256(os.path.abspath("F:\\workspace").encode("utf-8"))[:16]
+                                     ->  jeafefjdigahcngkajpclimdpjjamadc
+    """
+    p = os.path.abspath((ext_dir or "").strip())
+    if not p or p == os.path.abspath(os.curdir):
+        return None
+    p = p[0].upper() + p[1:]          # the law's drive letter: UPPERCASE
+                                       # (the on-disk spelling is already
+                                       # the load spelling; the letter is
+                                       # the one byte the browser fixes)
+    digest = hashlib.sha256(p.encode("utf-8")).digest()[:16]
+    return "".join(chr(ord("a") + (b >> 4)) + chr(ord("a") + (b & 0xF))
+                   for b in digest)
 
 
 def host_path():
@@ -115,6 +170,139 @@ def capabilities(now=None, force=False):
     caps = _ask(exe)
     _cache.update(until=now + CAP_TTL, caps=caps)
     return caps
+
+
+def install(ext_id=None):
+    """One-click helper install: run extension\\host\\install_host.ps1
+    (the SAME script the README documents - this call adds the app's
+    convenience, not a second installer), then re-probe so the
+    caller can answer with the fresh host's own reply.
+
+    Id resolution: `ext_id` when given - and anything that is not the
+    browser's 32-char a-p id refuses BEFORE a single process starts -
+    else derived from the on-disk extension dir (derive_unpacked_id;
+    the load path here is the extension's own home). A dir that cannot
+    be normalized answers a word, never a spawn.
+
+    The venv's python must be the installer's `python` (PyInstaller
+    6.22.3 lives in the venv): PATH is PREPENDED with
+    os.path.dirname(sys.executable). The installer's stdout (and
+    stderr) is captured into a scratch file, never the UI string; the
+    failure words quote the installer's OWN line (at most one) and
+    name the step it names - id/build/register/write - so a user can
+    tell WHICH of build, register, or write refused without opening
+    the scratch file.
+
+    Answers (bool, words). True + the fresh host's capabilities line -
+    the PROBE IS THE PROOF-OF-INSTALL (the cache is reset and the
+    fresh host is re-asked; a host that answers nothing reads as a
+    failure, not a victory). False + the refusing step + the manual
+    route (the ps1 path stays the documented one-line-down manual)."""
+    if ext_id is not None:
+        ext_id = str(ext_id).strip()
+    if ext_id:
+        if not EXT_ID_RE.match(ext_id):
+            return False, ("bad extension id - it must be 32 lowercase "
+                           "a-p chars (the browser's extensions page)")
+    else:
+        ext_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "extension")
+        ext_id = derive_unpacked_id(ext_dir)
+        if not ext_id:
+            return False, ("could not derive the extension id from the "
+                           "on-disk extension dir")
+    ps1 = _INSTALL_PS1
+    if not os.path.exists(ps1):
+        return False, "the installer is not here: %s" % ps1
+    scratch = os.path.join(
+        os.environ.get("TEMP") or os.environ.get("TMP") or ".",
+        "panelboss-helper-install.log")
+    env = dict(os.environ)
+    env["PATH"] = os.path.dirname(sys.executable) + os.pathsep + \
+        env.get("PATH", "")
+    try:
+        done = _spawn.run(["powershell", "-NoProfile", "-ExecutionPolicy",
+                           "Bypass", "-File", ps1, "-ExtensionId",
+                           ext_id],
+                          env=env, capture_output=True, text=True,
+                          timeout=300)
+    except _spawn.subprocess.TimeoutExpired:
+        return False, ("the install timed out (PyInstaller takes ~40 s; "
+                       "the cap is 5 min) - or run extension\\host\\"
+                       "install_host.ps1 -ExtensionId %s yourself"
+                       % ext_id)
+    # the installer's bulk never rides the UI string - it lands in the
+    # scratch file for the owner to read (the shell law); the words
+    # quote at most ONE line of it.
+    try:
+        with open(scratch, "w", encoding="utf-8") as f:
+            f.write((done.stdout or "") + (done.stderr or ""))
+    except OSError:
+        pass
+    if done.returncode != 0:
+        tail = _stdout_tail((done.stdout or "") + (done.stderr or ""))
+        step = _refusing_step(tail)
+        return False, "%s refused: %s - or run " \
+                      "extension\\host\\install_host.ps1 -ExtensionId " \
+                      "%s yourself" % (step, tail, ext_id)
+    # the fresh host's own reply is the proof-of-install: the cache is
+    # reset so THIS ask is the new host, not the one installed an hour
+    # ago (the TTL would otherwise answer the stale answer).
+    _cache.update(until=0.0, caps=None)
+    caps = capabilities(force=True)
+    if caps is None:
+        return False, ("the installer reported success but the fresh "
+                       "host answers no capabilities - or run "
+                       "extension\\host\\install_host.ps1 -ExtensionId "
+                       "%s yourself" % ext_id)
+    return True, "helper installed - " + _caps_line(caps)
+
+
+def _stdout_tail(out):
+    """The last quotable line of an installer's stdout, or one honest
+    word when it printed nothing."""
+    lines = [ln.strip() for ln in (out or "").splitlines() if ln.strip()]
+    return lines[-1] if lines else "the installer said nothing"
+
+
+def _refusing_step(tail):
+    """The step the installer's OWN line names - id, build, register,
+    write - so the words tell the user WHICH of build, register, or
+    write refused. The ps1's lines: the bad-id line, 'host build
+    failed', the host.json write, the register (any of them dying
+    surfaces as a Write-Output of its own error, which is what these
+    keywords quote). An un-named failure answers the honest generic -
+    never a guessed step."""
+    t = (tail or "").lower()
+    if "bad extension id" in t:
+        return "the extension id"
+    if "build" in t:
+        return "the build"
+    if "host.json" in t:
+        return "the host.json write"
+    if "native messaging hosts" in t or "registry" in t or \
+            "set-itemproperty" in t:
+        return "the register"
+    if "manifest" in t or "host-manifest" in t:
+        return "the manifest write"
+    return "the install"
+
+
+def _caps_line(caps):
+    """The capabilities reply as the card's line - the same render
+    companion._caps_line shows the card (mirrored here, not imported -
+    companion imports nmhost, the circle stays one-way) so install's
+    success word IS the fresh host's own reply."""
+    opnames = tuple(x for x in ops(caps) if isinstance(x, str))
+    fields = tuple(x for x in veil_fields(caps) if isinstance(x, str))
+    line = "buddy API: " + ", ".join(opnames) if opnames else \
+        "buddy API: (no ops)"
+    if isinstance(caps.get("auto"), dict):
+        line += ", auto on play"
+    if fields:
+        line += " - veil sends " + "/".join(fields)
+    return line
 
 
 def veil_fields(caps):
