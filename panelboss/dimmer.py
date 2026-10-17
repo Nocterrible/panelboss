@@ -129,6 +129,11 @@ WS_EX_TOPMOST = 0x8
 # and the GetPixel probe of Oct-15 measured the NEXT-shaped pin
 # painting the veil UNDER its target (no dim at all on a gray base).
 GW_HWNDPREV = 3
+# style bits for the transient-popup law (_fact, Oct-17)
+GWL_STYLE = -16
+WS_POPUP = 0x80000000
+WS_CAPTION = 0x00C00000
+WS_THICKFRAME = 0x00040000
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _FADE_LEVELS = (1.0, 2.0 / 3.0, 1.0 / 3.0)   # THREE steps, then gone
 _SWP_ZPIN = 0x213   # NOSIZE | NOMOVE | NOACTIVATE | NOOWNERZORDER: a
@@ -745,8 +750,24 @@ def _fact(w, fg, by_short):
     buf = ctypes.create_unicode_buffer(256)
     _u32.GetClassNameW(w, buf)           # a refusal leaves "": no
     ex = _u32.GetWindowLongW(w, GWL_EXSTYLE)   # shell view is unnamed
+    st = _u32.GetWindowLongW(w, GWL_STYLE)
+    # The TRANSIENT-POPUP law (owner UAT, Oct 17: "right click context
+    # menus... a violation of the foreground objects shouldn't dim
+    # structure"): a window with no caption and no resize frame that
+    # pops TOPMOST over the desk is menu-family - context menus (the
+    # Win11 taskbar's measured as Xaml_WindowedPopupClass, style
+    # 0x94000000, ex 0x8200008: WS_POPUP, no caption, no thickframe,
+    # topmost), tooltips, dropdowns, hover thumbnails. Species are
+    # OS-version shapeshifters (class whack-a-mole loses); the STYLE
+    # is the invariant. TOPMOST required: a borderless GAME window is
+    # caption-less too but sits ordinary - it must keep dimming like
+    # any background app when the owner walks away from it.
+    frameless = (bool(st & WS_POPUP) and not (
+                 st & (WS_CAPTION | WS_THICKFRAME))
+                 and bool(ex & WS_EX_TOPMOST))
     return {"hwnd": w, "pid": pid.value,
             "exe": _exe(pid.value), "cls": buf.value,
+            "frameless": frameless,
             # the overlay badge, measured on this desk (Oct-15 UAT):
             # every window WE paint is an overrideredirect (or an
             # explicit click-through) Tk toplevel, and Windows Tk
@@ -811,7 +832,8 @@ def _veil_rows(rows):
     skip still refuses it a veil, so the wallpaper law stands: the
     row passes the door precisely when it can never reach paint."""
     return [f for f in rows
-            if f["cls"] not in DESKTOP_VIEWS or f["fg"]]
+            if (f["cls"] not in DESKTOP_VIEWS or f["fg"])
+            and not f.get("frameless")]
 
 
 def _census():

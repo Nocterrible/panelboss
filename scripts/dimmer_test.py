@@ -279,6 +279,66 @@ ok("a focus on a child marks its TOP-LEVEL through the real census "
    "(GA_ROOT at the door); the desktop row carries attribution yet "
    "never reaches paint - the same-tick drop rides the fg flag")
 
+# --- the TRANSIENT-POPUP law (owner UAT, Oct 17): "right click
+# --- context menus are getting hit with the background dimmer which
+# --- feels like a violation of the foreground objects shouldn't dim
+# --- structure". The veil refuses borderless TOPMOST popups - the
+# --- style, not the class (Win11's taskbar menu measured HERE as
+# --- Xaml_WindowedPopupClass, style 0x94000000, ex 0x8200008; the
+# --- classic #32768 menu and #32770 tooltip carry the same shape);
+# --- topmost is required so a captionless borderless GAME window
+# --- keeps dimming like any background app. Door-level law:
+_menu = {"cls": "Xaml_WindowedPopupClass", "fg": False,
+         "frameless": True, "hwnd": 1, "pid": 1, "monitor": "MONA",
+         "exe": "explorer.exe", "tool": False, "cloaked": False,
+         "iconic": False, "rect": (0, 0, 10, 10)}
+_captioned = dict(_menu, cls="Notepad", frameless=False)
+assert dimmer._veil_rows([_menu]) == [], \
+    "a menu-family popup reached the veil stratum - the owner was " \
+    "about to click a dimmed item"
+assert len(dimmer._veil_rows([_captioned])) == 1, \
+    "the ordinary window lost its qualification to the new law"
+assert all("frameless" in f for f in _cold), \
+    "the fact does not carry the key - the door would filter on hope"
+_fbody = SRC[SRC.index("def _fact("):SRC.index("def _veil_rows(")]
+assert "WS_EX_TOPMOST" in _fbody[_fbody.index("frameless ="):], \
+    "the law is not topmost-gated: a borderless game would dodge the " \
+    "dimmer forever"
+# The STYLE COMPUTE, exercised for real (gate finding 6): a door-fake
+# cannot tell a style law from a class whitelist - only _fact against
+# REAL windows can. An overrideredirect topmost Toplevel carries the
+# menu's exact shape (WS_POPUP, captionless, frameless, topmost); its
+# captioned sibling must read ordinary. (Real tkinter BEFORE the
+# module-level fake further down the file.)
+import tkinter as _tkr
+_r = _tkr.Tk()
+_r.withdraw()
+_popup = _tkr.Toplevel(_r)
+_popup.overrideredirect(True)
+_popup.attributes("-topmost", True)
+_popup.geometry("40x40+80+80")
+_popup.update_idletasks()
+_ph = dimmer._u32.GetAncestor(_popup.winfo_id(), dimmer.GA_ROOT) \
+    or _popup.winfo_id()
+_cap = _tkr.Toplevel(_r)
+_cap.title("dimmer-test-captioned")
+_cap.geometry("40x40+140+80")
+_cap.update_idletasks()
+_ch = dimmer._u32.GetAncestor(_cap.winfo_id(), dimmer.GA_ROOT) \
+    or _cap.winfo_id()
+_fp = dimmer._fact(_ph, 0, {})
+_fc = dimmer._fact(_ch, 0, {})
+assert _fp and _fp["frameless"] is True, \
+    "a real topless-topmost window did not compute as frameless: %r" \
+    % (_fp,)
+assert _fc and _fc["frameless"] is False, \
+    ("a real captioned window computed frameless (it would never veil "
+     "again): %r" % (_fc,))
+_r.destroy()
+ok("menu-family popups are refused by the door on STYLE + TOPMOST; "
+   "every fact carries the key; the topmost gate is pinned at source; "
+   "the style COMPUTE is proven against real windows")
+
 # --- Oct-15 UAT bug 2a: a paint for a destroyed hwnd raises inside
 # --- Tk; the item must die alone, not take the pump - and its veil
 # --- must leave the dict. Driven with a fake tkinter through the

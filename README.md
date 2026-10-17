@@ -77,7 +77,13 @@ Opt a monitor in, and when input has been still for a moment every
 background window on it gets its own dark veil. Each panel can wear
 its own darkness percent. The foreground window is never veiled, an
 app that starts making sound lifts its own veil the tick the sensor
-learns it, and you can exclude named apps. When input returns the
+learns it, and you can exclude named apps. Menus, tooltips and other
+transient popups are never dimmed either - a context menu you are
+about to click is foreground by nature, and the veil reads the window
+style, not the class name, to know one. The taskbar follows the same
+law: permanent chrome does not get dimmed; the taskbar hider paints
+it when you want it gone. (A borderless *game* window is not a popup:
+it keeps dimming like any background app.) When input returns the
 veils are gone the same tick; a fade toggle opts into a soft lift
 instead. The pause hotkey is bound from the card (press a key, esc
 clears): unbound by default, no chord is stolen before you consent.

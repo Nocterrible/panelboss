@@ -1888,3 +1888,5 @@ Owner, verbatim: 'Movie theater mode is a ship with my own stamp - other systems
 
 Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wipe fresh-install burn-in, store submission (zip READY: dist\panelboss-companion-0.4.2.zip - unchanged since the fixer wave, extension files identical), owner icon art -> make_icon.py, README screenshots placeholders -> art, GH release + public repo, Reddit, hyper care.
 
+
+- TRANSIENT-POPUP law trade (gate, Oct 17): while a TASKBAR menu is open the foreground row is the dropped tray row, so always-dim panels dim blind for the menu's lifetime - judged on-principle (a menu is not a panel you are using) but named for the record. Taskbar no longer plain-veils (same law, permanent chrome).
