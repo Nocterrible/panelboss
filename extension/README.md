@@ -130,37 +130,33 @@ where chrome.downloads had *actually* put the file; the native host
 writes where it is told, every browser, every config. The shelf law is
 retired with it.
 
-## Manifest notes (v0.3) — the store form
+## Manifest notes (v0.4) — the store form
 
-`permissions: ["scripting", "activeTab", "nativeMessaging"]`. This is
-the store-grade minimum, and it is deliberate:
+`permissions: ["nativeMessaging"]` — one permission, nothing else. The
+v0.3 shape (`scripting`, `activeTab`) is retired: the measure moved into
+a **declared content script** (static `content_scripts` in the manifest,
+scoped to the site list in `matches`), so there is no injection API left
+to ask for and no host-permission warning for the review to question.
+This is the store-grade minimum, and it is deliberate:
 
-- **`activeTab` instead of `<all_urls>`.** The click is a user gesture on
-  the tab they are looking at; `activeTab` grants access to *that tab*
-  for *that moment* — the host-permission warning "*read and change all
-  your data on all websites*" never appears, and the review never asks
-  why a video-measuring trigger wants every site.
-- **`scripting`** is the inject-and-measure call, self-contained
-  function, nothing left attached.
+- **No `<all_urls>`, no `host_permissions` at all.** The site list in
+  `content_scripts.matches` is the widest door the extension ever
+  opens, and it lists streaming hosts, not the web.
 - **`nativeMessaging`** is the one sanctioned channel from an extension
   to a local desktop application. The review's question is answered by
   the `allowed_origins` list (our id, and only our id) and the host's
   single-file-write behavior.
-- **`tabs`/`downloads` left the manifest** (v0.2's file-bridge writer).
+- **`tabs`/`downloads` left the manifest** (v0.2's file-bridge writer);
+  **`scripting`/`activeTab`** left with v0.4's static content script.
 - **No remote code, no eval.** The measure function is bundled and
   static; MV3's CSP rejects eval strings and remotely-hosted code at
   review, and the old v0.2 `eval`-of-a-string was exactly that class.
 
-Justification for the store form (the one line each, for submission):
+Justification for the store form (the one line, for submission):
 
-- *scripting*: "measures the bounding box of the playing video in the
-  active tab on the toolbar click, so the companion desktop app can dim
-  the desk around it."
-- *activeTab*: "the measurement runs only in the tab the user clicked
-  from, only for that click — no persistent page access."
-- *nativeMessaging*: "hands the measured rectangle to the local PanelBoss
-  desktop app via a host that writes one file to the app's own folder;
-  the host accepts only this extension's id."
+- *nativeMessaging*: "hands the measured video rectangle to the local
+  PanelBoss desktop app via a host that writes one file to the app's
+  own folder; the host accepts only this extension's id."
 
 ## The debug port is gone, the engine reader retired
 

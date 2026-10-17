@@ -1868,3 +1868,15 @@ needed by a fresh user - the fresh-install trial will prove it), the
 start-menu entry exists (the MSI replaces it with the registered kind),
 the credit-wall and dead-transport dossiers keep the next architect
 from re-paying tuition.
+
+
+## Oct 17 - secondary-veil flicker dossier (census in-line, lane note)
+
+- Owner symptom after a5c95c2 deployed: full-field theater veils flicker on BOTH secondaries (IOC + AOC); video panel perfect.
+- captain-debugger lane returned EMPTY TWICE (ses_eb7250a52ffe9C76RRxLO98lZv, no text, no report). Fleet heuristic: a silent cappy completion is a LANE FAULT, not a verdict - do not re-boot a third dispatch on a small probe; the architect's 100-line census settles it cheaper.
+- ARCHITECT CENSUS (zchain-0930.py, live desk, app up): monitors DELA(0..3840) / right(3840..7680) / left(-3840..0). Trays: RIGHT secondary top=True z=4, PRIMARY top=True z=9, LEFT secondary top=FALSE z=49 (per-monitor taskbar setting). App pieces: right piece z=3 ABOVE its tray (prev-chain: own hider strips -> ForegroundStaging - never reaches the tray, it is BELOW); left piece topmost=FALSE (sitting in the ORDINARY band - behind the browser).
+- ROOT CAUSES (two, both structural): (1) the slide-under reads GetWindow(tray, GW_HWNDPREV) AFTER the raise put the piece ITSELF above the tray -> SetWindowPos(h, h) no-op -> stranded above chrome -> _in_slot's UP-walk can never reach a tray that is BELOW -> False forever -> 5 Hz pair = flicker (right monitor). (2) non-topmost row-tray (left): slide drags the piece into the ordinary band -> buried by the maximized browser -> raise/slide war per beat, veil mostly invisible = 'no proper video veil'.
+- FIX DISPATCHED (coder ses_eb7163160ffe, background): slide with the TRAY ITSELF as hwndInsertAfter (position-independent, no self-reference); slide ONLY for topmost trays; two-law _in_slot (under-tray when the row's tray is topmost; band-top otherwise); theater_live under-tray check follows the same law.
+- STILL OPEN after the fix: owner visual on both secondaries; then the owed run_all.ps1 at push.
+
+- OPEN (found by docs wave Oct 17): Tray.set_state (state-color hook, tray.py) has ZERO callers - the palette exists, the wiring does not: the icon stays green through away/pause states. Small wave: call it from the state machine transitions (dimmer pause, away enter/exit, theater active?). Also parked: public repo URL placeholder in README (git clone <this repo>) until the repo is made public.

@@ -409,7 +409,7 @@ DEFAULTS = {
                                    # the idle wait, bowing to the
                                    # foreground and the audible
                                    # exemptions; false is the plain law
-        "idle_sec": 120,          # input stillness before veils may birth;
+        "idle_sec": 60,           # input stillness before veils may birth;
                                    # clamped 0..60 (silent clamp rails;
                                    # 0 = the rail reaches zero and means
                                    # it, the ramp's law - Oct 15 UAT;
