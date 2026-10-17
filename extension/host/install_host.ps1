@@ -80,7 +80,17 @@ Set-ItemProperty -Path $key -Name '(default)' -Value $manifestPath
 # app queries the host it installed - the owner's "PanelBoss reads what
 # the API can send" mandate).
 $appdir = Join-Path $env:APPDATA 'PanelBoss'
-New-Item -Path $appdir -Force | Out-Null
+# [IO.Directory]::CreateDirectory, NOT New-Item -Force: PowerShell
+# 5.1's New-Item on an EXISTING directory throws a lying
+# UnauthorizedAccessException (measured Oct 16: the app writes this
+# dir every day; the ACL grants the user FullControl; the .NET call
+# succeeds in the same breath). CreateDirectory is idempotent and
+# tells the truth about real failures.
+[void][IO.Directory]::CreateDirectory($appdir)
+# utf-8-sig (no BOM) written here so BOTH producers of this file -
+# this script on Windows PowerShell and the app's own writer - are
+# readable by the reader's utf-8-sig; PS7's -Encoding utf8 is already
+# BOM-less, 5.1's is not; sig keeps them identical either way.
 @{ path = $hostExe } | ConvertTo-Json | Set-Content `
     -Path (Join-Path $appdir 'host.json') -Encoding UTF8
 
