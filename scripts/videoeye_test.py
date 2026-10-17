@@ -149,6 +149,46 @@ ok("the origin report folds exact - the border-guess's few-dozen-px "
    "bite is gone (the same row by the legacy formula lands x=634, "
    "20 px off the truth)")
 
+# 4b+. THE WEBRECT REPORT (v0.4.3, the owner's "up by triple" cure):
+#     window.screenX/screenY is a LIE on a maximized window (Chromium
+#     fills it with the WINDOW rect - measured (0,0) while the web
+#     content actually starts at (42,109): the whole toolbar + the GX
+#     sidebar sit between the two). The HOST now measures the browser's
+#     Chrome_RenderWidgetHostHWND child - the web viewport whose size
+#     IS view x dpr - and stamps its PHYSICAL rect as webrect. The fold
+#     anchors on it: x = round(webrect.left + rect.left*dpr), the
+#     webrect already PHYSICAL (NOT dpr-scaled - only the page's CSS
+#     rect scales).
+videoeye._STATE.clear()
+def _door_with_webrect(rect, view=(1920, 1080), bounds=(0, 0, 1920, 1080),
+                       dpr=1, webrect=(42, 109, 3798, 2019), family="chrome",
+                       lane="click", origin=None):
+    body = {"rect": {"left": rect[0], "top": rect[1],
+                     "width": rect[2], "height": rect[3]},
+            "dpr": dpr, "paused": False, "scroll": [0, 0],
+            "view": list(view),
+            "bounds": {"left": bounds[0], "top": bounds[1],
+                       "width": bounds[2], "height": bounds[3]},
+            "family": family, "lane": lane, "ts": CLK.wall,
+            "webrect": list(webrect)}
+    if origin is not None:
+        body["origin"] = list(origin)
+    with open(videoeye.RECT_PATH, "w", encoding="utf-8") as f:
+        f.write(json.dumps(body) + "\n")
+    os.utime(videoeye.RECT_PATH, (CLK.wall, CLK.wall))
+videoeye._STATE.clear()
+_door_with_webrect((613.5, 68, 1840, 920),
+                   bounds=(-8, -8, 3856, 2144), view=(3798, 2019),
+                   webrect=(42, 109, 3798, 2019), origin=(0, 0))
+videoeye.tick(vcfg(), CLK.monotonic())
+r = videoeye.video_rect(vcfg())
+#     x = round(42 + 613.5*1) = round(655.5) = 656 (ties to even);
+#     y = round(109 + 68) = 177; size (1840, 920).
+assert r == (656, 177, 1840, 920), r
+ok("the webrect report folds EXACT - the page's size bound to the "
+   "host's measured viewport origin (42,109): x=656 not 614, y=177 "
+   "not 68 - the owner's 'left by more, up by triple' bite is gone")
+
 # 4c. the compat lane: the SAME row without the report (no origin key,
 #     host/extension pairs mid-update) keeps the CURRENT bounds answer
 videoeye._STATE.clear()

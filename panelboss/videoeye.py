@@ -21,16 +21,17 @@ stopped video, not an event worth a dark veil).
 
 THE FOLD (content space -> physical desktop px): the page answers
 getBoundingClientRect (viewport CSS px) and devicePixelRatio. Since
-v0.4.2 the page also REPORTS its viewport origin (window.screenX/
-screenY) - and a report beats a guess: the fold anchors on the origin
-when the row carries one, because a maximized window's borders hang
-off-screen and no even-split can know that. The row also still carries
-the bounds the extension measured (chrome.windows.get), and rows
-WITHOUT the report fold on those - the legacy lane, kept for host/
-extension pairs mid-update (DIP scaled by dpr, uniform-desk assumption:
-every panel on this box shares the scale; mixed-DPI desks are the
-future lane's). The fold math is UNCHANGED from the port era: only the
-input plumbing changed.
+v0.4.3 the HOST measures the browser's ACTUAL web viewport - the
+Chrome_RenderWidgetHostHWND child - in physical px and stamps it as
+`webrect`; the fold anchors on that when the row carries one, because
+the page's window.screenX/screenY reports the WINDOW rect, not the
+viewport (measured (0,0) on a maximized window whose content starts at
+(42,109): the whole toolbar plus the GX sidebar sit between the two).
+Rows WITHOUT webrect (host/extension pairs mid-update) fold the older
+origin report, then the legacy bounds math - both kept as the compat
+lane (DIP scaled by dpr, uniform-desk assumption: every panel on this
+box shares the scale; mixed-DPI desks are the future lane's). The size
+law is UNCHANGED: round() is the one ruler.
 
 SIZE LAW note (~170): the module is ONE seam - the fold, the read, the
 tick. The transport lived in wm/_cdp and died with the port; the fold
@@ -73,6 +74,16 @@ def _origin(row):
     return None
 
 
+def _four(v):
+    """A four-number [left, top, w, h] in-memory shape, or None - the
+    webrect parser (the host's measured viewport rect, PHYSICAL px)."""
+    if (isinstance(v, (list, tuple)) and len(v) == 4
+            and all(isinstance(x, (int, float)) and not isinstance(x, bool)
+                    for x in v)):
+        return [float(v[0]), float(v[1]), float(v[2]), float(v[3])]
+    return None
+
+
 def _read(now, wall):
     """The extension's manual trigger, read as a content-space row. One
     doorway, one stat, one line of json. Missing/broken/empty all read
@@ -104,6 +115,7 @@ def _read(now, wall):
                "lane": row.get("lane") or "auto",
                "bounds": row.get("bounds"),
                "origin": _origin(row),
+               "webrect": _four(row.get("webrect")),
                "ts": now - max(0.0, wall - mtime), "src": "companion"}
     except (ValueError, KeyError, TypeError):
         return None
@@ -140,19 +152,34 @@ def _fold(row, bounds):
 
 
 def _rect_px(row):
-    """Fold a row to physical px. THE BORDER-GUESS WAS A GUESS; THE
-    ORIGIN IS A REPORT (owner UAT, Oct 16): a maximized window's
-    borders hang off-screen (live doorway row: bounds.left=-8), so the
-    even-split correction under-shoots by a few dozen px. A row that
-    carries the page's own viewport origin (window.screenX/screenY,
-    DIP, v0.4.2) folds ON THE REPORT and skips the bounds math whole:
-    x = round((origin0 + rect.left) * dpr), the same rounding the
-    legacy lane uses (round(), the one ruler - banker's ties included).
-    The bounds formula below survives ONLY as the legacy lane for
-    rows without the report (host/extension pairs mid-update). The
-    uniform-desk assumption is documented above: DIP * dpr matches
-    physical px on every non-mixed-DPI panel, and this box is 100%%.
-    None when the row is unplaceable."""
+    """Fold a row to physical px. THE WEBRECT IS THE REPORT (v0.4.3),
+    THE ORIGIN WAS A LIE: the host now measures the browser's ACTUAL
+    web viewport (the Chrome_RenderWidgetHostHWND child) in PHYSICAL px
+    and stamps it as webrect [left, top, w, h]. The page's rect is
+    viewport-CSS px, so the fold is webrect.left + rect.left*dpr (the
+    viewport origin no longer comes from window.screenX/screenY, which
+    Chromium fills with the WINDOW rect - measured (0,0) on a maximized
+    window whose content actually starts at (42,109): the whole browser
+    toolbar (~109px) and the GX sidebar (~42px) live between the two).
+    A row WITHOUT webrect (host/extension pairs mid-update) folds the
+    origin report if present, else the legacy bounds math - both kept
+    as the compat lane, same rounding (round(), one ruler). None when
+    the row is unplaceable."""
+    wr = row.get("webrect")
+    if (isinstance(wr, (list, tuple)) and len(wr) == 4
+            and all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                    for v in wr)):
+        try:
+            dpr = float(row.get("dpr") or 1)
+            r = row["rect"]
+            rl, rt = float(r["left"]), float(r["top"])
+            rw, rh = float(r["width"]), float(r["height"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if rw * rh <= 0:
+            return None
+        return (round(wr[0] + rl * dpr), round(wr[1] + rt * dpr),
+                round(rw * dpr), round(rh * dpr))
     o = row.get("origin")
     if o is not None:
         try:

@@ -8,12 +8,16 @@ that made the pythonw form pipe-blind), every reply written back the
 same way. (Chrome's spec is NATIVE order - little-endian on this
 platform, but a future port must not hard-code LE.)
 
-The host is a PURE TRANSPORT + one file write. It does not bind a port,
-does not touch the network, does not run PanelBoss: it receives the
-extension's message and hands the payload to the app by writing the
+The host is a TRANSPORT + one file write + ONE measurement. It does not
+bind a port, does not touch the network, does not run PanelBoss: it
+receives the extension's message, measures the browser window's actual
+web-viewport rectangle in PHYSICAL desktop px (the webrect - the only
+OS-side truth the page cannot see, v0.4.3; the measurement law lives in
+webrect.py), folds it into the payload, and writes the result to the
 single app-owned doorway file (%APPDATA%\\PanelBoss\\rect). That is the
-whole feature - the extension measures a playing video in the page and
-this host drops the geometry where the app's eye already looks.
+whole feature - the extension measures a playing video in the page
+(viewport CSS px, exact SIZE), this host binds that size to the exact
+SCREEN POSITION, and the app's eye reads the doorway.
 
 The id of the extension is the ACL (the registry key and the
 manifest's allowed_origins carry the SAME origin), the browser's own
@@ -25,12 +29,16 @@ any project may consume it, PanelBoss merely being the first.
 SIZE LAW (~130): the file is ONE seam - read one frame, dispatch one
 or two ops, write one reply. The frame discipline is 12 lines; splitting
 it would separate the length-prefix law from the code that reads it.
+The webrect measurement (the Win32 geometry walk) is its own file -
+webrect.py - because it is an independent pure-logic concern.
 """
 
 import json
 import os
 import struct
 import sys
+
+import webrect as _webrect_mod
 
 
 # the host name the registry and connectNative() both spell - the
@@ -60,7 +68,7 @@ CAPABILITIES = {
              "ended": "veil lifts"},
     "veil": {
         "fields": ["rect", "dpr", "paused", "scroll", "view",
-                   "origin", "bounds", "family", "lane", "ts"],
+                   "origin", "webrect", "bounds", "family", "lane", "ts"],
         "rect": ["left", "top", "width", "height"],
         "lane": ["click", "auto"],
     },
@@ -99,13 +107,18 @@ def _write_frame(stream, obj):
 
 
 def _veil(msg):
-    """op=veil: write the payload to the app's doorway file, one json
-    line exactly as the eye parses it, and answer with the disk truth
-    (the app's eye is the reader; the host's job ends at the write)."""
+    """op=veil: measure the browser viewport's physical rect (webrect,
+    the OS-side truth the page cannot see), fold it into the payload,
+    write one json line exactly as the eye parses it, and answer with
+    the disk truth (the app's eye is the reader; the host's job ends at
+    the write)."""
     payload = msg.get("payload")
     if not isinstance(payload, dict):
         return {"op": "veil", "ok": False, "why": "payload is not an "
                 "object"}
+    wr = _webrect_mod.webrect(payload)
+    if wr is not None:
+        payload["webrect"] = wr
     try:
         # the eye reads the FIRST line and json.loads it - write one
         # line, a trailing newline, no atomic temp (a torn write reads
