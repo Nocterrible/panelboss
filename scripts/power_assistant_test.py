@@ -945,7 +945,14 @@ def after_install():
     # the 5 s bound keeps a real loss loud.
     while not fm.events.empty():
         _PA_EVS.append(fm.events.get())
-    if ("power_assistant", True) not in _PA_EVS and _PA_AWAIT["n"] < 50:
+    if ("power_assistant", True) not in _PA_EVS and _PA_AWAIT["n"] < 150:
+        # 150 x 100 ms = a 15 s window: the FIRST version of this wait
+        # bounded at 5 s and went red ONLY inside the full gauntlet -
+        # under 46-suite load check()'s tail (the click that posts the
+        # event) legitimately needs seconds it does not spend alone.
+        # A standalone run never sees the difference; the watchdog
+        # bound (60 s) keeps the ceiling honest (measured Oct 16, the
+        # flake's own dossier entry).
         _PA_AWAIT["n"] += 1
         app.after(100, after_install)
         return
