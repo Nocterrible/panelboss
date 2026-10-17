@@ -915,7 +915,15 @@ def _in_slot(h, tray):
     answers False and the pin re-fires; a dead mid-chain GetWindow
     answers False too - a FAILED CHECK IS A RE-PIN, never a blind
     skip. No bookkeeping set: the walk reads the desk's own truth
-    every beat, so there is nothing to prune on unveil."""
+    every beat, so there is nothing to prune on unveil. SEMANTICS
+    (gate, Oct 17): the walk tolerates ANY intermediates, including a
+    foreign always-on-top window - an activated topmost utility then
+    concedes its dimming while the chain stays short (pre-cure it was
+    re-covered within 200 ms and re-ignited the z-war every beat; for
+    the theater, peace with the shell is the point). The strictified
+    law, if the owner ever wants sibling-only: require every hop to be
+    a known piece hwnd - the painter owns the set, it is a parameter
+    away."""
     try:
         if tray is None:
             return False

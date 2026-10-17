@@ -37,7 +37,8 @@ whole handshake (no pairing, no token).
   "auto": { "trigger": "video play", "pause": "veil lifts",
             "ended": "veil lifts" },
   "veil": { "fields": ["rect", "dpr", "paused", "scroll",
-                        "view", "bounds", "family", "lane", "ts"],
+                        "view", "origin", "webrect", "bounds",
+                      "family", "lane", "ts"],
             "lane": ["click", "auto"] }
 }
 ```
@@ -46,11 +47,17 @@ whole handshake (no pairing, no token).
 playing-ish `<video>`'s viewport box in CSS px (`left/top/width/
 height`), `dpr` the device pixel ratio, `paused` whether playback is
 stopped, `scroll` the `[scrollX, scrollY]` pair (the future DRM lane
-reads document space from it), `view` the inner `[width, height]`,
+reads document space from it), `view` the inner `[width, height]`, `origin` the window's
+`[screenX, screenY]` in CSS px, `webrect` the tab's REAL web-content
+rectangle `[left, top, width, height]` in physical pixels — stamped by
+the local host from the OS's own answer (the render-widget window's
+rect) when it can measure it, absent otherwise —
 `bounds` the window's outer `left/top/width/height` in DIP px, `family`
 one of `chrome` / `edge` / `opera_gx`, `lane` `click` (a one-shot test
 snapshot) or `auto` (a durable play state), `ts` the wall-clock seconds
-stamp.
+stamp. Consumers fold `rect` onto the most exact anchor a row carries:
+`webrect` first, then `origin`, then `bounds` — each older lane is a
+compatibility fallthrough, never an error.
 
 ### How PanelBoss reads it (the capability-discovery close)
 
