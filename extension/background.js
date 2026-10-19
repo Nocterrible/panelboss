@@ -1,5 +1,5 @@
-/* PanelBoss Companion - the AUTOMATIC lane + the manual test gesture,
- * v0.4.0.
+/* PanelBoss Companion - the AUTOMATIC lane + the popup's test button,
+ * v0.4.3.
  *
  * TWO lanes, one host, ONE measure (content.js owns it):
  *   - AUTOMATIC (the feature): a declared content script (content.js)
@@ -8,12 +8,12 @@
  *     runtime.sendMessage; this background folds in the window bounds
  *     (content scripts have no chrome.windows) and hands it to the host.
  *     A video STARTS playing -> the desk frames it, no click.
- *   - TEST (the button): the toolbar icon asks the tab's own content
- *     script to measure RIGHT NOW (chrome.tabs.sendMessage, no
- *     scripting, no activeTab) and hands the same folded row to the
- *     host. It is the owner's calibration gesture - demoted since the
- *     automatic lane landed - and all the DRM lane will ever get from a
- *     click.
+ *   - TEST (the popup's button): since v0.4.3 the toolbar icon opens
+ *     popup.html (the live readout - it asks the SAME {op:"measure"}
+ *     and draws the answer); its button posts {op:"veil_now"} here and
+ *     the veil below runs for it, echoing the word into the button.
+ *     default_popup retires action.onClicked, so the old listener is
+ *     gone with this sentence - the gesture lives on INSIDE the popup.
  *
  * The host writes the geometry to the app's own doorway file; the
  * app's eye reads it. No network, no remote code, no eval, no timers
@@ -144,7 +144,8 @@ async function veil(_tab) {
   return ok ? "veil" : "host";
 }
 
-chrome.action.onClicked.addListener(veil);
+// (v0.4.3: action.onClicked is dead while default_popup is set - the
+// veil() gesture reaches it from the popup's veil_now branch instead.)
 
 // the AUTOMATIC lane: the content script measures and sends here; this
 // background folds the bounds and pushes to the host. Quiet (no badge)

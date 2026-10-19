@@ -46,8 +46,21 @@ async function refresh() {
   }
   let r;
   try {
-    r = await chrome.tabs.sendMessage(tab.id, { op: "measure" });
+    r = await Promise.race([
+      chrome.tabs.sendMessage(tab.id, { op: "measure" }),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error("pb-slow")), 5000)),
+    ]);
   } catch (e) {
+    if (e && e.message === "pb-slow") {
+      // the gate's word-split, popup side: a WATCHER THAT STALLS is
+      // not an absent watcher - never read slowness as off-list.
+      setState("off", "the page did not answer");
+      $("note").textContent =
+        "the watcher is on this site but stalled; the automatic " +
+        "lane is independent of this readout.";
+      return;
+    }
     setState("off", "this site has no companion watcher");
     $("note").textContent =
       "the content script only lives on the sites listed in the " +
