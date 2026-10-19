@@ -229,7 +229,7 @@ videoeye.tick(vcfg(), CLK.monotonic())
 assert videoeye.video_rect(vcfg()) is None, \
     "the GX ghost (webrect -32000) still conjuncts the theater veil"
 ok("a paused:false row parked off the desk dims NOTHING - the "
-   "conunct is the picture, not the audio")
+   "conjunct is the picture, not the audio")
 
 videoeye._STATE.clear()
 import ctypes as _ct
@@ -252,7 +252,7 @@ assert videoeye.video_rect(vcfg()) == (_vx - 100, _vy, 3000, 1000)
 ok("a straddled window is a visible picture - intersection, not "
    "containment, is the rule")
 
-# 4e. the report under dpr 2: the DIP pair scales like everything else
+# 4f. the report under dpr 2: the DIP pair scales like everything else
 videoeye._STATE.clear()
 door((10, 20, 200, 100), dpr=2, bounds=(0, 0, 1920, 1080),
      view=(960, 540), origin=(100, 50))

@@ -230,6 +230,13 @@ def veil_now(cfg):
     ts = row.get("ts") or time.monotonic()
     if st["row"] is None or ts >= st["ts"]:     # freshest wins, the
         st["row"], st["ts"] = row, ts           # tick's own law
+    if not row.get("paused") and not videoeye._on_desktop(rect):
+        return "companion " + geo + " - but the picture is OFF the " \
+               "desk (a hidden or minimized tab); the visible-picture " \
+               "law will hold the theater shut"    # the promise is
+        #               gated with the gate (Oct 19 gate round): a
+        #               click-test on a ghost must confess the ghost,
+        #               not promise a frame the eye will veto
     return "companion " + geo + (" (paused - the eye waits for play)"
                                   if row.get("paused")
                                   else " - the frame lands next tick")

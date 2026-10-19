@@ -1432,18 +1432,23 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
             log.exception("away migration: the rows computed but the "
                           "write failed; recomputed next boot")
     merged.pop("_raw_power", None)
-    # THE BOOT TRUTH, one INFO line (Oct 19, the "theater turns itself
-    # back on" hunt: the claim contradicts a persisted on=false and a
-    # strict-True knob; every code path checked clean, so the next
-    # boot must show its answer instead of the owner's archaeology).
-    vd = merged.get("videodim") or {}
-    log.info("videodim boot: on=%r rows=%r", vd.get("on"),
-             sorted((vd.get("monitors") or {}).keys()))
     merged["away"] = normalize_away(merged.get("away"))
     merged["hider"] = normalize_hider(merged.get("hider"))
     merged["jog"] = normalize_jog(merged.get("jog"))
     merged["dimmer"] = normalize_dimmer(merged.get("dimmer"))
     merged["videodim"] = normalize_videodim(merged.get("videodim"))
+    # THE BOOT TRUTH, one INFO line (Oct 19, the "theater turns itself
+    # back on" hunt: the claim contradicts a persisted on=false and a
+    # strict-True knob; every code path checked clean, so the next
+    # boot must show its answer instead of the owner's archaeology).
+    # AFTER normalize (gate round): the normalized table is the
+    # answer - and its monitors-is-dict guarantee is what makes
+    # .keys() crash-proof against a hand-edited list (a truth-line
+    # that can die is worse than no truth-line: the gate caught this
+    # exact class shipped in the first draft).
+    vd = merged["videodim"]
+    log.info("videodim boot: on=%r rows=%r", vd.get("on"),
+             sorted(vd.get("monitors", {}).keys()))
     if verbose:
         log.debug(f"using config from {path}")
     # [camera] index and name_contains normalize to one in-memory shape
