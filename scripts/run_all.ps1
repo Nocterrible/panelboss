@@ -51,11 +51,16 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
                                       # net (UAT find, Oct 13): a
                                       # probe that runs only when
                                       # remembered is a rumor
-    'switch_geom_probe.py'            # the knob-lie family's geometry
+    'switch_geom_probe.py',           # the knob-lie family's geometry
                                       # pin (owner's bar-was-on catch,
                                       # Oct 13 night): truth switches
                                       # repaint after they know their
                                       # size; app-up compatible
+    'bright_door_test.py'             # the DDC/CI door's Oct-19 laws
+                                      # (captain ses_eab74fb30ffesL9):
+                                      # retire-not-free, the settle
+                                      # window, the arr slack - fake
+                                      # kernel, no real seconds
 $dir = Join-Path $root "scripts"
 # ledger 16: the log must be attributable - tip stamp at the head,
 # and DIRTY when the tested worktree differs from it (a stamp that

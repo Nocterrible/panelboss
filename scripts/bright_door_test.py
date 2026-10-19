@@ -8,6 +8,9 @@ time is faked too - the gate reads _bright.time.monotonic, and no real
 second ever passes in this suite.
 Run from repo root:
 .venv\\Scripts\\python.exe scripts\\bright_door_test.py
+SIZE LAW note (190-odd lines, under the ~300 gate): the fake kernel,
+the fake clock and the three pins are ONE world - splitting the file
+would clone the world, not sell a seam.
 """
 import ctypes
 import os

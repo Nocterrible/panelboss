@@ -71,7 +71,10 @@ is watching. Absence confirmed and the screens go dark, the same
 standby the power plan uses. Or set away mode to dim: the panels
 stay awake and the app paints the dark instead, per monitor one of
 blackout (a black overlay), dim (the panel drops to your level, 1 to
-40 percent), or off (the panel's own power code). Set Windows' own screen-off timer
+40 percent), or off (the panel's own power code). The DDC/CI door
+forgets handles rather than freeing them, and does not speak for
+five seconds after the desk changes - writes may take one more try
+after a monitor swap, refusals are clean. Set Windows' own screen-off timer
 and the panels take the real power code that way - the driver owns
 the device lifetime the app's timer could not promise. The pointer is parked at the bottom of
 the lowest monitor when away engages, and stays there when you return:
