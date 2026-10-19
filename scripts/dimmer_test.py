@@ -326,6 +326,7 @@ class _FakeK32:
         self.our_rid, self.target_rid = our_rid, target_rid
         self.refuse = refuse_open
         self.closes = 0
+        self.sids = {}
 
     def GetCurrentProcess(self):
         return -1
@@ -339,18 +340,19 @@ class _FakeK32:
 
 
 class _FakeAdv:
-    """Token pair on the advapi32 alias (where they live). The token
-    HANDLE value encodes WHICH token: 55 is ours (the pseudo-process),
-    99 the target's - GetTokenInformation answers per tok."""
+    """Token pair + SID accessors on the advapi32 alias (where the
+    loader says they live). Writes the MEASURED real shape:
+    TOKEN_MANDATORY_LABEL header {PSID at 0, attrs at 8} with the
+    self-relative SID copied at offset 16. The token HANDLE value
+    encodes WHICH token: 55 ours, 99 the target's."""
 
     def __init__(self, fake):
         self.f = fake
+        self.f.sids = {}
 
     def OpenProcessToken(self, h, access, out):
         if h is None or h == 0:
             return 0
-        # the byref out-param, written the portable way (CArgObject has
-        # no stable public target attribute on 3.10 - cast is the door)
         ctypes.cast(out, ctypes.POINTER(ctypes.c_void_p))[0] = \
             55 if h == -1 else 99
         return 1
@@ -359,12 +361,32 @@ class _FakeAdv:
         t = tok.value if hasattr(tok, "value") else tok   # real ctypes
         #                              argtypes deliver int; a raw fake
         #                              gets the c_void_p object itself
-        ctypes.cast(need, ctypes.POINTER(ctypes.c_ulong))[0] = 16
+        ctypes.cast(need, ctypes.POINTER(ctypes.c_ulong))[0] = 28
         if buf is None or size == 0:
             return 0
-        (ctypes.c_uint * 1).from_buffer(buf)[0] = (
-            self.f.our_rid if t == 55 else self.f.target_rid)
+        base = ctypes.addressof(buf)
+        rid = self.f.our_rid if t == 55 else self.f.target_rid
+        ctypes.cast(buf, ctypes.POINTER(ctypes.c_void_p))[0] = base + 16
+        (ctypes.c_ulong * 1).from_buffer(buf, 8)[0] = 0x30   # attrs
+        raw = (b"\x01\x01\x00\x00\x00\x00\x00\x10"
+               + int(rid).to_bytes(4, "little"))
+        ctypes.memmove(base + 16, raw, 12)
+        self.f.sids[base + 16] = (1, rid)
         return 1
+
+    def _target(self, psid):
+        p = psid.value if hasattr(psid, "value") else psid
+        return self.f.sids[int(p)]
+
+    def GetSidSubAuthorityCount(self, psid):
+        n, _ = self._target(psid)
+        self._keep = (ctypes.c_ubyte * 1)(n)
+        return self._keep
+
+    def GetSidSubAuthority(self, psid, idx):
+        _, rid = self._target(psid)
+        self._keep2 = (ctypes.c_ulong * 1)(rid)
+        return self._keep2
 
 
 _real_k32, _real_adv = dimmer._k32, dimmer._adv
@@ -392,6 +414,8 @@ try:
     dimmer._OURS[0] = "unset"
 finally:
     dimmer._k32, dimmer._adv = _real_k32, _real_adv
+    dimmer._elev_cache.clear()      # gate finding 2: the live witness
+    dimmer._OURS[0] = "unset"       # below must measure the real desk
 ok("the integrity COMPUTE parses the token (label-relative RID, both "
    "sides), caches, and fails open")
 

@@ -870,24 +870,57 @@ _OURS = ["unset"]          # our own RID, measured once; None = unknown
 
 
 def _integrity_rid(handle):
-    """The token's mandatory-label RID (SECURITY_MANDATORY_LABEL starts
-    with the RelativeId DWORD - no SID walking needed). None on any
-    refusal: callers decide what a shrug means."""
+    """The token's mandatory-label RID - MEASURED on this desk (Oct 19,
+    gate round; three prior guesses died): TokenIntegrityLevel(25)
+    returns TOKEN_MANDATORY_LABEL - a PSID at offset 0 pointing at the
+    SID copied into the same buffer (a header pointer, NOT the RID:
+    the offset-0 dword reads 0x1de4ab00-ish nonsense, and the
+    first-dword parse the first draft shipped compared SIDs'
+    Revision+count+authority-bytes - constant 257-ish for EVERY
+    integrity label, a dead law the fake blessed). The RID is
+    SubAuthority[0] of the self-relative SID; we let Windows index
+    it (GetSidSubAuthority, advapi32 - the loader corrected a
+    kernel32 guess) so the 6-byte authority is nobody's arithmetic
+    problem. The current token is the ruler: a UAC-filtered Medium
+    app cannot z-promise against High windows, elevation-linked or
+    not. None on any refusal: callers decide what a shrug means."""
     tok = ctypes.c_void_p()
     if not _adv.OpenProcessToken(handle, 0x0008, ctypes.byref(tok)):
         return None
     try:
         need = ctypes.c_ulong(0)
         _adv.GetTokenInformation(tok, 25, None, 0, ctypes.byref(need))
-        if not need.value:
-            return None
+        if need.value < 28:                    # header (16) + minimal
+            return None                        # SID (12) minimum
         buf = ctypes.create_string_buffer(need.value)
         if not _adv.GetTokenInformation(tok, 25, buf, need.value,
                                         ctypes.byref(need)):
             return None
-        return ctypes.cast(buf, ctypes.POINTER(ctypes.c_ulong))[0]
+        psid = ctypes.cast(buf,
+                           ctypes.POINTER(ctypes.c_void_p)).contents
+        if not psid:
+            return None
+        return _sub_rid(psid)
     finally:
         _k32.CloseHandle(tok)
+
+
+_adv.GetSidSubAuthority.restype = ctypes.POINTER(ctypes.c_ulong)
+_adv.GetSidSubAuthority.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+_adv.GetSidSubAuthorityCount.restype = ctypes.POINTER(ctypes.c_ubyte)
+_adv.GetSidSubAuthorityCount.argtypes = [ctypes.c_void_p]
+
+
+def _sub_rid(psid):
+    """SubAuthority[0] via the OS's own accessors. The integrity SIDs
+    (S-1-16-*) have exactly one subauthority; anything else refuses."""
+    n = _adv.GetSidSubAuthorityCount(psid)
+    if not n or n[0] < 1:
+        return None
+    p = _adv.GetSidSubAuthority(psid, 0)
+    if not p:
+        return None
+    return p[0]
 
 
 def _elevated(pid):
