@@ -104,8 +104,11 @@ pieces frame the video. The movie's sound does not lift the veil.
 The theater engages when a video is playing and input has been
 still for your idle delay (1 to 30 seconds); the darkness level is
 yours. Other monitors can wear a full-field veil while the movie
-runs. A fade is optional; instant lift is the default. The
-companion's API is open, documented in `extension/README.md`.
+runs. The picture must actually be on your desk: a hidden video (a
+browser's suspended tab parked off-screen, a minimized player) does
+not theater the room. A fade is optional; instant lift is the
+default. The companion's API is open, documented in
+`extension/README.md`.
 
 ### Gaming
 

@@ -1432,6 +1432,13 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
             log.exception("away migration: the rows computed but the "
                           "write failed; recomputed next boot")
     merged.pop("_raw_power", None)
+    # THE BOOT TRUTH, one INFO line (Oct 19, the "theater turns itself
+    # back on" hunt: the claim contradicts a persisted on=false and a
+    # strict-True knob; every code path checked clean, so the next
+    # boot must show its answer instead of the owner's archaeology).
+    vd = merged.get("videodim") or {}
+    log.info("videodim boot: on=%r rows=%r", vd.get("on"),
+             sorted((vd.get("monitors") or {}).keys()))
     merged["away"] = normalize_away(merged.get("away"))
     merged["hider"] = normalize_hider(merged.get("hider"))
     merged["jog"] = normalize_jog(merged.get("jog"))

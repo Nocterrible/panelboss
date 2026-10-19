@@ -214,6 +214,44 @@ r = videoeye.video_rect(vcfg())
 assert r == (708, 651, 800, 450), r
 ok("a junk origin is no origin: the fold falls back, never guesses")
 
+# 4e. THE VISIBLE PICTURE (owner, Oct 19, the GX ghost): a paused:false
+#     row whose folded rect lies ENTIRELY off the virtual desktop (a
+#     memory-saver tab parked at -32000, a minimized player) is no
+#     video - theater must not veil a desk for a rumor of one. The
+#     rule reads the REAL SM_CXVIRTUALSCREEN, so the pins place the
+#     ghost far outside any desk this suite can run on.
+videoeye._STATE.clear()
+_door_with_webrect((16, 68, 1037, 583), view=(1506, 1181),
+                   bounds=(-32000, -32000, 1506, 1181), dpr=1,
+                   webrect=(-32000, -32000, 1506, 1181),
+                   family="opera_gx", lane="auto")
+videoeye.tick(vcfg(), CLK.monotonic())
+assert videoeye.video_rect(vcfg()) is None, \
+    "the GX ghost (webrect -32000) still conjuncts the theater veil"
+ok("a paused:false row parked off the desk dims NOTHING - the "
+   "conunct is the picture, not the audio")
+
+videoeye._STATE.clear()
+import ctypes as _ct
+_vx = _ct.windll.user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+_vy = _ct.windll.user32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
+_door_with_webrect((10, 10, 900, 500), view=(1200, 800),
+                   bounds=(_vx + 1, _vy + 1, 1200, 800), dpr=1,
+                   webrect=(_vx + 1, _vy + 1, 1200, 800), lane="auto")
+videoeye.tick(vcfg(), CLK.monotonic())
+r = videoeye.video_rect(vcfg())
+assert r == (_vx + 11, _vy + 11, 900, 500), r
+ok("a whole frame just inside the desk edge stays a movie")
+
+videoeye._STATE.clear()
+_door_with_webrect((0, 0, 3000, 1000), view=(3000, 1000),
+                   bounds=(_vx - 100, _vy, 3000, 1000), dpr=1,
+                   webrect=(_vx - 100, _vy, 3000, 1000), lane="auto")
+videoeye.tick(vcfg(), CLK.monotonic())
+assert videoeye.video_rect(vcfg()) == (_vx - 100, _vy, 3000, 1000)
+ok("a straddled window is a visible picture - intersection, not "
+   "containment, is the rule")
+
 # 4e. the report under dpr 2: the DIP pair scales like everything else
 videoeye._STATE.clear()
 door((10, 20, 200, 100), dpr=2, bounds=(0, 0, 1920, 1080),

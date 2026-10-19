@@ -38,12 +38,14 @@ tick. The transport lived in wm/_cdp and died with the port; the fold
 stays here because the geometry law owns it. One file, one reader.
 """
 
+import ctypes
 import json
 import logging
 import os
 import time
 
 log = logging.getLogger("videoeye")
+_u32 = ctypes.windll.user32          # the virtual-desktop query only
 
 
 def door_path(env=None):
@@ -273,9 +275,34 @@ def video_rect(cfg, now=None):
         rect = _rect_px(row)
         if rect is None or rect[2] * rect[3] < mins:
             continue
+        if not _on_desktop(rect):
+            continue                    # THE VISIBLE PICTURE (Oct 19)
         if best is None or st["ts"] > best[1]:
             best = (rect, st["ts"])
     return best[0] if best else None
+
+
+def _on_desktop(rect):
+    """True when the folded rect intersects the VIRTUAL DESKTOP (all
+    monitors' union - one GetSystemMetrics quartet). THE VISIBLE
+    PICTURE LAW (owner, Oct 19, the GX ghost): a paused:false row
+    whose window lives entirely off the desk - a memory-saver tab
+    parked at (-32000,-32000), a minimized player - has no picture
+    ANYWHERE to dim around, and theater must not veil a desk for a
+    rumor of video. The conjunct is the frame, not the audio: the
+    owner's law verbatim - 'I have no videos playing but it's
+    applying and tearing down the full screen veil'. A refused query
+    answers True: the fail-open root never lets a dead syscall veto
+    a real movie."""
+    try:
+        vx = _u32.GetSystemMetrics(76)          # SM_XVIRTUALSCREEN
+        vy = _u32.GetSystemMetrics(77)          # SM_YVIRTUALSCREEN
+        vw = _u32.GetSystemMetrics(78)          # SM_CXVIRTUALSCREEN
+        vh = _u32.GetSystemMetrics(79)          # SM_CYVIRTUALSCREEN
+    except Exception:
+        return True
+    x, y, w, h = rect
+    return x < vx + vw and x + w > vx and y < vy + vh and y + h > vy
 
 
 def probe():
