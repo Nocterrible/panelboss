@@ -71,6 +71,8 @@ class FakeBright:
     VCP_POWER_OFF = _bright.VCP_POWER_OFF  # constants through the
     VCP_POWER_ON = _bright.VCP_POWER_ON    # fake's surface too
     VCP_TRIES = _bright.VCP_TRIES
+    BELT_STAGGER_SEC = _bright.BELT_STAGGER_SEC   # the belt's spacing,
+                                                  # same surface law
     CONFIRM_SLEEP_SEC = 0                  # the suite does not sleep
                                            # through the settle
 
@@ -624,11 +626,22 @@ def test_vcp_retry_law():
     with the 0.3 s backoff and takes; a refusal is reported only
     after the FULL budget, error and try-count in its word."""
     class FakeTime:
+        """The door's SETTLE gate reads time.monotonic() at every
+        entry (Oct 19 wave), so the clock fake carries the contract:
+        monotonic steps forward with headroom past any window the
+        failure path's invalidate re-arms (the import seed itself is
+        closed by the pinned _settle_until below)."""
         def __init__(self):
             self.slept = []
+            self.now = 1000.0
 
         def sleep(self, s):
             self.slept.append(s)
+
+        def monotonic(self):
+            self.now += 10.0          # every read lands past a 5 s
+            return self.now           # re-arm: the window never gates
+                                      # this pin's own retry law
 
     class FakeK32:
         def SetLastError(self, _v):
@@ -649,6 +662,9 @@ def test_vcp_retry_law():
     led = Ledger()
     pm = type("PM", (), {"hMonitor": 42})()
     led.keep(_bright, "_phys", lambda gdi: (0, 1, [pm]))
+    led.keep(_bright, "_settle_until", 0.0)     # the gate is a law of
+    #                              its own (bright_door_test pins it);
+    #                              this pin rides the retry budget
     led.keep(_bright, "k32", FakeK32())
     clock = FakeTime()
     led.keep(_bright, "time", clock)
@@ -740,13 +756,16 @@ def test_boot_belt():
     and boot's _force_on asks it nothing. The belt asks the CONFIG:
     empty ledger, off rows set - every reachable row gets its
     idempotent D6=1 (full retry budget), never-reached rows stay
-    silent, and nothing raises into boot."""
+    silent, and nothing raises into boot. The stagger seam is faked
+    here too: the belt law's sleeps must not burn real CI seconds."""
     tmp = tempfile.mkdtemp(prefix="pb_away_belt")
     bright = FakeBright({"D1": 80, "D3": 50}, no_door=["D2"])
     away = {"mode": "dim",
             "monitors": {"AAA": {"off": True}, "BBB": {"off": True},
                          "CCC": {"off": True}}}
     m = make_monitor(tmp, away, bright=bright)
+    from panelboss.state import _away as away_mod
+    m._ledger.keep(away_mod, "_belt_sleep", lambda s: None)
     try:
         assert not getattr(m, "_away_off", None), "dead-ledger boot"
         m._away_boot_belt()
@@ -757,6 +776,30 @@ def test_boot_belt():
             "no door means a silent belt, not a bus fight"
         print("ok - boot belt: config rows earn their D6=1 even with a "
               "dead ledger; unreachable rows stay quiet")
+    finally:
+        m._ledger.undo()
+
+
+def test_belt_stagger():
+    """The door wave (captain's law, Oct 19): three off rows on three
+    live doors get TWO stagger sleeps between the asks - counted on
+    rows ASKED, never on rows walked (skips buy the bus no second) -
+    recorded through the _belt_sleep seam, so no real second passes."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_stagger")
+    away = {"mode": "dim",
+            "monitors": {"AAA": {"off": True}, "BBB": {"off": True},
+                         "CCC": {"off": True}}}
+    m = make_monitor(tmp, away)            # the default fake: 3 doors
+    from panelboss.state import _away as away_mod
+    sleeps = []
+    m._ledger.keep(away_mod, "_belt_sleep", lambda s: sleeps.append(s))
+    try:
+        m._away_boot_belt()
+        assert sleeps == [1.5, 1.5], sleeps
+        assert sleeps == [_bright.BELT_STAGGER_SEC] * 2, \
+            "the belt rides the door's constant"
+        print("ok - belt stagger: three asks, two 1.5 s spacings through "
+              "the seam, no real time spent")
     finally:
         m._ledger.undo()
 
@@ -1713,6 +1756,7 @@ def main():
     test_vcp_retry_law()
     test_off_submode()
     test_boot_belt()
+    test_belt_stagger()
     test_jail_moves_cursor()
     test_park_replaces_jail()
     test_park_point_geometry()

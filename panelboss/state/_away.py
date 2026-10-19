@@ -1,9 +1,9 @@
 """The away engine: dim-mode substitution for the display power verb.
 
 SIZE LAW header: this part owns the fake-off ledger and nothing else -
-and at ~620 lines (post the park wave, owner Oct 17; the
+and at ~640 lines (post the park wave, owner Oct 17; the
 stage-two timer rode it three days and fell to the OS screen timer,
-Oct 19) the whole is still one
+Oct 19; the belt staggered with the door wave, Oct 19) the whole is still one
 law: the ledgers, the door
 calls and the status words interlock line-for-line,
 and splitting the prose from its call sites (or the lift from the
@@ -59,6 +59,14 @@ import logging
 import time
 
 log = logging.getLogger("state")
+
+# THE BELT STAGGER SEAM (Oct 19, the door wave): a module-level sleep
+# the suite replaces (the Ledger pattern, scripts/awaymode_test.py) so
+# no real second passes in CI. THE BELT LAW (the captain's words): a
+# refused 'off' row is NEVER re-asked inside its own spell; any future
+# re-ask rides vcp (settle-gated) and must re-stamp rec['tried'] (the
+# dated law) - never a bare re-bus of the row's own refusal.
+_belt_sleep = time.sleep
 
 
 class _AwayMixin:
@@ -461,7 +469,9 @@ class _AwayMixin:
         # every read below is a .get.
         desk = _live_desk()
         virtual = {m.get("short") for m in desk if m.get("virtual")}
-        try:
+        asked = 0                   # the stagger counts ROWS ASKED, not
+        try:                        # rows walked: a skipped row buys the
+                                    # flaky bus no second
             for m in desk:
                 row = rows.get(m["short"])
                 if not (row or {}).get("off"):
@@ -471,6 +481,12 @@ class _AwayMixin:
                     #                 # canvas: no DDC door, no door
                 if not _bright.reachable(m["gdi"]):
                     continue          # no door: the belt says nothing
+                if asked:             # THE BELT STAGGER (the captain's
+                    _belt_sleep(      # law, Oct 19): the flaky bus gets
+                        _bright.BELT_STAGGER_SEC)     # one ask per
+                asked += 1            # interval - the door's constant,
+                                      # the seam the suite fakes (no
+                                      # real seconds in CI)
                 sent, say = _bright.vcp(m["gdi"], _bright.VCP_POWER,
                                         _bright.VCP_POWER_ON)
                 log.info("away belt: boot power-on for %s %s",
