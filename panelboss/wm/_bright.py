@@ -90,7 +90,24 @@ VCP_POWER = 0xD6
 VCP_POWER_ON = 0x01         # 0x66 is the MCCS standard - this desk's
 VCP_POWER_OFF = 0x04        # panels NAK it unsupported (measured);
                             # vendor-D6 is the power code that exists
+SETTLE_SEC = 5.0            # THE SETTLE WINDOW (captain's door verdict,
+                            # Oct 19): after any invalidate or import the
+                            # WRITES stay silent this long - the desk
+                            # moved, a write may take one more try; the
+                            # READS ride ungated (measured clean all
+                            # morning, incl. the deaf AOC leg)
+_ARR_SLACK = 2              # the ghost-re-attach head (TOCTOU, verified
+                            # Oct 19): count + 2 structs, so a monitor
+                            # re-attaching between the count and the
+                            # fetch overruns into slack, not the heap
+BELT_STAGGER_SEC = 1.5      # the boot belt's spacing between row asks:
+                            # a refused 'off' row is NEVER re-asked
+                            # inside its own spell; any future re-ask
+                            # rides vcp (settle-gated) and must re-stamp
+                            # the rec['tried'] dated law
 MAX_PATH = 260
+SETTLE = ("the door is settling after a desk change - the write may "
+          "take one more try")
 
 
 class _MIEX(ctypes.Structure):        # the cbSize-exact twin (probe law)
@@ -137,6 +154,16 @@ dx.DestroyPhysicalMonitors.restype = ctypes.c_long                  # BOOL
 
 _lock = threading.Lock()
 _cache = {}           # gdi (lower case) -> (hmon, count, array)
+_retired = []         # RETIRE-NOT-FREE (Oct 19): the (count, array)
+                      # pairs the event thread FORGETS, never frees -
+                      # they ride this list until process exit (the
+                      # kernel reclaims), so a write thread mid-retry
+                      # sleep can never meet a freed trampoline page
+_settle_until = 0.0   # monotonic deadline: writes refuse until then
+_settle_until = time.monotonic() + SETTLE_SEC   # THE IMPORT SEED: the
+                                                # boot belt runs past
+                                                # import+6 s, so the
+                                                # seed never gates it
 
 
 def _hmon_for(gdi):
@@ -177,7 +204,11 @@ def _phys(gdi):
                                                       ctypes.byref(count)) \
             or count.value == 0:
         return None
-    arr = (PHYSICAL_MONITOR * count.value)()
+    # THE TOCTOU LAW (verified Oct 19): a KVM ghost may re-attach
+    # between the count and the fetch; the array carries _ARR_SLACK
+    # past the count, so its overrun lands in slack, not the heap -
+    # and the API is told the ORIGINAL count, never the padded size
+    arr = (PHYSICAL_MONITOR * (count.value + _ARR_SLACK))()
     if not dx.GetPhysicalMonitorsFromHMONITOR(hmon, count.value, arr):
         return None
     # the array must outlive this call: the handles reference its
@@ -234,6 +265,8 @@ def set(gdi, pct):
     handles never opened (the gray class). The caller owes the
     refusal half a degradation and a confession, and the unverified
     half an honest status word."""
+    if time.monotonic() < _settle_until:   # the SETTLE WINDOW: the bus
+        return REFUSAL, False              # is not touched during settle
     px = _phys(gdi)
     if px is None:
         return NO_DOOR, False
@@ -270,6 +303,10 @@ def restore(gdi, pct):
     same retry door as set() - the hand-back deserves the budget too.
     No refusal comes back: the truth is already in the engage-side
     ledger, and a hand-back that cannot land is the panel's answer."""
+    if time.monotonic() < _settle_until:   # the SETTLE WINDOW: the bus
+        log.info("bright: hand-back of %s%% to %s waits out the "                 # is not touched during settle;
+                 "settle", pct, gdi)                                             # the shape it already returns
+        return
     px = _phys(gdi)
     if px is None:
         return
@@ -292,6 +329,8 @@ def vcp(gdi, code, value, tries=VCP_TRIES):
     its error and try-count, or NO_DOOR at a panel never reached.
     A refusal is timestamped by the caller as what it is: this app's
     spent budget, not the firmware's soul."""
+    if time.monotonic() < _settle_until:   # the SETTLE WINDOW: the bus
+        return False, SETTLE               # is not touched during settle
     px = _phys(gdi)
     if px is None:
         return False, NO_DOOR
@@ -340,10 +379,20 @@ def reachable(gdi):
 
 def invalidate(gdi=None):
     """Topology moved (WM_DISPLAYCHANGE) or a refusal proved the
-    handles stale: drop the cache (this one, not every caller's)."""
+    handles stale: drop the cache (this one, not every caller's).
+    THE RETIRE-NOT-FREE law (captain's door verdict, Oct 19): dropping
+    means FORGETTING, never freeing - the event thread must not free
+    what a write thread may still hold (a retry-sleep of 0.3 s holds
+    the pair; the freed trampoline page is the C000041D class). The
+    popped pair rides _retired until process exit: the kernel
+    reclaims it, and the driver's later calls answer clean refusals,
+    not faults. Any invalidate also re-arms the SETTLE WINDOW - the
+    desk just moved, so the writes stay silent for SETTLE_SEC."""
+    global _settle_until
     with _lock:
         keys = [gdi.lower()] if gdi else list(_cache)
         for key in keys:
             px = _cache.pop(key, None)
             if px:
-                dx.DestroyPhysicalMonitors(px[1], px[2])
+                _retired.append((px[1], px[2]))
+        _settle_until = time.monotonic() + SETTLE_SEC
