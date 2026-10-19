@@ -300,6 +300,123 @@ assert len(dimmer._veil_rows([_captioned])) == 1, \
     "the ordinary window lost its qualification to the new law"
 assert all("frameless" in f for f in _cold), \
     "the fact does not carry the key - the door would filter on hope"
+assert all("elevated" in f for f in _cold), \
+    "the fact does not carry the elevation word - the door filters on hope"
+assert dimmer._veil_rows([dict(_captioned, elevated=True)]) == [], \
+    "an elevated window stayed veil-qualified: the Task Manager case " \
+    "(UIPI clamps the veil's z-slot against higher integrity, the veil " \
+    "rode over an app ABOVE its target - the owner's double veil)"
+assert len(dimmer._veil_rows([dict(_captioned, elevated=False)])) == 1, \
+    "the ordinary-integrity neighbour lost qualification to the new word"
+assert len(dimmer._veil_rows([dict(_captioned, elevated=True,
+                                   fg=True)])) == 1, \
+    "an elevated row that HOLDS THE FOREGROUND was dropped anyway - " \
+    "the Oct-15 attribution lesson again: the focus word must survive " \
+    "every door, and the FSM's fg skip still refuses it a veil (this " \
+    "is how the taskbar keeps the desk's attribution while its menu " \
+    "is open)"
+
+
+# --- Oct-19: the elevation COMPUTE at the token seam (the door-fake
+# --- cannot tell an integrity parse from a class list - this drives
+# --- the real _elevated through a fake kernel32; the byref out-param
+# --- is filled through the documented _target_ seam).
+class _FakeK32:
+    def __init__(self, our_rid, target_rid, refuse_open=False):
+        self.our_rid, self.target_rid = our_rid, target_rid
+        self.refuse = refuse_open
+        self.closes = 0
+
+    def GetCurrentProcess(self):
+        return -1
+
+    def OpenProcess(self, access, inherit, pid):
+        return None if self.refuse else 77
+
+    def CloseHandle(self, h):
+        self.closes += 1
+        return 1
+
+
+class _FakeAdv:
+    """Token pair on the advapi32 alias (where they live). The token
+    HANDLE value encodes WHICH token: 55 is ours (the pseudo-process),
+    99 the target's - GetTokenInformation answers per tok."""
+
+    def __init__(self, fake):
+        self.f = fake
+
+    def OpenProcessToken(self, h, access, out):
+        if h is None or h == 0:
+            return 0
+        # the byref out-param, written the portable way (CArgObject has
+        # no stable public target attribute on 3.10 - cast is the door)
+        ctypes.cast(out, ctypes.POINTER(ctypes.c_void_p))[0] = \
+            55 if h == -1 else 99
+        return 1
+
+    def GetTokenInformation(self, tok, cls, buf, size, need):
+        t = tok.value if hasattr(tok, "value") else tok   # real ctypes
+        #                              argtypes deliver int; a raw fake
+        #                              gets the c_void_p object itself
+        ctypes.cast(need, ctypes.POINTER(ctypes.c_ulong))[0] = 16
+        if buf is None or size == 0:
+            return 0
+        (ctypes.c_uint * 1).from_buffer(buf)[0] = (
+            self.f.our_rid if t == 55 else self.f.target_rid)
+        return 1
+
+
+_real_k32, _real_adv = dimmer._k32, dimmer._adv
+try:
+    fk = _FakeK32(0x2000, 0x3000)
+    dimmer._k32 = fk
+    dimmer._adv = _FakeAdv(fk)
+    dimmer._elev_cache.clear()
+    dimmer._OURS[0] = "unset"
+    assert dimmer._elevated(4242) is True, "High target over Medium self"
+    dimmer._elev_cache.clear()
+    dimmer._OURS[0] = "unset"
+    fk.target_rid = 0x2000
+    assert dimmer._elevated(4242) is False, "same-integrity neighbour exempted"
+    dimmer._elev_cache.clear()
+    dimmer._OURS[0] = "unset"
+    fk.target_rid = 0x1000
+    assert dimmer._elevated(4242) is False, "a LOWER app must not exempt"
+    dimmer._elev_cache.clear()
+    dimmer._OURS[0] = "unset"
+    fk.refuse = True
+    assert dimmer._elevated(4242) is False, \
+        "a refusal must veil-anyway (the conservative branch, popup law school)"
+    dimmer._elev_cache.clear()
+    dimmer._OURS[0] = "unset"
+finally:
+    dimmer._k32, dimmer._adv = _real_k32, _real_adv
+ok("the integrity COMPUTE parses the token (label-relative RID, both "
+   "sides), caches, and fails open")
+
+# live witness, honest form: on a desk with Task Manager open, the
+# census must classify it with the SAME word the door uses - the law
+# follows the token and the band, never the class name (a Medium
+# Task Manager, as on this desk today, is veil-eligible and must
+# slot correctly; an elevated one is exempt). Lawful absence: a desk
+# without the window says so.
+_tm = dimmer._u32.FindWindowW("TaskManagerWindow", None)
+if _tm:
+    _tpid = ctypes.c_ulong()
+    dimmer._u32.GetWindowThreadProcessId(_tm, ctypes.byref(_tpid))
+    _ex = dimmer._u32.GetWindowLongW(_tm, -20)
+    _elev = dimmer._elevated(_tpid.value)
+    _top = bool(_ex & dimmer.WS_EX_TOPMOST)
+    _tf = dimmer._fact(_tm, 0, {"MONA": (0, 0, 3840, 2160)})
+    _rows = dimmer._veil_rows([_tf]) if _tf else None
+    if _elev:
+        assert _rows == [], "an elevated Task Manager slipped the door"
+    print("ok - live Task Manager: elevated=%s topmost=%s -> veil-"
+          "%s (the law reads the token and the band, not the name)"
+          % (_elev, _top, "eligible" if _rows else "exempt"))
+else:
+    print("ok - (Task Manager closed on this desk: live witness skipped)")
 _fbody = SRC[SRC.index("def _fact("):SRC.index("def _veil_rows(")]
 assert "WS_EX_TOPMOST" in _fbody[_fbody.index("frameless ="):], \
     "the law is not topmost-gated: a borderless game would dodge the " \

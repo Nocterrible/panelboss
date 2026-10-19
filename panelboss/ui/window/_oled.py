@@ -103,7 +103,17 @@ TIP_DIM = {
           "touch lights up instantly, and anything the sound sensor "
           "hears stays bright - a video that just went quiet keeps "
           "its brightness for four honest seconds before the veil "
-          "may return. nothing dims until you opt in, per monitor.",
+          "may return. nothing dims until you opt in, per monitor. "
+          "WINDOWS THAT RUN AS ADMINISTRATOR (Task Manager's class) "
+          "stay bright: a non-admin app's veil cannot guarantee its "
+          "place in the stacking order next to an elevated window, "
+          "and a veil that slips a band too high dims the app ABOVE "
+          "its target - the double veil you saw on Task Manager. The "
+          "veil does reach those windows if this app itself runs as "
+          "administrator - not recommended: the elevation then "
+          "inherits into everything the tray launches, and the "
+          "exemptions that spare your menus get weaker, not "
+          "stronger, from on high.",
     "row": "dim veils on THIS monitor only (the opt-in law, shared "
            "with the strip and the refresh).",
     "always": "dim this panel WITHOUT the idle wait: the veils land "

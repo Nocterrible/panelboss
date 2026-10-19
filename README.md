@@ -91,7 +91,13 @@ about to click is foreground by nature, and the veil reads the window
 style, not the class name, to know one. The taskbar follows the same
 law: permanent chrome does not get dimmed; the taskbar hider paints
 it when you want it gone. (A borderless *game* window is not a popup:
-it keeps dimming like any background app.) When input returns the
+it keeps dimming like any background app.) Windows running as
+administrator - Task Manager's class - stay bright too: a normal
+app's veil cannot guarantee its place beside an elevated window, and
+a misplaced veil dims the app *above* its target. Run PanelBoss as
+administrator and the veil reaches those windows too, though it is
+not recommended: elevation inherits into everything the tray
+launches. When input returns the
 veils are gone the same tick; a fade toggle opts into a soft lift
 instead. The pause hotkey is bound from the card (press a key, esc
 clears): unbound by default, no chord is stolen before you consent.

@@ -768,6 +768,7 @@ def _fact(w, fg, by_short):
     return {"hwnd": w, "pid": pid.value,
             "exe": _exe(pid.value), "cls": buf.value,
             "frameless": frameless,
+            "elevated": _elevated(pid.value),
             # the overlay badge, measured on this desk (Oct-15 UAT):
             # every window WE paint is an overrideredirect (or an
             # explicit click-through) Tk toplevel, and Windows Tk
@@ -833,7 +834,87 @@ def _veil_rows(rows):
     row passes the door precisely when it can never reach paint."""
     return [f for f in rows
             if (f["cls"] not in DESKTOP_VIEWS or f["fg"])
-            and not f.get("frameless")]
+            and not f.get("frameless")
+            and (not f.get("elevated") or f["fg"])]
+
+
+# ---------------------------------------------------------------- elevation --
+# The integrity question, answered once per pid (the _exe_cache school).
+# Task Manager's class of window runs at a MANDATORY LEVEL above an
+# ordinary desktop app's, and a non-elevated painter cannot trust its
+# z-slot against such a window: UIPI clamps the cross-integrity
+# SetWindowPos insertion, the veil lands in the wrong band, and the
+# owner sees it "veiling over an app above it" (Oct 19 UAT - the
+# double veil over Teams). A veil that cannot promise its band is a
+# lie on the desk, so the door refuses the eligibility outright.
+# the token pair lives in ADVAPI32 (measured the honest way: this
+# build's kernel32 resolves OpenProcessToken but not
+# GetTokenInformation - the pin law says one DLL per alias, no
+# praying); the process handle and close stay on the module's _k32.
+_adv = ctypes.WinDLL("advapi32", use_last_error=True)
+_adv.OpenProcessToken.restype = ctypes.c_int
+_adv.OpenProcessToken.argtypes = [ctypes.c_void_p, ctypes.c_ulong,
+                                  ctypes.POINTER(ctypes.c_void_p)]
+_adv.GetTokenInformation.restype = ctypes.c_int
+_adv.GetTokenInformation.argtypes = [ctypes.c_void_p, ctypes.c_int,
+                                     ctypes.c_void_p, ctypes.c_ulong,
+                                     ctypes.POINTER(ctypes.c_ulong)]
+_k32.GetCurrentProcess.restype = ctypes.c_void_p
+_k32.GetCurrentProcess.argtypes = []
+_k32.CloseHandle.restype = ctypes.c_int
+_k32.CloseHandle.argtypes = [ctypes.c_void_p]      # the Oct-15 pin law:
+#                                    an unpinned CloseHandle truncates
+#                                    the 64-bit handle to int
+_elev_cache = {}
+_OURS = ["unset"]          # our own RID, measured once; None = unknown
+
+
+def _integrity_rid(handle):
+    """The token's mandatory-label RID (SECURITY_MANDATORY_LABEL starts
+    with the RelativeId DWORD - no SID walking needed). None on any
+    refusal: callers decide what a shrug means."""
+    tok = ctypes.c_void_p()
+    if not _adv.OpenProcessToken(handle, 0x0008, ctypes.byref(tok)):
+        return None
+    try:
+        need = ctypes.c_ulong(0)
+        _adv.GetTokenInformation(tok, 25, None, 0, ctypes.byref(need))
+        if not need.value:
+            return None
+        buf = ctypes.create_string_buffer(need.value)
+        if not _adv.GetTokenInformation(tok, 25, buf, need.value,
+                                        ctypes.byref(need)):
+            return None
+        return ctypes.cast(buf, ctypes.POINTER(ctypes.c_ulong))[0]
+    finally:
+        _k32.CloseHandle(tok)
+
+
+def _elevated(pid):
+    """True = this pid's mandatory level sits ABOVE ours. Refusals
+    answer False (the veil-anyway branch: same conservative school as
+    the popup law's refusal - a fact we cannot measure must not
+    silently exempt the whole desktop). Cached per pid; recycled
+    pids age out with the overflow clear, and one stale answer only
+    ever fails the exemption OPEN."""
+    got = _elev_cache.get(pid)
+    if got is not None:
+        return got
+    if _OURS[0] == "unset":
+        _OURS[0] = _integrity_rid(_k32.GetCurrentProcess())
+    ans = False
+    h = _k32.OpenProcess(0x1000, False, pid)   # QUERY_LIMITED only
+    if h:
+        try:
+            rid = _integrity_rid(h)
+            ans = (rid is not None and _OURS[0] is not None
+                   and rid > _OURS[0])
+        finally:
+            _k32.CloseHandle(h)
+    if len(_elev_cache) > 4096:
+        _elev_cache.clear()
+    _elev_cache[pid] = ans
+    return ans
 
 
 def _census():
