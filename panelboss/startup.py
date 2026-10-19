@@ -126,6 +126,39 @@ def enable():
     return ok, command() if ok else "registry did not keep the entry"
 
 
+def ensure_crash_dumps():
+    """Arms WER LocalDumps for pythonw.exe, fail-open: WER Event 1000
+    (Oct 19, pid 23004, python310.dll +0x487d, 0xc0000005) arrived with
+    no dump because LocalDumps was never configured. The key name is
+    the EXECUTABLE, so a python.exe (console) death writes elsewhere
+    and stays uncollected - the tray app's pythonw.exe is the one that
+    owns no stderr and cannot confess. Same fail-open re-read style as
+    the Run value above: the registry is the truth, written once per
+    launch, no harm in re-arming."""
+    try:
+        import winreg as reg
+        folder = os.path.join(os.environ.get("LOCALAPPDATA", "."),
+                              "CrashDumps")
+        path = (r"Software\Microsoft\Windows\Windows Error Reporting"
+                r"\LocalDumps\pythonw.exe")
+        with reg.OpenKey(reg.HKEY_CURRENT_USER, path,
+                         access=reg.KEY_READ | reg.KEY_SET_VALUE) as key:
+            reg.SetValueEx(key, "DumpType", 0, reg.REG_DWORD, 2)
+            reg.SetValueEx(key, "DumpFolder", 0, reg.REG_SZ, folder)
+            reg.SetValueEx(key, "DumpCount", 0, reg.REG_DWORD, 10)
+            dtype, _ = reg.QueryValueEx(key, "DumpType")
+    except OSError as exc:
+        log.warning("crash dumps: registry refused the write: %s", exc)
+        return
+    except Exception:
+        log.exception("crash dumps arming failed")
+        return
+    if dtype != 2:
+        log.warning("crash dumps: read-back says %s, not 2", dtype)
+    else:
+        log.info("crash dumps armed: %s (10 full dumps)", folder)
+
+
 def disable():
     """Returns (ok, message); absent counts as success."""
     try:
