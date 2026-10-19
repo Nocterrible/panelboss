@@ -303,11 +303,14 @@ class _EventsMixin:
                 self.camera_cfg["index"] = (
                     list(value) if isinstance(value, (list, tuple))
                     else int(value))
-                self._release_camera()             # the next poll opens the
-                                                   # chosen one
+                # the word lands BEFORE the hand (Oct 19): the AV that
+                # owned pid 23004 died in the release and took the toml
+                # with it; camera_diag's order is the shape
                 from .. import config
                 config.write_config(self.cfg)
                 log.info("camera roster now %s", self.camera_cfg["index"])
+                self._release_camera()             # the next poll opens the
+                                                   # chosen one
             elif action == "camera_enabled":
                 # the consent gate (redesign law 1): cameras open
                 # only after the owner says so. Loop-owned write (the
@@ -321,13 +324,17 @@ class _EventsMixin:
                 # report) refreshes the panes against the moved key,
                 # the same idiom the identity writes use.
                 self.camera_cfg["enabled"] = bool(value)
-                if not self.camera_cfg["enabled"]:
-                    self._release_camera()
+                # write BEFORE the release (Oct 19, the vanished "No"):
+                # the camera_enabled drain used to release the device
+                # first, and a death in the release ate the owner's word
+                # - the consent rides to disk before any hand moves
                 from .. import config
                 config.write_config(self.cfg)
                 log.info("camera detection %s",
                          "enabled" if self.camera_cfg["enabled"]
                          else "disabled (duty drained)")
+                if not self.camera_cfg["enabled"]:
+                    self._release_camera()
                 if self.ui_events is not None:
                     # the resync the comment promised (gate finding
                     # 3): the panes re-derive against the moved key,
