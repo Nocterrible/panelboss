@@ -63,6 +63,7 @@ from ._profiles import _ProfilesMixin
 from ._prof_editor import _EditorMixin
 from ._prof_apply import _ModeMixin
 from ._prof_pins import _PinMixin
+from ._icon import _IconMixin
 from ._restore import _RestoreMixin
 from ._power import _PowerMixin
 from ._gaming import _GamingMixin
@@ -82,6 +83,7 @@ class SettingsWindow(
     _EditorMixin,
     _ModeMixin,
     _PinMixin,
+    _IconMixin,
     _RestoreMixin,
     _PowerMixin,
     _GamingMixin,
@@ -111,6 +113,13 @@ class SettingsWindow(
         self.skin = theme.get_skin(cfg["ui"]["skin"])
         theme.apply_ctk_font(self.skin)
         self.title("PanelBoss")
+        self._set_app_icon()                   # the owner art on the
+                                               # titlebar + taskbar
+                                               # (Tk hands it to every
+                                               # toplevel: the wizard
+                                               # rides along); the
+                                               # TRAY stays the state
+                                               # circle by law
         # size (Oct 12, owner: "open larger, and remember how large I
         # dragged it"): the recalled [w, h], clamped at birth; the
         # minsize is the clamp's floor, so a recalled window is never

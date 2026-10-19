@@ -109,6 +109,29 @@ def check():
         assert app.state() == "withdrawn"
         assert getattr(app, "kofi_button", None) is not None, \
             "the window died at the kofi cup again"
+        # THE APP ICON (Oct 19): the owner art must ride the titlebar
+        # and the taskbar. The MARKER + file are the claim; the wm
+        # query below is diagnostic only (a bare query answers '' for
+        # the app-default on this Tcl - measured - so it proves
+        # nothing either way). THE VETO (gate round, same day): ctk
+        # 6.0.0 re-mints its feather on every CTkToplevel at +200 ms
+        # unless iconbitmap was called first - _brand_toplevels makes
+        # EVERY toplevel call it at birth. Pinned synchronously: a
+        # fresh toplevel's flag must already be True (the +200 pass
+        # cannot have fired yet; only our patch could have set it).
+        ic = app.tk.call("wm", "iconbitmap", app._w)
+        marker = getattr(app, "_app_icon_path", "")
+        assert str(marker).endswith("assets" + os.sep + "panelboss.ico") \
+            and os.path.isfile(marker), \
+            "no owner art on the window: marker %r, wm query %r" % (
+                marker, ic)
+        import customtkinter as _ctk
+        tl = _ctk.CTkToplevel(app)
+        try:
+            assert tl._iconbitmap_method_called is True, \
+                "the feather veto did not reach a fresh toplevel"
+        finally:
+            tl.destroy()
         assert tk._default_root is app, \
             "the default root is not the window (the painter raced it)"
         # the released painter: alive; and its root must NOT take the
