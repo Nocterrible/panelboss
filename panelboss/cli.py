@@ -7,6 +7,7 @@ cameras, preview, config and faces are diagnostics.
 from __future__ import annotations
 
 import argparse
+import atexit
 import ctypes
 import logging
 import os
@@ -61,6 +62,14 @@ def _newest_source_mtime(pkg_dir):
     return newest
 
 
+def _exit_receipt():
+    """The last word of a clean exit (silent-death dossier, Oct 15, now
+    covering the exit too): main registers this through atexit, so the
+    sign-off line's ABSENCE is the marker of a hard death."""
+    logging.getLogger("cli").info("cli: panelboss exit pid=%s",
+                                  os.getpid())
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="panelboss")
     parser.add_argument("command", nargs="?", default="run",
@@ -85,6 +94,20 @@ def main(argv=None):
     except Exception:
         pass
     config.get_log_level()            # logging always comes first
+    # the native-death receipt (Oct 19 WER 1000, pid 23004, python310.dll
+    # +0x487d, code 0xc0000005 - a camera-stack AV in a pythonw process
+    # that owns no console and left no dump, no atexit line, nothing):
+    # a process-level crash must leave a word where the log lives, and
+    # the handle sits in the module global so GC never closes the file
+    # under the handler's feet (line-buffered: a flush on every write)
+    try:
+        global _FAULT
+        import faulthandler
+        _FAULT = open(os.path.join(config.LOG_DIR, "fault.log"),
+                      "a", buffering=1)
+        faulthandler.enable(file=_FAULT, all_threads=True)
+    except Exception:
+        _FAULT = None                 # the receipt must never block boot
     # os, not sys: this box's 3.10 build ships a trimmed sys module
     # without getpid (the tray app has been on os.getpid all along)
     # The tree + the newest source mtime ride along: a hard-killed
@@ -103,6 +126,23 @@ def main(argv=None):
         __version__, os.getpid(), _here,                    # reciting 0.1.0
         time.strftime("%H:%M", time.localtime(_src))        # newest .py
         if _src else "UNKNOWN (tree unreadable)")           # now
+    # every normal departure signs the log (silent-death dossier, Oct 15,
+    # now covering the exit too): "cli: panelboss exit pid=" is the last
+    # word of a clean stop, and its ABSENCE is the death marker. An
+    # uncaught main-thread exception gets the log before the default hook
+    # (pythonw owns no stderr, so the log is the only witness).
+    atexit.register(_exit_receipt)
+
+    def _hook(exc_type, value, tb):
+        logging.getLogger("cli").exception(
+            "uncaught main-thread exception",
+            exc_info=(exc_type, value, tb))
+        if _PREV_HOOK is not sys.__excepthook__:
+            _PREV_HOOK(exc_type, value, tb)
+
+    global _PREV_HOOK
+    _PREV_HOOK = sys.excepthook
+    sys.excepthook = _hook
     config.migrate_once()             # the one-time pre-rename migration,
                                       # before any config read; fail-open
     cfg = config.get_config()
@@ -141,6 +181,10 @@ def _cameras():
 
 
 _MUTEX_HANDLE = None   # set by _single_instance on the win path
+
+_FAULT = None          # the crash-receipt file (set by main after the
+                       # log dir exists; module global so GC never
+                       # closes it under the handler's feet)
 
 
 def _single_instance():
@@ -365,6 +409,9 @@ def _run(cfg, autostart=False):
                                 # copy touches the registry, and
                                 # only after winning the instance
                                 # race
+    startup.ensure_crash_dumps()      # the no-dump blind spot (Oct 19
+                                      # WER 1000 arrived empty: LocalDumps
+                                      # never configured for pythonw)
     if cfg.get("restore", {}).get("enabled"):
         threading.Thread(target=_restore, args=(cfg, bool(autostart),
                                                 icon), daemon=True,
