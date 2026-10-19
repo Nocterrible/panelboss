@@ -66,7 +66,12 @@ log = logging.getLogger("state")
 # refused 'off' row is NEVER re-asked inside its own spell; any future
 # re-ask rides vcp (settle-gated) and must re-stamp rec['tried'] (the
 # dated law) - never a bare re-bus of the row's own refusal.
-_belt_sleep = time.sleep
+_bus_sleep = time.sleep     # the seam the suite fakes (it was
+#                             _belt_sleep until the hand-back joined:
+#                             ONE sleep seam for all bus-waits - the
+#                             belt's stagger, the belt's settle waits,
+#                             and the lift's wait-out, no real seconds
+#                             in CI, the captain's law)
 
 
 class _AwayMixin:
@@ -381,6 +386,21 @@ class _AwayMixin:
         hdr = getattr(self, "_away_hdr", None) or []
         off = getattr(self, "_away_off", None) or {}
         disc = getattr(self, "_away_disc", None) or {}
+        # THE SETTLE LAW OF THE HAND-BACK (gate round 2, Oct 19): the
+        # wake arms the settle window itself - panels powering up ARE
+        # a display change - and the lift fires milliseconds later.
+        # These writes are ONE-SHOT (the ledgers clear below), and a
+        # politely refused hand-back sits the panel dark until next
+        # boot's belt. The lift is a rare, non-realtime path: it waits
+        # the bounded window out rather than trusting a re-ask path.
+        # (getattr: the suite's FakeBright answers 0 when the door
+        # surface it mirrors does not carry the new call.)
+        if off or bright:
+            wait = getattr(_bright, "settle_left", lambda: 0.0)()
+            if wait > 0.0:
+                log.info("away: the bus is settling (%.1f s) - the "
+                         "hand-back waits it out", wait)
+                _bus_sleep(wait + 0.05)
         for gdi, tried in off.items():
             # UNCONDITIONAL on every wake reason - the asymmetry note
             # lives at the engage side; the wake can only have come
@@ -482,11 +502,17 @@ class _AwayMixin:
                 if not _bright.reachable(m["gdi"]):
                     continue          # no door: the belt says nothing
                 if asked:             # THE BELT STAGGER (the captain's
-                    _belt_sleep(      # law, Oct 19): the flaky bus gets
+                    _bus_sleep(       # law, Oct 19): the flaky bus gets
                         _bright.BELT_STAGGER_SEC)     # one ask per
                 asked += 1            # interval - the door's constant,
                                       # the seam the suite fakes (no
                                       # real seconds in CI)
+                wait = _bright.settle_left()          # and the belt
+                if wait > 0.0:                        # waits out its
+                    _bus_sleep(wait + 0.05)           # OWN echo (gate
+                    #     round 2): a refused row re-arms the settle
+                    #     window - the rows BEHIND it are not swallowed
+                    #     by the row ahead's dying
                 sent, say = _bright.vcp(m["gdi"], _bright.VCP_POWER,
                                         _bright.VCP_POWER_ON)
                 log.info("away belt: boot power-on for %s %s",

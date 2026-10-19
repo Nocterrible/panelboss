@@ -883,15 +883,23 @@ def _integrity_rid(handle):
     kernel32 guess) so the 6-byte authority is nobody's arithmetic
     problem. The current token is the ruler: a UAC-filtered Medium
     app cannot z-promise against High windows, elevation-linked or
-    not. None on any refusal: callers decide what a shrug means."""
+    not. (attrs on this desk's label read 0x60 - SE_GROUP_INTEGRITY
+    and _ENABLED, the ubiquitous enforcement bits, NOT a linked-
+    elevation marker: an earlier draft's note overread them, and the
+    LAW never consults Attributes anyway - the current token is the
+    ruler because UIPI evaluates the current token, full stop.)
+    None on any refusal: callers decide what a shrug means."""
     tok = ctypes.c_void_p()
     if not _adv.OpenProcessToken(handle, 0x0008, ctypes.byref(tok)):
         return None
     try:
         need = ctypes.c_ulong(0)
         _adv.GetTokenInformation(tok, 25, None, 0, ctypes.byref(need))
-        if need.value < 28:                    # header (16) + minimal
-            return None                        # SID (12) minimum
+        floor = 20 if ctypes.sizeof(ctypes.c_void_p) == 4 else 28
+        # x86 header is 8 (min SID 12); x64 is 16 + 12 (measured).
+        # Fail-open either way: a floor miss answers None = veil-anyway.
+        if need.value < floor:
+            return None
         buf = ctypes.create_string_buffer(need.value)
         if not _adv.GetTokenInformation(tok, 25, buf, need.value,
                                         ctypes.byref(need)):

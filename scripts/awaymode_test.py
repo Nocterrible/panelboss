@@ -71,7 +71,13 @@ class FakeBright:
     VCP_POWER_OFF = _bright.VCP_POWER_OFF  # constants through the
     VCP_POWER_ON = _bright.VCP_POWER_ON    # fake's surface too
     VCP_TRIES = _bright.VCP_TRIES
-    BELT_STAGGER_SEC = _bright.BELT_STAGGER_SEC   # the belt's spacing,
+    BELT_STAGGER_SEC = _bright.BELT_STAGGER_SEC
+
+    def settle_left(self):        # the door's public window query:
+        v = getattr(self, "_settle_once", 0.0)        # the round-2 pins script exactly
+        self._settle_once = 0.0        # ONE answer - a waiting write
+        return v        # re-asks into a quiet bus
+   # the belt's spacing,
                                                   # same surface law
     CONFIRM_SLEEP_SEC = 0                  # the suite does not sleep
                                            # through the settle
@@ -765,7 +771,7 @@ def test_boot_belt():
                          "CCC": {"off": True}}}
     m = make_monitor(tmp, away, bright=bright)
     from panelboss.state import _away as away_mod
-    m._ledger.keep(away_mod, "_belt_sleep", lambda s: None)
+    m._ledger.keep(away_mod, "_bus_sleep", lambda s: None)
     try:
         assert not getattr(m, "_away_off", None), "dead-ledger boot"
         m._away_boot_belt()
@@ -784,7 +790,7 @@ def test_belt_stagger():
     """The door wave (captain's law, Oct 19): three off rows on three
     live doors get TWO stagger sleeps between the asks - counted on
     rows ASKED, never on rows walked (skips buy the bus no second) -
-    recorded through the _belt_sleep seam, so no real second passes."""
+    recorded through the _bus_sleep seam, so no real second passes."""
     tmp = tempfile.mkdtemp(prefix="pb_away_stagger")
     away = {"mode": "dim",
             "monitors": {"AAA": {"off": True}, "BBB": {"off": True},
@@ -792,7 +798,7 @@ def test_belt_stagger():
     m = make_monitor(tmp, away)            # the default fake: 3 doors
     from panelboss.state import _away as away_mod
     sleeps = []
-    m._ledger.keep(away_mod, "_belt_sleep", lambda s: sleeps.append(s))
+    m._ledger.keep(away_mod, "_bus_sleep", lambda s: sleeps.append(s))
     try:
         m._away_boot_belt()
         assert sleeps == [1.5, 1.5], sleeps
@@ -800,6 +806,58 @@ def test_belt_stagger():
             "the belt rides the door's constant"
         print("ok - belt stagger: three asks, two 1.5 s spacings through "
               "the seam, no real time spent")
+    finally:
+        m._ledger.undo()
+
+
+def test_belt_waits_settle():
+    """Round-2 handback law (gate): the belt waits the settle window
+    OUT before its asks - neither the import seed nor a prior row's
+    refusal may swallow later rows. One scripted settle_left answer
+    (the door fake's round-2 seam) proves the wait happens once,
+    BEFORE the stagger, and both rows still reach the quiet bus."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_settle")
+    away = {"mode": "dim",
+            "monitors": {"AAA": {"off": True}, "CCC": {"off": True}}}
+    m = make_monitor(tmp, away)
+    m._fake["bright"]._settle_once = 3.0
+    from panelboss.state import _away as away_mod
+    sleeps = []
+    m._ledger.keep(away_mod, "_bus_sleep", lambda s: sleeps.append(s))
+    try:
+        m._away_boot_belt()
+        assert sleeps == [3.05, 1.5], sleeps
+        calls = m._fake["calls"]
+        assert ("vcp", "D1", 0xD6, 1, _bright.VCP_TRIES) in calls, calls
+        assert ("vcp", "D3", 0xD6, 1, _bright.VCP_TRIES) in calls, calls
+        print("ok - belt: the settle wait precedes the stagger; both "
+              "rows reach a quiet bus")
+    finally:
+        m._ledger.undo()
+
+
+def test_handback_waits_settle():
+    """The lift's D6=1 is the ONLY way back for an offed panel (the
+    asymmetry law's own words) - and the wake arms the window it
+    would be swallowed by (powering panels ARE a display change).
+    Round 2: the lift waits the window out, sends once more, and the
+    ledgers still clear unconditionally."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_hw")
+    m = make_monitor(tmp, {"mode": "dim"})
+    m._fake["bright"]._settle_once = 2.0
+    from panelboss.state import _away as away_mod
+    sleeps = []
+    m._ledger.keep(away_mod, "_bus_sleep", lambda s: sleeps.append(s))
+    try:
+        m.away_status = {"AAA": "off (unverified)"}
+        m._away_off = {"D1": 1.0}
+        m._away_lift()
+        assert sleeps == [2.05], sleeps
+        assert ("vcp", "D1", 0xD6, 1, _bright.VCP_TRIES) in \
+            m._fake["calls"], m._fake["calls"]
+        assert m._away_off == {}, "the ledger clears whatever happened"
+        print("ok - lift: the wake's echo cannot swallow the one-shot "
+              "hand-back - the wait comes first")
     finally:
         m._ledger.undo()
 
@@ -1757,6 +1815,8 @@ def main():
     test_off_submode()
     test_boot_belt()
     test_belt_stagger()
+    test_belt_waits_settle()
+    test_handback_waits_settle()
     test_jail_moves_cursor()
     test_park_replaces_jail()
     test_park_point_geometry()

@@ -183,10 +183,44 @@ def test_arr_slack():
         restore(saved)
 
 
+def test_settle_public_and_cap():
+    """Gate round 2 (Oct 19): settle_left() publishes the window (the
+    belt and the lift wait on it), and the retire shelf is CAPPED - a
+    resident app may not grow without bound, and an entry older than
+    the cap is an unreferenced pair by construction (the worst
+    in-flight hold is the retry budget, ~1.4 s, far under cap age).
+    The cap drops OUR end and never frees."""
+    rec, t, saved = fake_world()
+    fresh(rec, t)
+    try:
+        t.now = 10.0
+        _bright.invalidate(GDI)
+        assert abs(_bright.settle_left() - _bright.SETTLE_SEC) < 1e-9, \
+            "a fresh invalidate leaves the full window"
+        t.now += 2.0
+        assert abs(_bright.settle_left() - (_bright.SETTLE_SEC - 2.0)) \
+            < 1e-9, "the window counts down with the clock"
+        t.now += 100.0
+        assert _bright.settle_left() == 0.0, "closed answers zero, not minus"
+        _bright._retired.clear()
+        for i in range(_bright.RETIRE_CAP + 12):
+            t.now = 10.0 + i
+            _bright._phys(GDI)            # refill one door...
+            _bright.invalidate(GDI)       # ...retire it again
+        assert len(_bright._retired) == _bright.RETIRE_CAP, \
+            len(_bright._retired)
+        assert rec["destroy"] == 0, "the cap forgets, it does not free"
+        print("ok - settle_left publishes the window; the retire shelf "
+              "caps at %d by forgetting" % _bright.RETIRE_CAP)
+    finally:
+        restore(saved)
+
+
 def main():
     test_settle_window()
     test_retire_not_free()
     test_arr_slack()
+    test_settle_public_and_cap()
     print("BRIGHT DOOR TESTS OK")
 
 

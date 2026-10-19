@@ -101,10 +101,16 @@ _ARR_SLACK = 2              # the ghost-re-attach head (TOCTOU, verified
                             # re-attaching between the count and the
                             # fetch overruns into slack, not the heap
 BELT_STAGGER_SEC = 1.5      # the boot belt's spacing between row asks:
-                            # a refused 'off' row is NEVER re-asked
-                            # inside its own spell; any future re-ask
-                            # rides vcp (settle-gated) and must re-stamp
-                            # the rec['tried'] dated law
+                            # a refused 'off' row re-arms the settle
+                            # window, and the belt's rows BEHIND it
+                            # wait it out via settle_left (gate round 2)
+                            # - they are no longer swallowed by the row
+                            # ahead's dying
+RETIRE_CAP = 64             # the retire shelf's ceiling (gate round 2):
+                            # an in-flight write holds its pair <= ~1.4 s
+                            # - older entries are unreferenced by
+                            # construction; the shelf drops its own end,
+                            # never frees what the driver may still own
 MAX_PATH = 260
 SETTLE = ("the door is settling after a desk change - the write may "
           "take one more try")
@@ -160,10 +166,16 @@ _retired = []         # RETIRE-NOT-FREE (Oct 19): the (count, array)
                       # kernel reclaims), so a write thread mid-retry
                       # sleep can never meet a freed trampoline page
 _settle_until = 0.0   # monotonic deadline: writes refuse until then
-_settle_until = time.monotonic() + SETTLE_SEC   # THE IMPORT SEED: the
-                                                # boot belt runs past
-                                                # import+6 s, so the
-                                                # seed never gates it
+_settle_until = time.monotonic() + SETTLE_SEC   # THE IMPORT SEED: a
+                                                # bus mid-boot may
+                                                # still be laying
+                                                # handles; the belt
+                                                # and the lift WAIT
+                                                # the seed out (gate
+                                                # round 2 - the
+                                                # settle_left law),
+                                                # so no timing margin
+                                                # is load-bearing
 
 
 def _hmon_for(gdi):
@@ -395,4 +407,23 @@ def invalidate(gdi=None):
             px = _cache.pop(key, None)
             if px:
                 _retired.append((px[1], px[2]))
+        # the retire shelf is CAPPED (gate round 2): an in-flight write
+        # holds the pair for <= ~1.4 s (3x0.3 retries), so an entry
+        # older than the last RETIRE_CAP cycles is unreferenced by
+        # construction - dropping OUR reference returns the ctypes
+        # bytes without ever freeing what the driver may still own.
+        while len(_retired) > RETIRE_CAP:
+            _retired.pop(0)
         _settle_until = time.monotonic() + SETTLE_SEC
+
+
+def settle_left():
+    """Seconds until the settle window closes (0 = the bus is speakable
+    now). Public for the HAND-BACK'S LAW (gate round 2, Oct 19): the
+    one-shot writes - the lift's D6=1 and the belt's power-on - must
+    never be swallowed by the window their OWN echo armed (panels
+    powering up on wake ARE a display change, and the lift fires
+    milliseconds later). A refusal inside settle is honest, but a
+    HANDBACK lost to settle is a dark panel until next boot - the
+    fire-once writes wait the window out instead."""
+    return max(0.0, _settle_until - time.monotonic())
