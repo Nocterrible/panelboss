@@ -93,12 +93,12 @@ class _IconMixin:
                 self._app_icon_path = path
                 _BRAND = path
                 _brand_toplevels()
-                log.info("ui: app icon set from %s - the feather's "
-                         "late pass is vetoed class-wide", path)
+                log.info("app icon set from %s - the feather's late "
+                         "pass is vetoed class-wide", path)
                 return
             except Exception:
-                log.warning("ui: the icon refused to set from %s - "
+                log.warning("the icon refused to set from %s - "
                             "the stock icon keeps its place", path)
                 return
-        log.warning("ui: assets/panelboss.ico not found - the stock "
+        log.warning("assets/panelboss.ico not found - the stock "
                     "icon will do (make_icon.py can rebuild it)")

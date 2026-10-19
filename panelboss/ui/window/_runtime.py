@@ -303,6 +303,11 @@ class _RuntimeMixin:
         # must cost nothing (the 0.4 s tick repaint, profiled)
         chip = {"text": state}
         color = self.skin.chip(state)
+        sink = getattr(self.monitor, "tray_sink", None)
+        if sink is not None:
+            sink(state)                      # the tray recolors on the
+                                             # same truth the chip
+                                             # paints (diff-guarded)
         if self.chip.cget("fg_color") != color:
             chip["fg_color"] = color
         if len(chip) == 1:

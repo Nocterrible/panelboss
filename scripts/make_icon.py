@@ -10,9 +10,10 @@ draw below. Outputs, one run:
   assets/panelboss.ico            shell/Start-menu ladder (16..256)
   extension/icons/{16,32,48,128}.png   the Chrome Web Store ladder
 
-(The tray icon is painted live by tray.py - the circle in the state
-color - this is the same picture's calmer siblings for the shells
-that want files.) Run: .venv\\Scripts\\python.exe scripts\\make_icon.py
+(The TRAY paints itself live: assets/tray_master.png - the same art,
+holes left open - is filled with the state color by tray.py at paint
+time; the old interim circle is its no-art fallback. This module is
+the same picture's calmer siblings for the shells that want files.) Run: .venv\\Scripts\\python.exe scripts\\make_icon.py
 """
 import json
 import os
@@ -102,10 +103,14 @@ def _rescue_alpha(im):
     return out
 
 
-def draw_master():
+def draw_master(fill=True):
     """The owner's master (assets/master.png, or a flattened
     assets/master.jpg that gets its alpha rescued - both centered
-    and square-coerced), else the programmatic interim draw below."""
+    and square-coerced), else the programmatic interim draw below.
+    fill=False keeps the INTERIOR HOLES transparent: that is the
+    tray's canvas (tray.py fills them with the live state color -
+    the design's own note since Oct 17: the screen interior is where
+    the status color lands)."""
     png = os.path.join("assets", "master.png")
     jpg = os.path.join("assets", "master.jpg")
     src = png if os.path.isfile(png) else (jpg if os.path.isfile(jpg)
@@ -127,7 +132,7 @@ def draw_master():
         im = im.crop(((im.width - s) // 2, (im.height - s) // 2,
                       (im.width - s) // 2 + s,
                       (im.height - s) // 2 + s))
-        return _fill_holes(im)
+        return _fill_holes(im) if fill else im
     im = Image.new("RGBA", (MASTER, MASTER))
     d = ImageDraw.Draw(im)
     r = MASTER // 8
@@ -165,6 +170,13 @@ def draw_master():
 def main():
     im = draw_master()
     os.makedirs("assets", exist_ok=True)
+    # THE TRAY CANVAS (the owner's law, Oct 19): the same art with
+    # the interior holes LEFT transparent - tray.py colors them with
+    # the live state at paint time (screen and lenses color
+    # together, _fill_holes' own reading of the design).
+    draw_master(fill=False).resize((128, 128), Image.BOX).save(
+        os.path.join("assets", "tray_master.png"))
+    print("wrote assets/tray_master.png (holes left for the state)")
     im.save(os.path.join("assets", "panelboss.ico"), format="ICO",
             sizes=[(s, s) for s in SIZES])
     print("wrote assets/panelboss.ico")

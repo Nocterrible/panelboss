@@ -1,6 +1,11 @@
 """System tray: barebones but with the settings that matter.
 
-The icon is a circle that changes color with the machine state; the menu
+THE TRAY ICON IS THE OWNER ART (owner law, Oct 19; the circle it
+replaced was the interim before the art existed): assets/tray_master
+.png - the master with its INTERIOR HOLES left transparent - painted
+live with the machine state color filling the holes (screen and
+lenses color together, make_icon._fill_holes' reading of the design).
+The circle stays as the no-art fallback. The menu
 carries the levers (detection device, camera, wake policy, pause/snooze).
 pystray runs callbacks on its own pump thread, so nothing here touches
 the camera or display directly; everything is persisted through the
@@ -28,6 +33,7 @@ from __future__ import annotations
 from importlib import metadata
 
 import logging
+import os
 import threading
 import time
 import uuid
@@ -200,12 +206,81 @@ COLORS = {
 }
 
 
+_TRAY_ART = "unset"                      # lazy; None after a failed hunt
+_ART_PATHS = (
+    ("..", "assets", "tray_master.png"),  # dev tree: tray.py sits one
+                                          # below the repo root
+    ("assets", "tray_master.png"),        # belt: a package dir kept
+                                          # beside this module
+)
+
+
+def _art():
+    """The owner art with the interior holes OPEN (make_icon exports
+    it beside the ladders); None = no art, the interim circle lives
+    on as the fallback - with its absence said ONCE, in the log."""
+    global _TRAY_ART
+    if _TRAY_ART != "unset":
+        return _TRAY_ART
+    here = os.path.dirname(os.path.abspath(__file__))
+    for rel in _ART_PATHS:
+        path = os.path.join(here, *rel)
+        if os.path.isfile(path):
+            try:
+                _TRAY_ART = Image.open(path).convert("RGBA")
+                return _TRAY_ART
+            except Exception:
+                break
+    log.warning("tray: assets/tray_master.png absent or unreadable - "
+                "the interim circle paints until make_icon.py runs")
+    _TRAY_ART = None
+    return None
+
+
 def _image(state="active"):
-    img = Image.new("RGB", (64, 64))        # the box is black until the
-    draw = ImageDraw.Draw(img)              # background is applied
-    draw.rectangle((0, 0, 63, 63), fill=(255, 255, 255))
-    color = COLORS.get(state, COLORS["active"])
-    draw.ellipse((8, 8, 56, 56), fill=color)   # the circle comes last
+    """The art, holes filled with the state color (the law: screen
+    and lenses color together - the same hole rule as
+    make_icon._fill_holes: a transparent component that does not
+    touch the border is part of the design, so it colors)."""
+    color = COLORS.get(state, COLORS["off"])
+    art = _art()
+    if art is None:
+        img = Image.new("RGB", (64, 64))  # the box is black until the
+        d = ImageDraw.Draw(img)           # background is applied
+        d.rectangle((0, 0, 63, 63), fill=(255, 255, 255))
+        d.ellipse((8, 8, 56, 56), fill=color)   # the circle comes last
+        return img
+    img = art.copy()
+    px = img.load()
+    w, h = img.size
+    total = w * h
+    seen = bytearray(total)
+    for i in range(total):
+        x, y = i % w, i // w
+        if seen[i] or px[x, y][3] >= 128:
+            continue
+        comp = [i]
+        seen[i] = 1
+        touches = False
+        q = 0
+        while q < len(comp):
+            p = comp[q]
+            q += 1
+            cx, cy = p % w, p // w
+            for nx, ny in ((cx - 1, cy), (cx + 1, cy), (cx, cy - 1),
+                           (cx, cy + 1)):
+                if not (0 <= nx < w and 0 <= ny < h):
+                    touches = True
+                    continue
+                n = ny * w + nx
+                if seen[n] or px[nx, ny][3] >= 128:
+                    continue
+                seen[n] = 1
+                comp.append(n)
+        if touches:
+            continue                      # the outside world stays out
+        for p in comp:
+            px[p % w, p // w] = color + (255,)
     return img
 
 
@@ -219,6 +294,11 @@ class Tray(threading.Thread):
         self.monitor = monitor                 # the live source for the
                                                # picker's mode tail
         self.icon = None
+        self._paint_lock = threading.Lock()   # one handle, one writer
+                                              # at a time (set_state's
+                                              # docstring carries the
+                                              # why); _ready and stop
+                                              # ride it too
         self._pending_menu = None              # the warm worker's result,
                                                # consumed at a pump-safe
                                                # instant by _on_menu_ready
@@ -229,8 +309,14 @@ class Tray(threading.Thread):
         # start as honest "probing..." placeholders, and the warm
         # worker swaps in the real ones when it finishes
         try:
+            _first = (self.monitor.state if self.monitor is not None
+                      else "unknown")        # honest: the state machine
+                                             # has not spoken yet - the
+                                             # muted gray, not a green
+                                             # promise
+            self._state = _first
             self.icon = pystray.Icon(name="PanelBoss",
-                                     icon=_image("active"),
+                                     icon=_image(_first),
                                      title="PanelBoss",
                                      menu=self._light_menu())
             self.icon.run(setup=self._ready)
@@ -274,7 +360,8 @@ class Tray(threading.Thread):
                 self.monitor.events.put(("quit", True))
 
     def _ready(self, icon):
-        icon.visible = True       # pystray starts hidden; our setup
+        with self._paint_lock:
+            icon.visible = True   # pystray starts hidden; our setup
                                   # replaced the default one that shows it
         icon.update_menu()        # and the constructor skipped the HMENU
         log.info("tray icon ready")
@@ -664,10 +751,37 @@ class Tray(threading.Thread):
                 pass                        # notifications are a courtesy
 
     def set_state(self, state):
-        """Recolor the circle; the full UI overhaul wires this later."""
-        if self.icon is not None:
-            self.icon.icon = _image(state)
+        """Recolor the art's interior (the tray law: the holes ARE
+        the status); diff-guarded - the ui tick feeds this every
+        beat through monitor.tray_sink and a repaint costs a shell
+        notify message. THE COMMIT ORDER (gate finding 2): _state
+        moves only AFTER a successful setter, and a raise is LOUD -
+        a swallowed failure that left _state moved would make the
+        diff-guard eat every later beat and freeze the color on a
+        silent lie (the class this whole file exists to avoid)."""
+        if self.icon is None or state == getattr(self, "_state", None):
+            return
+        try:
+            img = _image(state)              # paint cost (BFS) stays
+                                             # off the lock; the TRY
+                                             # keeps it - a permanent
+                                             # asset fault must warn,
+                                             # not vanish (gate round-2
+                                             # finding 1)
+            with self._paint_lock:           # pystray's icon setter is
+                self.icon.icon = img         # synchronous NIM_MODIFY on
+                                             # the CALLER's thread while
+                                             # the pump thread touches
+                                             # the same _icon_handle
+                                             # (display-change hide/
+                                             # show): one Lock keeps the
+                                             # DDC-class race out here
+            self._state = state              # commit AFTER the win
+        except Exception:
+            log.warning("tray: the %r recolor was refused - the color "
+                        "is stale until the next beat", state)
 
     def stop(self):
         if self.icon is not None:
-            self.icon.stop()
+            with self._paint_lock:
+                self.icon.stop()

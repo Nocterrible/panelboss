@@ -84,6 +84,10 @@ class _BootMixin:
         self.wake_times = []                  # unexpected wakes, recent
         self.re_off_paused = False            # burst tripped; stays lit
         self.notifier = None                  # cli wires icon.notify
+        self.tray_sink = None                 # cli wires icon.set_state
+                                              # (the ui tick feeds it;
+                                              # the tray's holes are
+                                              # the status)
         self._hdr_snap = []                   # gdis HDR was on at the
                                               # moment the desk went
                                               # dark (power section)

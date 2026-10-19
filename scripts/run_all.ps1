@@ -56,11 +56,14 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
                                       # Oct 13 night): truth switches
                                       # repaint after they know their
                                       # size; app-up compatible
-    'bright_door_test.py'             # the DDC/CI door's Oct-19 laws
+    'bright_door_test.py',            # the DDC/CI door's Oct-19 laws
                                       # (captain ses_eab74fb30ffesL9):
                                       # retire-not-free, the settle
                                       # window, the arr slack - fake
                                       # kernel, no real seconds
+    'tray_icon_test.py'               # the tray ART (owner law Oct 19):
+                                      # the holes are the status; pure
+                                      # PIL, app-up compatible
 $dir = Join-Path $root "scripts"
 # ledger 16: the log must be attributable - tip stamp at the head,
 # and DIRTY when the tested worktree differs from it (a stamp that

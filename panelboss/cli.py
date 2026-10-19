@@ -396,6 +396,9 @@ def _run(cfg, autostart=False):
                                             # the monitor
     monitor.notifier = icon.notify          # burst warnings reach the
                                             # user, not just the log
+    monitor.tray_sink = icon.set_state      # and so does the state:
+                                            # the tray art's holes ARE
+                                            # the status (owner law)
     # Tk must own the main thread, so the monitor loop drops to a
     # worker; the same worker warms the detector before it starts
     # pumping, so a right-click or a quit in the tray is never lost
@@ -663,7 +666,29 @@ def _drive(cfg, monitor, worker, ui_events):
         logging.getLogger("cli").info("no ui; running headless beside the "
                                        "tray")
         while worker.is_alive():             # headless: park main, let
-            worker.join(0.5)                 # the tray be the only lever
+                                             # the tray be the only
+                                             # lever - and the ONLY
+                                             # STATUS LIGHT: without
+                                             # the ui tick the sink
+                                             # has no other caller, so
+                                             # this park feeds it (the
+                                             # gate's finding 1: the
+                                             # law "the holes ARE the
+                                             # status" may not be false
+                                             # in exactly the mode the
+                                             # tray IS the ui). The
+                                             # sink is diff-guarded -
+                                             # an unchanged beat costs
+                                             # an attribute read.
+            sink = getattr(monitor, "tray_sink", None)
+            if sink is not None:
+                try:
+                    sink(monitor.state)
+                except Exception:
+                    pass                    # a lost beat recolors on
+                                            # the next; the swallow is
+                                            # set_state's own rule too
+            worker.join(0.5)
 
 
 def _enroll(cfg, name):
