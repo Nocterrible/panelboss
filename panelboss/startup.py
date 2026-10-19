@@ -141,8 +141,11 @@ def ensure_crash_dumps():
                               "CrashDumps")
         path = (r"Software\Microsoft\Windows\Windows Error Reporting"
                 r"\LocalDumps\pythonw.exe")
-        with reg.OpenKey(reg.HKEY_CURRENT_USER, path,
-                         access=reg.KEY_READ | reg.KEY_SET_VALUE) as key:
+        # CreateKey, not OpenKey: the WER path does not pre-exist (the
+        # Oct 19 dossier's own finding - LocalDumps was never
+        # configured), and OpenKey refuses it with WinError 2 (live
+        # probe). CreateKey opens-or-creates the whole chain.
+        with reg.CreateKey(reg.HKEY_CURRENT_USER, path) as key:
             reg.SetValueEx(key, "DumpType", 0, reg.REG_DWORD, 2)
             reg.SetValueEx(key, "DumpFolder", 0, reg.REG_SZ, folder)
             reg.SetValueEx(key, "DumpCount", 0, reg.REG_DWORD, 10)
