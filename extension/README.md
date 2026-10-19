@@ -6,8 +6,12 @@ natively (`getBoundingClientRect` is a DOM call it owns); on
 `play`/`pause`/`ended` it hands the row to the **local native host**
 over `chrome.runtime.sendMessage` → `connectNative`, done. The host
 writes the geometry to PanelBoss's own doorway file; PanelBoss's eye
-reads it on its next beat. The toolbar icon is the demoted *test*
-gesture — measure RIGHT NOW on the clicked tab, one shot, no waiting.
+reads it on its next beat. Since v0.4.3 the toolbar icon opens a
+*popup readout*: the live row the eye sees (video box, dpr, paused,
+viewport, window origin - asked of the page's own content script
+through the same open `{op:"measure"}` API), plus the demoted *test*
+button - one click measures RIGHT NOW, no waiting, and the button
+echoes the host's word back in place of the old badge gesture.
 No timers, no pumps, no banner, no network, no eval, and — the big win
 of v0.4 — **no `scripting`, no `activeTab`, no `<all_urls>`**: the
 measure lives in the content script, so the manifest asks for
@@ -111,9 +115,10 @@ is `panelboss_host.py`, frozen to `panelboss-host.exe` by
    machine, and the store copy alike — and PanelBoss's in-app install
    button computes it for you anyway.
 
-The test button needs a video tab on the site list: one press asks the
-tab's own content script to measure, hands the row to the host, and the
-icon answers on itself with a word — `veil` (geometry written; the badge
+The readout's test button needs a video tab on the site list: one
+click asks the tab's own content script to measure, hands the row to
+the host, and answers in two places - the button echoes the word and
+the icon badges it - `veil` (geometry written; the badge
 clips past four chars, so the success word is short), `novid` (no
 `<video>`), `site` (the tab is off the site list, so no content script
 lives there; a present-but-stalled script answers `slow` instead, the

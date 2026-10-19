@@ -1,10 +1,10 @@
 """Package the companion extension for Chrome Web Store upload.
 
 The store zip is the LOADABLE files only: manifest.json, background.js,
-content.js, and icons/ once the art lands. The host/ tree is PanelBoss's
-own install payload (the button ships it), README.md is store listing
-prose - neither belongs in the crx. Files sit at the zip ROOT (the
-store rejects a wrapping folder).
+content.js, popup.html/js, and icons/ once the art lands. The host/ tree
+is PanelBoss's own install payload (the button ships it), README.md is
+store listing prose - neither belongs in the crx. Files sit at the zip
+ROOT (the store rejects a wrapping folder).
 
 ID STABILITY (the Oct 17 store lesson - the paperwork, not the plan,
 was wrong): the repo manifest carries "key" (the public half) so an
@@ -33,7 +33,8 @@ EXT = os.path.join(ROOT, "extension")
 OUT = os.path.join(ROOT, "dist")
 PRIVATE = os.path.join(EXT, "host", "companion_private_key_pkcs8.pem")
 
-LOADABLE = ["manifest.json", "background.js", "content.js"]
+LOADABLE = ["manifest.json", "background.js", "content.js",
+            "popup.html", "popup.js"]
 DESC_MAX = 132      # the store's own cap on the manifest description
 
 

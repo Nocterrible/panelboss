@@ -435,6 +435,42 @@ finally:
     nmhost.HOST_JSON = _real_host_json
     nmhost._cache.update(until=0.0, caps=None)
 
+# --- v0.4.3 popup readout pins: the toolbar icon opens a live readout,
+# the test gesture survives as a button INSIDE it. Pinned structure, not
+# style: the manifest points at a popup.html that exists, the packager
+# carries it (a popup the zip omits is a popup that does not exist in
+# the store), and background must dispatch the button's {op:"veil_now"}
+# BEFORE the sender.tab filter - a popup message has no tab and the old
+# guard would drop it in silence (the classic class: 200s with nothing
+# behind them).
+_EXT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                    "..", "extension")
+with open(os.path.join(_EXT, "manifest.json"), encoding="utf-8") as _m:
+    _man = _json.load(_m)
+check(_man.get("action", {}).get("default_popup") == "popup.html"
+      and os.path.isfile(os.path.join(_EXT, "popup.html"))
+      and os.path.isfile(os.path.join(_EXT, "popup.js")),
+      "the manifest points the icon at popup.html and both popup "
+      "files exist beside it")
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "package_extension.py"), encoding="utf-8") as _f:
+    _pkg = _f.read()
+check('"popup.html"' in _pkg and '"popup.js"' in _pkg,
+      "the packager's LOADABLE carries the popup (silent-drop class: "
+      "an unlisted file ships as absence)")
+with open(os.path.join(_EXT, "background.js"), encoding="utf-8") as _f:
+    _bg = _f.read()
+check(_bg.index('msg.op === "veil_now"')
+      < _bg.index('if (!msg || !sender || !sender.tab)'),
+      "the veil_now branch precedes the tab filter verbatim line - "
+      "comments may mention either, the ORDER of code is what's pinned")
+with open(os.path.join(_EXT, "content.js"), encoding="utf-8") as _f:
+    _ct = _f.read()
+check('op: "measure"' in _bg and '"measure"' in _ct,
+      "the popup asks the ONE question: measure is served by content, "
+      "relayed by background, shown by popup - there is no second "
+      "measure")
+
 print("COMPANION-PIN OK (%d)" % len(passed) if not fails
       else "COMPANION-PIN FAILED: %s" % fails)
 sys.exit(1 if fails else 0)

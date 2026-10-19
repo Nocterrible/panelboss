@@ -104,8 +104,10 @@ async function push(row, windowId, lane, badgeWord) {
   try {
     const ans = await sendNative({ op: "veil", payload }, 5000);
     if (badgeWord) say(ans && ans.ok ? "veil" : "nm");
+    return !!(ans && ans.ok);
   } catch (e) {
     if (badgeWord) say(e && e.badge ? e.badge : "nm");
+    return false;
   }
 }
 
@@ -113,7 +115,7 @@ async function veil(_tab) {
   const tab = _tab && typeof _tab.id === "number" ? _tab
             : (await chrome.tabs.query({ active: true,
                                          currentWindow: true }))[0];
-  if (!tab || typeof tab.id !== "number") return;
+  if (!tab || typeof tab.id !== "number") return "site";
 
   // the tab's own content script measures (no scripting, no activeTab:
   // the measure lives in content.js, which the site list already
@@ -125,17 +127,21 @@ async function veil(_tab) {
       chrome.tabs.sendMessage(tab.id, { op: "measure" }),
       5000, "slow");            // timeout is SLOWNESS, not absence -
   } catch (e) {                 // the gate's finding 3: one word for
-    say(e && e.badge ? e.badge : // both made a present-but-stalled
-        "site");                // content script read as off-list.
-    return;                     // The timeout pre-labels (badge) and
-  }                             // wins; true absence (no content
-                                // script to answer) carries no badge
-                                // and keeps the honest 'site'.
+    const w = e && e.badge ? e.badge : "site";   // both made a
+    say(w);                                     // present-but-stalled
+    return w;                                   // content script read
+  }                                             // as off-list. The
+                                                // timeout pre-labels
+                                                // (badge) and wins;
+                                                // true absence carries
+                                                // no badge and keeps
+                                                // the honest 'site'.
   if (!row) {
     say("novid");                  // no <video> element: nothing to
-    return;                        // veil, nothing to send
+    return "novid";                // veil, nothing to send
   }
-  await push(row, tab.windowId, "click", "veil");
+  const ok = await push(row, tab.windowId, "click", "veil");
+  return ok ? "veil" : "host";
 }
 
 chrome.action.onClicked.addListener(veil);
@@ -145,6 +151,12 @@ chrome.action.onClicked.addListener(veil);
 // and lane "auto" (the app's idle rail governs it) - a page push must
 // not nag, the veil lands or the grace retracts.
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // The popup's test button: a popup message has no sender.tab, so the
+  // veil_now branch must come BEFORE the tab filter below.
+  if (msg && msg.op === "veil_now") {
+    veil(null).then((word) => sendResponse({ word: word }));
+    return true;                 // async answer, keep the channel open
+  }
   if (!msg || !sender || !sender.tab) return;
   if (msg.op === "veil" && msg.payload) {
     push(msg.payload, sender.tab.windowId, "auto", null);

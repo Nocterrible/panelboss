@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<!-- PanelBoss Companion popup - the live readout (v0.4.3).
+     No new permissions, no network, no timers: it asks the page's
+     own content script the SAME {op:"measure"} question the test
+     button asks (the API is open and there is ONE measure), and it
+     draws the answer. The values shown are the raw content-space
+     row; the window bounds, lane and stamp are folded in by
+     background.js at push time - said on the face, not assumed. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 12px/1.45 "Segoe UI", sans-serif; background: #14161a;
+         color: #e8eaed; margin: 0; width: 260px; }
+  #pad { padding: 10px 12px 12px; }
+  h1   { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  #state { font-weight: 700; letter-spacing: .4px; }
+  #state.playing { color: #5ad469; }
+  #state.paused  { color: #e8b339; }
+  #state.none, #state.off  { color: #8a8f98; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  td { padding: 1px 0; vertical-align: top; }
+  td.k { color: #8a8f98; padding-right: 10px; white-space: nowrap; }
+  td.v { font-family: Consolas, monospace; }
+  button { margin-top: 10px; width: 100%; padding: 5px 0;
+           background: #2b2f36; color: #e8eaed; border: 1px solid #3a3f47;
+           border-radius: 6px; cursor: pointer; }
+  button:hover { background: #343941; }
+  #note { color: #8a8f98; margin-top: 8px; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div id="pad">
+    <h1>PanelBoss companion</h1>
+    <div id="state" class="none">asking the page...</div>
+    <table id="rows"></table>
+    <button id="veil" disabled>veil this video (test)</button>
+    <div id="note">values are the raw content-space row; the window
+      bounds and the push stamp are added when it travels to the
+      desktop app.</div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
