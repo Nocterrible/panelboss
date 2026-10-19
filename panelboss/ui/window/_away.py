@@ -89,7 +89,10 @@ TIP = {
             "readback keeps its sub-mode and says (unverified) on the "
             "row's status word; only a send refused after the retries "
             "degrades the row to blackout, and it says that too - "
-            "never silent.",
+            "never silent. When a painted spell engages, the pointer "
+            "parks at the bottom of the lowest monitor and stays "
+            "there when you return: nobody remembers where their "
+            "cursor was after leaving the room.",
     "row": "blackout = the painted lie; dim = HDR off + the shared "
            "brightness level; off = the panel's own power code (0xD6) "
            "through the brightness door, blackout as the confessed "
@@ -169,36 +172,6 @@ class _AwayMixin:
         self.away_lock_box.set(bool((self.cfg.get("away") or {})
                                     .get("lock")))
         self.away_lock_box.grid(row=0, column=2, sticky="e", padx=(10, 0))
-
-        # stage two (owner, Oct 17): painted dark at once, the panel's
-        # own power code after a timer. Gray-not-lie: _away_sync gates
-        # this row exactly like the lock box - a second stage on a
-        # spell that never paints is a slider that cannot speak.
-        drow = self._row(box, "deep sleep (disconnect) after",
-                         "stage two: after this many minutes away, the "
-                         "painted monitors get the monitor-power-off "
-                         "command - the GPU stops presenting and the "
-                         "panels rest for real; the wake on return "
-                         "takes a beat longer. blackout and dim rows "
-                         "only. The pointer is parked at the bottom of "
-                         "the lowest monitor when away engages, and "
-                         "stays there when you return.",
-                         hint_chars=42)
-        self.away_deep_value = ctk.CTkLabel(drow, font=self.skin.font(12),
-                                            **self.skin.text_style("sub"))
-        self.away_deep_value.grid(row=0, column=3, sticky="e", padx=(6, 0))
-        self.away_deep_slider = ctk.CTkSlider(
-            drow, from_=0, to=240, number_of_steps=48, width=150,
-            # 5-minute stops (owner UAT, Oct 17): 241 positions on a
-            # 150-px slider is target practice, and nobody wants a
-            # 17-minute nap. A hand-set odd value rides the label
-            # honestly; the knob snaps to its nearest stop.
-            command=self._away_deep_changed,
-            **self.skin.slider_style())
-        self.away_deep_slider.set(
-            (self.cfg.get("away") or {}).get("off_after_min", 0))
-        self.away_deep_slider.grid(row=0, column=2, sticky="e")
-        self._away_deep_say()
 
         # one row per live panel, the profile list's idiom - inside
         # THEIR OWN frame: the desk can change under a living window
@@ -414,24 +387,6 @@ class _AwayMixin:
                 r["value"].configure(text="%d%%" % level)
         self._save()
 
-    def _away_deep_changed(self, value):
-        # write-is-applying like every neighbour: the NEXT engage reads
-        # the count (a spell in flight keeps its stage), with one
-        # honest exception - the beat re-reads the table every tick,
-        # so a 0 written mid-spell disarms it right there
-        self.cfg.setdefault("away", {})["off_after_min"] = \
-            max(0, min(240, int(round(value))))
-        self._away_deep_say()
-        self._save()
-
-    def _away_deep_say(self):
-        mins = (self.cfg.get("away") or {}).get("off_after_min", 0)
-        try:
-            self.away_deep_value.configure(
-                text="never" if not mins else "%d min" % mins)
-        except Exception:
-            pass                          # rebuilt mid-toggle: fine
-
     # ------------------------------------------------------------------------------------------------------------------- preview --
     def _away_preview_clicked(self, short):
         job = self._away_jobs.pop(short, None)
@@ -551,11 +506,6 @@ class _AwayMixin:
                                          else "disabled")
         except Exception:
             pass                          # rebuilt mid-toggle: fine
-        for w in (self.away_deep_slider, self.away_deep_value):
-            try:
-                w.configure(state="normal" if dim else "disabled")
-            except Exception:
-                pass
         for short, r in self._away_rows.items():
             state = "normal" if dim else "disabled"
             gated = False

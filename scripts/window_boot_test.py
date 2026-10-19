@@ -132,7 +132,6 @@ def check():
             "the oled tab froze rows onto an empty desk"
         assert app.gaming_menus == {}, \
             "the gaming card grew rows out of nothing"
-        assert getattr(app, "away_deep_slider", None) is not None
         assert getattr(app, "away_refresh_btn", None) is not None
         # (ii) the desk returns: the fanout (what the 2 s fingerprint
         # poll calls; the test drives the seam directly because its
@@ -218,9 +217,8 @@ def check():
                     _t2.append(x)
                 _titles2(c)
         _titles2(app.pages["detection"].inner)
-        for want in ("deep sleep (disconnect) after",
-                     "lock when away starts",
-                     "never", "refresh monitors"):
+        for want in ("lock when away starts",
+                     "refresh monitors"):
             assert want in _t2, \
                 "the detection tab lost the away card's %r" % want
         # THE HELPER-INSTALL VERB (Oct 16): the doorway row's button

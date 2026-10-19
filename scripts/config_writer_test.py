@@ -85,14 +85,6 @@ assert back4["videodim"]["monitors"] == {
 assert back4["dimmer"]["levels"] == {"DELA283": 66}, \
     back4["dimmer"]["levels"]
 print("ok - per-monitor theater/dimmer rows round-trip (sub-sub-tables)")
-# the stage-two away timer (Oct 17 wave): a scalar in [away] must
-# round-trip THROUGH normalize_away - a value the writer drops or the
-# normalizer loses would silently return every spell to single-stage
-cfg.setdefault("away", {})["off_after_min"] = 7
-config.write_config(cfg, path)
-back5 = config.get_config(dir=dirpath, verbose=False)
-assert back5["away"]["off_after_min"] == 7, back5["away"]
-print("ok - away.off_after_min round-trips through normalize")
 print("ok - dict + backslash round-trip survives write/read")
 print("ok - camera mode tables + wear-guard keys round-trip")
 os.remove(path)
