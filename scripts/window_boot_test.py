@@ -160,6 +160,39 @@ def check():
                    encoding="utf-8").read()
         assert "_desk_check()" in _rt and "fingerprint" in _rt, \
             "the desk ear is not wired to the pump"
+        # THE CONSENT DOOR (owner correction, Oct 19): 'No' to the
+        # setup ask must let the user IN - the switch stays, the
+        # engine gets the word, no wizard toll. (The complaint:
+        # toggling detection off and on again "won't stay enabled
+        # unless you go through first time setup again".)
+        app.cfg["camera"]["enabled"] = False
+        app.consent_switch.select()              # the user's flip -
+        import panelboss.ui.window._detection as _det
+        _real_ask = _det.messagebox.askyesno
+        _det.messagebox.askyesno = lambda *a, **k: False   # the No
+        try:
+            app._consent_flipped()
+            _evt = None
+            try:
+                _evt = fm.events.get_nowait()
+            except queue.Empty:
+                pass
+            assert _evt == ("camera_enabled", True), \
+                "a No at the gate must ENABLE, not re-flip: %r" % (_evt,)
+            # the drain's answer (state owns the key; the resync is
+            # what lights the switch - simulate the applied truth):
+            app.cfg["camera"]["enabled"] = True
+            app._sync_consent_switch()
+            assert bool(app.consent_switch.get()), \
+                "the switch must STAY on through the refused wizard"
+            app._consent_flipped()               # switch already on,
+            try:                                 # cfg now on: pure
+                _evt = fm.events.get_nowait()    # echo, no post
+                raise AssertionError("the echo guard leaked: %r" % (_evt,))
+            except queue.Empty:
+                pass
+        finally:
+            _det.messagebox.askyesno = _real_ask
         # the handoff's winner side: the loser's stamp opens THIS
         # window through the tray's own manual seam and reads the ack
         poke = os.path.join(config.CONFIG_DIR, "poke")

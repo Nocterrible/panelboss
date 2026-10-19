@@ -63,10 +63,17 @@ class _DetectionMixin:
 
 
     def _consent_flipped(self):
-        """OFF is a door anyone may shut; ON is only real through the
-        setup screen (owner design: toggling ON ASKS, and a "No"
-        costs nothing but the flip back - an enabled app with a blind
-        picker is exactly the lockout the redesign blew away)."""
+        """OFF is a door anyone may shut; ON ASKS about the setup -
+        but the ask was a VETO until the owner's correction (Oct 19):
+        a 'No' must let the user IN, wizard optional, previous
+        settings intact (they always were - the off-drain provably
+        keeps the roster and the per-index tables, _events' own
+        comment). The old re-flip punished exactly the returning
+        toggle the protection was for: off-then-on refused to stay
+        on without the whole wizard. The blind-picker lockout the
+        design feared is a first-run ghost, and even a first-run No
+        now enters: the card's own rescan button is the standing
+        invitation the wizard was."""
         want = bool(self.consent_switch.get())
         if want == bool(self.cfg["camera"].get("enabled")):
             return                               # repaint echo, no-op
@@ -104,9 +111,12 @@ class _DetectionMixin:
                                                  # the resync paints
                                                  # this tab
             return
-        self._sync_consent_switch()              # "No": the switch
-                                                 # flips back, the
-                                                 # truth never moved
+        self.monitor.events.put(("camera_enabled", True))
+        self._sync_consent_switch()              # the owner's No: IN.
+        #                                   The switch stays, the
+        #                                   engine gets the word, the
+        #                                   wizard is an option not a
+        #                                   toll
 
 
     def _sync_consent_switch(self):
