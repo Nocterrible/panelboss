@@ -125,6 +125,27 @@ try:
           and st["row"]["rect"]["width"] == 800,
           "the one-shot feeds the eye's state fresh-wins: the dimmer's "
           "next tick frames it")
+    # the ghost branch (Oct 19 gate round): a click-test on an
+    # OFF-DESK picture must confess the ghost, not promise a frame
+    # the visible-picture law will veto on the tick
+    body["bounds"] = {"left": -32000, "top": -32000, "width": 1920,
+                      "height": 1080}
+    with open(_dark, "w", encoding="utf-8") as f:
+        f.write(json.dumps(body) + "\n")
+    words = companion.veil_now({"videodim": {"on": True,
+                                             "min_rect_px": 1}})
+    check("OFF the desk" in words and "next tick" not in words,
+          "a click on a suspended tab answers the ghost, not the "
+          "promise: %r" % (words,))
+    body["paused"] = True
+    with open(_dark, "w", encoding="utf-8") as f:
+        f.write(json.dumps(body) + "\n")
+    words = companion.veil_now({"videodim": {"on": True,
+                                             "min_rect_px": 1}})
+    check("waits for play" in words,
+          "a PAUSED ghost keeps the paused fork's precedence (the "
+          "eye's own order): %r" % (words,))
+    body["paused"] = False
     words = companion.veil_now({})
     check(words.startswith("saw the rect"),
           "a click with the eye unarmed says so, no state fed")
