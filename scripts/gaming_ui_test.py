@@ -439,6 +439,28 @@ def check():
                 assert bool(app.fullscreen_switch.get()) is flip
                 assert bool(app.power_switch.get()) is (not flip)
                 assert bool(app.gaming_switch.get()) is flip
+            # the gray law's OTHER arm, painted (test (e)'s UI half):
+            # detection off -> the segment loses its state (grayed,
+            # never hidden: the row's selection keeps its place); back
+            # on -> the state returns. The data half lives in hold_test
+            # 3c; this is the flag->segment mapping it promises.
+            _was_on = cfg["camera"]["enabled"]
+            cfg["camera"]["enabled"] = False
+            _sel_before = app.hold_display_choice.get()
+            app._sync_hold_rows()
+            for _seg in (app.hold_display_choice, app.hold_sleep_choice):
+                assert _seg._buttons_dict[
+                    "while present (camera)"]._state == "disabled", \
+                    "detection off left 'while present' enabled"
+                assert "while present (camera)" in _seg.cget("values"), \
+                    "the gray-out HID the choice (law: gray, never hide)"
+            assert app.hold_display_choice.get() == _sel_before, \
+                "graying moved the row's selection (kept-while-grayed law)"
+            cfg["camera"]["enabled"] = _was_on
+            app._sync_hold_rows()
+            assert app.hold_display_choice._buttons_dict[
+                "while present (camera)"]._state == "normal", \
+                "detection back on left the segment grayed"
             # the profiles tab's lever + the editor's checkbox: same
             # law, driven through their own rebuild seams
             for flip in (True, False):
