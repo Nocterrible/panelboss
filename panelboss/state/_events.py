@@ -110,8 +110,14 @@ class _EventsMixin:
                                              # (the lease owns next_poll
                                              # and _rearm until it expires)
                 self._rearm("on")
-            return
+            self._post_hold_rows()           # the desk is lit: re-dress
+            return                           # the power rows
         if self.state == "off" and value == 1.0:
+            self._post_hold_rows()           # a self-woken screen must
+            #                                not keep stale-on segments:
+            #                                the gray law re-reads live
+            #                                cfg on this existing wake
+            #                                path
             self._away_lift()                # a dim spell ends here too:
                                              # the desk lit WITHOUT our
                                              # wake seam (power button),
@@ -335,6 +341,11 @@ class _EventsMixin:
                          else "disabled (duty drained)")
                 if not self.camera_cfg["enabled"]:
                     self._release_camera()
+                    # the door shut IS no verdict: recorded right here,
+                    # so a 'present' row lets go on the next tick (0.2 s)
+                    # and never waits out the old verdict to the next
+                    # poll - the owner's release-the-moment law
+                    self._note_verdict(None)
                 if self.ui_events is not None:
                     # the resync the comment promised (gate finding
                     # 3): the panes re-derive against the moved key,

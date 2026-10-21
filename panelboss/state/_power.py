@@ -5,6 +5,7 @@ lines 161-178 and 296-429."""
 import logging
 import math
 
+from .. import config
 from .. import display
 
 log = logging.getLogger("state")
@@ -12,24 +13,60 @@ log = logging.getLogger("state")
 
 class _PowerMixin:
 
+    def _post_hold_rows(self):
+        """Every transition to a LIT desk re-asks the window to
+        re-derive the power-card rows (owner Oct 21: a self-woken
+        screen with detection off must show 'while present' grayed,
+        never stale-on - and the on-phase re-adopts the hold against
+        the fresh verdict). The post rides the existing wake path; a
+        miss costs one tick of belt (the reveal repaints anyway)."""
+        if getattr(self, "ui_events", None) is not None:
+            try:
+                self.ui_events.put(("power_rows", None))
+            except Exception:
+                log.debug("power_rows post lost", exc_info=True)
+
+    def _hold_on(self, key):
+        """The third state, read at the hold's own cadence: the row's
+        value in its canonical word decides. 'present' holds ONLY
+        while the state machine's camera verdict says a person is
+        here - absent and no-verdict (dead camera, no frame, consent
+        off, detection tab off) both hand the timer back to the plan
+        the moment they land: presence unknown == absent, the owner's
+        explicit ruling, the fail-into-Windows branch. Today's
+        booleans stay valid and mean on/off (hold_state)."""
+        word = config.hold_state(self.power_cfg.get(key))
+        if word == "present":
+            return self._camera_present is True
+        return word == "on"
+
     def _apply_hold(self, now):
         """Windows' execution-state policy, restated every tick:
         hold_display suppresses the plan's display timeout, hold_sleep
-        the sleep timeout - either may live alone. The display bit
-        always lets go while dark (holding a display is claiming the
-        screens are wanted); the system bit survives the dark ONLY if
-        the user kept hold_sleep on - it is what keeps the watcher
-        alive to see the return, and without it the box sleeps and
-        the app re-arms on the power-button press (unknown-state
-        boot). Paused or snoozing releases everything: the app then
-        behaves exactly like an app that is not running."""
+        the sleep timeout - either may live alone, and each row answers
+        'off', 'on' or 'present' (the third state: held only while the
+        camera sees you, _hold_on). The display bit always lets go
+        while dark (holding a display is claiming the screens are
+        wanted); the system bit survives the dark ONLY if the row's
+        answer says so - it is what keeps the watcher alive to see the
+        return, and without it the box sleeps and the app re-arms on
+        the power-button press (unknown-state boot). Paused or snoozing
+        releases everything: the app then behaves exactly like an app
+        that is not running. The transition log line is the one honest
+        dump the burn-in desk reads (diff-guarded: it speaks only when
+        the answer moves)."""
         if self.paused or now < self.snooze_until:
-            display.set_hold(False, False)
+            bits = (False, False)
         elif self.state == "off":
-            display.set_hold(False, bool(self.power_cfg.get("hold_sleep")))
+            bits = (False, self._hold_on("hold_sleep"))
         else:
-            display.set_hold(bool(self.power_cfg.get("hold_display")),
-                             bool(self.power_cfg.get("hold_sleep")))
+            bits = (self._hold_on("hold_display"),
+                    self._hold_on("hold_sleep"))
+        if bits != self._hold_bits:
+            log.info("hold restated: display=%s sleep=%s (camera_present"
+                     "=%r)", bits[0], bits[1], self._camera_present)
+            self._hold_bits = bits
+        display.set_hold(bits[0], bits[1])
 
     def _force_on(self, now, reason):
         """SC_MONITORPOWER ON when the truth was unknown: on lit screens
@@ -57,6 +94,8 @@ class _PowerMixin:
         self.hits = 0
         self.next_poll = now + self.timers["present_recheck_sec"]
         self._restore_layout()
+        self._post_hold_rows()               # a lit desk re-dresses the
+        #                                    card: gray law from live cfg
 
     def _wake(self, now, score):
         if score is None:
@@ -90,6 +129,7 @@ class _PowerMixin:
         self.hits = 0
         self.next_poll = now + self.on_poll()
         self._restore_layout()
+        self._post_hold_rows()               # the wake re-dresses the card
 
     def _hdr_back(self):
         """HDR the user had at the leaving moment comes home with
@@ -112,9 +152,9 @@ class _PowerMixin:
                                                # still intact (see wm)
         # the display hold lets go BEFORE the broadcast (a held display is
         # a claim the screens are wanted); the sleep hold survives the dark
-        # only if the user kept it - it keeps the watcher alive to catch
-        # the return
-        display.set_hold(False, bool(self.power_cfg.get("hold_sleep")))
+        # only if the row's answer says so - it keeps the watcher alive to
+        # catch the return ('present' rows read the verdict, _hold_on)
+        display.set_hold(False, self._hold_on("hold_sleep"))
         # per-index stream-through: an eye whose off table says
         # always_on keeps its stream THROUGH the standby transition,
         # never released. Reopening inside the transition is the race

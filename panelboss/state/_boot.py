@@ -72,6 +72,16 @@ class _BootMixin:
         self.quit = False
         self.camera = None                    # opened lazily, per mode
         self.last_present = 0.0
+        self._camera_present = None           # the camera's LAST verdict:
+        #                                   True seen, False absent, None
+        #                                   = no verdict (consent off,
+        #                                   dead eye, no frame). The one
+        #                                   presence opinion the hold's
+        #                                   'present' state reads; _cams
+        #                                   records it at the poll's one
+        #                                   gate (no second camera here)
+        self._hold_bits = None                # diff-guard for the hold
+        #                                   transition's log line
         self.preview_until = 0.0              # debug window lease
         self.previewing = False
         self.preview_cool = 0.0               # warm-wall deadline after a

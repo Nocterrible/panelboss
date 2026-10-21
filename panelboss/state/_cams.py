@@ -16,10 +16,54 @@ import logging
 
 log = logging.getLogger("state")
 
+# the dark-eye notice (owner Oct 21, amendment included): the camera
+# going dark is news on its own - UNCONDITIONAL, once per dark episode,
+# re-armed by a recovery to present - because any user with detection
+# on deserves to learn their eye went quiet. Phrased true for a desk
+# with no 'present' rows too: with no verdict, presence-based behavior
+# is exactly what paused.
+CAMERA_DARK_MSG = ("the camera stopped seeing - presence-based behavior "
+                   "is paused until it sees a person again")
+
 
 class _CamsMixin:
 
+    @property
+    def camera_present(self):
+        """READ-ONLY accessor (the packet's one opinion): the camera's
+        last verdict - True seen, False absent, None = no verdict
+        (consent off, dead eye, blinded eye, no frame). The hold
+        policy's 'present' rows read this; 'presence unknown ==
+        absent' is applied at the decision, not by a second vote."""
+        return self._camera_present
+
+    def _note_verdict(self, present):
+        """The single record point for every camera verdict: _poll
+        routes here, and the consent-off drain calls it directly (the
+        instant the door shuts there is no verdict, and a 'present'
+        row must let go THIS tick, not at the next poll). The
+        seen-to-dark edge (a verdict that WAS present going
+        no-verdict) files the balloon once; the dark->seen recovery
+        re-arms the edge; absent (False) is the eye still talking,
+        not an eye gone quiet - no balloon for a real verdict."""
+        was = self._camera_present
+        self._camera_present = present
+        if was is True and present is None and self.notifier is not None:
+            try:
+                self.notifier(CAMERA_DARK_MSG)
+            except Exception:
+                pass                             # the notice is a courtesy
+        return present
+
     def _poll(self):
+        """The duty vote wrapped at the one gate: every verdict the
+        state machine holds is recorded here on its way out, so the
+        hold's third state and the dark-eye notice read the SAME
+        present the phase machine consumes - never a second opinion."""
+        present, score = self._poll_camera()
+        return self._note_verdict(present), score
+
+    def _poll_camera(self):
         if not self.camera_cfg.get("enabled"):
             # the consent gate (redesign law 1): NO camera opens
             # until the owner says so. The gate sits at the poll -

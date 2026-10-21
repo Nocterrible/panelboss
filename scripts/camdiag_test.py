@@ -431,8 +431,11 @@ with open(os.path.join(_lawb, "config.toml"), "w", encoding="utf8") as fh:
              '[recovery]\nwake_policy = "re_off"\n\n'
              '[gaming]\nenabled = true\n')
 _b = config.get_config(dir=_lawb, verbose=False)
-for _k in ("hold_display", "hold_sleep", "restore_windows",
-           "assistant_task"):
+for _k in ("hold_display", "hold_sleep"):
+    assert _b["power"][_k] == "off", (_k, _b["power"])  # old trues reset
+    #                                   (tri-state words since Oct 21: the
+    #                                   reset lands stock, stock is 'off')
+for _k in ("restore_windows", "assistant_task"):
     assert _b["power"][_k] is False, (_k, _b["power"])   # old trues reset
 assert _b["guards"]["fullscreen"] is False, _b["guards"]
 assert _b["recovery"]["wake_policy"] == "leave_on", _b["recovery"]
@@ -449,7 +452,10 @@ with open(os.path.join(_lawb, "config.toml"), "w", encoding="utf8") as fh:
              'enabled = false\n\n[power]\nhold_display = true\n\n'
              '[recovery]\nwake_policy = "re_off"\n')
 _st = config.get_config(dir=_lawb, verbose=False)
-assert _st["power"]["hold_display"] is True, "the stamp did not disarm"
+assert _st["power"]["hold_display"] == "on", "the stamp did not disarm"
+#                                     (the file's own true survives, in
+#                                     the tri-state word it reads at
+#                                     load - Oct 21 wave)
 assert _st["recovery"]["wake_policy"] == "re_off"
 print("consent migration OK (absent+virgin false, set-up upgrades"
       " true, explicit either way always wins; the default-off law"

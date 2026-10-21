@@ -31,6 +31,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
+from ... import config
 from .. import theme
 from ..shield import shield_pil
 from ._constants import TIPS
@@ -56,12 +57,10 @@ class _PowerMixin:
                                                  **self.skin.switch_style())
         self.hold_display_switch.grid(row=0, column=1, sticky="e")
         # knob-from-truth, BOTH branches (the _sync_consent_switch /
-        # dd42d43 idiom, now the whole house's law): painting only
-        # select() on the True case lets the false case ride the
-        # widget's build default instead of the config - a fresh CTk
-        # is off by accident, and the owner's afternoon of catching
-        # widget-blind paints proved accidents do not survive reuse.
-        if self.cfg["power"].get("hold_display"):
+        # dd42d43 idiom, now the whole house's law): a truthy string
+        # is not truth - the tri-state words read hold_state, and the
+        # row paints ON only for 'on' (or today's boolean).
+        if config.hold_state(self.cfg["power"].get("hold_display")) == "on":
             self.hold_display_switch.select()
         else:
             self.hold_display_switch.deselect()
@@ -71,7 +70,7 @@ class _PowerMixin:
                                                command=self._hold_changed,
                                                **self.skin.switch_style())
         self.hold_sleep_switch.grid(row=0, column=1, sticky="e")
-        if self.cfg["power"].get("hold_sleep"):
+        if config.hold_state(self.cfg["power"].get("hold_sleep")) == "on":
             self.hold_sleep_switch.select()
         else:
             self.hold_sleep_switch.deselect()
@@ -419,10 +418,12 @@ class _PowerMixin:
         where the flag stands (a lying ON self-heals on the truth
         beat), so the flag remains the honest state between beats."""
         p = self.cfg["power"]
-        self.hold_display_switch.select() if p.get("hold_display") \
-            else self.hold_display_switch.deselect()
-        self.hold_sleep_switch.select() if p.get("hold_sleep") \
-            else self.hold_sleep_switch.deselect()
+        (self.hold_display_switch.select()
+         if config.hold_state(p.get("hold_display")) == "on"
+         else self.hold_display_switch.deselect())
+        (self.hold_sleep_switch.select()
+         if config.hold_state(p.get("hold_sleep")) == "on"
+         else self.hold_sleep_switch.deselect())
         self.restore_switch.select() if p.get("restore_windows") \
             else self.restore_switch.deselect()
         # hdr_away_switch is gone with its row (dim-mode wave): the

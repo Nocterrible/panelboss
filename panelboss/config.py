@@ -189,13 +189,17 @@ DEFAULTS = {
         # hold pair renders ON in the screenshot because stock says so
         # - stock is dark now; a fresh box lets Windows own its timers
         # until the owner touches the switches.
-        "hold_display": False,   # while the app watches a lit desk it holds
-                                 # the plan's display timeout off - a still
-                                 # person reading a page is never timed out
-        "hold_sleep": False,     # ...and the sleep timeout. The dark watcher
-                                 # wants it once it runs at all - but the
-                                 # watcher is consent-gated (camera.enabled):
-                                 # a box that never opted in sleeps when its
+        "hold_display": "off",   # 'off' | 'on' | 'present' (the third state,
+                                 # Oct 21): while the app watches a lit desk
+                                 # it holds the plan's display timeout off -
+                                 # a still person reading a page is never
+                                 # timed out; 'present' holds ONLY while the
+                                 # camera's verdict says a person is here
+        "hold_sleep": "off",     # ...and the sleep timeout, same three
+                                 # words. The dark watcher wants it once it
+                                 # runs at all - but the watcher is
+                                 # consent-gated (camera.enabled): a box
+                                 # that never opted in sleeps when its
                                  # plan says so
         "skip_camera_when_blocked": False,  # if another app already holds the
                                             # display awake, the camera does
@@ -583,6 +587,11 @@ NORMALIZE_RULES = (
     # must track DEVICE_KEYS (ui/window/_constants.py:29): a UI-added
     # backend (directml someday) the set lacks reverts to auto at boot
     ("inference", "device", "oneof", ("auto", "cuda", "cpu")),
+    # the tri-state hold pair (the 'while present' wave, Oct 21): see
+    # the 'hold' arm of _coerce - the booleans of the pre-wave files
+    # read on/off and stay valid, junk fails to on
+    ("power", "hold_display", "hold", ("on", "off", "present")),
+    ("power", "hold_sleep", "hold", ("on", "off", "present")),
     ("inference", "device_id", "int", None),
     ("inference", "confidence", "float", (0.05, 0.95)),
     ("detection", "ratio", "float", (0.0, 1.0)),
@@ -618,6 +627,21 @@ def _coerce(value, rule, stock):
         if value in bound:
             return True, value, ""
         return False, bound[0], "expected one of %s" % "/".join(bound)
+    if kind == "hold":
+        # the tri-state hold rows ('while present', owner Oct 21): the
+        # booleans of the pre-wave files STAY VALID and mean on/off (the
+        # owner's live rows survive the upgrade behavior-identical); the
+        # words are the file's own enum texture (wake_policy taught it);
+        # junk fails to 'on' - the one hold answer that cannot lose a
+        # watching desk to a plan timeout - and the warning names it.
+        if value is True:
+            return True, "on", ""
+        if value is False:
+            return True, "off", ""
+        v = value.strip().lower() if isinstance(value, str) else value
+        if v in bound:
+            return True, v, ""
+        return False, bound[0], "expected on/off/present"
     if kind == "int":
         if value is None:
             return True, None, ""       # None is legal: it means unset
@@ -738,12 +762,41 @@ def normalize_sections(merged):
             # warn only when the FILE brought a value that differs from
             # stock: a stock value that trips its own bound (the poll-ms
             # 200 default vs the 250 floor) would otherwise confess on
-            # every clean load
+            # every clean load. The line names the COERCED value, not
+            # the stock: for every rule but 'hold' the failure fallback
+            # IS the stock, but the hold rows fail to 'on' - and an
+            # honest warning says what landed (the section's honest word
+            # is the point of the line).
             if section_cfg.get(key) != stock:
                 log.warning("config [%s].%s = %r is unusable (%s); "
                             "using %r", section, key, section_cfg.get(key),
-                            reason, stock)
+                            reason, coerced)
         section_cfg[key] = coerced
+
+
+def hold_state(value):
+    """One hold row's value in its canonical word ('the migration table'
+    as a function): the pre-wave booleans read on/off and stay valid,
+    the tri-state words ride through (case/edge tolerant), anything
+    else - a value that never saw the load boundary, a live dict a
+    harness scribbled on - is off's neighbor. The state machine and the
+    UI both read THIS, so the table lives once."""
+    if value is True:
+        return "on"
+    if value is False:
+        return "off"
+    v = value.strip().lower() if isinstance(value, str) else value
+    return v if v in ("on", "off", "present") else "off"
+
+
+def hold_present_available(camera_cfg):
+    """THE GRAY-OUT LAW AS DATA (owner Oct 21): the 'while present'
+    choice is offered only while camera detection stands consented and
+    on - [camera].enabled is the consent door's key, and never
+    consented reads false, the same key the detection tab's switch
+    owns. The UI grays the segment from this (gray, never hidden);
+    the suite tests the flag without a widget."""
+    return bool((camera_cfg or {}).get("enabled"))
 
 
 def normalize_index(value):

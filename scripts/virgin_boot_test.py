@@ -83,11 +83,11 @@ _rec.records.clear()
 cfg = config.get_config(dir=VIRGIN, verbose=False)
 check(cfg["camera"]["enabled"] is False,
       "virgin config: camera.enabled lands False")
-check(cfg["power"]["hold_display"] is False
-      and cfg["power"]["hold_sleep"] is False
-      and cfg["power"]["restore_windows"] is False
-      and cfg["power"]["assistant_task"] is False
-      and cfg["guards"]["fullscreen"] is False
+check(cfg["power"]["hold_display"] == "off"
+      and cfg["power"]["hold_sleep"] == "off"      # tri-state words
+      and cfg["power"]["restore_windows"] is False # (Oct 21 wave); the
+      and cfg["power"]["assistant_task"] is False  # rest of the pair is
+      and cfg["guards"]["fullscreen"] is False     # still bool
       and cfg["recovery"]["wake_policy"] == "leave_on",
       "virgin config: the power stock is DARK (wave B, the owner's "
       "screenshot law: every feature off until its switch is touched)")
@@ -141,9 +141,9 @@ check(cfg2["gaming"]["enabled"] is False
       and cfg2["restore"]["enabled"] is False,
       "trap: the default-off law strips the stranger's POWER behaviors "
       "(amendment 2: an upgrade keeps names and the roster, not modes)")
-check(cfg2["power"]["hold_display"] is False
-      and cfg2["power"]["hold_sleep"] is False
-      and cfg2["power"]["restore_windows"] is False
+check(cfg2["power"]["hold_display"] == "off"
+      and cfg2["power"]["hold_sleep"] == "off"      # tri-state words
+      and cfg2["power"]["restore_windows"] is False # (Oct 21 wave)
       and cfg2["power"]["assistant_task"] is False
       and cfg2["guards"]["fullscreen"] is False
       and cfg2["recovery"]["wake_policy"] == "leave_on",

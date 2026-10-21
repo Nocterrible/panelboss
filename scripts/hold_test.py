@@ -107,8 +107,10 @@ with open(mpath, "w", encoding="utf8") as fh:
     fh.write("[meta]\ndefaults = 2\n\n[power]\nhold_timers = false\n")
 c = config.get_config(dir=mdir, verbose=False)
 assert "hold_timers" not in c["power"], c["power"]
-assert c["power"]["hold_display"] is False
-assert c["power"]["hold_sleep"] is False
+# the tri-state boundary (Oct 21): the seeded booleans read their
+# canonical words at load - hold_state's table, behavior identical
+assert c["power"]["hold_display"] == "off"
+assert c["power"]["hold_sleep"] == "off"
 with open(mpath, "w", encoding="utf8") as fh:
     fh.write("[meta]\ndefaults = 2\n\n"     # stamped: this fixture tests
                                              # the fossil's seeding, not the
@@ -118,8 +120,8 @@ with open(mpath, "w", encoding="utf8") as fh:
                                              # argue in the middle of a test)
              "[power]\nhold_timers = false\nhold_display = true\n")
 c = config.get_config(dir=mdir, verbose=False)
-assert c["power"]["hold_display"] is True, "the file's own answer wins"
-assert c["power"]["hold_sleep"] is False
+assert c["power"]["hold_display"] == "on", "the file's own answer wins"
+assert c["power"]["hold_sleep"] == "off"
 print("migration OK (legacy seeds both, file wins, fossil dropped)")
 
 # 4) the self-filter, against the shapes powercfg REALLY prints
