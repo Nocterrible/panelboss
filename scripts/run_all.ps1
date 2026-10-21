@@ -64,7 +64,7 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
     'tray_icon_test.py',              # the tray ART (owner law Oct 19):
                                       # the holes are the status; pure
                                       # PIL, app-up compatible
-    'uninstall_test.py',              # the MSI cleanup verb (Oct 21):
+    'uninstall_test.py'               # the MSI cleanup verb (Oct 21):
                                       # CCD-first ordering, ours-only
                                       # task, honest no-op, exit 0 -
                                       # all fakes, app-up compatible

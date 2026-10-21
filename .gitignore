@@ -31,3 +31,6 @@ extension/host/companion_private_key_pkcs8.pem
 
 # suite runner logs
 scripts/suite_*.log
+
+# pyinstaller spec (build_msi/build_release write it at the repo root)
+PanelBoss.spec

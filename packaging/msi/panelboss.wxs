@@ -40,7 +40,7 @@
     <Property Id="ARPPRODUCTICON" Value="panelboss.ico"/>
     <Property Id="ARPCOMMENTS"
               Value="Per-user install. Uninstall cleans the power task, the Run key, and every display this app left disconnected."/>
-    <WixVariable Id="WixUILicenseRtf" Value="license.rtf"/>
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicRtf)"/>
     <UIRef Id="WixUI_Minimal"/>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
@@ -68,16 +68,21 @@
                      Name="startmenu" Type="integer" Value="1" KeyPath="yes"/>
     </Component>
 
-    <!-- law 3's uninstall half. deferred + Impersonate=yes: the act
-         runs in the USER context (HKCU, the user's own task, the
-         user's own LOCALAPPDATA) - an elevated CA would look at the
-         wrong hive. Sequenced after InstallInitialize, so before
+    <!-- law 3's uninstall half. THE DIRECTORY ATTRIBUTE IS THE POINT:
+         a deferred CA made of ExeCommand alone never sees [INSTALLDIR]
+         (properties do not expand in the deferred context - the
+         classic trap); a Directory-sourced CA resolves its path from
+         the execute script at deferred time, so the bare relative
+         command just runs. deferred + Impersonate=yes: the act runs
+         in the USER context (HKCU, the user's own task, the user's
+         own LOCALAPPDATA) - an elevated CA would look at the wrong
+         hive. Sequenced after InstallInitialize, so before
          RemoveFiles: the exe is still on disk to speak its cleanup.
          Return=ignore is the second belt (the verb already exits 0):
          a locked exe or an AE-mandated reboot may not fail the
          uninstall; the cleanup re-runs fine after the reboot. -->
-    <CustomAction Id="PanelBossCleanup"
-                  ExeCommand="&quot;[INSTALLDIR]PanelBoss.exe&quot; cleanup"
+    <CustomAction Id="PanelBossCleanup" Directory="INSTALLDIR"
+                  ExeCommand="PanelBoss.exe cleanup"
                   Execute="deferred" Impersonate="yes" Return="ignore"/>
     <InstallExecuteSequence>
       <Custom Action="PanelBossCleanup" After="InstallInitialize">REMOVE</Custom>

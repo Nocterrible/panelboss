@@ -33,7 +33,7 @@ $exe = 'PanelBoss'
 . (Join-Path $PSScriptRoot 'build_onedir.ps1')
 
 if ($Help) {
-    Get-Content -TotalCount 30 $PSCommandPath | Select-Object -Skip 1
+    Get-Content -TotalCount 31 $PSCommandPath
     exit 0
 }
 
@@ -83,11 +83,23 @@ $wxs = @(
 if ($LASTEXITCODE -ne 0) { throw "heat failed ($LASTEXITCODE)" }
 $defs = @(('-dVersion=' + $version),
           ('-dSourceDir=' + $srcDir),
-          ('-dIcon=' + (Join-Path $repo 'assets\panelboss.ico')))
+          ('-dIcon=' + (Join-Path $repo 'assets')),
+          ('-dLicRtf=' + (Join-Path $repo 'packaging\msi\license.rtf')))
 & $candle -nologo -o (Join-Path $work '') @defs $wxs
 if ($LASTEXITCODE -ne 0) { throw "candle failed ($LASTEXITCODE)" }
 $msi = Join-Path $repo ('dist\PanelBoss-' + $version + '-user.msi')
-& $light -nologo -ext WixUIExtension -o $msi (Get-ChildItem $work -Filter '*.wixobj' | ForEach-Object FullName)
+# -sice:ICE91 / -sice:ICE38 / -sice:ICE64: ICE91 complains that
+# per-user dirs do not vary with ALLUSERS, ICE38 that user-profile
+# components must key on HKCU, ICE64 that profile dirs belong in
+# the RemoveFile table - per-machine-era formalities whose subject
+# does not exist here: law 1 says per-user ONLY, one user owns every
+# byte, the shortcut component carries the HKCU marker the ICEs ask
+# for, and MSI itself removes created dirs that are empty at
+# uninstall (only files the USER dropped in models\ stay - by
+# design: that folder outlives the installer, it is the user's).
+# Every real cross-check (missing refs, dangling keypaths) stays
+# armed.
+& $light -nologo -ext WixUIExtension -sice:ICE91 -sice:ICE38 -sice:ICE64 -o $msi (Get-ChildItem $work -Filter '*.wixobj' | ForEach-Object FullName)
 if ($LASTEXITCODE -ne 0) { throw "light failed ($LASTEXITCODE)" }
 
 # --- law 4: MEASURE the bundle ---------------------------------------

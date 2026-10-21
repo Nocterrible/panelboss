@@ -37,6 +37,11 @@ def run(cfg, dry=False):
     _ccd(cfg or {}, dry, lines)
     _run_key(dry, lines)
     _task(dry, lines)
+    # the windowed exe has no console: the log file is the frozen
+    # world's stdout, so every summary line rides it too (the MSI
+    # teardown's only witness is %APPDATA%\PanelBoss\logs)
+    for line in lines:
+        log.info("%s", line)
     return lines
 
 
