@@ -229,9 +229,10 @@ class _AwayMixin:
         phase machine: the off-phase polls and _wake lifts without
         ever consulting an input event - and GetLastInputInfo counts
         the locked session as idle, README's own note, so the absence
-        logic stays honest the whole spell), and from the watcher's
-        session-unlock ear, which posts the same away_lift the overlay
-        click rides."""
+        logic stays honest the whole spell; on a desk that runs
+        lock=false this whole branch is inert, which is today's truth
+        here), and from the watcher's session-unlock ear, which posts
+        the same away_lift the overlay click rides."""
         if not lock_on or not any(_row_went_dark(s)
                                   for s in self.away_status.values()):
             return

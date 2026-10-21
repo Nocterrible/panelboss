@@ -7,6 +7,7 @@ import queue
 import time
 
 from .. import display
+from .. import inputtruth
 from .. import dimmer
 from .. import hider
 from .. import jog
@@ -226,6 +227,12 @@ class _BootMixin:
             self.next_poll = now
         idle = display.get_idle_time()     # the input gate always comes first
         if self.state == "off":
-            self._off_phase(now, idle)
+            # the pump's wake clock, exemption included (Oct 20):
+            # ONLY the off-phase wake hears the synthetic knock -
+            # the on-phase rails keep the stock number (and the
+            # pump's own verdict) until the away adjudication says
+            # otherwise; inputtruth returns the handed-in stock
+            # value verbatim when the pump is off or deaf
+            self._off_phase(now, inputtruth.wake_idle_seconds(idle))
         else:
             self._on_phase(now, idle)

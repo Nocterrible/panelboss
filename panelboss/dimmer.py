@@ -1434,16 +1434,39 @@ def _monitors():
     return wm.monitors()
 
 
+_PUMP_ON = None      # [dimmer].input_pump, latched on the first beat
+#                      # (the section's restart-required law: the
+#                      # choice of clock lives for the process - no
+#                      # mid-run swap can leave one ear half-open)
+
+
 def _idle_secs():
-    """The idle LAW's clock, production half of the Veils seam.
-    STOCK (display.idle_seconds -> GetLastInputInfo) by the Oct-20
-    stop-order: the pump question (does this desk's user32 clock
-    ever age - zero-travel KVM chatter says it may not, the
-    adjudication owns that verdict) is upstream, not here. When a
-    clock-truth wave lands, THIS one line is the swap site - the
-    plain dimmer's idle_ok (tick), the theater's stillness conjunct
-    (_live_rect) and every [dimmer]/[videodim].idle_sec rail in the
-    app follow it without learning anything new."""
+    """The idle LAW's clock, production half of the Veils seam, and
+    THE one conditional (Oct-20 input-truth wave):
+    [dimmer].input_pump true (the owner's default - his override of
+    the default-off law rides the fail-open: worst case equals the
+    old behavior) routes through inputtruth - raw ears (no hook
+    chain anywhere: the repo's own ~31 ms dispatch-quantum law,
+    display.py:16-23), cumulative >=3 px travel, real keydowns,
+    injection dropped on the kernel's null-hDevice marker, boot
+    INFINITE idle, and a deaf pump fail-opens to the stock clock
+    with ONE dated word (receipts of the class that forced this:
+    Temp\\opencode\\unplug.log / direct.log / nohid.log / nohid2.log
+    - a macropad's stuck firmware re-stamping GetLastInputInfo with
+    zero-travel reports for a full working day; the replug closed
+    the case, the class outlives the incident). false is the stock
+    clock VERBATIM: the seam, the conjunct, and every
+    [dimmer]/[videodim].idle_sec rail keep behaving exactly as the
+    whole pre-pump life of the app. THIS one function stays the
+    only swap site: the plain dimmer's idle_ok (tick), the
+    theater's stillness conjunct (_live_rect) and every idle rail
+    in the app follow it without learning anything new. The
+    OFF-PHASE WAKE has its own door - state/_boot.py reads
+    inputtruth.wake_idle_seconds, the exemption living there and
+    only there."""
+    if _PUMP_ON:
+        from . import inputtruth
+        return inputtruth.idle_seconds()
     from . import display
     return display.idle_seconds()
 
@@ -1605,10 +1628,18 @@ def tick(cfg, now):
     actually born - an armed-off [dimmer] costs one dict and a
     return. The hotkey press lands here as a flag: ONE press
     pauses, one resumes."""
-    global _veils, _hot_flag
+    global _veils, _hot_flag, _PUMP_ON
     if _hot_flag:
         _hot_flag = False
         set_paused(not _PAUSED)
+    if _PUMP_ON is None:                 # latch the clock choice on
+        _PUMP_ON = bool((cfg.get("dimmer") or {}).get(
+            "input_pump", True))         # the FIRST beat, keep it for
+        #                                 # the process (the section's
+        #                                 # restart law - and True is
+        #                                 # the twin of the config
+        #                                 # default, this module
+        #                                 # importing config lazily)
     if _veils is None:
         _veils = Veils(_census, _sounding, _idle_secs, _paint, _unveil,
                        video=_video_rect)

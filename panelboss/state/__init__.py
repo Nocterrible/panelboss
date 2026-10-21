@@ -1,7 +1,10 @@
 """Presence state machine, as a package.
 
 one loop, every event source drains into it:
-- keyboard idle (GetLastInputInfo): the gate; we never poll the camera
+- keyboard idle (GetLastInputInfo; with [dimmer].input_pump on the
+  pump clock is the gate's truth source, and only the OFF-PHASE WAKE
+  also hears injection - inputtruth's docstring carries that rule):
+  the gate; we never poll the camera
   while the user is typing
 - camera frames: presence evidence, debounced so a single flaky frame
   never toggles the power
