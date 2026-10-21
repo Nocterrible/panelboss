@@ -14,7 +14,9 @@ proving a port.
 The row is the OPEN API's veil payload (extension/README.md): rect (the
 first <video>'s viewport box, CSS px), dpr, paused, scroll, view, and
 the window's outer bounds the extension measured itself. The feature is
-OFF by default: off means no file reads, nothing. Fail-open is the root
+OFF by default: OFF is the FRAME's root law - no theater ring - but
+since Oct 20 the eye still reads the doorway every beat (the player
+exemption does not wait for the switch). Fail-open is the root
 law: a missing file, a junk row, a stale row all read as "no rect this
 tick" and the dimmer's ramp retracts the veil (a vanished rect is a
 stopped video, not an event worth a dark veil).
@@ -216,12 +218,13 @@ _STATE = {}
 
 def tick(cfg, now):
     """The _boot hook (AFTER dimmer.tick): refresh the view of the
-    companion. Feature OFF is a return at the root: no file read. The
-    doorway file rides every tick (one stat); a stale row ages out in
-    video_rect's grace."""
-    vd = cfg.get("videodim") or {}
-    if not vd.get("on"):
-        return
+    companion. THE EYE ALWAYS LOOKS (owner, Oct 20): the doorway is
+    read every tick even when [videodim] is off - the extension
+    pushes regardless of the app's switch, and the PLAYER EXEMPTION
+    (a window playing a reported video is never plain-veiled, with
+    or without theater mode) needs a fresh view to key on. One stat
+    and one short line of json per beat is the whole cost. A stale
+    row ages out in the door's grace; nothing here grows a timer."""
     row = _read(now, time.time())
     if row is None:
         return
@@ -233,33 +236,20 @@ def tick(cfg, now):
         st["row"], st["ts"] = row, row["ts"]
 
 
-def video_rect(cfg, now=None):
-    """The dimmer's door: the live PHYSICAL rect (x, y, w, h) of a
-    PLAYING video - not paused, big enough for min_rect_px (the
-    ad-banner line of defense). This door knows ONE thing: "is a video
-    playing, and where." The INPUT-IDLE conjunction (the theater veil
-    requires the desk still) is the DIMMER's law, applied at
-    dimmer._live_rect where the idle clock lives - not here; the eye
-    must never grow a timer.
+def live_rect(cfg, now=None):
+    """THE PLAYER-EXEMPTION DOOR (owner, Oct 20): the live playing
+    rect with the SAME liveness law as video_rect - not paused, big
+    enough for min_rect_px, on the desk, fresh by lane - but NOT
+    gated on [videodim].on. The exemption is a property of the buddy
+    reporting a playing video, not of the theater switch: a user who
+    turned theater mode off still told the eye where their movie is,
+    and 'veil never lands on a video' holds either way."""
+    return _best_rect(cfg, now)
 
-    Two lanes, two freshness laws:
-      - CLICK (lane "click"): a one-shot snapshot, good for grace_s -
-        the owner's demoted test-the-geometry gesture.
-      - AUTO (lane "auto"): the extension pushes on play AND pause/end;
-        a playing video emits no further events, so a paused:false auto
-        row is a durable STATE, not a snapshot. It stays live until a
-        paused:true push (pause/end) or the app restarts - no short
-        grace ages out a movie mid-roll. A browser that dies mid-play
-        without a pause/end leaves the row; the DIMMER's idle gate
-        drops the frame the moment the owner touches the desk, so the
-        stale row costs nothing.
 
-    Any failure anywhere is None; the dimmer holds it one tick and its
-    ramp retracts the veil."""
+def _best_rect(cfg, now):
     now = time.monotonic() if now is None else now
     vd = cfg.get("videodim") or {}
-    if not vd.get("on"):
-        return None
     grace = float(vd.get("grace_s", DEFAULT_GRACE))
     mins = float(vd.get("min_rect_px", DEFAULT_MIN))
     best = None
@@ -280,6 +270,33 @@ def video_rect(cfg, now=None):
         if best is None or st["ts"] > best[1]:
             best = (rect, st["ts"])
     return best[0] if best else None
+
+
+def video_rect(cfg, now=None):
+    """The dimmer's theater door: the live PHYSICAL rect (x, y, w, h)
+    of a PLAYING video - the shared liveness law of live_rect, plus
+    the [videodim].on feature gate. Whether the veil is CREATION-ready
+    (a live playing rect - dimmer._live_rect) is the DIMMER's law,
+    applied there; the eye must never grow a timer.
+
+    Two lanes, two freshness laws:
+      - CLICK (lane "click"): a one-shot snapshot, good for grace_s -
+        the owner's demoted test-the-geometry gesture.
+      - AUTO (lane "auto"): the extension pushes on play AND pause/end;
+        a playing video emits no further events, so a paused:false auto
+        row is a durable STATE, not a snapshot. It stays live until a
+        paused:true push (pause/end) or the app restarts - no short
+        grace ages out a movie mid-roll. A browser that dies mid-play
+        without a pause/end leaves the row; under the Oct-20 law its
+        window stays plain-veil-exempt until a pause push or an app
+        restart - admitted cost: the buddy's report is the fact, and
+        the buddy is the first to know when the tab goes.
+
+    Any failure anywhere is None; the dimmer holds it one tick and its
+    ramp retracts the veil."""
+    if not (cfg.get("videodim") or {}).get("on"):
+        return None
+    return _best_rect(cfg, now)
 
 
 def _on_desktop(rect):

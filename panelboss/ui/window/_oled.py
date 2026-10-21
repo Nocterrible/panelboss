@@ -26,9 +26,8 @@ from ...config import (DIMMER_IDLE_CEIL, DIMMER_IDLE_DEFAULT,
                        DIMMER_LEVEL_DEFAULT, DIMMER_LEVEL_FLOOR,
                        DIMMER_RAMP_CEIL, DIMMER_RAMP_DEFAULT,
                        DIMMER_RAMP_FLOOR)
-from ...config import (VIDEODIM_IDLE_CEIL, VIDEODIM_IDLE_DEFAULT,
-                       VIDEODIM_IDLE_FLOOR, VIDEODIM_LEVEL_CEIL,
-                       VIDEODIM_LEVEL_DEFAULT, VIDEODIM_LEVEL_FLOOR)
+from ...config import (VIDEODIM_LEVEL_CEIL, VIDEODIM_LEVEL_DEFAULT,
+                       VIDEODIM_LEVEL_FLOOR)
 from ...config import HOLD_SEC_CEIL, HOLD_SEC_FLOOR, HOLD_SEC_DEFAULT
 from ...config import (JOG_CYCLE_CEIL, JOG_CYCLE_DEFAULT,
                    JOG_CYCLE_FLOOR, JOG_STEP_CEIL,
@@ -156,20 +155,26 @@ TIP_DIM = {
 
 
 TIP_COMP = {
-    "on": "arm movie theater mode: a desk still for the \"veil after\" "
-          "wait dims everything but the PLAYING video - the frame lands "
-          "around the rect and the browser's chrome dims with it. off "
-          "is the root law: no file is read, nothing happens. the eye "
-          "learns the video's place from the buddy extension's native "
-          "host: no flag, no port, no debugger.",
+    "on": "arm movie theater mode: a PLAYING video dims everything "
+          "but itself - the frame lands around the rect and the "
+          "browser's chrome dims with it; it lifts when the video "
+          "pauses or its window leaves the desk, never on mouse, "
+          "keys or sound (the stillness rail was retired Oct 20). "
+          "off is the frame's root law: no theater, no ring - and "
+          "still the eye keeps watching the doorway, because the "
+          "player window stays exempt from the PLAIN veils with or "
+          "without this switch (the buddy's report outranks it). "
+          "the eye learns the video's place from the buddy "
+          "extension's native host: no flag, no port, no debugger.",
     "status": "live words: the consent rail and the buddy "
               "extension's last push, refreshed on the dimmer's "
               "own beat. the test-the-geometry answer lands here "
               "too. a missing answer reads as words, never a crash.",
     "veil": "test the geometry: measure the video on the clicked tab "
-            "right now, one shot, no waiting on the idle rail. this "
-            "is the calibration/test gesture - the FEATURE is the "
-            "automatic lane (playing AND still), not this button.",
+            "right now, one shot, no waiting. this is the "
+            "calibration/test gesture - the FEATURE is the automatic "
+            "lane (a playing video, no rail, Oct 20), not this "
+            "button.",
     "path": "the doorway the extension's native host writes: the "
             "app's own folder, a fixed path, every browser, every "
             "download config. the extension's id is the only ACL - "
@@ -187,29 +192,36 @@ TIP_COMP = {
                "a bad shape answers a word and does NOT fire the "
                "installer. the manual route stays one line down: "
                "extension\\host\\install_host.ps1.",
+    "store": "the buddy is ON the Chrome Web Store - one click "
+             "opens the listing, and it installs in Chrome, Edge "
+             "and Opera GX alike (any Chromium browser reads the "
+             "same store). the store id is the one this app's "
+             "helper already trusts (the pinned key makes it "
+             "permanent), so after adding it here comes 'install "
+             "the helper' below - extension first, then the door.",
     "caps": "what the buddy's API CAN send, read from the host "
             "itself (the open-API ruling: discover, never assume). "
             "no host installed reads as the honest words - press "
             "install above to register it. this line re-checks on "
             "the veil button and the switch.",
-    "delay": "veil after: the desk frames a PLAYING video only once "
-             "the input has been still this long - the dimmer's "
-             "\"dim after\" shape, one knob for the on-delay and the "
-             "re-arm (any mouse/keyboard move drops the veil until "
-             "this passes again). 0 means instant. a film's sound "
-             "never lifts the theater veils.",
+    "delay": "retired Oct 20: the theater creates from the live "
+             "playing rect the buddy reports - no stillness wait (it "
+             "died on RDP desks, and the movie never wears a veil "
+             "anyway). kept as the seam's history, not a control.",
     "level": "veil level: how dark the four theater pieces are, in "
              "percent - the theater's OWN darkness, not the idle "
              "dimmer's number. the movie can go darker (or lighter) "
              "than the plain idle veils.",
-    "fade": "off (the default): the frame is GONE the moment you "
-            "touch the mouse or press a key - no fade, no ceremony. "
-            "on: the theater joins the ramp family - one beat of "
-            "hold, then the frame retracts gently over the dimmer's "
-            "\"fade within\" ramp, never a blink.",
+    "fade": "off (the default): when the frame lifts (the video "
+            "pauses, its window leaves the desk) it is GONE that "
+            "tick - no fade, no ceremony. on: the theater joins the "
+            "ramp family - one beat of hold, then the frame retracts "
+            "gently over the dimmer's \"fade within\" ramp, never a "
+            "blink. motion never lifts the frame either way: it is "
+            "the rect's going that does (Oct 20).",
     "mons": "per-monitor theater: the box keeps THIS panel's theater "
             "(a video on it frames; a panel with no video wears the "
-            "full-field veil while the conjunction holds). unchecked, "
+            "full-field veil while the theater holds). unchecked, "
             "the panel gets no pieces at all and dims like any idle "
             "desk. the slider is the panel's OWN veil percent - until "
             "you move it the panel follows the \"veil level\" above. "
@@ -1028,11 +1040,14 @@ class _OledMixin:
 
     def _build_companion(self, parent):
         box = self._card(parent, "Movie theater mode",
-                         "a playing video dims the desk around it, "
-                         "once the input sits still for the \"veil "
-                         "after\" wait; touch lifts the frame at once "
-                         "and a film's sound never does - only the "
-                         "mouse and keys drop it")
+                         "a playing video dims the desk around it the "
+                         "moment the buddy reports it; the frame lifts "
+                         "only when the video pauses or its window "
+                         "leaves the desk - mouse, keys and a film's "
+                         "sound never drop it (the stillness rail was "
+                         "retired Oct 20: it died on RDP desks and "
+                         "fought the rule that the veil never lands "
+                         "on the movie)")
         row = self._row(box, "Movie theater mode", TIP_COMP["on"],
                         hint_chars=42)
         self.oled_comp_box = ctk.CTkSwitch(
@@ -1043,29 +1058,13 @@ class _OledMixin:
                                         {}).get("on") is True \
             else self.oled_comp_box.deselect()
 
-        # "veil after" - the automatic lane's IDLE rail, the dimmer's
-        # idle_sec sibling (owner, Oct 16: "same as window dimming" and
-        # "if the user moves mouse veil drops until x secs"): a playing
-        # video frames the desk only when the input has been still this
-        # long. ONE knob for the on-delay and the re-arm - the dimmer's
-        # symmetric shape. Sound never lifts the theater veils.
-        row = self._row(box, "veil after", TIP_COMP["delay"],
-                        hint_chars=42)
-        self.oled_vee_delay_label = ctk.CTkLabel(
-            row, font=self.skin.font(12), **self.skin.text_style("sub"))
-        slider = ctk.CTkSlider(
-            row, from_=VIDEODIM_IDLE_FLOOR, to=VIDEODIM_IDLE_CEIL,
-            number_of_steps=VIDEODIM_IDLE_CEIL - VIDEODIM_IDLE_FLOOR,
-            width=180, command=self._oled_comp_delay_changed,
-            **self.skin.slider_style())
-        slider.set(int((self.cfg.get("videodim") or {}).get(
-            "idle_sec", VIDEODIM_IDLE_DEFAULT)))
-        slider.grid(row=0, column=1, sticky="e")
-        self.oled_vee_delay_label.configure(
-            text="%s s" % int((self.cfg.get("videodim") or {}).get(
-                "idle_sec", VIDEODIM_IDLE_DEFAULT)))
-        self.oled_vee_delay_label.grid(row=0, column=2, sticky="e",
-                                       padx=(theme.S_FIELD, 0))
+        # THE "VEIL AFTER" SLIDER IS GONE (owner law, Oct 20): the
+        # theater creates from the live playing rect, no stillness
+        # wait - the knob had nothing left to steer, and a control
+        # that steers nothing is the knob-lie family (the Game DVR
+        # precedent). [videodim].idle_sec keeps round-tripping
+        # silently in the config; its deprecation (warn-once, drop
+        # on save) rides the next commit, not this one.
 
         # "veil level" - the theater pieces' OWN darkness (owner, Oct
         # 16): the four dark pieces draw at THIS percent, not the idle
@@ -1125,6 +1124,19 @@ class _OledMixin:
         # port open to every local process, the infostealer classic.
         # The native-messaging host answers instead: the extension's id
         # is the only ACL, the host writes the app's doorway.
+
+        # THE STORE DOOR (owner, Oct 20): the listing went LIVE and
+        # the assigned id IS the pinned-key prediction (feolhiok...) -
+        # the Oct-17 key-pin decision verified at the front door. One
+        # click opens the listing; unpacked dev loads and the store
+        # copy share the id, so the host trusts whichever is present.
+        row = self._row(box, "get the extension", TIP_COMP["store"],
+                        hint_chars=42)
+        ctk.CTkButton(row, text="open store page", height=26,
+                      width=150, command=self._comp_store,
+                      **self.skin.secondary()).grid(row=0, column=1,
+                                                    columnspan=2,
+                                                    sticky="e")
 
         row = self._row(box, "test the geometry", TIP_COMP["veil"],
                         hint_chars=42)
@@ -1221,13 +1233,6 @@ class _OledMixin:
         self._save()
         self._comp_words(force=True)
 
-    def _oled_comp_delay_changed(self, value):
-        # [videodim].idle_sec - the automatic lane's ONE idle knob (the
-        # dimmer's idle_sec sibling): on-delay and re-arm, symmetric.
-        self.cfg.setdefault("videodim", {})["idle_sec"] = int(round(value))
-        self.oled_vee_delay_label.configure(text="%s s" % round(value))
-        self._save()
-
     def _oled_comp_level_changed(self, value):
         # [videodim].level - the theater pieces' OWN darkness (the
         # dimmer's veil-level sibling): the frame draws at THIS, not the
@@ -1267,6 +1272,16 @@ class _OledMixin:
             round(value))
         pair[2].configure(text="%s%%" % round(value))
         self._save()
+
+    COMP_STORE = ("https://chromewebstore.google.com/detail/"
+                  "panelboss-companion/feolhiokchmpphlhllagimnilceldegk")
+
+    def _comp_store(self):
+        # the Ko-fi pattern (webbrowser, not a hand-rolled start):
+        # the OS default browser takes it, and the store page works
+        # in every Chromium browser on the shelf.
+        import webbrowser
+        webbrowser.open(self.COMP_STORE)
 
     def _oled_comp_veil(self):
         # the one-shot answers in the status line itself (the wash

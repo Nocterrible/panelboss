@@ -5,8 +5,9 @@ viewport-space judgment), the liveness gates (paused, min_rect_px, the
 grace), freshest-wins across families - and the Veils frame: four pieces
 clamped per monitor, the straddle covering BOTH panels with no sliver on
 the video column, plain veils skipped on the covered panels only, the
-ramp retraction, the pause, the THREE-BEAT idle conjunction (on after X,
-drop on input, re-arm after X), the sound exemption (a film's audio does
+ramp retraction, the pause, the CREATION LAW (Oct 20: a live playing
+rect frames the desk with NO stillness gate - input may return and the
+frame holds), the sound exemption (a film's audio does
 NOT lift the theater frame), and the replacement seam (theater active ->
 a plain idle veil never covers that region). Every door is a fake seam
 (the doorway path, monitors, the clock) - no browser, no Tk, app-up and
@@ -96,7 +97,46 @@ cfg = vcfg(on=False)
 videoeye.tick(cfg, CLK.monotonic())
 assert videoeye._STATE == {}
 assert videoeye.video_rect(vcfg(on=False)) is None
-ok("feature off means NOTHING happens: no file read, no state, no rect")
+ok("feature off means the THEATER DOOR is shut: no rect, the switch "
+   "owns the frame")
+
+# 1b. THE UNDATED DOOR (owner, Oct 20): with the theater switch OFF
+#     the eye STILL reads the doorway (the extension pushes on play
+#     no matter what the app's switch says), so live_rect answers the
+#     PLAYER-EXEMPTION call - the buddy's report is a fact, the
+#     switch is only the frame's consent.
+videoeye._STATE.clear()
+door((100, 100, 800, 450), lane="auto", paused=False)
+videoeye.tick(vcfg(on=False), CLK.monotonic())
+assert videoeye._STATE, "the eye closed its eye to the doorway when " \
+    "the theater switched off - the player exemption went blind"
+assert videoeye.video_rect(vcfg(on=False), CLK.monotonic()) is None, \
+    "the feature switch must still gate the FRAME door"
+assert videoeye.live_rect(vcfg(on=False), CLK.monotonic()) == \
+    (100, 100, 800, 450), "live_rect is the ungated door: a playing " \
+    "reported video answers with its rect"
+os.remove(videoeye.RECT_PATH)      # leave pin 2 its pristine no-file
+videoeye._STATE.clear()            # desk: the door file was THIS
+                                   # pin's prop, not the world's
+ok("theater off keeps the eye looking: video_rect stays shut, "
+   "live_rect serves the exemption")
+
+# 1c. the CLICK snapshot rides the ungated door too - and ages on
+#     grace like anywhere: a test-the-geometry exempt-bite has a
+#     grace-second lease, no more, and the theater switch changes
+#     nothing about that lease.
+videoeye._STATE.clear()
+door((100, 100, 800, 450), lane="click", age=1.0)
+videoeye.tick(vcfg(on=False, grace=3), CLK.monotonic())
+assert videoeye.live_rect(vcfg(on=False, grace=3),
+                           CLK.monotonic()) == (100, 100, 800, 450)
+CLK.advance(3.5)
+assert videoeye.live_rect(vcfg(on=False, grace=3),
+                           CLK.monotonic()) is None
+os.remove(videoeye.RECT_PATH)
+videoeye._STATE.clear()
+ok("the click snapshot ages on grace through the ungated door too: "
+   "the test gesture's exemption lease is grace_s, no more")
 
 # 2. no doorway file -> None (fail-open)
 videoeye._STATE.clear()
@@ -313,7 +353,8 @@ assert videoeye.video_rect(vcfg(), CLK.monotonic()) is not None
 CLK.advance(30.0)               # way past grace_s - the movie still plays
 assert videoeye.video_rect(vcfg(), CLK.monotonic()) is not None
 ok("an auto playing row persists past grace_s (a movie is a state, "
-   "not a 3 s snapshot); the idle gate lives in the dimmer")
+   "not a 3 s snapshot); the theater gate is the rect itself, in the "
+   "dimmer - the eye grows no timer")
 
 # 8c. the CLICK lane is a snapshot: it ages out on grace_s (measure
 #     once, see the rect - the demoted test-the-geometry gesture)
@@ -379,9 +420,11 @@ RECT = [None]
 class Frame:
     """The fake desk: an idle clock (mutable via .idle), an audio set
     (mutable via .audio), and the video eye seam fixed to RECT[0]. The
-    theater veil's idle conjunction reads .idle; the plain veil's sound
-    exemption reads .audio. Both are per-tick mutable so the suite can
-    drive the three beats and the sound/touch edges without a browser."""
+    .idle rail steers ONLY the plain veil's dimmer wait now - the
+    theater has no idle gate (creation law, Oct 20), and the pins say
+    so by framing at idle=0. The plain veil's sound exemption reads
+    .audio. Both are per-tick mutable so the suite can drive the
+    sound/touch edges and the exemption without a browser."""
     def __init__(self, wins=None, idle=0.0, audio=None, vlevel=30,
                  vfade=False, vmons=None):
         self.wins = wins or []
@@ -399,14 +442,14 @@ class Frame:
                               video=lambda cfg, now: RECT[0],
                               monitors=lambda: MON)
 
-    def tick(self, now, level=30, dim_on=True, vidle=0):
+    def tick(self, now, level=30, dim_on=True, vidle=0, von=True):
         self.v.tick({"dimmer": {"on": dim_on,
                                 "monitors": {"MONA": True,
                                              "MONB": True},
                                 "always": {}, "apps": {},
                                 "idle_sec": 120, "ramp_sec": 8,
                                 "level": level, "bound": None},
-                     "videodim": {"on": True, "min_rect_px": 1,
+                     "videodim": {"on": von, "min_rect_px": 1,
                                   "grace_s": 3, "idle_sec": vidle,
                                   "level": self.vlevel,
                                   "fade": self.vfade,
@@ -461,43 +504,54 @@ assert set(f.rec.painted) == {1, 2}
 ok("no live rect means no negative keys: the plain dimmer behaves as "
    "before")
 
-# 15. THE THREE BEATS (the automatic lane's conjunction): a playing
-#     video frames only when the input has been still for idle_sec; any
-#     input drops it; stillness again re-arms it - ONE rail, symmetric.
+# 15. THE CREATION LAW (owner, Oct 20): the theater is a property of
+#     the PLAYING video, not of the desk's stillness - the old three-
+#     beat idle conjunction is RETIRED (on an RDP desk the pointer
+#     clock never ages at all - measured stuck at ~0 for five seconds;
+#     and with the veil landing on everything but the video, input may
+#     return freely without any veil darkening a movie). First tick
+#     with a live auto row: the frame is BORN, busy desk notwithstanding.
+#     Input returning mid-film: the frame HOLDS - motion lifts nothing;
+#     only the rect's own going (pause, off-desk) lifts.
 f = Frame([w(1)], idle=0.0, vlevel=30)
 RECT[0] = (100, 100, 600, 300)
-f.tick(100, vidle=5)                 # still 0 s < 5 s: NO frame
-assert f.rec.painted == {}, f.rec.painted
-f.idle = 6.0                          # the desk sits still past the rail
-f.tick(101, vidle=5)                  # frame lands
-assert len(f.rec.painted) == 4, f.rec.painted
-f.idle = 1.0                          # a pointer move: input returns
-f.tick(102, vidle=5)                  # FADE OFF (the default, owner
-assert f.rec.painted == {}, f.rec.painted   # Oct 16): the frame is
-f.tick(103, vidle=5)                  # GONE this tick and stays gone
-assert len(f.rec.painted) == 0        # while the desk is under X
-f.idle = 6.0                          # stillness passes X AGAIN: the
-f.tick(104, vidle=5)                  # SAME rail re-arms, no second
-assert len(f.rec.painted) == 4        # knob
-ok("the three beats: on after X still, drop the tick input returns "
-   "(fade off, the default), re-arm after X again - one symmetric rail")
+f.tick(100, vidle=5)                 # still 0 s < the old 5 s rail:
+assert len(f.rec.painted) == 4, f.rec.painted     # THE FRAME IS BORN
+f.idle = 6.0
+f.tick(101, vidle=5)
+assert len(f.rec.painted) == 4, f.rec.painted     # stillness: same frame
+f.idle = 1.0
+f.tick(102, vidle=5)                 # input returns mid-film: the
+assert len(f.rec.painted) == 4, f.rec.painted     # frame does NOT lift
+RECT[0] = None
+f.tick(103, vidle=5)                 # the rect GOES: that is the lift
+assert f.rec.painted == {} and len(f.rec.gone) == 4
+ok("creation is the playing rect: born on a busy desk, held through "
+   "input, lifted only by the rect's own going")
 
 # 15b. THE FADE OPTION, other side: fade=True opts the theater into
-#      the ramp family - the first step is the one-tick hold (the
-#      eye's fail-open law), then gradual retract, no blink.
+#      the ramp family - the retraction after the rect's OWN going is
+#      the one-tick hold (the eye's fail-open law) then the gradual
+#      steps, no blink. Under the Oct-20 creation law input lifts
+#      nothing anyway - the ramp belongs to the rect's going alone.
 fb = Frame([w(1)], idle=0.0, vlevel=30, vfade=True)
 RECT[0] = (100, 100, 600, 300)
-fb.tick(120, vidle=5)
+fb.tick(120, vidle=5)                  # born on a busy desk (no rail)
+assert len(fb.rec.painted) == 4, fb.rec.painted
 fb.idle = 6.0
 fb.tick(121, vidle=5)
 assert len(fb.rec.painted) == 4, fb.rec.painted
 fb.idle = 1.0
-fb.tick(122, vidle=5)                 # fade ON: still painted, dying
-assert len(fb.rec.painted) == 4       # has begun (one-tick hold)
-fb.tick(130, vidle=5)
+fb.tick(122, vidle=5)                  # input returns: the frame does
+assert len(fb.rec.painted) == 4        # not even begin to die - no lift
+RECT[0] = None
+fb.tick(123, vidle=5)                  # the rect GOES: the fade family
+assert len(fb.rec.painted) == 4        # starts - the hold, still full
+assert all(v[1] == 0.3 for v in fb.rec.painted.values())
+fb.tick(131, vidle=5)                  # a whole ramp later: bare
 assert fb.rec.painted == {}, fb.rec.painted
-ok("fade=true rides the ramp family: one-tick hold then retract - "
-   "the theater opt-in beside the owner's no-fade default")
+ok("fade=true rides the ramp family on the rect's going: one-tick hold "
+   "then retract - and input alone never started the dying")
 
 # 16. THE SOUND EXEMPTION: a film's audio must not lift the theater
 #     frame - the drive is the pointer/keyboard idle clock only. Sound
@@ -509,15 +563,20 @@ assert len(f.rec.painted) == 4        # audio pid present, frame STAYS
 f.audio = {1}
 f.tick(101, vidle=5)
 assert len(f.rec.painted) == 4        # sound does not lift the frame
-ok("a film's sound never lifts the theater frame (the lift is the "
-   "pointer/keyboard idle gate, not the sound ledger)")
+ok("a film's sound never lifts the theater frame (and since Oct 20 "
+   "neither does motion - the rect's own going is the only lift)")
 
 # 17. THE REPLACEMENT SEAM: while the theater frame is ACTIVE, a plain
 #     idle veil must NOT cover that panel - the movie stays bright, the
 #     rest of the desk dims. (The browser window is exempt by pid only
 #     while it is SOUNDING; the frame's panel skip is the
 #     sound-independent backstop for a silent mid-scene stretch.)
-f = Frame([w(1), w(2, monitor="MONB")], idle=999.0)
+f = Frame([w(1), w(2, monitor="MONB", rect=(1100, 100, 800, 600))],
+          idle=999.0)   # MONB's window wears a MONB-true rect (the
+                        # default dummy sat numerically OVER the
+                        # video and would claim the player exemption
+                        # for the wrong panel - real census rects are
+                        # monitor-true; real rects, real law)
 RECT[0] = (100, 100, 600, 300)        # the theater frame on MONA
 f.tick(100, vidle=5, dim_on=True)
 keys = f.rec.painted
@@ -552,13 +611,59 @@ assert 1 not in f.rec.painted            # MONB is covered too: the
 ok("videodim.monitors MONB: EXACTLY one full-field piece at its rect, "
    "alpha 0.5 (per-row level), while MONA keeps its four border pieces")
 
-f = Frame([w(1)], idle=999.0, vmons={"MONA": {"on": False}})
+f = Frame([w(1), w(2, rect=(3000, 10, 800, 600))], idle=999.0,
+          vmons={"MONA": {"on": False}})
 RECT[0] = (100, 100, 600, 300)
 f.tick(100, vidle=5, dim_on=True)
-assert f.rec.painted == {1: ((10, 10, 800, 600), 0.3)}, f.rec.painted
+assert f.rec.painted == {2: ((3000, 10, 800, 600), 0.3)}, f.rec.painted
+# (Oct-20 amendment: the old expectation veiled BOTH windows - the
+# plain veil proceeds on an opted-out panel exactly as always, and
+# the player exemption now rides that rule: window 1 plays the
+# reported video and stays bright; window 2 does not and dims on
+# schedule. The amendment proves the seam is per-window, not a new
+# blanket panel immunity - the ring remains the only panel-wide
+# actor, and it is opted out here.)
 ok("videodim.monitors MONA on=false: the video panel gets NO frame "
-   "and is NOT covered - the plain veils proceed there (window 1 "
-   "wears its veil)")
+   "and is NOT covered - the plain veils proceed there, every window "
+   "but the one playing the reported video (Oct-20 exemption)")
+
+# 19. THE OWNER REPRODUCTION, PINNED (Oct 20): a video plays on MONA,
+#     the owner tabs to a window on MONB, the secondary opted into the
+#     theater at its own level - and the desk is the RDP one that is
+#     NEVER still (idle reads 0.0; phantom channel input, measured on
+#     the live machine at 0.00-0.03 s across eight samples). OLD law:
+#     the stillness rail starves the theater forever and the always-on
+#     plain dimmer veils the browser - the movie goes dark, the exact
+#     complaint. NEW law: creation is the RECT.
+f = Frame([w(1, rect=(50, 50, 900, 700)),
+           w(2, monitor="MONB", fg=True, rect=(1100, 50, 800, 600))],
+          idle=0.0, vlevel=76,
+          vmons={"MONB": {"on": True, "level": 76}})
+RECT[0] = (100, 100, 600, 300)
+f.tick(100, vidle=5)
+pieces = {h: v for h, v in f.rec.painted.items() if h < 0}
+assert len(pieces) == 5, f.rec.painted            # 4 border (MONA) + 1
+assert all(v[1] == 0.76 for v in pieces.values()) # full-field (MONB)
+assert 1 not in f.rec.painted                     # the player: bright
+ok("the owner's reproduction: on a never-still desk the ring is BORN, "
+   "the opted secondary takes the field at 76%, the movie window wears "
+   "no plain veil")
+
+# 19b. the SAME desk with the THEATER OFF: the switch owns the frame
+#      (no negative keys), but the player window STILL never wears the
+#      plain veil - the exemption is the buddy's report, not the
+#      theater's consent (owner, Oct 20: "which is I think a good
+#      thing"). The desk went still (121 s past the plain 120 rail),
+#      and the unrelated window dims on schedule.
+f = Frame([w(1, rect=(50, 50, 900, 700)),
+           w(2, rect=(750, 500, 200, 150))],
+          idle=121.0)
+RECT[0] = (100, 100, 600, 300)
+f.tick(100, vidle=5, von=False)
+assert not any(h < 0 for h in f.rec.painted), f.rec.painted
+assert f.rec.painted == {2: ((750, 500, 200, 150), 0.3)}, f.rec.painted
+ok("theater OFF: no frame at all, yet the window playing the reported "
+   "video stays untouchable - every OTHER window dims as always")
 
 # --- config: the rails at the boundary --------------------------------
 n = config.normalize_videodim({"on": "yes", "min_rect_px": 9e9,
