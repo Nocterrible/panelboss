@@ -1092,8 +1092,11 @@ class _OledMixin:
         # on-delay and the re-arm - the dimmer's symmetric shape.
         # Sound never lifts the theater veils; motion lifts the RING
         # only - the movie itself never wears a veil regardless (the
-        # player exemption is clock-free). The rail rides the OS's
-        # input clock; the tip carries the KVM-chatter honesty.
+        # player exemption is clock-free). The rail rides the SEAM's
+        # clock - the raw-input pump by default, the stock
+        # GetLastInputInfo only when [dimmer].input_pump is off
+        # (a gadget on the desk can lie about input; the pump is
+        # what makes the theater deaf to it).
         row = self._row(box, "veil after", TIP_COMP["delay"],
                         hint_chars=42)
         self.oled_vee_delay_label = ctk.CTkLabel(
@@ -1158,7 +1161,7 @@ class _OledMixin:
         # the fail-open honesty and the relaunch law; the switch
         # ships CHECKED like the key it reads.
         row = self._row(box, "Does your shit occasionally decide "
-                         "it wants to keep Windows awake? ",
+                         "it wants to keep Windows awake?",
                         TIP_COMP["pump"], hint_chars=42)
         self.oled_comp_pump_box = ctk.CTkSwitch(
             row, text="", font=self.skin.font(12),
@@ -1324,19 +1327,12 @@ class _OledMixin:
 
 
     def _oled_comp_pump_changed(self):
-
         # [dimmer].input_pump - the clock choice (Oct-20 wave,
-
         # the owner's default-on override). RESTART-required
-
         # like the rest of the section: the card's word lands,
-
         # the relaunch makes it true.
-
         self.cfg.setdefault("dimmer", {})["input_pump"] = bool(
-
             self.oled_comp_pump_box.get())
-
         self._save()
 
 

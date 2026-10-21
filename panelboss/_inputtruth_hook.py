@@ -32,6 +32,14 @@ the kernel's own marker (null hDevice) AND by the TERMSRV_SHADOW
 flag (the RDP-injected twin): an injected mouse with real deltas
 would else stamp the clock like a hand. What the injected flag on
 the hook structs was for, these two gates do without the chain.
+
+WHY ONE FILE AND 309 LINES: the prototype block below and the
+thread loop are ONE read - the x64 slot law that AV'd this
+module's first draft binds both halves, and the pure logic was
+already split at design time (inputtruth.py). Severing them
+would make every future edit re-learn the pairing the hard way:
+the split costs more than it saves here, which is the law's own
+exemption, spoken out loud.
 """
 import ctypes
 import ctypes.wintypes as wt

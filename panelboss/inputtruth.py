@@ -231,10 +231,17 @@ def idle_seconds():
     real input; inf while no report has passed the filter since
     boot; the stock GetLastInputInfo (loudly once, dated) when the
     ear cannot or no longer does live."""
+    global _ear
     if _ear is None and not _unavailable:
         install()                       # lazy: the first rail read
         #                                # births the ear (an armed-off
         #                                # [dimmer] never asks)
+    if _ear is not None and not _ear.alive():
+        with _lock:                     # a dead pump is a state, not
+            if _ear is not None and not _ear.alive():
+                _ear = None             # a verdict: drop the corpse
+            #                           # and the lazy arm above
+            #                           # re-births it next read
     if _ear is not None and _ear.alive():
         return _pump.idle_seconds(time.monotonic())
     return _fail_open()
