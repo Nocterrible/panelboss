@@ -211,13 +211,13 @@ TIP_COMP = {
              "the INPUT has been still this long - the dimmer's "
              "\"dim after\" shape, one knob for the on-delay and the "
              "re-arm (any mouse/keyboard move drops the RING until "
-             "this passes again). the clock is the OS's own input "
-             "stamp (GetLastInputInfo): on a desk whose KVM/USB "
-             "chain re-stamps it without the pointer ever moving, "
-             "the rail never passes and the ring never rises - a "
-             "motion-dead-zone pump (real travel or keys only, 3 px) "
-             "is adjudicated upstream to answer that desk, not "
-             "shipped yet. motion lifts the RING only: the MOVIE "
+             "this passes again). the clock is the app's raw-input "
+             "pump by default (the 'keep Windows awake' switch "
+             "below): zero-travel device chatter - a stuck macro "
+             "pad, a jiggler, a KVM's re-reports - no longer keeps "
+             "the ring from ever rising, and a deaf pump falls "
+             "back to the OS stamp by itself. motion lifts the "
+             "RING only: the MOVIE "
              "never wears a veil either way - the window reporting "
              "the playing rect is exempt from the plain veils no "
              "matter what any timer says. 0 means instant. a film's "
@@ -232,6 +232,17 @@ TIP_COMP = {
             "ceremony. on: the theater joins the ramp family - one "
             "beat of hold, then the frame retracts gently over the "
             "dimmer's \"fade within\" ramp, never a blink.",
+    "pump": "some devices (macro pads, KVMs, jigglers) keep "
+            "claiming you just typed; this makes the app trust "
+            "only real movement. off is the stock Windows idle "
+            "clock verbatim (the behavior the app had its whole "
+            "first life); on, every dim timer reads the app's "
+            "own raw-input pump - a deaf pump falls back to the "
+            "stock clock by itself, so the worst case is off. "
+            "needs a relaunch to take. the screens still wake "
+            "for a remote hand: injection counts for the WAKE "
+            "while the device stream is silent (the away rails "
+            "never take that shortcut).",
     "mons": "per-monitor theater: the box keeps THIS panel's theater "
             "(a video on it frames; a panel with no video wears the "
             "full-field veil while the conjunction holds). unchecked, "
@@ -1139,6 +1150,26 @@ class _OledMixin:
             else self.oled_comp_fade.deselect()
         self.oled_comp_fade.grid(row=0, column=1, sticky="e")
 
+        # THE PUMP'S DOOR (Oct-20 wave; the owner's words verbatim
+        # as the label - the card may be boring, the owner's desk
+        # may not). It steers [dimmer].input_pump: on (the owner's
+        # default) routes every idle rail through the raw-input
+        # pump, off is the stock clock verbatim. The tip carries
+        # the fail-open honesty and the relaunch law; the switch
+        # ships CHECKED like the key it reads.
+        row = self._row(box, "Does your shit occasionally decide "
+                         "it wants to keep Windows awake? ",
+                        TIP_COMP["pump"], hint_chars=42)
+        self.oled_comp_pump_box = ctk.CTkSwitch(
+            row, text="", font=self.skin.font(12),
+            command=self._oled_comp_pump_changed,
+            **self.skin.switch_style())
+        self.oled_comp_pump_box.select() if (
+            self.cfg.get("dimmer") or {}).get("input_pump",
+                                                 True) is True \
+            else self.oled_comp_pump_box.deselect()
+        self.oled_comp_pump_box.grid(row=0, column=1, sticky="e")
+
         # THE PER-MONITOR THEATER (owner, Oct 16): every panel gets a
         # row. CHECKED (the default when no row exists - a row is
         # written to opt OUT too) keeps the panel's theater: its own
@@ -1289,6 +1320,26 @@ class _OledMixin:
         vd = self.cfg.setdefault("videodim", {})
         vd["fade"] = bool(self.oled_comp_fade.get())
         self._save()
+
+
+
+    def _oled_comp_pump_changed(self):
+
+        # [dimmer].input_pump - the clock choice (Oct-20 wave,
+
+        # the owner's default-on override). RESTART-required
+
+        # like the rest of the section: the card's word lands,
+
+        # the relaunch makes it true.
+
+        self.cfg.setdefault("dimmer", {})["input_pump"] = bool(
+
+            self.oled_comp_pump_box.get())
+
+        self._save()
+
+
 
     def _oled_comp_row_changed(self, short):
         # [videodim].monitors[short].on - the per-panel theater box.

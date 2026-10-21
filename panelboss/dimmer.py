@@ -620,22 +620,26 @@ class Veils:
         re-arms it. One knob for both halves - the card's "veil
         after" slider, back on the card with this commit.
 
-        THE CONJUNCT'S CORRECTED STORY: 70eb8fa retired it under an
-        RDP theory. That theory was measured wrong the same evening
-        on re-probe: the desk is PHYSICAL (no RDP) - the clock itself
-        is the sick half. GetLastInputInfo read 0.00-0.05 s across
-        90+30 hands-off samples while the cursor sat pixel-frozen at
-        (-3140, 1542): zero-travel HID chatter (the KVM/USB chain)
-        re-stamps the user32 clock without the pointer moving. The
-        conjunct rides the dimmer's OWN idle seam (production:
-        display.idle_seconds()). Whether THIS desk's clock truly
-        never ages is ADJUDICATED UPSTREAM; an app-side pump
-        (inputtruth - real keys and traveled pointers only, a 3 px
-        dead zone against the chatter) exists in the worktree as
-        uncommitted WIP and is NOT wired: _idle_secs stays on the
-        stock clock by the stop-order. On a desk whose clock never
-        ages, the ring simply never forms while the rail is nonzero
-        - the theater waits on its owner's clock, honestly.
+        THE CONJUNCT'S CORRECTED STORY (case CLOSED at the desk,
+        Oct 20): 70eb8fa retired it under an RDP theory - wrong, the
+        desk is PHYSICAL. Re-probe: GetLastInputInfo read 0.00-0.05 s
+        across three unplug experiments while the cursor sat
+        pixel-frozen (receipts unplug.log / direct.log / nohid.log /
+        nohid2.log) - the trail pointed at the KVM's emulated HID
+        (VID_1189&PID_8890) when the stamping survived even that
+        box's USB leg going away, and the desk closed it: the stamper
+        was the 3-button MACROPAD's firmware, stuck re-reporting a
+        zero-travel mouse; the physical replug reset it and the stock
+        clock now ages honestly. The KVM stands exonerated, the
+        CLASS stands (pads, jigglers, KVMs, whatever ships next),
+        and the pump is INSURANCE, not repair. The conjunct therefore
+        rides the seam ([dimmer].input_pump, ON by the owner's
+        override): true routes through inputtruth (raw ears, real
+        keydowns and traveled pointers only, boot infinite, fail-open
+        one dated word), false keeps this very rail on the stock
+        clock - the whole pre-pump behavior, verbatim. On a stamped
+        desk the ring simply waits for the rail, honestly, whatever
+        the option says.
         CREATION is still the live PLAYING RECT: the rect's own going
         (pause, off-desk, grace) lifts the frame whatever the clock
         says. Sound never lifts it (the frame never consults
