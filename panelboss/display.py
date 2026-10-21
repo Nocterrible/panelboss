@@ -373,6 +373,19 @@ def _def_window(h, m, w, l):
     return int(u32.DefWindowProcW(h, m, w, l) or 0)
 
 
+# The call-time neutralizer for RegisterRawInputDevices (see
+# Display._register_ears for the whole disease): a real windll
+# function carries the cross-module class binding that must go; the
+# suites' fakes carry none (and a bound METHOD cannot even hold the
+# attribute - awaymode_test's AttributeError mid-sweep), so the
+# clear is attempted and forgiven exactly where it cannot apply.
+def _neutral_reg_bind(lib):
+    try:
+        lib.RegisterRawInputDevices.argtypes = None
+    except AttributeError:
+        pass
+
+
 class Display(threading.Thread):
     """Hidden window + power sink; owns its thread from cradle to grave.
 
@@ -750,7 +763,31 @@ class Display(threading.Thread):
         through it, so a spell used to mean a 32 Hz mouse). These
         registrations deliver to our window only, and only while a
         spell is alive; a mode-off machine never registers anything -
-        invisible by construction, same law as before."""
+        invisible by construction, same law as before.
+
+        THE CALL-TIME NEUTRAL BINDING (the owner's desk, Oct 21,
+        twice: 'display watcher died at startup', ctypes.ArgumentError
+        'expected LP_RAWINPUTDEVICE instance instead of
+        RAWINPUTDEVICE_Array_2', 08:25 and 11:18): argtypes on the
+        shared windll function object are a CROSS-MODULE property -
+        _inputtruth_hook (the inputtruth pump's ears) re-binds it to
+        ITS OWN struct class when the pump installs, and a raw array
+        of display's struct then raises through the pump thread and
+        kills the watcher (argtypes measure the class IDENTITY, so
+        two same-laid-out classes are two types here; byref does not
+        pierce the class check either - measured in the pin's probe:
+        the message only changes to 'pointer to RAWINPUTDEVICE'). The
+        gate named two candidate shapes - byref or missing argtypes;
+        only the missing one survives every module order: clear the
+        binding at the call, and ctypes auto-converts the array with
+        no class check (the classic shape the pre-argtypes era used).
+        Leaving it cleared is safe for the hook's later calls too -
+        its array converts under no binding exactly like ours. The
+        neutralizer is a module function because a fake user32 whose
+        registration is a plain METHOD has no attr slot for argtypes
+        (awaymode_test proved it mid-sweep the hard way), and a fake
+        with no binding is exactly as neutral as one that clears."""
+        _neutral_reg_bind(u32)
         arr = self._device_array()
         self._hooked = bool(u32.RegisterRawInputDevices(
             arr, len(arr), ctypes.sizeof(RAWINPUTDEVICE)))
@@ -762,7 +799,11 @@ class Display(threading.Thread):
     def _release_ears(self):
         # RIDEV_REMOVE through the SAME entry point (this OS exports
         # no UnregisterRawInputDevices at all - measured): flags
-        # RIDEV_REMOVE + null target is the documented un-take.
+        # RIDEV_REMOVE + null target is the documented un-take. Same
+        # call-time neutral binding as _register_ears (the sibling of
+        # the same cross-module disease: the pump died at register
+        # long before this line ever ran to find out).
+        _neutral_reg_bind(u32)
         arr = self._device_array(remove=True)
         if not u32.RegisterRawInputDevices(
                 arr, len(arr), ctypes.sizeof(RAWINPUTDEVICE)):

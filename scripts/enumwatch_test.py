@@ -190,5 +190,99 @@ finally:
     cam_mod.IR_BUDGET_SEC = _saved_ir
     cam_mod._bad_doors.clear()
 
+# ---- the watcher's ears registration (gate-caught, pre-existing): the
+# owner's desk died on it TWICE today ('display watcher died at
+# startup' 08:25 and 11:18, ctypes.ArgumentError 'expected
+# LP_RAWINPUTDEVICE instance instead of RAWINPUTDEVICE_Array_2'): the
+# argtypes of the shared user32 function are a cross-module property,
+# _inputtruth_hook re-binds them to ITS struct class when the pump
+# installs, and display's raw array then raises through the pump
+# thread. The pin runs the live order: the hook imported FIRST (its
+# class binding in effect), then the watcher's own arm/disarm - the
+# call must SURVIVE (the disease raised right here before the fix)
+# and the 'died at startup' line must not speak. Real API call on the
+# desktop's own HWND (INPUTSINK needs one); restored by the release
+# arm the same test drives.
+import ctypes
+# THE LIVE ORDER IS THE TEST: display binds its class at boot import,
+# the pump installs (rebinds to the hook's class) AFTER - so display
+# first, the hook second. (A swapped pair lets display's import-time
+# binding run last and the survival check passes UNFIXED - the teeth
+# check below caught exactly that in its first draft.)
+from panelboss import display as disp
+from panelboss import _inputtruth_hook            # noqa: E402,F401
+
+_disp_log = logging.getLogger("display")
+
+
+class _Grab2(logging.Handler):
+    msgs = []
+
+    def emit(self, record):
+        _Grab2.msgs.append(record.getMessage())
+
+
+_g2 = _Grab2()
+_disp_log.addHandler(_g2)
+_active_saved = list(disp._ACTIVE)
+_reg_saved = disp.u32.RegisterRawInputDevices.argtypes
+# the pin's teeth: without the hook's binding ACTUALLY in effect on
+# the shared function, the survival check would pass unfixed (a
+# display-class binding lets display's own array through by
+# construction). The hook module binds its OWN struct class at import
+# (module line 157); assert that is what the call must survive.
+# (Amended after the gate round: this check was first written against
+# _inputtruth_hook.ctypes.POINTER, which the module never re-exports
+# - an attribute accident, not an assertion; it now compares the
+# documented rule directly, class identity across modules.)
+check(_reg_saved is not None and len(_reg_saved) == 3
+      and getattr(_reg_saved[0], "_type_", None)
+      is _inputtruth_hook.RAWINPUTDEVICE,
+      "the hook's OWN struct-class binding is in effect before the "
+      "call (import order verified, not assumed): %r" % (_reg_saved,))
+try:
+    w = disp.Display(verbose=False)               # __init__ only, no run()
+    # a real message-only sink ON THIS THREAD (the _run shape):
+    # INPUTSINK's registration needs a window the calling thread
+    # owns; GetDesktopWindow was judged 87 for exactly that reason,
+    # and a registration that SUCCEEDS is the stronger pin
+    _proc = disp.WNDPROTYPE(disp._def_window)     # keep the callback alive
+    _wc = disp.WNDCLASSEX()
+    _wc.cbSize = ctypes.sizeof(_wc)
+    _wc.lpfnWndProc = _proc
+    _wc.lpszClassName = "EnumwatchEarSink"
+    disp.u32.RegisterClassExW(ctypes.byref(_wc))  # 1407 (already) is fine
+    _hwnd = disp.u32.CreateWindowExW(0, "EnumwatchEarSink", None, 0,
+                                     0, 0, 0, 0, disp.HWND_MESSAGE,
+                                     None, ctypes.c_void_p(0), None)
+    w._hwnd = _hwnd
+    armed = None
+    try:
+        w._register_ears()                        # the line that killed the
+        armed = w._hooked                         # pump thread at 08:25
+    except ctypes.ArgumentError as e:
+        armed = "ArgumentError: %s" % e
+    check(armed is True,
+          "the watcher's registration survives the hook's binding and "
+          "the OS ACCEPTS it (pre-fix it raised ctypes.ArgumentError "
+          "before the OS saw the call): %r" % (armed,))
+    w._release_ears()
+    check(w._hooked is False,
+          "the disarm arm rides the same neutral call (no raise)")
+    check(not any("died at startup" in m or "without a stop" in m
+                  for m in _Grab2.msgs),
+          "the death line stayed silent under the fake's order: %r"
+          % _Grab2.msgs[-3:])
+    # and the neutralization is the shipped shape: the call clears the
+    # cross-module class binding (the ONLY order-safe arm the gate's
+    # two candidates leaves - byref was measured to bounce off the
+    # class check too, message changed, disease the same)
+    check(disp.u32.RegisterRawInputDevices.argtypes is None,
+          "the call did not neutralize the shared binding at call time")
+finally:
+    disp._ACTIVE[:] = _active_saved
+    disp.u32.RegisterRawInputDevices.argtypes = _reg_saved
+    _disp_log.removeHandler(_g2)
+
 print("enumwatch-test: %d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
