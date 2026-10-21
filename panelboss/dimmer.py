@@ -850,9 +850,11 @@ def _fact(w, fg, by_short):
                                ctypes.sizeof(cloak))
     cx, cy = (r.l + r.r) // 2, (r.t + r.b) // 2
     short = None
+    panel = None
     for s, (mx, my, mw, mh) in by_short.items():
         if mx <= cx < mx + mw and my <= cy < my + mh:
             short = s
+            panel = (mx, my, mw, mh)   # the furniture law's ruler (d0)
             break
     buf = ctypes.create_unicode_buffer(256)
     _u32.GetClassNameW(w, buf)           # a refusal leaves "": no
@@ -872,6 +874,17 @@ def _fact(w, fg, by_short):
     frameless = (bool(st & WS_POPUP) and not (
                  st & (WS_CAPTION | WS_THICKFRAME))
                  and bool(ex & WS_EX_TOPMOST))
+    # THE FURNITURE LAW's measure (d0): the share of ITS OWN PANEL
+    # this rect covers - ONE overlap, against the row the center-map
+    # loop already matched; the packet's mw*mh is that panel's own
+    # area. 0.0 when the center answers no panel (empty by_short is
+    # the test lane, so the matched row rides out of the loop).
+    cov = 0.0
+    if panel is not None:
+        _ox = min(r.r, panel[0] + panel[2]) - max(r.l, panel[0])
+        _oy = min(r.b, panel[1] + panel[3]) - max(r.t, panel[1])
+        if _ox > 0 and _oy > 0:
+            cov = _ox * _oy / float(panel[2] * panel[3])
     return {"hwnd": w, "pid": pid.value,
             "exe": _exe(pid.value), "cls": buf.value,
             "frameless": frameless,
@@ -882,6 +895,10 @@ def _fact(w, fg, by_short):
             # gives THOSE WS_EX_TOOLWINDOW; the settings window is
             # the CTk root - same class, NO toolwindow bit.
             "tool": bool(ex & WS_EX_TOOLWINDOW),
+            # the law's second word (d0): the door reads it WITH
+            # the tool bit; a fact with no panel answer carries
+            # ZERO - no veil claim without the measurement
+            "panel_cov": cov,
             "monitor": short, "fg": w == fg,
             "cloaked": bool(cloak.value),
             "iconic": bool(_u32.IsIconic(w)),
@@ -942,7 +959,28 @@ def _veil_rows(rows):
     return [f for f in rows
             if (f["cls"] not in DESKTOP_VIEWS or f["fg"])
             and not f.get("frameless")
-            and (not f.get("elevated") or f["fg"])]
+            and (not f.get("elevated") or f["fg"])
+            # FURNITURE NEVER WEARS A VEIL (d0, the Oct-21 DELA
+            # double veil): a window that answers the census with
+            # the toolwindow bit AND covers >=99% of its panel is
+            # desktop furniture, not a background app - furniture
+            # gets no veil, own-process or foreign. Kin in the
+            # doctrine: the style+geometry invariant (the 154504e
+            # frameless law), and the DESKTOP_VIEWS words above
+            # describe this exact failure class in their own words.
+            # The focus word rides this door too, the elevation
+            # clause's shape: MEASURED tonight (Oct-21), Win11's
+            # Progman answers the census WITH the tool bit (ex
+            # 0x200080, hwnd-probed) - the wallpaper row IS
+            # furniture to this door, and a dropped fg row loses
+            # the desk's attribution and dims the always rows
+            # blind; the FSM's fg skip still refuses it the veil,
+            # so the row passes precisely when it can never reach
+            # paint. The Oct-15 UAT law stands verbatim: the walk's
+            # own-process skip is untouched, the settings window
+            # (no tool bit) still dims like any background window.
+            and (not (f.get("tool") and f.get("panel_cov", 0) >= 0.99)
+                 or f["fg"])]
 
 
 # ---------------------------------------------------------------- elevation --

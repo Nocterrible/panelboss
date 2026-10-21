@@ -316,6 +316,45 @@ assert len(dimmer._veil_rows([dict(_captioned, elevated=True,
     "is how the taskbar keeps the desk's attribution while its menu " \
     "is open)"
 
+# --- THE FURNITURE LAW (d0, the Oct-21 DELA double veil): measured on
+# --- this desk - OLED GUARD Pro and the NVIDIA overlay are FOREIGN
+# --- full-panel toolwindows the plain walk treated as background
+# --- apps, each took a monitor-wide veil, and the two stacked to
+# --- 45-oplus-45=69.75 over the focused panel. The door's answer:
+# --- the toolwindow bit AND >=99% panel coverage is desktop furniture,
+# --- not a background app; furniture gets no veil, own-process or
+# --- foreign. Kin in the doctrine: the style+geometry invariant (the
+# --- 154504e frameless law) - the bit alone is not enough, exactly as
+# --- the popup law requires TOPMOST with the borderless style.
+_fulltool = {"cls": "OLEDGUARD", "fg": False, "frameless": False,
+             "elevated": False, "hwnd": 1, "pid": 4321,
+             "monitor": "DELA", "exe": "oledguard.exe",
+             "tool": True, "cloaked": False, "iconic": False,
+             "rect": (0, 0, 2560, 1440), "panel_cov": 1.0}
+assert dimmer._veil_rows([_fulltool]) == [], \
+    "desktop furniture reached the veil stratum - the owner's whole " \
+    "panel wore a foreign overlay's dim tonight"
+assert len(dimmer._veil_rows([dict(_fulltool, panel_cov=0.04)])) == 1, \
+    "a small tool window lost qualification: the law is the bit AND " \
+    "the geometry, never the bit alone (the hider's strips ride here)"
+assert len(dimmer._veil_rows([dict(_fulltool, tool=False)])) == 1, \
+    "a full-panel FOREIGN app (no tool bit) was refused - a kiosk-" \
+    "mode ordinary window still dims like the background app it is"
+assert len(dimmer._veil_rows([dict(_fulltool, fg=True)])) == 1, \
+    "a furniture row HOLDING THE FOREGROUND was dropped anyway - " \
+    "measured tonight: Win11's Progman carries the tool bit (ex " \
+    "0x200080), the wallpaper row IS furniture to this door, and " \
+    "the focus word must survive every door (the Oct-15 attribution " \
+    "lesson); the FSM's fg skip still refuses it a veil"
+assert all("panel_cov" in f for f in _cold), \
+    "the fact does not carry the coverage word - the door would " \
+    "filter on hope"
+ok("furniture never wears a veil: tool bit AND >=99% panel coverage "
+   "is refused the door (d0), the focus word notwithstanding - it "
+   "rides every door per the elevation clause's lesson; a small "
+   "tool and a full-panel app without the bit both ride through; "
+   "every fact carries the coverage word")
+
 
 # --- Oct-19: the elevation COMPUTE at the token seam (the door-fake
 # --- cannot tell an integrity parse from a class list - this drives
