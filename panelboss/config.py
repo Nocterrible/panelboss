@@ -446,6 +446,25 @@ DEFAULTS = {
                                    # consent); the arm in dimmer.py does
                                    # the RegisterHotKey against the
                                    # display pump's window
+        "input_pump": True,       # trust ONLY the app's raw-input
+                                # pump for every idle rail (the Oct-20 wave;
+                                #   the owner overrode the default-off law for
+                                #   THIS key: default-on plus fail-open means
+                                #   the worst case equals the old behavior,
+                                #   which is what justified the override). false
+                                #   is the stock GetLastInputInfo clock verbatim;
+                                #   true routes the idle seams through
+                                #   inputtruth - zero-travel device liars
+                                #   (stuck-macropad firmware, jigglers, KVM
+                                #   chatter) re-stamp that clock forever and
+                                #   the pump's 3 px dead zone is deaf to
+                                #   exactly those. Restart-required like the
+                                #   rest of this section: flip it, relaunch.
+                                #   The OFF-PHASE WAKE additionally hears
+                                #   injection through the exemption when the
+                                #   stream is silent (see inputtruth's
+                                #   docstring - the away/theater rails never
+                                #   take the exemption).
     },
     "videodim": {
         "on": False,               # the dim-around-the-playing-video
@@ -1086,6 +1105,15 @@ def normalize_dimmer(value):
         log.warning("dimmer fade %r is not a bool; the veil drops "
                     "without a fade", fade)
         fade = False
+    # input_pump: the Oct-20 clock choice (the owner's default-on
+    # override of the default-off law - fail-open is the insurance
+    # that justified it, so junk folds to the DEFAULT, not to off).
+    # STRICT bool like fade; the restart law covers the flip.
+    pump = value.get("input_pump", True)
+    if not isinstance(pump, bool):
+        log.warning("dimmer input_pump %r is not a bool; the pump "
+                    "stays on (fail-open is the whole desk)", pump)
+        pump = True
     rows = {}
     raw = value.get("monitors")
     try:
@@ -1175,7 +1203,7 @@ def normalize_dimmer(value):
     return {"on": on, "monitors": rows, "always": always,
             "idle_sec": idle, "ramp_sec": ramp, "level": level,
             "fade": fade, "levels": levels,
-            "apps": apps, "bound": bound}
+            "apps": apps, "bound": bound, "input_pump": pump}
 
 
 VIDEODIM_MIN_FLOOR = 0             # a zero min means "trust every
