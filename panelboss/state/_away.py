@@ -478,7 +478,7 @@ class _AwayMixin:
         retracted panel may answer to no GDI row at all (or only to
         a lying ghost). A desk with no offdisc rows never reaches
         the CCD at all - the belt's first live act is silence."""
-        from ..wm import _bright, _sdc
+        from ..wm import _bright
         away = self.cfg.get("away") or {}
         rows = away.get("monitors") or {}
         # THE EXEMPTION reaches the belt too (the canvas is not a
@@ -524,30 +524,14 @@ class _AwayMixin:
                       exc_info=True)
         # the second door keeps its OWN try-block (gate fix 3): a
         # raising D6 row must not skip the disconnect pass - one
-        # belt, two doors, each dying alone
+        # belt, two doors, each dying alone. The pass itself lives in
+        # _restore_offdisc below: the uninstall's cleanup verb (cli)
+        # must call the SAME retraction hand-back, not a re-derivation
+        # (the MSI wave, Oct 21); the belt's call and its log lines
+        # are exactly what they were.
         try:
-            for short, row in rows.items():
-                if not (row or {}).get("offdisc"):
-                    continue
-                if short in virtual:
-                    continue          # the row answers the live desk
-                    #                 as a canvas: no retraction to
-                    #                 raise back (a withdrawn canvas
-                    #                 that answers NO row stays the
-                    #                 belt's existing silent class)
-                # gdi unknown for a retracted row (no desk slot to
-                # name): the token join carries it, and an ambiguous
-                # twin answers None = silent, never a gamble - and
-                # at THIS call shape a slot/token dispute cannot even
-                # form (no gdi to cross-check): disputes stay silent
-                # by design on the belt's road, the loud refusal
-                # belongs to the gdi-naming callers (engage side)
-                verdict = _sdc.revive({"short": short, "gdi": ""})
-                if verdict is not None:
-                    log.info("away belt: boot disconnect-restore for "
-                             "%s %s", short,
-                             "sent" if verdict[0]
-                             else "refused (%s)" % verdict[1])
+            _restore_offdisc(rows, virtual,
+                             "away belt: boot disconnect-restore for ")
         except Exception:
             log.debug("away belt: the boot disconnect pass failed",
                       exc_info=True)
@@ -650,6 +634,48 @@ def _row_went_dark(status):
     an all-refused engage must not yank the session."""
     return status in ("blackout", "dim", "dim (unverified)",
                       "off (unverified)", "off (disconnected)")
+
+
+def _restore_offdisc(rows, virtual, prefix="away belt: boot disconnect-restore for "):
+    """The belt's second door, EXTRACTED for the uninstall (MSI wave,
+    Oct 21): the boot belt AND the cleanup verb (panelboss/cleanup.py)
+    call this one function, so the CCD hand-back is never re-derived.
+    Every configured-offdisc row that is not a canvas gets
+    _sdc.revive's re-query: a target sitting INACTIVE in the store
+    (the crash/quit/update between the retraction and its hand-back:
+    the SAVE bit keeps the disconnect past this app, the documented
+    footgun) is raised back with SAVE too. `rows` is the config's
+    away.monitors dict, `virtual` the short set of canvas rows (the
+    canvas is not a panel - the belt says nothing to it); a call
+    whose verdict is None (lit, or the belt's silent classes) earns
+    no line. `prefix` keeps the belt's exact words while cleanup
+    names itself. Returns [(short, ok, why)] for the rows REACHED -
+    cleanup's summary counts from it, the belt ignores it (it never
+    did before the extract). The caller owns the exception budget:
+    the belt keeps its own try-block (gate fix 3), cleanup wraps
+    every step - a raising door must never sentence the other.
+    gdi unknown for a retracted row (no desk slot to name): the
+    token join carries it, and an ambiguous twin answers None =
+    silent, never a gamble (the belt's road, same law as before the
+    extract)."""
+    from ..wm import _sdc
+    reached = []
+    for short, row in rows.items():
+        if not (row or {}).get("offdisc"):
+            continue
+        if short in virtual:
+            continue          # the row answers the live desk
+            #                 as a canvas: no retraction to
+            #                 raise back (a withdrawn canvas
+            #                 that answers NO row stays the
+            #                 belt's existing silent class)
+        verdict = _sdc.revive({"short": short, "gdi": ""})
+        if verdict is not None:
+            log.info(prefix + "%s %s", short,
+                     "sent" if verdict[0]
+                     else "refused (%s)" % verdict[1])
+            reached.append((short, bool(verdict[0]), str(verdict[1])))
+    return reached
 
 
 def _live_desk():

@@ -61,9 +61,13 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
                                       # retire-not-free, the settle
                                       # window, the arr slack - fake
                                       # kernel, no real seconds
-    'tray_icon_test.py'               # the tray ART (owner law Oct 19):
+    'tray_icon_test.py',              # the tray ART (owner law Oct 19):
                                       # the holes are the status; pure
                                       # PIL, app-up compatible
+    'uninstall_test.py',              # the MSI cleanup verb (Oct 21):
+                                      # CCD-first ordering, ours-only
+                                      # task, honest no-op, exit 0 -
+                                      # all fakes, app-up compatible
 $dir = Join-Path $root "scripts"
 # ledger 16: the log must be attributable - tip stamp at the head,
 # and DIRTY when the tested worktree differs from it (a stamp that

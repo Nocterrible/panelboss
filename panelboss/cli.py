@@ -74,7 +74,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="panelboss")
     parser.add_argument("command", nargs="?", default="run",
                         choices=["run", "cameras", "preview", "config",
-                                "enroll", "faces"])
+                                "enroll", "faces", "cleanup"])
     parser.add_argument("--off-test", action="store_true",
                         help="prove the monitor round trip; always the last "
                              "check before trusting the power control")
@@ -83,6 +83,9 @@ def main(argv=None):
                         help="camera index; overrides the config file")
     parser.add_argument("--no-ui", action="store_true",
                         help="start headless; the tray alone")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="cleanup only: read every truth, write "
+                             "nothing (safe on a live desk)")
     parser.add_argument("--autostart", action="store_true",
                         help="this copy was fired by the logon Run key "
                              "(the entry stamps itself; recognition is "
@@ -153,6 +156,15 @@ def main(argv=None):
 
     if args.command == "config":
         print(cfg["_path"])
+        return 0
+    if args.command == "cleanup":
+        # the MSI's uninstall verb (law 3): the lines ARE the report,
+        # the exit is ALWAYS 0 - a no-op world must not fail an
+        # uninstall, and cleanup.run swallows every door's death into
+        # its own honest line (panelboss/cleanup.py)
+        from . import cleanup
+        for line in cleanup.run(cfg, bool(args.dry_run)):
+            print(line)
         return 0
     if args.command == "cameras":
         _cameras()                          # names always after indexes
