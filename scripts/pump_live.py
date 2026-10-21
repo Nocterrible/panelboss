@@ -20,9 +20,12 @@ Exit 0 = the ear lived the whole window, both clocks are sane
 numbers, and the pump clock aged at the wall rate while hands
 stayed off (the stamping regime this feature exists for is
 welcomed, not required: a healthy desk shows two climbing lines).
-Exit 1 names the failure. This is where the KVM-exonerating,
-macropad-convicting receipts (Temp\\opencode\\unplug.log /
-direct.log / nohid.log / nohid2.log) graduated into a fixture.
+Exit 1 names the failure. NOT rostered in run_all (a live-desk
+guard, hand-run like theater_live before it: the desk it speaks
+for is never a CI fixture - un-handled hands make every window
+a lie). This is where the KVM-exonerating, macropad-convicting
+receipts (Temp\\opencode\\unplug.log / direct.log / nohid.log /
+nohid2.log) graduated into a fixture.
 """
 import math
 import os
