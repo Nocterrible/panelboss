@@ -11,18 +11,25 @@ lifts it, the rail re-arms it; Frame.idle drives the fake clock), the
 WINDOW HOLE (clause 1: the ring's hole is the REPORTING WINDOW, bounds
 expanded 8 px, when the row reports one; the VIDEO rect stays the hole
 without the report - the compat lane; liveness never left the video
-rect), the sound exemption (a film's audio does NOT lift the theater
+rect), THE PUMP (the conjunct's clock: inputtruth's filter core pinned
+as a PURE function on synthetic report events - boot infinite idle,
+the zero-travel chatter refusal, the 3 px dead-zone accumulation, the
+injected masks - the hook thread a smoke test only, and the deaf pump
+its packeted one warning line), the sound exemption (a film's audio does NOT lift the theater
 frame), and the replacement seam (theater active ->
 a plain idle veil never covers that region). Every door is a fake seam
 (the doorway path, monitors, the clock) - no browser, no Tk, app-up and
 headless alike, the dimmer_test family's idiom.
 """
 import json
+import math
 import os
 import sys
 
 sys.path.insert(0, ".")
-from panelboss import config, dimmer, videoeye          # noqa: E402
+from panelboss import config, dimmer, inputtruth, videoeye   # noqa: E402
+import panelboss._inputtruth_hook as _inputtruth_hook  # noqa: E402
+
 
 OK = []
 _TMP = os.path.join(os.environ.get("TEMP", "."), "pb-videoeye-test-door")
@@ -577,8 +584,8 @@ assert len([h for h in fb.rec.painted if h < 0]) == 4   # the ring is BORN
 fb.idle = 30.0                         # motion mid-film: the ring
 fb.tick(121, vidle=130)                # lifts - fade=true joins the
 assert len([h for h in fb.rec.painted if h < 0]) == 4   # ramp family,
-assert all(v[1] == 0.3 for v in fb.rec.painted.values()  # the hold is
-        if h < 0)                                      # still full
+assert all(v[1] == 0.3 for h, v in fb.rec.painted.items()
+           if h < 0)                      # the hold is still full
 fb.tick(129, vidle=130)                # a whole ramp later: bare
 assert fb.rec.painted == {}, fb.rec.painted
 ok("fade=true rides the ramp family on the MOTION lift too: one-tick "
@@ -756,6 +763,311 @@ os.remove(videoeye.RECT_PATH)
 videoeye._STATE.clear()
 ok("live_pair: one walk, both answers; dpr folds the bounds; no "
    "bounds report is (rect, None) - the compat lane at the door")
+
+# 19f. THE PUMP, PURE (the conjunct's clock, the Oct-20 input-truth
+#      wave): the filter core takes SYNTHETIC RAW PACKET fields - no
+#      hooks (none shipped: the owner's raw-only ruling), no ctypes
+#      threads, no sleeps; the clock arrives as `now`. This is the
+#      law the desk receipts wrote (unplug.log / direct.log /
+#      nohid.log / nohid2.log, Oct 20): a stuck macropad re-reported
+#      the mouse with ZERO travel and poisoned GetLastInputInfo for
+#      a working day - travel, not the report, is the input.
+pmp = inputtruth.Pump()
+assert math.isinf(pmp.idle_seconds(0.0))   # BOOT = INFINITE idle, not
+#                                           # "now" (the packeted state)
+for _i in range(500):                      # the nohid.log desk: 500
+    assert not pmp.mouse(0, 0, 0, 1.0 + _i)  # zero-travel relative
+assert math.isinf(pmp.idle_seconds(600.0)) # packets - the stream is
+#                                           # traffic, but never input
+assert not pmp.key(0x1E, inputtruth.RI_KEY_BREAK, 601.0)
+                                           # a keyUP proves nothing
+assert pmp.key(0x1E, 0, 602.0)             # a MAKE with the BREAK
+                                           # clear is a hand
+assert pmp.idle_seconds(607.0) == 5.0
+assert not pmp.key(0x1E, inputtruth.RI_KEY_TERMSRV_SHADOW, 608.0)
+                                           # the RDP-shadow make is
+                                           # not a local hand
+assert pmp.key(0x41, inputtruth.RI_KEY_E0, 610.0)
+                                           # extended bits ride: the
+                                           # make still counts
+pmp = inputtruth.Pump()                    # the CUMULATIVE dead zone
+assert not pmp.mouse(1, 0, 0, 100.0)       # a high-res mouse streams
+assert not pmp.mouse(0, 1, 0, 100.1)       # honest sub-zone deltas:
+assert not pmp.mouse(0, 0, 0, 100.15)      # 2 px so far, under
+assert pmp.mouse(1, 0, 0, 100.2)           # 3 px TOTAL travels:
+                                           # stamps
+assert not pmp.mouse(1, 1, 0, 100.3)       # and the accumulator
+                                           # RE-ARMS: 2 px after the
+                                           # stamp is 2, not 5
+pmp = inputtruth.Pump()                    # absolute reports anchor
+pmp.mouse(200, 100, inputtruth.MOUSE_MOVE_ABSOLUTE, 200.0)
+assert math.isinf(pmp.idle_seconds(201.0))  # first one measures
+                                           # nothing
+pmp = inputtruth.Pump()                    # from
+pmp.mouse(200, 100, inputtruth.MOUSE_MOVE_ABSOLUTE, 200.0)
+assert not pmp.mouse(201, 100, inputtruth.MOUSE_MOVE_ABSOLUTE, 201.0)
+                                           # one finger-px under way
+assert pmp.mouse(202, 102, inputtruth.MOUSE_MOVE_ABSOLUTE, 202.0)
+                                           # 4 px from the ANCHOR: a
+                                           # touch travel counts
+pmp = inputtruth.Pump()
+assert not pmp.mouse(9999, 0, inputtruth.MOUSE_VIRTUAL_DESKTOP, 300.0)
+                                           # virtual-desktop coords
+                                           # are not px of this desk
+                                           # (display's own gate)
+assert pmp.traffic_since(300.0) and not pmp.traffic_since(300.5)
+                                           # the refused packet is
+                                           # STILL device traffic
+                                           # (the witness counts the
+                                           # stream, not the verdict) -
+                                           # the pad's zero-travel
+                                           # class of lie keeps the
+                                           # wake exemption SHUT,
+                                           # exactly as the owner's
+                                           # rule reads
+ok("the pump's filter, pure: boot infinite, zero-travel traffic never "
+   "input, real travel ACCUMULATES across sub-zone reports (high-res "
+   "mice, slow drags), absolute reports count by anchor delta, "
+   "VIRTUAL_DESKTOP and shadow-makes and keyups are none of the "
+   "pump's business; traffic_since is the exemption's witness")
+
+#      INJECTION IS DROPPED AT THE EAR (the null-hDevice marker the
+#      Oct-20 probe confirmed live: every SendInput packet arrived
+#      hDevice-less while real devices carry their HID handle).
+#      Structure-level: hand RawEars._parse real RAWINPUT buffers
+#      with and without the handle, no thread required.
+class _EarProbe:
+    """A RawEars that never started a thread: _parse against buffers
+    the fake GetRawInputData hands back."""
+    def __init__(self):
+        self._pump = inputtruth.Pump()
+        self._now = lambda: 400.0
+
+
+_real_grid = _inputtruth_hook.U32.GetRawInputData
+_bufs = {}
+
+
+def _fake_grid(handle, cmd, buf, psize, hsize):
+    blob = _bufs["raw"]
+    if buf is None:
+        psize._obj.value = len(blob)        # byref(UINT): report size
+        return 0
+    ctypes.memmove(buf, blob, len(blob))
+    psize._obj.value = len(blob)
+    return len(blob)
+
+
+def _pack(head_dev, payload, kind):
+    h = _inputtruth_hook.RAWINPUTHEADER()
+    h.dwType = kind
+    h.dwSize = 200
+    h.hDevice = head_dev
+    h.wParam = 0
+    return bytes(h) + payload
+
+
+def _parse_into(ear, blob):
+    _bufs["raw"] = blob
+    _inputtruth_hook.U32.GetRawInputData = _fake_grid
+    try:
+        _inputtruth_hook.RawEars._parse(ear, 1)
+    finally:
+        _inputtruth_hook.U32.GetRawInputData = _real_grid
+
+
+import ctypes                              # noqa: E402
+ear = _EarProbe()
+_kb = _inputtruth_hook.RAWKEYBOARD(0x1E, 0, 0, 0x41, 0x0100, 0)
+ear_pump = ear._pump
+_parse_into(ear, _pack(0, bytes(_kb), _inputtruth_hook.RIM_TYPEKEYBOARD))
+assert ear_pump.last is None               # hDevice NULL: injected,
+#                                           # never reaches the pump
+#                                           # (no stamp, and NO
+#                                           # traffic credit either:
+#                                           # a synthetic knock is
+#                                           # not a device speaking)
+_parse_into(ear, _pack(0x1001, bytes(_kb), _inputtruth_hook.RIM_TYPEKEYBOARD))
+assert ear_pump.last == 400.0              # handle present: the make
+#                                           # stamps as the pure core
+#                                           # said it would
+ear_pump.last = 399.0              # move the witness off the kb
+                                   # stamp so the mouse drop is
+                                   # OBSERVABLE, not coincidental
+_mo = _inputtruth_hook.RAWMOUSE()
+_mo.flags = 0
+_mo.u.buttons.ulButtons = 0
+_mo.u.buttons.buttonFlags = 0
+_mo.u.buttons.buttonData = 0
+_mo.lastX, _mo.lastY = 17, 0
+_parse_into(ear, _pack(0, bytes(_mo), _inputtruth_hook.RIM_TYPEMOUSE))
+assert ear_pump.last == 399.0              # injected MOUSE (17 px!)
+#                                           # also dropped: an
+#                                           # injected hand's travel
+#                                           # is not this pump's
+#                                           # input, and the EXEMPTION
+#                                           # (below) is its lane
+ok("null-hDevice packets (SendInput's documented marker, probe-confirmed "
+   "Oct 20) are dropped AT THE EAR for both device types: injection "
+   "cannot stamp the pump clock no matter what deltas it carries - "
+   "the owner's wake exemption is a remote hand's only lane")
+
+#      THE WAKE EXEMPTION, both directions (the owner's rule, verbatim
+#      from the module docstring): injection counts as input ONLY when
+#      the stock clock moved while the pump saw ZERO device packets -
+#      amid real traffic (even zero-travel pad lies) the pump's
+#      verdict alone governs.
+_saved_ear = inputtruth._ear
+
+
+class _AliveEar:
+    def alive(self):
+        return True
+
+
+inputtruth._ear = _AliveEar()
+pmp = inputtruth.Pump()
+_saved_pump, inputtruth._pump = inputtruth._pump, pmp
+inputtruth.WAKE_WINDOW_SEC = 1.0
+# (a) DEVICE TRAFFIC + stock advance -> NO wake via the exemption:
+_now = inputtruth.time.monotonic()         # no fake clock needed:
+pmp.mouse(0, 0, 0, _now - 0.5)             # ONE zero-travel device
+wake1 = inputtruth.wake_idle_seconds(0.3)      # packet half a second
+assert math.isinf(wake1), wake1            # ago; stock says "0.3 -
+#                                           # busy!" - the pump saw
+                                           # traffic, so the pump
+                                           # verdict (never a counted
+                                           # input: inf) governs and
+                                           # the stock lie does NOT
+                                           # wake the screens
+# (b) stock advance + NO packets at all -> the synthetic knock wakes:
+pmp2 = inputtruth.Pump()                   # fresh: stream silent
+inputtruth._pump = pmp2
+wake2 = inputtruth.wake_idle_seconds(0.3)
+assert wake2 == 0.3, wake2                       # whatever moved stock was
+#                                           # injection - count it: a
+#                                           # remote hand wakes the
+#                                           # door it already dimmed
+# and the pump's OWN truth still wakes it the plain way:
+pmp2.key(0x1E, 0, inputtruth.time.monotonic())
+                                           # a real make, this second
+wake3 = inputtruth.wake_idle_seconds(9.0)  # stock says "idle 9s" -
+assert wake3 < 1.0, wake3                  # the pump says HAND, and
+#                                           # the hand outranks the
+#                                           # stranger's 9 seconds
+inputtruth._ear = _saved_ear
+inputtruth._pump = _saved_pump
+ok("the wake exemption, both directions: traffic + stock advance does "
+   "NOT wake (the pad lie cannot), silence + stock advance DOES (the "
+   "remote hand is a guest at the door it already dimmed), and the "
+   "pump's own counted input outranks a lying stock - off-phase only, "
+   "the state seam is pinned in dimmer_test 6c")
+
+#      THE CONJUNCT ON THE PUMP (the clause-2 rail and the filter,
+#      end to end - hooks still synthetic, the seam's clock IS a
+#      Pump): chatter holds the ring, real travel lifts it, the rail
+#      re-arms. The Frame's idle seam is swapped for pump.idle and
+#      the fake desk's clock hand is the pump's own `now`.
+RECT[0] = (100, 100, 600, 300)
+WRECT[0] = None
+f = Frame([w(1)], idle=999.0)
+pmp = inputtruth.Pump()
+TC = [1000.0]
+f.v._idle = lambda: pmp.idle_seconds(TC[0])
+f.tick(100, vidle=15)
+assert len([h for h in f.rec.painted if h < 0]) == 4, f.rec.painted
+                                       # boot=inf past the rail: RING
+for _i in range(200):                  # the desk CHATTERS hands-off
+    pmp.mouse(0, 0, 0, TC[0])          # 10 s of zero-travel packets
+    TC[0] += 0.05
+f.tick(101, vidle=15)
+assert len([h for h in f.rec.painted if h < 0]) == 4, f.rec.painted
+                                       # the ring HOLDS through lies
+assert pmp.mouse(4, 0, 0, TC[0])       # 4 px of real travel: a hand
+f.tick(102, vidle=15)
+assert not any(h < 0 for h in f.rec.painted), f.rec.painted
+                                       # lifts the RING (the player
+                                       # stays bright either way -
+                                       # the exemption is clock-free)
+TC[0] += 15.0
+f.tick(103, vidle=15)
+assert len([h for h in f.rec.painted if h < 0]) == 4, f.rec.painted
+                                       # and the rail RE-ARMS on the
+                                       # pump
+RECT[0] = None
+ok("the conjunct rides the pump clock end to end: chatter holds the "
+   "ring, real travel lifts it, the rail re-arms - clause 2 on the "
+   "sick desk's own truth")
+
+#      THE HOOK THREAD, SMOKE ONLY (the packet's one concession to the
+#      real desk: the raw ear installs, survives an idle beat, and
+#      unstalls clean - every SEMANTIC above was pinned without it):
+assert inputtruth.install(), "the raw ear must install on this desk"
+assert inputtruth.alive()
+import time as _time
+inputtruth.pump().key(0x1E, 0, _time.monotonic())
+assert isinstance(inputtruth.idle_seconds(), float)  # the smoke
+#                                                     # keystamp makes it
+#                                                     # finite, never a raise
+_time.sleep(0.3)                                     # an idle desk...
+assert inputtruth.alive(), "the ear rode the idle beat"
+assert isinstance(inputtruth.idle_seconds(), float)  # ...survived; any
+#                                                     # real hand that
+#                                                     # typed during it
+#                                                     # merely restamps
+inputtruth.uninstall()
+assert not inputtruth.alive()
+inputtruth.uninstall()                               # idempotent, no raise
+
+#      FAIL-OPEN (the deaf pump's packeted word): a refusal reaches
+#      the dimmer seam as the STOCK clock plus exactly ONE DATED
+#      warning line.
+import logging as _lg
+
+
+class _Ear(_lg.Handler):
+    def __init__(self):
+        _lg.Handler.__init__(self)
+        self.n = 0
+        self.line = ""
+
+    def emit(self, rec):
+        self.n += 1
+        self.line = rec.getMessage()
+
+
+wh = _Ear()
+inputtruth.log.addHandler(wh)
+_real_attach = sys.modules["panelboss._inputtruth_hook"].attach
+
+
+def _refuser(pump):
+    raise OSError("RegisterRawInputDevices refused: Win32 error 5 "
+                  "(fake)")
+
+
+sys.modules["panelboss._inputtruth_hook"].attach = _refuser
+assert not inputtruth.install()
+v2 = inputtruth.idle_seconds()          # fail-open: the stock clock
+assert isinstance(v2, float) and v2 >= 0.0   # answers (finite or the
+#                                      # deaf-inf it returns too - the
+#                                      # seam never sees a refusal)
+inputtruth.idle_seconds()
+inputtruth.idle_seconds()
+assert wh.n == 1, wh.n                  # ...with ONE warning line
+assert wh.line[:2].isdigit() and wh.line[2] == ":", wh.line
+#                                       # and it is DATED (the owner's
+#                                       # fail-open addition: the line
+#                                       # opens HH:MM - a pump that
+#                                       # dies at 3 am says 3 am)
+sys.modules["panelboss._inputtruth_hook"].attach = _real_attach
+inputtruth.log.removeHandler(wh)
+inputtruth._unavailable = False          # fresh-process parity for
+inputtruth._refusal = ""                 # whatever reads next
+inputtruth._warned = False
+ok("the raw ear: installs, survives an idle desk, unstalls "
+   "idempotently; a refusal fail-opens to the stock clock with "
+   "exactly ONE DATED warning line (the packeted deaf-pump law)")
 
 # 19b. the SAME desk with the THEATER OFF: the switch owns the frame
 #      (no negative keys), but the player window STILL never wears the

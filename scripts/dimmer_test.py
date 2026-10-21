@@ -1346,4 +1346,56 @@ assert "hotkey_window" in DISP                       # the registrar's
 _dlg.removeHandler(_cap)
 ok("the WM_HOTKEY wire is pinned end to end: 0x0312, the 0x5042 "
    "belt, straight to hotkey_press")
+
+# --- 6c: THE IDLE SEAM is a GATE, pinned both ways (Oct-20 wave,
+# --- the final shape: default-ON pump, stock clock one switch away).
+# --- The seam is the ONE swap site - the plain idle_ok, the theater
+# --- conjunct, every [dimmer]/[videodim].idle_sec rail follow it -
+# --- so the pin reads the SOURCE (the wire-pin idiom above) and
+# --- drives both branches with sentinel clocks.
+DIM = open("panelboss/dimmer.py", encoding="utf-8").read()
+_seam = DIM[DIM.index("def _idle_secs():"):]
+_seam = _seam[:_seam.index("\n\n")]
+assert "inputtruth.idle_seconds()" in _seam and \
+    "display.idle_seconds()" in _seam and "if _PUMP_ON" in _seam, \
+    "the seam lost its conditional or a branch"
+assert config.normalize_dimmer({})["input_pump"] is True   # the owner
+#                                            # override: default ON,
+#                                            # fail-open is the cover
+assert config.normalize_dimmer(
+    {"input_pump": False})["input_pump"] is False
+assert config.normalize_dimmer(
+    {"input_pump": "yes"})["input_pump"] is True   # junk folds to the
+#                                                   # default, warns
+import panelboss.inputtruth as _IT
+from panelboss import display as _D
+_real_pump_clock, _real_stock = _IT.idle_seconds, _D.idle_seconds
+_IT.idle_seconds = lambda: 7.0
+_D.idle_seconds = lambda: 8.0
+try:
+    dimmer._PUMP_ON = True
+    assert dimmer._idle_secs() == 7.0, "pump ON did not reach the pump"
+    dimmer._PUMP_ON = False
+    assert dimmer._idle_secs() == 8.0, "pump OFF did not reach the stock clock"
+finally:
+    _IT.idle_seconds, _D.idle_seconds = _real_pump_clock, _real_stock
+    dimmer._PUMP_ON = None
+# the OFF-PHASE WAKE door (the exemption's ONLY consumer): the boot
+# seam must hand the off-phase the wake clock and the on-phase the
+# raw stock number - the away rails never take the shortcut
+BOOT = open("panelboss/state/_boot.py", encoding="utf-8").read()
+_wake = BOOT[BOOT.index("idle = display.get_idle_time()"):]
+assert "self._off_phase(now, inputtruth.wake_idle_seconds(idle))" \
+    in _wake and "self._on_phase(now, idle)" in _wake, \
+    "the exemption moved onto the wrong phase"
+# the owner's verbatim label ships on the card, word for word
+OLED = open("panelboss/ui/window/_oled.py", encoding="utf-8").read()
+assert '\"Does your shit occasionally decide \"' in OLED or \
+    'Does your shit occasionally decide ' in OLED, \
+    "the owner's own words left the label"
+assert 'input_pump' in OLED and '_oled_comp_pump_changed' in OLED
+ok("the idle seam is the gate: source pins both branches, sentinels "
+   "drive both clocks, default-ON normalizes (junk folds to on), the "
+   "exemption lives only at the off-phase door, and the owner's label "
+   "is verbatim on the card (6c)")
 print("\nDIMMER TESTS OK (%d)" % len(OK))
