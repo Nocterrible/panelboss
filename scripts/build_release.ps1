@@ -6,36 +6,18 @@
 #           dist\PanelBoss-<commit>.zip  (the release).
 # The zip drops beside the exe's own folder; config and logs stay in
 # %APPDATA%\PanelBoss for BOTH the repo and the exe world.
+# The exe itself is built by the SHARED onedir step (build_onedir.ps1,
+# dot-sourced below): this file owns only the zip and its stamp, and
+# build_msi.ps1 owns the candle/light half - the PyInstaller flags
+# live in exactly one place now (MSI wave, Oct 21).
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'build_onedir.ps1')
 
 $repo = Split-Path -Parent $PSScriptRoot
 $exe = 'PanelBoss'
-$py = Join-Path $repo '.venv\Scripts\python.exe'
 
-Write-Output 'building exe (minutes: onnxruntime + opencv ride along)'
-& $py -m PyInstaller --noconfirm --clean --windowed --name $exe `
-    --distpath (Join-Path $repo 'dist') `
-    --workpath (Join-Path $repo 'build') `
-    --collect-all customtkinter `
-    --collect-binaries onnxruntime `
-    --collect-all pystray `
-    --hidden-import whircam `
-    --collect-all winrt `
-    --exclude-module pytest `
-    --exclude-module setuptools `
-    --exclude-module pip `
-    (Join-Path $repo 'run_exe.py')
-if ($LASTEXITCODE -ne 0) { Write-Output "pyinstaller failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
-
-# the models folder ships OUTSIDE _internal so users can drop their
-# own *.onnx there; inference.py (frozen) prefers exe-dir\models
-$models = Join-Path $repo 'models'
-$target = Join-Path $repo ('dist\' + $exe + '\models')
-if (Test-Path $models) {
-    New-Item $target -ItemType Directory -Force | Out-Null
-    Copy-Item (Join-Path $models '*.onnx') $target -Force -ErrorAction SilentlyContinue
-}
+Invoke-OnedirBuild -repo $repo -exe $exe
 
 $stamp = (& git -C $repo rev-parse --short HEAD) 2>$null
 if ($stamp) { $zipName = ($exe + '-' + $stamp + '.zip') } else { $zipName = ($exe + '.zip') }
