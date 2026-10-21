@@ -328,6 +328,25 @@ class Veils:
         vrect = self._live_rect(cfg, now, praw)
         frame = self._frame_pieces(vrect, vd.get("monitors"), valpha,
                                    window_rect=wraw)
+        # THE RING IS BORN ONLY OVER A LIVE HOLDER (d1, the owner's
+        # freshness ruling): a reported rect the census says NO
+        # window holds is a ghost - the tab closed, the player died,
+        # the report outlived its holder - and no ring may be born
+        # over it. Stale by FACT, no clock, no grace, this tick;
+        # THE SAME predicate the player exemption rides below. The
+        # census is not wasted: the walk REUSES it (one EnumWindows
+        # per theater tick); fade ticks carry vrect None, pay
+        # nothing, and the documented census-free economy below
+        # stands untouched. Caveat, honest: a tab closed inside a
+        # still-running browser holder-MATCHES (benign - the hole is
+        # the WINDOW's bounds); the content.js pagehide->paused push
+        # is the parked one-line complement.
+        _wins = None
+        if vrect is not None:                    # only a ring-birth tick pays
+            try: _wins = self._windows()
+            except Exception: _wins = None       # census dead: refuse BIRTH
+            if not (_wins and any(_rect_has(w["rect"], praw) for w in _wins)):
+                vrect, frame = None, {}          # stale by FACT, no clock needed
         covered = {short for _, short, _a in frame.values()}
         rows = d.get("monitors") or {}
         opted = {s for s, v in rows.items() if v}
@@ -393,7 +412,7 @@ class Veils:
             self._fade(d, now, cfg.get("videodim"))
             return
         try:
-            wins = self._windows()
+            wins = _wins if _wins is not None else self._windows()
         except Exception:
             log.warning("dimmer: the census failed this tick; the "
                         "veils hold position")

@@ -489,8 +489,13 @@ assert {v[0] for v in f.rec.painted.values()} == {
 ok("the frame is exactly four dark rectangles - the hole is the rect")
 
 # 12. the straddle: pieces PER MONITOR, each clamped; the seam column
-#     across the video stays bright
-f = Frame([w(1)], idle=999.0)
+#     across the video stays bright. (Oct-21 amendment, d1: the fake
+#     desk gained a STRADDLING HOLDER - the old lone window sat fully
+#     west of the reported rect, and the holder-match gate at birth
+#     rightly refuses a report no census window holds. The straddle
+#     law itself is unchanged; the desk just became honest about who
+#     plays the movie.)
+f = Frame([w(1, rect=(850, 150, 300, 500))], idle=999.0)
 RECT[0] = (900, 200, 200, 400)
 f.tick(100)
 assert {v[0] for v in f.rec.painted.values()} == {
@@ -590,6 +595,48 @@ fb.tick(129, vidle=130)                # a whole ramp later: bare
 assert fb.rec.painted == {}, fb.rec.painted
 ok("fade=true rides the ramp family on the MOTION lift too: one-tick "
    "hold then retract - the conjunct's lift, the fade option's shape")
+
+# 15c. HOLDER-MATCH AT BIRTH (d1, the owner's freshness ruling): the
+#      ring is born only over a LIVE HOLDER. Branch one: the eye
+#      reports, the desk is still past the rail, and the census holds
+#      NO window containing the rect - stale by FACT, no clock
+#      needed: zero theater pieces are born (the plain veils proceed:
+#      it is the RING that the ghost refuses, not the desk's law).
+#      The spy counts the seam: ONE census per birth tick - the gate
+#      paid it and the plain walk rode it (this assert FAILS if the
+#      walk re-EnumerWindows). Branch two: the census is DEAD - the
+#      birth gate refuses on the doubt too, and the walk's old fail-
+#      open still holds the (empty) field's position.
+_census_calls = [0]
+
+
+def _dead_census():
+    raise OSError("census dead (fake)")
+
+
+f = Frame([w(1, rect=(10, 10, 300, 200))], idle=999.0)   # too small
+RECT[0] = (100, 100, 600, 300)                           # to hold it
+_wreal = f.v._windows
+
+
+def _spy():
+    _census_calls[0] += 1
+    return _wreal()
+
+
+f.v._windows = _spy
+f.tick(100, vidle=5)
+assert not any(h < 0 for h in f.rec.painted), f.rec.painted   # NO ring
+assert _census_calls[0] == 1, _census_calls      # one walk, reused
+f = Frame([w(1)], idle=999.0)                   # the holder EXISTS
+RECT[0] = (100, 100, 600, 300)                  # here; only eyes gone
+f.v._windows = _dead_census
+f.tick(100, vidle=5)
+assert f.rec.painted == {} and f.rec.gone == [], f.rec.painted
+ok("the ring is born only over a live holder (d1): a no-holder tick "
+   "and a dead-census tick both refuse birth - stale by fact, fail- "
+   "closed on birth alone - and the birth census is ONE walk the "
+   "plain leg reuses (spy: exactly one seam call on a birth tick)")
 
 # 16. THE SOUND EXEMPTION: a film's audio must not lift the theater
 #     frame - the drive is the pointer/keyboard idle clock only. Sound
