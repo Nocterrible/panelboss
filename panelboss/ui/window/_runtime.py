@@ -197,6 +197,14 @@ class _RuntimeMixin:
             if message == "startup":
                 from ... import startup
                 self._startup_sync(startup.enabled())
+            if message == "power_rows":
+                # the state machine's wake post (screen came up on its
+                # own, or our own wake re-lit the desk): the hold rows
+                # re-derive their selection AND their gray state from
+                # live cfg - a self-woken screen with detection off
+                # must show 'while present' grayed, not stale-on
+                if hasattr(self, "_sync_hold_rows"):
+                    self._sync_hold_rows()
             if message == "hdr_sync":
                 # amendment 8: a WM_DISPLAYCHANGE ride-up - the color
                 # state moved under us. The profiles pane's hdr notes
@@ -245,6 +253,11 @@ class _RuntimeMixin:
                     # gray-out read the moved key on the same turn,
                     # no second channel
                     self._sync_consent_switch()
+                if hasattr(self, "_sync_hold_rows"):
+                    # the power card joins the same turn (Oct 21):
+                    # detection flipped - the 'while present' segments
+                    # re-gray (or un-gray) live, no restart
+                    self._sync_hold_rows()
                 # every list change resets the debug view's slot (the
                 # owner's law: never a stale frame from the previous
                 # device) - the draw arm below takes the None slot as

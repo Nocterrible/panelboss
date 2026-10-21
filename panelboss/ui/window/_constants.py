@@ -112,12 +112,21 @@ TIPS = {
                      "while the app watches a lit desk. Nothing in the "
                      "power plan changes - the timer is only held back, "
                      "and only while this app runs: pausing, snoozing "
-                     "or quitting hands it back.",
+                     "or quitting hands it back. 'while present' holds "
+                     "it only while the camera's last verdict sees a "
+                     "person: when the desk reads absent or the eye "
+                     "gives no verdict (a dead camera, no frame, "
+                     "detection off) the timer is handed back on the "
+                     "spot and the plan's own timeout darkens the "
+                     "screens - the app never silently keeps holding.",
     "hold_sleep": "the plan's sleep timer is held back too. While the "
                    "screens are dark this is what keeps the watcher "
                    "alive to notice the return; with it off the box "
                    "sleeps on schedule and the app re-arms when the "
-                   "power button is pressed.",
+                   "power button is pressed. 'while present' holds it "
+                   "only while the camera sees a person - absent or "
+                   "no verdict hands the sleep timer to the plan the "
+                   "same instant.",
     "restore_windows": "some monitors unplug themselves from Windows "
                        "when they sleep, and Windows re-lays every window "
                        "on them to the wrong screen when they return. "

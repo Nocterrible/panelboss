@@ -8,9 +8,11 @@ the hassle; the tweaks module and its registry values survive.)
 The gaming rate section lives in _gaming.py beside it: it shares
 this tab's SECOND column (Oct 12, owner: the gaming cards moved
 right) but trades monitor rates, not powercfg flags.
-Size law (measured 420, Oct 15 - the Game DVR card's honest
-burial took the last 93 from the Oct 13's 511, taken after the
-widget-blind family's both-branch paint and the knob-lie sync
+Size law (measured 447, Oct 21 - the segmented hold wave grew the
+file by the choice builder, the gray walker and the HOLD_CHOICES map,
+after the Game DVR card's honest burial took the last 93 from the
+Oct 13's 511, taken after the widget-blind family's both-branch paint
+and the knob-lie sync
 entry landed - the
 two-column split and the defect-2
 knob-from-truth paint came before it): this
@@ -40,6 +42,16 @@ from ._widgets import SkewCombo
 
 log = logging.getLogger("ui")
 
+# the hold rows' three-way control (the 'while present' wave, Oct 21):
+# (config word, segment label) pairs - the labels speak this card's
+# voice, the words are what the load boundary stores. The control is
+# the house's segmented picker (the detection mode row's family),
+# never a style invented for one card.
+HOLD_CHOICES = (("off", "off"), ("on", "on"),
+                ("present", "while present (camera)"))
+HOLD_LABELS = dict(HOLD_CHOICES)
+HOLD_WORDS = {label: word for word, label in HOLD_CHOICES}
+
 
 class _PowerMixin:
     # --------------------------------------------------------- power plan --
@@ -49,31 +61,17 @@ class _PowerMixin:
                          "nothing in the power plan changes: the "
                          "timers are only held from firing while the app "
                          "is watching, and they are handed back the "
-                         "moment it pauses, snoozes or quits")
+                         "moment it pauses, snoozes or quits; with "
+                         "'while present' they are ALSO handed back "
+                         "whenever the camera can't see a person, and "
+                         "the app will not silently keep holding")
         row = self._row(box, "screen power off", TIPS["hold_display"])
-        self.hold_display_switch = ctk.CTkSwitch(row, text="",
-                                                 font=self.skin.font(12),
-                                                 command=self._hold_changed,
-                                                 **self.skin.switch_style())
-        self.hold_display_switch.grid(row=0, column=1, sticky="e")
-        # knob-from-truth, BOTH branches (the _sync_consent_switch /
-        # dd42d43 idiom, now the whole house's law): a truthy string
-        # is not truth - the tri-state words read hold_state, and the
-        # row paints ON only for 'on' (or today's boolean).
-        if config.hold_state(self.cfg["power"].get("hold_display")) == "on":
-            self.hold_display_switch.select()
-        else:
-            self.hold_display_switch.deselect()
+        self.hold_display_choice = self._hold_choice(row, "hold_display")
         row = self._row(box, "sleep", TIPS["hold_sleep"])
-        self.hold_sleep_switch = ctk.CTkSwitch(row, text="",
-                                               font=self.skin.font(12),
-                                               command=self._hold_changed,
-                                               **self.skin.switch_style())
-        self.hold_sleep_switch.grid(row=0, column=1, sticky="e")
-        if config.hold_state(self.cfg["power"].get("hold_sleep")) == "on":
-            self.hold_sleep_switch.select()
-        else:
-            self.hold_sleep_switch.deselect()
+        self.hold_sleep_choice = self._hold_choice(row, "hold_sleep")
+        self._sync_hold_rows()               # knob-from-truth, BOTH
+        #                                    branches: paint from cfg,
+        #                                    never from a build default
 
         box = self._card(col, "when the screens wake on their own")
         row = self._row(box, "unexpected wake", TIPS["wake"])
@@ -243,15 +241,60 @@ class _PowerMixin:
         self._save()
 
 
-    def _hold_changed(self):
+    def _hold_choice(self, row, key):
+        """One tri-state hold row's picker: off / on / while present
+        (camera). The gray-out law lands in _sync_hold_rows, not here:
+        the widget only ever paints from cfg + the availability flag."""
+        seg = ctk.CTkSegmentedButton(
+            row, values=[label for _word, label in HOLD_CHOICES],
+            height=26, width=250,
+            command=lambda label, k=key: self._hold_changed(k, label),
+            **self.skin.segmented_style())
+        seg.grid(row=0, column=1, sticky="e")
+        return seg
+
+    def _hold_changed(self, key, label):
         # cfg["power"] IS monitor.power_cfg, and the loop re-asserts
-        # the execution state every tick: both switches are live within
-        # 0.2 s, each on its own
-        self.cfg["power"]["hold_display"] = bool(
-            self.hold_display_switch.get())
-        self.cfg["power"]["hold_sleep"] = bool(
-            self.hold_sleep_switch.get())
+        # the execution state every tick: both rows are live within
+        # 0.2 s, each on its own. The segment LABEL arrives; the WORD
+        # goes to the dict (the file shape the load boundary reads
+        # back unchanged).
+        self.cfg["power"][key] = HOLD_WORDS[label]
         self._save()
+
+    def _sync_hold_rows(self):
+        """KNOB-FROM-TRUTH for the segmented pair, BOTH branches (the
+        _sync_consent_switch law): the selection paints from cfg via
+        hold_state (a stale segment that survived a hidden-state flip
+        is the knob-lie class in new clothes), and the gray-out law
+        re-reads config.hold_present_available - THE LAW AS DATA, so
+        the suite pins the flag without a widget. The 'while present'
+        segment grays, never hides (owner): a row already answering
+        'present' keeps its selection visible while detection stands
+        off, and its EFFECT is the released hold (state/_power's
+        _hold_on reads the no-verdict the consent drain recorded) -
+        both halves pinned. Called at build, at every window show and
+        power-tab reveal (SWITCH_SYNC), on the cameras resync (the
+        detection tab flipped without a restart) and on the wake
+        power_rows post (a self-woken screen must not sit stale-on)."""
+        p = self.cfg["power"]
+        wanted = {"hold_display": HOLD_LABELS[config.hold_state(
+                      p.get("hold_display"))],
+                  "hold_sleep": HOLD_LABELS[config.hold_state(
+                      p.get("hold_sleep"))]}
+        gray = "disabled" if not config.hold_present_available(
+            self.cfg.get("camera")) else "normal"
+        for key, seg in (("hold_display", self.hold_display_choice),
+                         ("hold_sleep", self.hold_sleep_choice)):
+            if seg.get() != wanted[key]:
+                seg.set(wanted[key])         # set() fires no command
+            btn = seg._buttons_dict[HOLD_LABELS["present"]]
+            if btn._state != gray:
+                # diff-guarded per WIDGET (the belt's own idiom): the
+                # guard rides the button's tracked state, so a rebuild
+                # over an unchanged law still lands the fresh widget's
+                # honest paint and an unchanged truth costs no redraw
+                btn.configure(state=gray)
 
 
     def _restore_changed(self):
@@ -418,12 +461,10 @@ class _PowerMixin:
         where the flag stands (a lying ON self-heals on the truth
         beat), so the flag remains the honest state between beats."""
         p = self.cfg["power"]
-        (self.hold_display_switch.select()
-         if config.hold_state(p.get("hold_display")) == "on"
-         else self.hold_display_switch.deselect())
-        (self.hold_sleep_switch.select()
-         if config.hold_state(p.get("hold_sleep")) == "on"
-         else self.hold_sleep_switch.deselect())
+        # the hold pair's both-branch truth paint + the gray law moved
+        # into _sync_hold_rows with the segmented wave (Oct 21); the
+        # restore/fullscreen/assistant switches keep the select() belt
+        self._sync_hold_rows()
         self.restore_switch.select() if p.get("restore_windows") \
             else self.restore_switch.deselect()
         # hdr_away_switch is gone with its row (dim-mode wave): the

@@ -416,10 +416,22 @@ def check():
                 cfg["power"]["assistant_task"] = not flip
                 cfg["gaming"]["enabled"] = flip
                 app._build_power(app.pages["power plan"].inner)
-                assert bool(app.hold_display_switch.get()) is flip, \
+                # the hold pair paints from cfg as the SEGMENTED trio
+                # since Oct 21: the same both-branch law, now also
+                # proving the belt's bool->word mapping (flip rides the
+                # pre-wave boolean shape) and the gray law as painted
+                # (camera.enabled is True in this suite's cfg: the
+                # 'while present' segment must stand enabled)
+                assert app.hold_display_choice.get() == \
+                    ("on" if flip else "off"), \
                     "hold_display painted its default, not its cfg"
-                assert bool(app.hold_sleep_switch.get()) is (not flip), \
+                assert app.hold_sleep_choice.get() == \
+                    ("off" if flip else "on"), \
                     "hold_sleep kept a stale ON"
+                assert app.hold_display_choice._buttons_dict[
+                    "while present (camera)"]._state == "normal", \
+                    "the 'while present' segment grayed behind an " \
+                    "enabled eye"
                 assert bool(app.restore_switch.get()) is flip
                 # (hdr_while-away's assert retired with its switch -
                 #  dim-mode wave; the away card's rows are painted by

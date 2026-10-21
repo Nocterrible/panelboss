@@ -103,14 +103,17 @@ def knob(sw):
 
 
 LIT = lambda: {"consent": app.consent_switch,
-               "hold_display": app.hold_display_switch,
                "fullscreen": app.fullscreen_switch,
                "power": app.power_switch,
                "gaming": app.gaming_switch,
                "min": app.min_switch}
-DARK = lambda: {"hold_sleep": app.hold_sleep_switch,
-                "restore": app.restore_switch,
+DARK = lambda: {"restore": app.restore_switch,
                 "restorep": app.restorep_switch}
+# the hold pair left the knob family with the segmented wave (Oct 21):
+# a CTkSegmentedButton has no slider to lie about, so its arm of the
+# belt is pinned as a SELECTION below (same law: a paint that cannot
+# see the truth keeps it stale; the knob geometry arms below cover the
+# switches that remain)
 # the editor's open-wish box is a CTkCheckBox (no slider item to
 # measure): its arm of the belt repaints paint-state, pinned here
 STATE_ONLY = lambda: {"pin_open": app.pin_open_box}
@@ -129,7 +132,7 @@ def check():
         app.update()
         app._unveil()
         mapped = {k: knob(sw) for k, sw in LIT().items()}
-        ctl = app.hold_sleep_switch           # built DARK at hidden birth
+        ctl = app.restore_switch              # built DARK at hidden birth
         off_x = knob(ctl)
         ctl.select()
         app.update_idletasks()
@@ -167,9 +170,13 @@ def check():
         app.update()
         app._show_tab("power plan")           # the pane arm of the seam
         app.update()
-        assert abs(knob(app.hold_display_switch)[0] - off_x[0]) <= 1, \
-            "the reveal kept the stale ON knob"
-        assert abs(knob(app.hold_sleep_switch)[0] - on_x[0]) <= 1, \
+        # the hold pair's arm of the same law, segmented form (Oct 21):
+        # a truth moved in cfg while hidden, the reveal re-selects from
+        # it - the bools of the pre-wave shape prove the belt's
+        # hold_state mapping too
+        assert app.hold_display_choice.get() == "off", \
+            "the reveal kept the stale ON selection"
+        assert app.hold_sleep_choice.get() == "on", \
             "the reveal missed the new ON truth"
         print("[PASS] truth switches paint their knob after they know "
               "their size (show seam + tab arm)")

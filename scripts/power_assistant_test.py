@@ -698,23 +698,26 @@ def check():
         assert app.tips.tip.overrideredirect(), "the note grew a titlebar"
         app.tips.kill()
         assert app.tips.tip is None
-        # the hold switches are independent, and wave B darkened both:
-        # the default-off law (the owner's screenshot) - stock is off,
-        # the round trip still proves each lives alone
+        # the hold rows are independent, and wave B darkened both: the
+        # default-off law (the owner's screenshot) - stock is off (the
+        # tri-state WORD since the Oct 21 wave), the round trip still
+        # proves each lives alone, and 'present' rides the same rail
         app._show_tab("power plan")
-        assert not bool(app.hold_display_switch.get()), "display hold defaults on"
-        assert not bool(app.hold_sleep_switch.get()), "sleep hold defaults on"
-        app.hold_display_switch.select()
-        app.hold_sleep_switch.select()
-        app._hold_changed()
-        assert cfg["power"]["hold_display"] is True and cfg["power"]["hold_sleep"] is True
-        app.hold_sleep_switch.deselect()
-        app._hold_changed()
-        assert cfg["power"]["hold_sleep"] is False
-        assert cfg["power"]["hold_display"] is True, "each lives alone"
-        app.hold_display_switch.deselect()
-        app._hold_changed()
-        assert cfg["power"]["hold_display"] is False
+        assert app.hold_display_choice.get() == "off", \
+            "display hold defaults on"
+        assert app.hold_sleep_choice.get() == "off", \
+            "sleep hold defaults on"
+        app._hold_changed("hold_display", "on")
+        app._hold_changed("hold_sleep", "on")
+        assert cfg["power"]["hold_display"] == "on" and cfg["power"]["hold_sleep"] == "on"
+        app._hold_changed("hold_sleep", "off")
+        assert cfg["power"]["hold_sleep"] == "off"
+        assert cfg["power"]["hold_display"] == "on", "each lives alone"
+        app._hold_changed("hold_display", "while present (camera)")
+        assert cfg["power"]["hold_display"] == "present", \
+            "the third state's label did not land its word"
+        app._hold_changed("hold_display", "off")
+        assert cfg["power"]["hold_display"] == "off"
         # window restore: wave B darkens it too (it MOVES the owner's
         # windows - a behavior to be wanted), same key, same round trip
         assert not bool(app.restore_switch.get()), "restore defaults on"
