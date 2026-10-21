@@ -103,6 +103,13 @@ print("release clear OK (released eye: no vote credit, no round debt)")
 #     packet's ONE opinion - camera_present is the read-only door,
 #     _note_verdict the single record seam). Drive _apply_hold at the
 #     verdict's edges; the ES tuple is the row's whole truth.
+cfg["camera"]["index"] = 0                    # the single-eye baseline:
+#                                             # this suite is written
+#                                             # against ONE eye (the
+#                                             # live cfg it loaded may
+#                                             # hold the owner's TWO -
+#                                             # 2e brings the rotation
+#                                             # back on its own terms)
 m.paused = False
 m.snooze_until = 0.0
 m.state = "counting"
@@ -207,15 +214,75 @@ m.last_vote = {0: _time.monotonic() - 1e5,    # and BOTH fall silent
                2: _time.monotonic() - 1e5}    # again: the episode
 m._note_verdict(None)                         # re-arms, it speaks again
 assert len(notes2) == 2, notes2
+# the rest credit: polling RESTARTING (the idle-gate seam) is not a
+# roster dying - a long typing rest must age nothing. Stale stamps +
+# _rest_credit -> the seen record rides through the first post-rest
+# abstain, no balloon; only real polling silence may end the episode.
+cfg["power"]["hold_display"] = "present"
+m._rest_credit()                              # stamps fresh, record None
+m._note_verdict(True)                         # ...until an eye sees again
+m.last_vote = {0: _time.monotonic() - 1e5,    # a LONG typing rest: the
+               2: _time.monotonic() - 1e5}    # wall ages, the machine rests
+m._rest_credit()                              # the gate opens, poll restarts
+m._note_verdict(None)                         # the first duty open abstains
+assert len(notes2) == 2, \
+    "a rest's first abstain filed a balloon (rest credit ignored)"
+assert m.camera_present is True, "the rest's abstain cleared the seen record"
+m.last_vote = {0: _time.monotonic() - 1e5,    # now it really falls silent
+               2: _time.monotonic() - 1e5}
+m._note_verdict(None)                         # (no credit: polling silence)
+assert len(notes2) == 3, notes2               # the dark speaks, episode 3
 cfg["camera"]["index"] = 0                    # the single-eye world
 m._note_verdict(True)                         # re-arm...
 m._note_verdict(None)                         # the single dead desk...
-assert len(notes2) == 3, \
+assert len(notes2) == 4, \
     "the single-eye exemption moved: no roster, no guard, its balloon"
 m.notifier = None
 print("rotation fixture OK (staggered boot flaps nothing, half-spoken "
-      "rounds file no balloon, wholly silent roster is the dark, "
-      "single-eye desk keeps its exemption honest)")
+      "rounds file no balloon, rest restarts age nothing, wholly silent "
+      "roster is the dark, single-eye desk keeps its exemption honest)")
+
+# 2f) THE DOOR SHUTS, THE WALK'S LEDGER YIELDS (the gate MEDIUM's V catch,
+#     470b38b: the sequel's message promised the consent-off drain
+#     forfeits the shuffle credit, but the keyword was wired into the
+#     SIGNATURE, never passed at _events' drain call site - on this
+#     two-leg desk with FRESH stamps, the un-forfeited drain returns at
+#     the guard's first line and the seen record outlives the shut door,
+#     aging up to a full window (170 s here) - no, the law: the moment
+#     it gives no verdict, release THIS tick). The forfeit's semantics
+#     are pinned at the seam; a counter-proof keeps the guard guarding;
+#     the keyword is pinned at the call site (the power_assistant
+#     precedent: a source read pins the contract the seam alone cannot
+#     see - a keyword in the signature is not a call).
+notes3 = []
+m.notifier = notes3.append
+cfg["camera"]["index"] = [0, 2]                # the owner's roster again
+m.last_vote = {0: _time.monotonic(), 2: _time.monotonic()}   # FRESH stamps
+m._note_verdict(True)                          # the desk was seen
+assert m.camera_present is True
+m._note_verdict(None, shuffled=False)          # the drain's exact call
+                                               # shape (the door shut)
+assert m.camera_present is None, \
+    "a shut door left the seen record up (fresh roster, no forfeit)"
+assert len(notes3) == 1 and "camera stopped seeing" in notes3[0], notes3
+# counter-proof: the SAME fresh stamps through the DEFAULT call must
+# still be the walk, not the dark (the forfeit must not gut the guard)
+m._note_verdict(True)
+m.last_vote = {0: _time.monotonic(), 2: _time.monotonic()}
+m._note_verdict(None)
+assert m.camera_present is True, \
+    "the forfeit went too far: a normal abstain now reads dark"
+assert len(notes3) == 1, notes3
+# the call-site pin: the drain must carry the keyword (the V catch's
+# regression class, verbatim)
+import panelboss.state._events as _events
+_src = open(os.path.join(os.path.dirname(_events.__file__),
+                         "_events.py"), encoding="utf-8").read()
+assert "_note_verdict(None, shuffled=False)" in _src, \
+    "the consent-off drain lost its forfeit keyword at the call site"
+m.notifier = None
+print("drain forfeit OK (shut door speaks on fresh stamps, walk still "
+      "walks, keyword pinned at the drain's call site)")
 
 # 3) migration: one old hold_timers answer seeds both new keys, keys
 #    the file sets itself always win, and the fossil never survives a

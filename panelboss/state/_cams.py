@@ -52,22 +52,43 @@ class _CamsMixin:
         nor file a balloon. The roster knowledge is the wear clock
         this file already keeps (last_vote: when each eye last
         delivered a frame): the round counts as spoken while ANY
-        index of the CURRENT duty roster has delivered within two
-        present-recheck windows (a full sweep of a live roster fits
-        many times over; dead eyes' stamps age out and the desk is
-        honestly dark). NO rotation -> no guard: the single-eye
-        exemption the law wants is the ABSENCE of a roster, not a
-        pass; a single dead desk keeps its balloon."""
+        index of the CURRENT duty roster has delivered within the
+        round's TRUE budget - two full sweeps (the roster SHARES the
+        recheck cadence: per-eye period = present_recheck_sec x
+        roster size) plus the named warm-open allowance (the duty
+        door's measured 3.8-5.5 s on this desk, worst-warm 27 s by
+        the camcore number). The window is not theory: the owner's
+        live file tunes present_recheck_sec = 35, and the first
+        shipped window (2 x recheck, roster-blind) aged exactly at
+        that cadence's edge - True->None gaps of 69 s measured the
+        evening of the merge, the hold flickering ~6 s per hand-off.
+        NO rotation -> no guard: the single-eye exemption the law
+        wants is the ABSENCE of a roster, not a pass; a single dead
+        desk keeps its balloon."""
         if not self._multi_cam():
             return False
         from .. import config
         roster = config.normalize_index(self.camera_cfg.get("index", 0))
-        grace = 2 * self.timers["present_recheck_sec"]
+        grace = (2 * self.timers["present_recheck_sec"] * len(roster)
+                 + 30.0)
         now = time.monotonic()
         return any(now - self.last_vote.get(i, -math.inf) <= grace
                    for i in roster)
 
-    def _note_verdict(self, present):
+    def _rest_credit(self):
+        """Polling RESTARTING is not a roster dying: the camera rests
+        while the owner types (the idle gate) and across a pause's
+        gate-release, and the first duty open after any rest votes
+        abstain through the door's seconds. Stamps are refreshed at
+        the restart seams so the age the guard measures accrues only
+        while the machine is really polling. No verdict is invented:
+        the credit touches the walk's ledger, never the record."""
+        from .. import config
+        now = time.monotonic()
+        for i in config.normalize_index(self.camera_cfg.get("index", 0)):
+            self.last_vote[i] = now
+
+    def _note_verdict(self, present, shuffled=True):
         """The single record point for every camera verdict: _poll
         routes here, and the consent-off drain calls it directly (the
         instant the door shuts there is no verdict, and a 'present'
@@ -80,8 +101,10 @@ class _CamsMixin:
         half-spoken multi-eye round is the roster SHUFFLING, not the
         eye going dark - the record holds, no edge, no balloon; a
         round whose EVERY eye has fallen silent IS dark (the guard
-        falls away and the edge fires as the law says)."""
-        if present is None and self._roster_shuffling():
+        falls away and the edge fires as the law says). shuffled=False
+        (the consent drain) FORFEITS the credit: the door the owner
+        just shut is the dark, however fresh the stamps are."""
+        if (present is None and shuffled and self._roster_shuffling()):
             return present                     # the walk, not the dark
         was = self._camera_present
         self._camera_present = present

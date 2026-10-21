@@ -344,8 +344,14 @@ class _EventsMixin:
                     # the door shut IS no verdict: recorded right here,
                     # so a 'present' row lets go on the next tick (0.2 s)
                     # and never waits out the old verdict to the next
-                    # poll - the owner's release-the-moment law
-                    self._note_verdict(None)
+                    # poll - the owner's release-the-moment law. The
+                    # credit is FORFEITED (shuffled=False, the V catch):
+                    # a two-leg desk whose eyes all spoke seconds ago
+                    # must still let go the instant the owner shuts the
+                    # door - the walk's ledger cannot outweigh a shut
+                    # door, or the law's own words ('detection tab off'
+                    # = no verdict) would age out behind a fresh roster.
+                    self._note_verdict(None, shuffled=False)
                 if self.ui_events is not None:
                     # the resync the comment promised (gate finding
                     # 3): the panes re-derive against the moved key,

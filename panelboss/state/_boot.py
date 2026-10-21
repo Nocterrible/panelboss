@@ -235,6 +235,10 @@ class _BootMixin:
             # again (audit HIGH: lit desk stays lit all night, dark
             # desk camera-wakes only on physical input)
             self.next_poll = now
+            self._rest_credit()               # polling restarting is
+            #                                 not a roster dying (the
+            #                                 gate's own restart seam,
+            #                                 sibling of _phase's)
         idle = display.get_idle_time()     # the input gate always comes first
         if self.state == "off":
             # the pump's wake clock, exemption included (Oct 20):

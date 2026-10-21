@@ -32,6 +32,11 @@ class _PhaseMixin:
             self.next_poll = now                # the gate just opened;
                                                    # the camera always starts
                                                    # here
+            self._rest_credit()                 # a rest's end must not age
+            #                                   the roster into a false
+            #                                   dark: the first duty open
+            #                                   after any rest abstains
+            #                                   through the door's seconds
         if self.re_off_paused and idle <= 2 * self.timers["re_off_grace_sec"]:
             self.grace_until = now + self.recovery[
                 "leave_on_grace_sec"]    # the desk is still hot: stay lit
