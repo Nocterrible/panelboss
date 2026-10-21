@@ -254,20 +254,33 @@ class Veils:
 
     VIDEO MODE (Oct-15, the dim-around-the-playing-video ruling):
     the two optional seams, video(cfg, now) -> a LIVE physical rect
-    or None (videoeye.video_rect is the shipped eye; the suite
-    injects a fake) and monitors() -> panel rows. When the eye is
+    (or the clause-1 PAIR, (rect, window bounds) - the shipped eye
+    answers videoeye.live_pair; a bare rect reads as (rect, None))
+    or None, and monitors() -> panel rows. When the eye is
     live the veil set gains FOUR dark pieces (top/bottom/left/
-    right) around the rect, clamped PER MONITOR, keyed by synthetic
+    right) around the hole, clamped PER MONITOR, keyed by synthetic
     negative hwnds; the plain per-window veils are SKIPPED on the
     covered panels - the frame already darkens everything outside
     the hole there, and a window veil under the frame would stack
     its alpha (the stratum's own no-stacking law). The foreground
-    gets NO exclusion on those panels: the browser's own chrome
-    dims too - the hole is the rect, not the window. The frame's
+    gets NO exclusion on those panels. THE HOLE IS THE REPORTING
+    WINDOW when the row bounds it (owner clause 1, Oct 20: the veil
+    never interacts with a window reporting an active playing rect
+    - the ring's hole grows from the video rect to the window's
+    bounds, 8 px expanded, _frame_pieces; liveness stays on the
+    VIDEO rect, and the compat lane - a row without the bounds
+    report, or any pre-pair fake - keeps the video rect as the
+    hole). The frame's
     alpha is its OWN [videodim] level (the theater rail, default
     20 - NOT the idle dimmer's shared level; the Oct-16 replacement
     wave) and the fade/ramp rules apply unchanged; a gone rect
-    rides the RAMP, not a blink. The Oct-16 owner wave made the
+    rides the RAMP, not a blink. THE STILLNESS CONJUNCT (owner
+    clause 2, Oct 20 restored): the frame exists only while the
+    desk has been input-still for [videodim].idle_sec - motion
+    lifts the RING, stillness re-arms it, and the player's PLAIN-
+    veil exemption is clock-independent so a lifted ring never
+    means a veiled movie (_live_rect carries the whole law and the
+    clock's honest story). The Oct-16 owner wave made the
     replacement SET opt-in per panel: a [videodim].monitors row
     frames a non-video panel with a full-field piece at its own
     level while the theater holds, and an on=false row strips
@@ -304,16 +317,17 @@ class Veils:
         # above the geometry call (the Oct-16 per-panel wave): the
         # full-field opt-in rows need it as their follow-global default.
         valpha = int(vd.get("level", 20)) / 100.0
-        vrect = self._live_rect(cfg, now)
-        # THE TWO DOORS, ONE WALK: when the theater is up, the live
-        # rect IS the raw rect (one seam call). When it is not (the
-        # feature is off or the desk is paused - where pause takes
-        # every veil anyway), the exemption door still asks the eye:
-        # the buddy's report outranks the theater switch (owner,
-        # Oct 20): the player window is never plain-veiled, with or
-        # without movie theater mode.
-        praw = vrect if vrect is not None else self._raw_rect(cfg, now)
-        frame = self._frame_pieces(vrect, vd.get("monitors"), valpha)
+        # THE TWO DOORS, ONE WALK (clause 1's second answer): the one
+        # seam call answers the pair - the live PLAYING rect (the
+        # player exemption's and the frame's door: the buddy's report
+        # outranks the theater switch, owner Oct 20: the player window
+        # is never plain-veiled, with or without movie theater mode)
+        # and the REPORTING WINDOW's bounds (the ring's hole when the
+        # row carries them). vrect is praw plus the theater's gates.
+        praw, wraw = self._raw_rect(cfg, now)
+        vrect = self._live_rect(cfg, now, praw)
+        frame = self._frame_pieces(vrect, vd.get("monitors"), valpha,
+                                   window_rect=wraw)
         covered = {short for _, short, _a in frame.values()}
         rows = d.get("monitors") or {}
         opted = {s for s, v in rows.items() if v}
@@ -467,10 +481,12 @@ class Veils:
             #                   # window bright (per-window, not
             #                   # desk-wide), with a SETTLE_SEC hold
             #                   # after it goes quiet. The theater frame
-            #                   # NEVER consults _exempt - its only lift is
-            #                   # the rect's own going (Oct-20
-            #                   # creation law, _live_rect); a film's
-            #                   # audio cannot kill the veil.
+            #                   # NEVER consults _exempt - its lifts are
+            #                   # the rect's own going, the whole-field
+            #                   # switches, and the STILLNESS RAIL
+            #                   # (clause 2 restored, _live_rect); a
+            #                   # film's audio can neither kill the ring
+            #                   # nor feed it.
             qualified[w["hwnd"]] = ((x, y, cw, ch), w["monitor"],
                                     None)   # the alpha slot is the
             #                               # frame's own (the Oct-16
@@ -562,54 +578,88 @@ class Veils:
                     self._drop(hwnd)
 
     def _raw_rect(self, cfg, now):
-        """THE PLAYER-EXEMPTION DOOR (owner, Oct 20): the eye's live
-        playing rect, THEATER-STATE-INDEPENDENT. The exemption - the
-        window that is playing the video reporting a rect is NEVER
+        """THE PLAYER-EXEMPTION DOOR (owner, Oct 20), PAIRED (clause
+        1): the eye's live playing rect AND the reporting window's
+        bounds, THEATER-STATE-INDEPENDENT. The exemption - the window
+        that is playing the video reporting a rect is NEVER
         plain-veiled - keys on the BUDDY's report, not on the theater
         switch or the ring: a user who turned theater off still told
-        the eye where their movie is. Liveness (paused lift,
-        min_rect_px, visible-picture) is the eye's law for both doors.
-        Fail-open: no seam or a raising eye reads as no rect, LOUDLY
-        once per call - fail-open AND loud (a
-        raising seam warns once per door per beat: two doors, two
-        words, the honest cost of the split; the production seam
+        the eye where their movie is. The seam answers videoeye.
+        live_pair; an answer that is a plain rect (a legacy seam or
+        a fake) reads as (rect, None) - no window half, the frame
+        keeps the video rect as its hole (the compat lane). Liveness
+        (paused lift, min_rect_px, visible-picture) is the eye's law
+        for both doors and both halves. Fail-open: no seam or a
+        raising eye reads as (None, None), LOUDLY once per call -
+        fail-open AND loud (a raising seam warns once per door per
+        beat: the honest cost of the split; the production seam
         raises only if the eye's import dies)."""
         if self._video is None:
-            return None
+            return None, None
         try:
-            return self._video(cfg, now)
+            ans = self._video(cfg, now)
         except Exception:
             log.warning("dimmer: the video eye raised; no frame "
                         "this tick (fail-open)")
-            return None
+            return None, None
+        if (isinstance(ans, tuple) and len(ans) == 2
+                and (ans[0] is None or isinstance(ans[0], tuple))):
+            return ans
+        return ans, None
 
-    def _live_rect(self, cfg, now):
+    def _live_rect(self, cfg, now, praw=None):
         """The eye's theater door: the raw playing rect (all of
-        _raw_rect's laws) plus the two things that outrank the FRAME
-        only - the dimmer pause and the [videodim] feature switch
-        (the whole-field law, the always rows' own shape).
+        _raw_rect's laws, handed in as praw - one seam call feeds
+        both doors) plus the three things that outrank the FRAME
+        only: the dimmer pause, the [videodim] feature switch (the
+        whole-field law, the always rows' own shape), and the
+        STILLNESS CONJUNCT - RESTORED (owner clause 2, Oct 20: the
+        movie theater respects input timers). Motion lifts the ring
+        THIS TICK (the fade option decides the shape - drop or ramp,
+        unchanged law); the desk sitting still for [videodim].idle_sec
+        re-arms it. One knob for both halves - the card's "veil
+        after" slider, back on the card with this commit.
 
-        THE CREATION GATE IS THE LIVE PLAYING RECT (owner, Oct 20):
-        the old pointer-stillness conjunct is GONE - it fought the law
-        that the veil never lands on the video (you may touch the desk
-        while a film runs), and on an RDP desk it is unconditionally
-        dead: the remote channel re-stamps GetLastInputInfo forever
-        (measured: idle stuck at 0.00-0.03 s across eight samples over
-        five seconds), so a stillness-gated theater could never be
-        born here. The eye's own gates (paused, min_rect_px,
-        visible-picture) do the rumor-of-a-movie guard alone. Sound
-        never lifts the frame and never creates it. Motion does not
-        lift it either: the ONLY lifts are the rect's own going and
-        the whole-field switches. [videodim].idle_sec is now UNREAD -
-        a dead knob awaiting the fossil-law deprecation (off_after_min's
-        precedent) and the owner's word on its card slider; it does
-        NOT silently steer anything.
-        """
+        THE CONJUNCT'S CORRECTED STORY: 70eb8fa retired it under an
+        RDP theory. That theory was measured wrong the same evening
+        on re-probe: the desk is PHYSICAL (no RDP) - the clock itself
+        is the sick half. GetLastInputInfo read 0.00-0.05 s across
+        90+30 hands-off samples while the cursor sat pixel-frozen at
+        (-3140, 1542): zero-travel HID chatter (the KVM/USB chain)
+        re-stamps the user32 clock without the pointer moving. The
+        conjunct rides the dimmer's OWN idle seam (production:
+        display.idle_seconds()). Whether THIS desk's clock truly
+        never ages is ADJUDICATED UPSTREAM; an app-side pump
+        (inputtruth - real keys and traveled pointers only, a 3 px
+        dead zone against the chatter) exists in the worktree as
+        uncommitted WIP and is NOT wired: _idle_secs stays on the
+        stock clock by the stop-order. On a desk whose clock never
+        ages, the ring simply never forms while the rail is nonzero
+        - the theater waits on its owner's clock, honestly.
+        CREATION is still the live PLAYING RECT: the rect's own going
+        (pause, off-desk, grace) lifts the frame whatever the clock
+        says. Sound never lifts it (the frame never consults
+        _exempt). And the PLAYER EXEMPTION stays clock-INDEPENDENT -
+        it keys on praw, not on this door (that half of 70eb8fa
+        stands untouched): a lifted ring can never mean a veiled
+        movie."""
         if _PAUSED or not ((cfg.get("videodim") or {}).get("on")):
             return None
-        return self._raw_rect(cfg, now)
+        if praw is None:
+            return None            # no report, no matter the clock
+        rail = float((cfg.get("videodim") or {}).get(
+            "idle_sec", 15))        # 15 = VIDEODIM_IDLE_DEFAULT (the
+                                    # constant's twin here; this
+                                    # module imports config lazily)
+        try:
+            if self._idle() < rail:
+                return None         # the desk is in motion: no ring
+        except Exception:
+            return None             # a dead idle clock is a dead frame
+        return praw
 
-    def _frame_pieces(self, vrect, mons_rows=None, valpha=0.2):
+    def _frame_pieces(self, vrect, mons_rows=None, valpha=0.2,
+                      window_rect=None):
         """The four dark pieces (top/bottom/left/right) around the
         live rect, CLAMPED PER MONITOR: a straddle cuts one piece
         set per panel and every piece stays inside its panel's
@@ -618,6 +668,24 @@ class Veils:
         this geometry ships with, named in the delivery). Zero-size
         pieces (the rect touching an edge) drop; the full ring is
         FOUR, an edge kiss is three, a panel-covering rect is none.
+        THE HOLE IS THE WINDOW (owner clause 1, Oct 20): when the
+        row reports its OUTER bounds (window_rect - the pair answer,
+        physical px), the hole GROWS from the video rect to those
+        bounds EXPANDED 8 px: the GDI-lie direction, the class
+        docstring's geometry note - the rect a foreign report carries
+        lies by a few px around a rounded window, and a hole that is
+        too SMALL clips window px the veil must never touch, while a
+        hole too big darkens only the chrome the ring dims anyway
+        (70eb8fa's own open A/B, answered by the owner: the ring may
+        not darken the reporting window AT ALL). THE NAMED
+        ASYMMETRY: liveness (min_rect_px, paused, visible-picture)
+        rode the VIDEO rect the whole way up (the eye's law) - a
+        tiny ad in a huge window cannot carve a huge hole from a
+        tiny video: the min rail is the video's, the hole is the
+        window's. window_rect None (no bounds report - old hosts,
+        and every fake predating the pair) keeps the VIDEO rect as
+        the hole: the compat lane, the shape every existing pin
+        above runs on.
         Keys are synthetic NEGATIVE ints: the painter takes
         (hwnd, rect, alpha) and keys nothing off hwnd realism - and
         the negative key IS the law the pump obeys (Oct-16 buried-ring
@@ -639,6 +707,11 @@ class Veils:
         rx, ry, rw, rh = vrect
         if rw <= 0 or rh <= 0:
             return out
+        if window_rect is not None:
+            # clause 1's anchor swap, the 8-px expansion (the
+            # GDI-lie direction, the docstring's law above)
+            rx, ry, rw, rh = (window_rect[0] - 8, window_rect[1] - 8,
+                              window_rect[2] + 16, window_rect[3] + 16)
         try:
             mons = self._mons()
         except Exception:
@@ -1324,15 +1397,19 @@ def _sounding():
 def _video_rect(cfg, now):
     """The eye's door into the FSM (the seam the tests replace):
     lazy import - videoeye owns the sockets, this module only ever
-    asks the question. THE UNDATED DOOR (owner, Oct 20): live_rect -
+    asks the question. THE UNDATED DOOR (owner, Oct 20): live_pair -
     the liveness law (paused lift, min_rect_px, visible-picture) is
     the eye's, pinned in its docstring - but NOT the [videodim].on
     switch: the PLAYER EXEMPTION the seam feeds must answer even
     with the theater feature off (the buddy's report is the fact,
     the switch is only the frame's consent). The theater's own frame
-    path gates the switch in _live_rect, above."""
+    path gates the switch (and the stillness conjunct - clause 2) in
+    _live_rect, above. THE PAIR (clause 1, Oct 20): (playing rect,
+    reporting window's bounds) from one walk - the second half is
+    the ring's hole; a seam answering a bare rect (every pre-pair
+    fake) reads as (rect, None): the compat lane."""
     from . import videoeye
-    return videoeye.live_rect(cfg, now)
+    return videoeye.live_pair(cfg, now)
 
 
 def _rect_has(outer, inner):
@@ -1358,6 +1435,15 @@ def _monitors():
 
 
 def _idle_secs():
+    """The idle LAW's clock, production half of the Veils seam.
+    STOCK (display.idle_seconds -> GetLastInputInfo) by the Oct-20
+    stop-order: the pump question (does this desk's user32 clock
+    ever age - zero-travel KVM chatter says it may not, the
+    adjudication owns that verdict) is upstream, not here. When a
+    clock-truth wave lands, THIS one line is the swap site - the
+    plain dimmer's idle_ok (tick), the theater's stillness conjunct
+    (_live_rect) and every [dimmer]/[videodim].idle_sec rail in the
+    app follow it without learning anything new."""
     from . import display
     return display.idle_seconds()
 

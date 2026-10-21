@@ -247,7 +247,37 @@ def live_rect(cfg, now=None):
     return _best_rect(cfg, now)
 
 
+def live_pair(cfg, now=None):
+    """THE PAIRED DOOR (owner clause 1, Oct 20): (live playing rect,
+    reporting window's bounds) from ONE walk - the shape the dimmer
+    seams on. Same ungated consent as live_rect. Either half reads
+    None on its own law: no live row answers (None, None); a row
+    whose bounds the host never reported answers (rect, None) and
+    the dimmer keeps the VIDEO rect as the ring's hole (the compat
+    lane - old hosts). The liveness gates ride the VIDEO rect
+    throughout (min_rect_px, paused, visible-picture): a tiny ad in
+    a huge window is a tiny video - the min rail is the video's,
+    only the hole is the window's."""
+    return _best_pair(cfg, now)
+
+
+def window_rect(cfg, now=None):
+    """The REPORTING WINDOW's bounds ALONE (the eye's door the probe
+    and the suite speak): the live row's outer bounds folded to
+    physical px, None with no live row or no usable bounds."""
+    return _best_pair(cfg, now)[1]
+
+
 def _best_rect(cfg, now):
+    return _best_pair(cfg, now)[0]
+
+
+def _best_pair(cfg, now):
+    """ONE walk, both answers: the freshest row that passes every
+    liveness law (not paused, big enough for min_rect_px, on the
+    desk, fresh by lane) -> (its video rect, its window bounds).
+    Any failure anywhere is (None, None); the dimmer holds it one
+    tick and its ramp retracts the veil."""
     now = time.monotonic() if now is None else now
     vd = cfg.get("videodim") or {}
     grace = float(vd.get("grace_s", DEFAULT_GRACE))
@@ -268,8 +298,26 @@ def _best_rect(cfg, now):
         if not _on_desktop(rect):
             continue                    # THE VISIBLE PICTURE (Oct 19)
         if best is None or st["ts"] > best[1]:
-            best = (rect, st["ts"])
-    return best[0] if best else None
+            best = (rect, _window_phys(row), st["ts"])
+    return (best[0], best[1]) if best else (None, None)
+
+
+def _window_phys(row):
+    """The row's OUTER WINDOW bounds in physical px: the bounds the
+    extension measured itself (DIP), dpr-scaled by the same ruler
+    the legacy fold uses. A row without usable bounds (missing,
+    junk, zero-size) reads None - fail-open, the compat lane, not
+    an error."""
+    try:
+        b = row.get("bounds")
+        dpr = float(row.get("dpr") or 1)
+        bounds = tuple(float(b[k]) * dpr for k in
+                       ("left", "top", "width", "height"))
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    if bounds[2] <= 0 or bounds[3] <= 0:
+        return None
+    return tuple(round(v) for v in bounds)
 
 
 def video_rect(cfg, now=None):
