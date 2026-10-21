@@ -4,6 +4,7 @@ tuples for BOTH switches (screen, sleep), the one-old hold_timers
 key seeding them, and _parse hiding OUR [PROCESS] line even though
 the flat dump (measured on this box) prints no PID - only the image
 path, and of the BASE install the venv launcher re-exec'd."""
+import logging
 import math
 import os
 import sys
@@ -97,6 +98,69 @@ assert m._vote_index is None, "a released eye kept its in-flight credit"
 assert m._round is None, "a released eye kept a half-collected AND round"
 print("release clear OK (released eye: no vote credit, no round debt)")
 
+# 2c) THE THIRD STATE (the 'while present' wave, Oct 21): the hold
+#     rides the state machine's camera verdict and nothing else (the
+#     packet's ONE opinion - camera_present is the read-only door,
+#     _note_verdict the single record seam). Drive _apply_hold at the
+#     verdict's edges; the ES tuple is the row's whole truth.
+m.paused = False
+m.snooze_until = 0.0
+m.state = "counting"
+cfg["power"]["hold_display"] = "present"
+cfg["power"]["hold_sleep"] = "on"
+m._note_verdict(True)                          # (a) the eye sees a person
+m._apply_hold(0.0)
+assert held[-1] == (True, True), \
+    "present + camera-present: the display timer was let go"
+m._note_verdict(False)                         # (b) a real absent verdict
+m._apply_hold(0.0)
+assert held[-1] == (False, True), \
+    "present + camera-absent: the display timer is still held"
+m._note_verdict(None)                          # (c) dark: no verdict at all
+m._apply_hold(0.0)
+assert held[-1] == (False, True), \
+    "present + no verdict: unknown == absent did not hand the timer over"
+m.state = "off"
+cfg["power"]["hold_display"] = "on"
+cfg["power"]["hold_sleep"] = "present"
+m._apply_hold(0.0)
+assert held[-1] == (False, False), \
+    "hold_sleep 'present' in the dark: a silent eye must not hold the box"
+cfg["power"]["hold_sleep"] = "on"
+m._apply_hold(0.0)
+assert held[-1] == (False, True), "dark: the booleans still ride on/off"
+print("third state OK (present holds on verdict True alone; absent and "
+      "no-verdict both hand the timer to the plan, dark included)")
+
+# 2d) the DARK-CAMERA balloon - the owner amendment included: the news
+#     is UNCONDITIONAL (no row-dependence gate), fires on the
+#     seen-to-dark edge (a verdict that WAS present going no-verdict),
+#     once per dark episode, re-armed by a recovery to present, silent
+#     per-poll and on repeat-dark-within-one-episode. The notifier
+#     seam is the pystray path cli wires to tray.notify (the
+#     instance-guard loser line's own balloon road). The desk below
+#     has NO present row and still learns its eye went quiet.
+notes = []
+m.notifier = notes.append
+cfg["power"]["hold_display"] = "off"
+cfg["power"]["hold_sleep"] = "off"
+m._note_verdict(True)                          # seen: silent, no edge yet
+assert notes == [], "the balloon spoke without a dark edge"
+m._note_verdict(None)                          # first dark: exactly one
+assert len(notes) == 1 and "camera stopped seeing" in notes[0], notes
+m._note_verdict(None)                          # per-poll dark: silent
+m._note_verdict(False)                         # absent is the eye TALKING
+assert len(notes) == 1, notes
+m._note_verdict(None)                          # dark again, no seen between
+assert len(notes) == 1, notes
+m._note_verdict(True)                          # recovery re-arms...
+m._note_verdict(None)                          # ...the next episode speaks
+assert len(notes) == 2 and notes[0] == notes[1], notes
+assert len(notes[0]) < 200, "the balloon is one line, not a paragraph"
+m.notifier = None
+print("dark-camera balloon OK (unconditional, one per episode, re-armed "
+      "by present, silent per-poll and on repeat-dark, off/off hears it)")
+
 # 3) migration: one old hold_timers answer seeds both new keys, keys
 #    the file sets itself always win, and the fossil never survives a
 #    rewrite (the writer persists whatever the dict holds)
@@ -123,6 +187,80 @@ c = config.get_config(dir=mdir, verbose=False)
 assert c["power"]["hold_display"] == "on", "the file's own answer wins"
 assert c["power"]["hold_sleep"] == "off"
 print("migration OK (legacy seeds both, file wins, fossil dropped)")
+
+# 3b) the tri-state migration TABLE, every row of it, at the load
+#     boundary (the config_norm recorder idiom: the warning must SPEAK
+#     for the junk row). The owner's live boolean rows survive the
+#     upgrade behavior-identical: 'on' and 'off' drive the same ES
+#     tuples the booleans drove, and the file's bytes sit untouched
+#     until some later ordinary save (the load never rewrites them).
+_tri = os.path.join(os.environ.get("TEMP", "."), "panelboss_hold_tri")
+os.makedirs(_tri, exist_ok=True)
+_tpath = os.path.join(_tri, "config.toml")
+
+
+class _Rec(logging.Handler):
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.msgs = []
+
+    def emit(self, record):
+        self.msgs.append(record.getMessage())
+
+
+_rec = _Rec()
+logging.getLogger("config").addHandler(_rec)
+with open(_tpath, "w", encoding="utf8") as fh:
+    fh.write("[meta]\ndefaults = 2\n\n[power]\n"
+             "hold_display = true\nhold_sleep = false\n")
+c = config.get_config(dir=_tri, verbose=False)
+assert c["power"]["hold_display"] == "on", c["power"]      # true -> on
+assert c["power"]["hold_sleep"] == "off", c["power"]       # false -> off
+assert _rec.msgs == [], _rec.msgs     # valid rows speak no warnings
+with open(_tpath, encoding="utf8") as fh:
+    assert "hold_display = true" in fh.read(), \
+        "the load rewrote the owner's file bytes"
+_rec.msgs.clear()
+with open(_tpath, "w", encoding="utf8") as fh:
+    fh.write("[meta]\ndefaults = 2\n\n[power]\nhold_display = 'yes please'\n")
+c = config.get_config(dir=_tri, verbose=False)
+assert c["power"]["hold_display"] == "on", c["power"]      # junk -> on
+assert any("hold_display" in w and "on" in w for w in _rec.msgs), _rec.msgs
+_rec.msgs.clear()
+with open(_tpath, "w", encoding="utf8") as fh:
+    fh.write("[meta]\ndefaults = 2\n")
+c = config.get_config(dir=_tri, verbose=False)
+assert c["power"]["hold_display"] == "off", c["power"]     # absent -> stock
+assert c["power"]["hold_sleep"] == "off", c["power"]
+assert c["power"]["hold_display"] == "off"
+# the words drive EXACTLY the tuples the booleans drove (section 2's
+# ground truth): the owner's lit-desk hold cannot shift on upgrade
+_tri_m = PresenceMonitor(config.get_config(dir=_tri, verbose=False),
+                         detector=None)
+_held = []
+display.set_hold = lambda *a, **k: _held.append(a)
+for value, want in (("on", (True, False)), (True, (True, False)),
+                    ("off", (False, False)), (False, (False, False)),
+                    ("present", (False, False))):   # no verdict yet
+    _tri_m.power_cfg["hold_display"] = value
+    _tri_m.state = "counting"
+    _tri_m._apply_hold(0.0)
+    assert _held[-1] == want, (value, _held[-1], want)
+print("tri-state migration OK (absent->off, true->on, false->off, "
+      "junk->on LOUD, file bytes untouched; the words drive the "
+      "booleans' tuples)")
+
+# 3c) the GRAY-OUT LAW as data (the UI grays the 'while present'
+#     segment from this flag alone - gray, never hidden - and the
+#     detection tab's consent key is the ONLY input): detection off,
+#     or never consented (the key absent reads False at load - section
+#     3b's stock rows ARE that truth), the option loses its state.
+assert config.hold_present_available({"enabled": True}) is True
+assert config.hold_present_available({"enabled": False}) is False
+assert config.hold_present_available({}) is False
+assert config.hold_present_available(None) is False
+print("gray law data OK (the flag is the consent key, and the paint "
+      "suite owns the segment; offline this is the whole contract)")
 
 # 4) the self-filter, against the shapes powercfg REALLY prints
 tail = sys.executable.split(":", 1)[-1].strip("\\").lower()

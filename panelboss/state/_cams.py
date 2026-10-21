@@ -5,7 +5,12 @@ that is opening abstains, a known-dead single open keeps its
 fail-closed ABSENT through the opener's failed record (and camera's
 new evict keeps the boot blink off the loop thread), and no driver's
 17 s tax is ever paid on the loop thread again.
-SIZE LAW: measured 368 (Oct 13, after the consent gate rode in at
+SIZE LAW: measured 395 (Oct 21, the dark-camera record: _poll's
+verdict wrapper + _note_verdict + the accessor grew the file's HEAD
+by 27 - the record lives here because a second camera opinion is the
+one sin the feature cannot commit, and pulling it out would put the
+vote's truth one file from the code that casts it; formerly measured
+368, Oct 13, after the consent gate rode in at
 _poll's head - one guard clause, the file's own doctrine): the two
 single-desk vote arms grew, but they
 ARE one contract (the (frame, opened) abstain/fail-closed split) and
