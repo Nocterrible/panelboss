@@ -53,9 +53,16 @@ TIMER_SPECS = [          # section, key, label, min, max, step, help
 DEVICE_KEYS = [("auto", "auto"), ("cpu", "CPU"), ("cuda", "CUDA GPU")]
 DEVICE_BY_LABEL = dict((label, key) for key, label in DEVICE_KEYS)
 
-TABS = ("detection", "monitor profiles", "power plan", "oled",
+TABS = ("detection", "power plan", "monitor profiles", "oled",
         "general")      # general last (owner UAT, Oct 15); detection
-                        # first stays the landing tab (TABS[0])
+                        # first stays the landing tab (TABS[0]). The
+                        # power plan moved up to sit immediately AFTER
+                        # detection (owner Oct 21): the hold's 'present'
+                        # third state and the dark-camera notice make
+                        # the dependency real - the two cards belong
+                        # adjacent; monitor profiles drops one slot
+                        # (less related to detection than the timers
+                        # it now shares the row with)
 
 PERSON_ROWS = ("device", "cuda gpu id", "confidence", "min hits")
 MOTION_ROWS = ("frame changes", "pixel delta", "motion hold")

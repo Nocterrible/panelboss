@@ -387,8 +387,13 @@ class SettingsWindow(
         for key in TABS:
             self.pages[key] = ScrollHost(self._body, bg=self.skin.bg)
         self._build_detection(self.pages["detection"].inner)
-        self._build_profiles(self.pages["monitor profiles"].inner)
+        # the build order follows TABS (the button row iterates TABS;
+        # the initial layer stack of the placed pages is the build
+        # order too, and _show_tab re-raises the winner anyway). The
+        # power plan sits beside detection since Oct 21: the 'present'
+        # hold state makes that adjacency load-bearing.
         self._build_power(self.pages["power plan"].inner)
+        self._build_profiles(self.pages["monitor profiles"].inner)
         self._build_general(self.pages["general"].inner)
         self._build_oled(self.pages["oled"].inner)
         # The layer law (owner, Oct 12: "tabbing just reveals them
