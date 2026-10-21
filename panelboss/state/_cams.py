@@ -18,6 +18,8 @@ splitting them from _grab would put the vote's truth two files away
 from the code that casts it."""
 
 import logging
+import math
+import time
 
 log = logging.getLogger("state")
 
@@ -42,6 +44,29 @@ class _CamsMixin:
         absent' is applied at the decision, not by a second vote."""
         return self._camera_present
 
+    def _roster_shuffling(self):
+        """The gate MEDIUM's one guard (owner desk census: TWO camera
+        legs, cam0/cam2): the rotation reads ONE eye per poll, so an
+        abstain while the walk is mid-round is the ROSTER SHUFFLING,
+        not the eye going dark - it must not clear the presence record
+        nor file a balloon. The roster knowledge is the wear clock
+        this file already keeps (last_vote: when each eye last
+        delivered a frame): the round counts as spoken while ANY
+        index of the CURRENT duty roster has delivered within two
+        present-recheck windows (a full sweep of a live roster fits
+        many times over; dead eyes' stamps age out and the desk is
+        honestly dark). NO rotation -> no guard: the single-eye
+        exemption the law wants is the ABSENCE of a roster, not a
+        pass; a single dead desk keeps its balloon."""
+        if not self._multi_cam():
+            return False
+        from .. import config
+        roster = config.normalize_index(self.camera_cfg.get("index", 0))
+        grace = 2 * self.timers["present_recheck_sec"]
+        now = time.monotonic()
+        return any(now - self.last_vote.get(i, -math.inf) <= grace
+                   for i in roster)
+
     def _note_verdict(self, present):
         """The single record point for every camera verdict: _poll
         routes here, and the consent-off drain calls it directly (the
@@ -50,7 +75,14 @@ class _CamsMixin:
         seen-to-dark edge (a verdict that WAS present going
         no-verdict) files the balloon once; the dark->seen recovery
         re-arms the edge; absent (False) is the eye still talking,
-        not an eye gone quiet - no balloon for a real verdict."""
+        not an eye gone quiet - no balloon for a real verdict. The
+        one exemption below it (gate MEDIUM): an abstain from a
+        half-spoken multi-eye round is the roster SHUFFLING, not the
+        eye going dark - the record holds, no edge, no balloon; a
+        round whose EVERY eye has fallen silent IS dark (the guard
+        falls away and the edge fires as the law says)."""
+        if present is None and self._roster_shuffling():
+            return present                     # the walk, not the dark
         was = self._camera_present
         self._camera_present = present
         if was is True and present is None and self.notifier is not None:

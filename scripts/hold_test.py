@@ -161,6 +161,62 @@ m.notifier = None
 print("dark-camera balloon OK (unconditional, one per episode, re-armed "
       "by present, silent per-poll and on repeat-dark, off/off hears it)")
 
+# 2e) THE ROSTER SHUFFLES, THE EYE DOES NOT GO DARK (the gate MEDIUM,
+#     measured with the notifier ATTACHED - the reviewer's inference
+#     converted): the owner's desk runs TWO camera legs (cam0/cam2,
+#     today's census), and the rotation votes ONE eye per poll. A
+#     staggered boot - eye 0 present, eye 2 still opening - must flap
+#     NOTHING: no present-clear, no balloon across the alternating
+#     abstains (the spoken-stamp ledger the wear clock keeps is the
+#     guard's only input; the test seeds it the exact way _note_vote
+#     writes it). Then EVERY eye falls silent (stamps age out) - that
+#     IS the dark: the edge fires, one balloon; recovery re-arms.
+import time as _time
+cfg["camera"]["index"] = [0, 2]               # the owner's roster shape
+cfg["power"]["hold_display"] = "present"      # the row under test
+cfg["power"]["hold_sleep"] = "off"
+m.state = "counting"
+m.paused = False
+m.snooze_until = 0.0
+notes2 = []
+m.notifier = notes2.append
+m.last_vote = {0: _time.monotonic(), 2: _time.monotonic() - 1e-9}
+m._note_verdict(True)                         # eye 0 saw somebody
+m._apply_hold(0.0)
+held_round = held[-1]
+assert held_round[0] is True, "present row did not hold on a seen eye"
+for _round in range(3):                       # alternating walks: the
+    m.last_vote[0] = _time.monotonic()        # seen eye keeps voting,
+    m._note_verdict(True)                     # the opening eye keeps
+    m._note_verdict(None)                     # abstaining
+assert notes2 == [], ("the shuffling roster filed balloons", notes2)
+assert m.camera_present is True, \
+    "a half-spoken round's abstain cleared the presence record"
+m._apply_hold(0.0)
+assert held[-1] == held_round, "the hold flapped across the walk"
+# now EVERY eye falls silent: the stamps age past the guard's window
+m.last_vote = {0: _time.monotonic() - 1e5, 2: _time.monotonic() - 1e5}
+m._note_verdict(None)
+assert len(notes2) == 1 and "camera stopped seeing" in notes2[0], notes2
+assert m.camera_present is None, "the wholly silent roster did not read dark"
+m._note_verdict(None)                         # still one episode
+assert len(notes2) == 1, notes2
+m.last_vote[2] = _time.monotonic()            # eye 2 came up seeing
+m._note_verdict(True)
+m.last_vote = {0: _time.monotonic() - 1e5,    # and BOTH fall silent
+               2: _time.monotonic() - 1e5}    # again: the episode
+m._note_verdict(None)                         # re-arms, it speaks again
+assert len(notes2) == 2, notes2
+cfg["camera"]["index"] = 0                    # the single-eye world
+m._note_verdict(True)                         # re-arm...
+m._note_verdict(None)                         # the single dead desk...
+assert len(notes2) == 3, \
+    "the single-eye exemption moved: no roster, no guard, its balloon"
+m.notifier = None
+print("rotation fixture OK (staggered boot flaps nothing, half-spoken "
+      "rounds file no balloon, wholly silent roster is the dark, "
+      "single-eye desk keeps its exemption honest)")
+
 # 3) migration: one old hold_timers answer seeds both new keys, keys
 #    the file sets itself always win, and the fossil never survives a
 #    rewrite (the writer persists whatever the dict holds)
