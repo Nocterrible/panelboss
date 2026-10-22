@@ -1433,8 +1433,19 @@ assert '\"Does your shit occasionally decide \"' in OLED or \
     'Does your shit occasionally decide ' in OLED, \
     "the owner's own words left the label"
 assert 'input_pump' in OLED and '_oled_comp_pump_changed' in OLED
+# the pump row lives ON THE DIMMER CARD (owner ruling, Oct 22): the
+# [dimmer].input_pump key belongs to this section, so the row builds
+# inside _build_dimmer - between the lift-fade bind and the veil-level
+# row. The companion card no longer carries it (companions_test pins
+# the ABSENT half of this law).
+_DIM = OLED[OLED.index("def _build_dimmer"):]
+_DIM = _DIM[:_DIM.index("\n    def ")]
+assert 'keep Windows awake' in _DIM, \
+    "the pump row left the dimmer card"
+assert 'TIP_COMP["pump"]' in _DIM, "the pump tip did not travel with the row"
 ok("the idle seam is the gate: source pins both branches, sentinels "
    "drive both clocks, default-ON normalizes (junk folds to on), the "
    "exemption lives only at the off-phase door, and the owner's label "
-   "is verbatim on the card (6c)")
+   "is verbatim on the card (6c) - the pump row now builds on THIS "
+   "card, where its [dimmer].input_pump key lives")
 print("\nDIMMER TESTS OK (%d)" % len(OK))

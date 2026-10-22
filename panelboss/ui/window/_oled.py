@@ -774,6 +774,26 @@ class _OledMixin:
         self.oled_dim_lift_fade.bind(
             "<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
 
+        # THE PUMP'S DOOR (Oct-20 wave; the owner's words verbatim
+        # as the label - the card may be boring, the owner's desk
+        # may not). It steers [dimmer].input_pump: on (the owner's
+        # default) routes every idle rail through the raw-input
+        # pump, off is the stock clock verbatim. The tip carries
+        # the fail-open honesty and the relaunch law; the switch
+        # ships CHECKED like the key it reads.
+        row = self._row(box, "Does your shit occasionally decide "
+                         "it wants to keep Windows awake?",
+                        TIP_COMP["pump"], hint_chars=42)
+        self.oled_comp_pump_box = ctk.CTkSwitch(
+            row, text="", font=self.skin.font(12),
+            command=self._oled_comp_pump_changed,
+            **self.skin.switch_style())
+        self.oled_comp_pump_box.select() if (
+            self.cfg.get("dimmer") or {}).get("input_pump",
+                                                 True) is True \
+            else self.oled_comp_pump_box.deselect()
+        self.oled_comp_pump_box.grid(row=0, column=1, sticky="e")
+
         row = self._row(box, "veil level", TIP_DIM["level"],
                         hint_chars=42)
         self.oled_level_label = ctk.CTkLabel(row, font=self.skin.font(12),
@@ -926,6 +946,15 @@ class _OledMixin:
     def _oled_level_changed(self, value):
         self.cfg.setdefault("dimmer", {})["level"] = int(round(value))
         self.oled_level_label.configure(text="%s%%" % round(value))
+        self._save()
+
+    def _oled_comp_pump_changed(self):
+        # [dimmer].input_pump - the clock choice (Oct-20 wave,
+        # the owner's default-on override). RESTART-required
+        # like the rest of the section: the card's word lands,
+        # the relaunch makes it true.
+        self.cfg.setdefault("dimmer", {})["input_pump"] = bool(
+            self.oled_comp_pump_box.get())
         self._save()
 
     def _oled_dim_app_add(self):
@@ -1153,26 +1182,6 @@ class _OledMixin:
             else self.oled_comp_fade.deselect()
         self.oled_comp_fade.grid(row=0, column=1, sticky="e")
 
-        # THE PUMP'S DOOR (Oct-20 wave; the owner's words verbatim
-        # as the label - the card may be boring, the owner's desk
-        # may not). It steers [dimmer].input_pump: on (the owner's
-        # default) routes every idle rail through the raw-input
-        # pump, off is the stock clock verbatim. The tip carries
-        # the fail-open honesty and the relaunch law; the switch
-        # ships CHECKED like the key it reads.
-        row = self._row(box, "Does your shit occasionally decide "
-                         "it wants to keep Windows awake?",
-                        TIP_COMP["pump"], hint_chars=42)
-        self.oled_comp_pump_box = ctk.CTkSwitch(
-            row, text="", font=self.skin.font(12),
-            command=self._oled_comp_pump_changed,
-            **self.skin.switch_style())
-        self.oled_comp_pump_box.select() if (
-            self.cfg.get("dimmer") or {}).get("input_pump",
-                                                 True) is True \
-            else self.oled_comp_pump_box.deselect()
-        self.oled_comp_pump_box.grid(row=0, column=1, sticky="e")
-
         # THE PER-MONITOR THEATER (owner, Oct 16): every panel gets a
         # row. CHECKED (the default when no row exists - a row is
         # written to opt OUT too) keeps the panel's theater: its own
@@ -1323,19 +1332,6 @@ class _OledMixin:
         vd = self.cfg.setdefault("videodim", {})
         vd["fade"] = bool(self.oled_comp_fade.get())
         self._save()
-
-
-
-    def _oled_comp_pump_changed(self):
-        # [dimmer].input_pump - the clock choice (Oct-20 wave,
-        # the owner's default-on override). RESTART-required
-        # like the rest of the section: the card's word lands,
-        # the relaunch makes it true.
-        self.cfg.setdefault("dimmer", {})["input_pump"] = bool(
-            self.oled_comp_pump_box.get())
-        self._save()
-
-
 
     def _oled_comp_row_changed(self, short):
         # [videodim].monitors[short].on - the per-panel theater box.
