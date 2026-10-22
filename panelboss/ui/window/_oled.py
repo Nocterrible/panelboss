@@ -257,7 +257,7 @@ class _OledMixin:
     # Four sections, one idiom (the _cam_rows discard-and-refill): the
     # widgets are disposable, cfg is the truth, and the desk is allowed
     # to change under a living window (owner's zero-monitor boot,
-    # Oct 17). Each fill re-derives its own dupes/labels from the
+    # Oct 17). Each fill re-derives its labels from the
     # fresh enumeration; nothing cached survives the swap.
 
     def _oled_fill_rows(self):
@@ -267,7 +267,6 @@ class _OledMixin:
         hid = self.cfg.setdefault("hider", {})
         _live = wm.monitors()
         base = [m.get("short") or m.get("id") for m in _live]
-        dupes = {b for b in base if base.count(b) > 1}
         for m, short in zip(_live, base):
             label = monitor_row_label(_live, m)
             row = self._row(self._oled_row_frame, label, TIP["row"],
@@ -292,7 +291,6 @@ class _OledMixin:
         jog_cfg = self.cfg.setdefault("jog", {})
         _live = wm.monitors()
         base = [m.get("short") or m.get("id") for m in _live]
-        dupes = {b for b in base if base.count(b) > 1}
         for m, short in zip(_live, base):
             label = monitor_row_label(_live, m)
             row = self._row(self._jog_row_frame, label, TIP_JO["row"],
@@ -318,7 +316,6 @@ class _OledMixin:
         dim = self.cfg.setdefault("dimmer", {})
         _live = wm.monitors()
         base = [m.get("short") or m.get("id") for m in _live]
-        dupes = {b for b in base if base.count(b) > 1}
         for m, short in zip(_live, base):
             label = monitor_row_label(_live, m)
             row = self._row(self._dim_row_frame, label, TIP_DIM["row"],

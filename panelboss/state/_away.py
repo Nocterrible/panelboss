@@ -80,8 +80,8 @@ class _AwayMixin:
 
     # ------------------------------------------------------------- engage --
     def _away_engage(self):
-        """Called where the off broadcast used to stand: dim mode
-        paints the dark INSTEAD of powering it - the blackout rows
+        """Called where the off broadcast used to stand: the dark
+        spell paints over INSTEAD of powering - the blackout rows
         wear the overlay, the dim rows lose their HDR and drop to
         dim_level, and the OFF rows ask the panel's own power code
         through the brightness door (no overlay - the panel IS the

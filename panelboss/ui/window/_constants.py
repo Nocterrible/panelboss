@@ -93,8 +93,9 @@ TIPS = {
     "confidence": "how sure a detection must be before a frame counts "
                   "as a person. Applies to the next frame.",
     "min_hits": "consecutive positive frames before the screens wake. "
-                "An eye that cannot see never votes and never resets "
-                "the streak.",
+                "With several eyes, any eye that sees votes present; absent "
+                "needs every eye to deny. An eye that cannot see never votes "
+                "and never resets the streak.",
     "frame changes": "share of the frame that must move before a poll "
                      "counts as motion. Applies immediately.",
     "pixel delta": "how much one pixel must shift to count as a "

@@ -103,10 +103,10 @@ TIP = {
            "re-connect entry in Windows settings. A write accepted "
            "but unproven keeps its mode and says (unverified); a "
            "refusal says so next to the panel - never silent. A "
-           "preview applies THIS row's effect for ten seconds and "
+           "preview applies THIS row's effect for %d seconds and "
            "reverts (second click cancels). A disconnected panel "
            "survives this app: Settings -> Display brings it back, "
-           "and a lone screen is never stranded.",
+           "and a lone screen is never stranded." % PREVIEW_SEC,
     "offdisc": "the path is retracted AT THE ADAPTER (SetDisplayConfig): "
                "the panel never hears a code, it loses its signal, and "
                "it comes back as a replug. The state lives in Windows' "

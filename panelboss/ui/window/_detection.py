@@ -352,7 +352,9 @@ class _DetectionMixin:
         box = self._card(left, "Timers",
                          "written to config.toml, applied while the "
                          "loop runs")
-        self.timer_labels = {}
+        # no whole-dict reset: the power-plan wake card
+        # registers two of these keys too and rebuilds
+        # of THIS card must not orphan their readouts
         for spec in TIMER_SPECS:
             self._timer_row(box, *spec)
         self.worst_label = ctk.CTkLabel(box, font=self.skin.font(11),

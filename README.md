@@ -88,9 +88,9 @@ panel itself
 goes dark as if you pressed its button; off (disconnect) - the default for
 rows you never touched - retracts the signal at the adapter, and Windows
 refuses to strand the last active display. An unworded row follows the
-legacy [away] mode key before the default. Lock
-when away starts ends the session too: panels wake to the lock screen.
-Preview tries a row for ten seconds and reverts; the second click cancels.
+legacy [away] mode key before the default. Lock when away starts ends
+the session too: panels wake to the lock screen. Preview tries a row for
+10 seconds and reverts; the second click cancels.
 Some panels refuse DDC/CI writes - a KVM often explains it - and the app
 reports it, never hushes: an accepted write that never proves itself reads
 (unverified) on its row, a refused write falls back to painted blackout, and

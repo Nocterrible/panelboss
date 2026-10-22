@@ -1,0 +1,27 @@
+window: the edge descriptor rides every monitor identity - one seam, suppressed when it carries no news
+
+desk_position's owner law (Oct 22): each descriptor COMPONENT shows
+iff at least one row in the LISTED SET differs on it - an all-'top
+left' desk says nothing, a side-by-side desk drops the vacuous 'top'
+and says ' [left]' / ' [right]', a single-row card says nothing, and
+before any desktop capture has answered (empty row set) the slot is
+ABSENT, not a dash. It is a pure function over the rows the card
+lists, so suppression is per-context by construction.
+
+The seam (monitor_row_label, _widgets) is the ONE place a monitor
+identity becomes UI text: short name, duplicate-model gdi tail, and
+the descriptor. Routed through it: the away card's per-monitor rows
+(already on the geometry word), the hider strip rows, the jog rows,
+the dimmer rows, the theater's per-monitor rows, the gaming rate rows
+(both menus), and the profiles tab's add-monitor menu (the captured
+panel rows get pos=desk_position over their OWN profile's displays -
+the profiles tab refreshes the pane on every capture, and the mode
+rows rebuild there, so the descriptor populates with the capture and
+is simply absent before it). The tray submenu builds its monitor
+lines by hand off the pump thread - named follow-up, not today's
+batch.
+
+suite: scripts/descriptor_test.py (truth table, the seam's data, the
+identical-descriptor walk, the source coverage census); registered
+in run_all. The _oled.py tip dicts travel with this commit already
+under the sweep law (same file's surgery).

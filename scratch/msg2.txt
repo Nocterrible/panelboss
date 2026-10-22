@@ -1,0 +1,50 @@
+ui: the global mode selector dies - per-monitor modes already said everything (owner ruling)
+
+The away card's global mode row is gone: the [away] mode key stays
+READABLE as the rows' fallback word (config normalize ships the new
+default; the legacy "off"/"dim" files keep their meaning through the
+same row words), and the fallback chain lives in ONE engine place
+(state/_away._row_mode) mirrored by the card's _away_row_mode for
+paint. The away engine no longer short-circuits: every engage dresses
+rows; the SC_MONITORPOWER broadcast answers only the empty desk (and
+the fossil hdr_off_when_away there). The card's own row-menu and the
+awaymode suite re-pinned together (off_choice == MODE_BY_LABEL).
+
+Also in this surgery (owner's second law, same file): 'ui: off (DDC
+fast) says what it is, the default is what Windows does, and the gray
+paints at build time (the first-boot lie)'.
+- the VCP row option renders 'off (DDC fast)' with its own tip (plain
+  voice, owner's words); the stored word stays "off" byte-identical,
+  and a refused row's blackout-degradation already says itself on the
+  row's status line (state sets it, _away_say surfaces it live - the
+  carry the law asked for existed; the tooltip is the new half).
+- the new default for unset rows is 'off (disconnect)': normalize's
+  word flipped ("mode": value.get("mode", AWAY_ROW_DEFAULT),
+  AWAY_ROW_DEFAULT="offdisc"), the absent-row promise in the DEFAULTS
+  comment rewritten, every docstring/TIP that promised the dim default
+  updated with it. Migration law held: present rows answer byte-
+  identical, the all-False triple is still the explicit dim.
+- the gray from the row's own mode word paints AT BUILD and on every
+  detection-tab reveal (_sync_away_rows, the pump/hold idiom of
+  60e0348/e59383a; the first-boot card no longer lies about off-mode
+  rows' controls being live).
+- 'preview (10s)': the duration lives IN the word (owner, same law),
+  interpolated from the new PREVIEW_SEC=10 - the TRUE run, not the 15
+  the ask guessed (15 s is the camera sweep's probe timeout in
+  _preview.py, a different preview). The timer and the countdown seed
+  ride the constant; the fake-constant pin fails a hardcoded label.
+- the away-decision trio now sits on the card in behavior chronology
+  (hold-off -> lock -> restore): the lock speaks for every away mode
+  (the engine locks any engage that darked a row), and the
+  window-restore toggle + fullscreen hold-off traveled in from the
+  power-plan wake card verbatim - same labels, same keys, same write
+  paths. 'window: window-restore goes next to lock-on-away - one
+  decision, one section (owner ruling), and the fullscreen hold-off
+  joins the family.'
+- the tooltip sweep (owner, shown the pump tip): TIPS and the card
+  TIP dicts now say what the control does, one sentence, why only
+  where the label cannot carry it, no history - the pump tip verbatim
+  approved-shape. 'ui: tooltips say what the control does, not how the
+  app got here.'
+- the away card's row labels adopt the one identity seam (the next
+  commit ships the rest of it).

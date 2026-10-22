@@ -198,7 +198,7 @@ class _PowerMixin:
         keep = [i for i in self._indexes()
                 if self._table_mode(i, "off") == "always_on"]
         self._off_phase_hold(keep, "before")
-        # dim mode plays dead instead of asleep: the away engine owns
+        # the dark spell plays dead instead of asleep: the away engine owns
         # the dark and the OFF BROADCAST IS NEVER SENT (the static ban
         # the awaymode suite pins: no power verb below a dim engage).
         # Stock mode falls through to today's exact path, fossil HDR
