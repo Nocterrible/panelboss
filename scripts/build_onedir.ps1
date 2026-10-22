@@ -22,6 +22,10 @@ function Invoke-OnedirBuild {
     # against the split 14.36/14.51 set collected from the JRE bin,
     # 2026-10-22 autopsy: the JRE dirs on PATH ship 14.36 CRTs and the
     # collection scans PATH - strip them before the build inherits them.
+    # (False-positive risk - a PATH dir whose name carries 'jre' as a
+    # substring - is accepted for THIS build: python, git and the WiX
+    # tools all arrive by absolute path, so no stripped entry is ever
+    # needed by the build itself.)
     $env:Path = ($env:Path -split ';' |
         Where-Object { $_ -notmatch 'Adoptium|Oracle|[Jj]re' }) -join ';'
     & $py -m PyInstaller --noconfirm --clean --windowed --name $exe `

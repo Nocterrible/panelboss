@@ -56,11 +56,11 @@
          CHECKBOX=1 makes the box appear CHECKED at dialog init;
          unchecking publishes 0 and the Publish condition stops
          matching. WixShellExecTarget points at the harvested exe:
-         the fil id is heat's name-hash, identical across re-harvest
+         the fil id is heat's name-hash, - stable across re-harvest of the fixed
+          path (a path-hash, not a content checksum).
+          Impersonate=yes (the default) is present for clarity -
          (diff-verified against a fresh heat run before referencing).
-         Impersonate=yes is load-bearing on this per-user package:
-         the launched app must run as the interactive user (HKCU
-         config, tray), never an elevated context. Return: candle
+         the user-context guarantee is the type-1 in-session, free-threaded DLL CA + per-user scope - WixShellExec lands in the installing user's session, never an elevated context. Return: candle
          REFUSES asyncNoWait on a DllEntry CA ('requires ExeCommand',
          CNDL0038) - MSI's async+continue bits are EXE-only
          (msi/custom-action-return-processing-options). The
