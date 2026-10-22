@@ -819,6 +819,82 @@ def check():
             assert popped2[0][0] == ["cmd.exe", "/c", script, "deps",
                                      "relaunch"], popped2
             assert ("quit", True) in list(fm.events.queue)
+            # ---- GHOST LAWS at the picker (the ghost-law build,
+            # stage 3). LAW 5: an ADD whose scan row matches exactly
+            # one PnP device POPULATES the human-assertion lane (the
+            # bind rides the EXISTING camera_identity verb - state
+            # owns the toml, re-adoption-by-instance already lives
+            # there, the add just signs it at enrol); an ambiguous
+            # name binds NOTHING (the deaf badge and the manual bind
+            # path own the twins). LAW 4: the duty card reads the
+            # monitor's deaf report, and the eye the scan lost gets
+            # the card the ROSTER hands it (invisibility was the
+            # 00:47 disease). LAW 3 at the dep switch: the about-to-
+            # quit write rides the funnel too - no silent in-memory
+            # move anywhere the roster lives.
+            app._devs = [{"name": "Integrated Camera",
+                          "instance": "USB\\VID_INT\\0", "status": "OK"},
+                         {"name": "Logitech Webcam C270",
+                          "instance": "USB\\VID_LOG\\1", "status": "OK"}]
+            cfg["camera"]["index"] = 0
+            app._apply_cameras(found)
+            before = len(fm.events.queue)
+            app._camera_changed("index 1 (640 px) Logitech Webcam C270")
+            new = list(fm.events.queue)[before:]
+            assert ("camera", [0, 1]) in new, new
+            assert cfg["camera"]["index"] == [0, 1], cfg["camera"]["index"]
+            assert ("camera_identity",
+                    {"instance": "USB\\VID_LOG\\1", "bind": 1}) in new, new
+            # the twins: one name, two PnP rows, no honest join, NO claim
+            app._devs = [{"name": "Twin Cam", "instance": "USB\\T1",
+                          "status": "OK"},
+                         {"name": "Twin Cam", "instance": "USB\\T2",
+                          "status": "OK"}]
+            cfg["camera"]["index"] = 0
+            app._cams = [(0, True, 1280, "Twin Cam"),
+                         (1, True, 640, "Twin Cam")]
+            app._apply_cameras(app._cams)
+            before = len(fm.events.queue)
+            app._camera_changed("index 1 (640 px) Twin Cam")
+            new = list(fm.events.queue)[before:]
+            assert ("camera", [0, 1]) in new, new
+            assert not [v for v in new if v[0] == "camera_identity"], \
+                "the twins got a guessed bind"
+            # the badge: a scanned eye wears it on its card...
+            app._devs = []
+            cfg["camera"]["index"] = [0, 1]
+            fm.deaf_indices = lambda: {1: 2}
+            app._apply_cameras(found)
+            assert "disconnected" in app._cam_rows[1]["title"], \
+                app._cam_rows[1]["title"]
+            # ...and the eye the scan cannot even answer for gets the
+            # whole card from the roster (law 4's own sentence)
+            cfg["camera"]["index"] = [0, 1, 2]
+            fm.deaf_indices = lambda: {2: 3}
+            app._apply_cameras(found)
+            assert 2 in app._cam_rows, \
+                "the deaf off-scan eye stayed invisible"
+            assert "disconnected" in app._cam_rows[2]["title"]
+            del fm.deaf_indices                    # the next vote's
+            app._apply_cameras(found)              # re-apply clears
+            assert "disconnected" not in app._cam_rows[1]["title"], \
+                "the badge survived the next vote"
+            # the about-to-quit dep switch rides the funnel too
+            cfg["camera"]["index"] = 0
+            popped3 = []
+            real = W.subprocess.Popen
+            W.subprocess.Popen = lambda *a, **k: popped3.append(a)
+            try:
+                app._dep_install(switch=True)
+            finally:
+                W.subprocess.Popen = real
+            assert cfg["camera"]["index"] == cam.HELLO_IR, \
+                "the dep switch did not move the roster"
+            assert ("camera", -2) in list(fm.events.queue), \
+                "the dep switch wrote the dict without a word"
+            print("ghost laws OK at the picker (unique add binds, "
+                  "twins bind nothing, the deaf card is painted or "
+                  "the eye is invisible, the dep switch speaks)")
         finally:
             cam.optional_present, cam.hello_ir_names = real_present, real_names
             cfg["camera"]["index"] = idx0

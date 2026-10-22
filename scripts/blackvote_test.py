@@ -281,6 +281,27 @@ try:
     print("streak OK (a permanently blind sibling no longer caps the "
           "live eye: %s -> wake)" % ([h for (v, h) in seen],))
 
+    # ---- LAW 2 (the ghost-law build): the per-frame verdict confesses
+    # at INFO, not debug. The bound: ONE line per camera OPEN (the
+    # duty's own poll cadence, never a per-frame stream) - about 150
+    # lines a day on the owner's live desk, and the dark-test proof
+    # the 00:47 autopsy begged for (an ungraded assist was invisible
+    # in the log exactly because the frame line was DEBUG-only). The
+    # votes A and B just drove cast both shapes through the real
+    # _poll_camera seam; the INFO handler on "state" is the file's own.
+    assert any("frame: present=True score=0.90" in r for r in recs), \
+        ("the present verdict did not confess at INFO", recs[-8:])
+    _m2 = fresh_monitor(scratch_cfg('index = 7\n'
+                                    'mode_on = "boot_per_poll"\n'))
+    _m2.state = "counting"                       # an honest nobody:
+    _m2._poll()                                  # bright frame, no
+    drain_vote(_m2)                              # person in it
+    _m2._poll()
+    assert any("frame: present=False score=0.00" in r for r in recs), \
+        ("the absent verdict went silent at INFO", recs[-8:])
+    print("verdict confession OK (the frame line speaks at INFO, both "
+          "tiers of truth, one per open)")
+
     # ---- C) an all-blind desk CONFIRMS NOTHING: several counting
     # turns, and the absence clock never starts (the off-timer feed is
     # the False vote; a blind eye never casts one)

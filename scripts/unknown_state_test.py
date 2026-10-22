@@ -126,6 +126,11 @@ cfg["power"]["skip_camera_when_blocked"] = False
 # the budget to zero: the deadline is the law under test, nothing else.
 cfg["recovery"]["wake_policy"] = "off"
 cfg["recovery"]["leave_on_grace_sec"] = 0
+# and the tier the ghost-law pins judge against: the same live-file
+# hazard wake_burst names (the owner's slider reaches 0.95 - a strict
+# scenario must not red because the desk is tuned strict, and an
+# assist scenario must not pass because it is tuned loose)
+cfg["inference"]["confidence"] = 0.45
 sent = []
 display.wake = lambda *a, **k: sent.append("wake")
 display.turn_off = lambda *a, **k: sent.append("off")
@@ -347,5 +352,30 @@ try:
 finally:
     _it.idle_seconds, display.idle_seconds = _real_pump_clock, _real_stock
     _dim._PUMP_ON = None
+
+# 7) THE GHOST AT THE UNKNOWN BOOT (LAW 1, the ghost-law build): a
+# sub-floor True on a desk whose screens the app cannot prove are lit
+# does NOT get the power-on. The force-on branch is decisive work too,
+# and the 00:47 autopsy's person@0.30-on-an-empty-scene is exactly the
+# shadow that must not light a panel; the absence countdown starts
+# anyway (the scenario-3 shape), the strict presence keeps force-
+# owning (scenario 2 above is that pin), and the blinded streak is
+# untouched either way (a verdict is a verdict - the two clocks).
+sent.clear()
+m8 = PresenceMonitor(cfg, detector=None)
+m8._release_camera = lambda: None
+m8._hold_camera = lambda: None
+m8._drain_tray = lambda: None
+m8._poll = lambda: (True, 0.30)                   # the ghost
+m8._on_phase(100.0, idle=90.0)                    # unknown -> counting
+assert m8.state == "counting" and sent == [], (m8.state, sent)
+assert m8.absent_since == 100.0, \
+    "the ghost skipped the absence clock at the boot seam"
+for t in range(101, 166):                         # the countdown runs
+    m8._poll = lambda t=t: (True, 0.30)           # THROUGH the ghosts
+    m8._on_phase(float(t), idle=90.0)
+assert m8.state == "off" and sent[-1] == "off", (m8.state, sent)
+print("boot-dark-ghost OK (assist presence never forces the screens "
+      "on; the unproven desk counts away through the ghosts)")
 
 print("ALL UNKNOWN-STATE TESTS OK")

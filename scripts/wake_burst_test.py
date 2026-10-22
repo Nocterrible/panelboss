@@ -1,4 +1,6 @@
 """Drive the wake-burst logic without cameras or displays."""
+import logging
+import math
 import os
 import sys
 
@@ -177,6 +179,74 @@ mon2.state = "counting"
 mon2._round = {1}
 mon2._schedule_on_poll(31000.0, True, 0.9)
 assert mon2._round is None, "round state must not cross the wake boundary"
+
+# ---- LAW 1 (the ghost law, the 00:47 autopsy, measured 0.6 s): the
+# on-phase absence clock GRADES the tier. The door eye scores
+# person@0.30 on an empty scene; the ungraded reset beat the 10 s
+# absence clock by 0.6 s and the screens stayed lit on nobody. The
+# dark room already refuses the assist tier (Oct 22 above); the lit
+# desk now refuses it the same way: a sub-floor True informs (hits
+# accrue, the hold record stays), but ONLY a strict True resets the
+# confirmed-absence clock or voids the re-off budget.
+ghosted = []
+mon5 = PresenceMonitor(cfg, StubDetector())          # cfg pins 0.45
+mon5._screens_off = lambda now: ghosted.append(now)
+mon5._blind_since = 30000.0                          # a running streak
+mon5._schedule_on_poll(31010.0, True, 0.30)          # the ghost hits
+assert mon5._blind_since is None, \
+    "an assist True must still break the no-verdict streak (the two "\
+    "clocks measure different silences: a verdict, any verdict, is "\
+    "silence-over for the fallback; a PERSON is not)"
+assert mon5.absent_since == 31010.0, \
+    "the ghost did not start the absence clock"
+assert mon5.last_present == 31010.0 and mon5.hits == 1, \
+    "the ghost must still INFORM (hold rows, hits)"
+ghost_since = mon5.absent_since
+mon5.re_off_deadline = 31025.0                        # woke into a budget
+mon5._schedule_on_poll(31020.0, True, 0.30)
+assert mon5.absent_since == ghost_since, \
+    "an assist True reset the confirmed-absence clock"
+assert mon5.re_off_deadline == 31025.0, \
+    "an assist True voided the re-off budget"
+mon5._schedule_on_poll(31030.0, True, 0.9)            # a person speaks
+assert mon5.absent_since is None and mon5.re_off_deadline == math.inf, \
+    "a strict True must reset both (the counter-pin)"
+print("ghost law OK (assist informs but does not reset; strict resets)")
+
+# the false streak accumulates THROUGH a ghost: 3x False + True@0.30
+# + False -> the off engages on the ORIGINAL absent_since
+mon5b = PresenceMonitor(cfg, StubDetector())
+ghosted2 = []
+mon5b._screens_off = lambda now: ghosted2.append(now)
+CONF = cfg["timers"]["absent_confirm_sec"]     # the clock's own number,
+# read not assumed (the live desk runs 10; a fresh file would say 60)
+mon5b._schedule_on_poll(32010.0, False, 0.0)          # clock at 32010
+mon5b._schedule_on_poll(32015.0, False, 0.0)
+assert mon5b.absent_since == 32010.0, mon5b.absent_since
+mon5b._schedule_on_poll(32010.0 + CONF - 2, True, 0.30)   # the ghost,
+# two seconds shy of the deadline it is about to fail to move
+assert mon5b.absent_since == 32010.0, \
+    "the ghost reset a False streak's clock"
+assert ghosted2 == [], "the desk engaged before its own deadline"
+mon5b._schedule_on_poll(32010.0 + CONF + 1, False, 0.0)
+assert ghosted2 == [32010.0 + CONF + 1], \
+    "the desk did not engage on the ORIGINAL absent_since (the ghost "\
+    "bought the screens exactly what a False bought: nothing)"
+print("ghost law OK (False streak accrues through the ghost; the off "\
+      "lands on the original clock)")
+
+# the hold-side survival: a ghost vote through the REAL record seam
+# leaves _camera_present True - the motionless reading human's screen-
+# lit row must not notice the grading (hold_test 2c owns the verdict
+# record's third state; this is its ghost-side pair)
+mon5c = PresenceMonitor(cfg, StubDetector())
+mon5c._screens_off = lambda now: None
+mon5c._note_verdict(True)                             # the tier-blind gate
+mon5c._schedule_on_poll(33010.0, True, 0.30)          # assist presence
+assert mon5c.camera_present is True, \
+    "the graded absence arm moved the hold rows' truth"
+assert mon5c.absent_since == 33010.0                  # clock still runs
+print("ghost law OK (hold rows see _camera_present=True on assist hits)")
 
 # fail-closed ABSENT (gate finding 1): a stall/dead verdict carries no
 # recorded eye (no _note_vote frame); it resets at once, as the shipped

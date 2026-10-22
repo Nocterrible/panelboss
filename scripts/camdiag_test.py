@@ -610,4 +610,154 @@ assert _cedit.hidden_rows_spec({"hidden": []}, []) == []
 print("hidden captions OK (label over friendly name over tail, "
       "clipped, and an empty list is the info line's cue)")
 
+# 11) THE ROSTER FUNNEL (ghost law 3, the 00:47 autopsy): [camera]
+#     index moves through config.set_camera_roster and nowhere else.
+#     With a queue the write rides the ("camera", ...) event - the
+#     handler lands the toml, the confession, and the release; without
+#     one (boot, about-to-quit) the funnel files AND speaks the same
+#     line itself. The silent hand is pinned dead at the source, the
+#     way hold_test 2f pins the forfeit keyword: a call site, not a
+#     signature.
+import logging as _lg11
+
+_lg11.basicConfig(level=_lg11.INFO)
+recs11 = []
+
+
+class _Grab11(_lg11.Handler):
+    def emit(self, record):
+        recs11.append(record.getMessage())
+
+
+_h11 = _Grab11()
+_h11s = _Grab11()
+config.log.addHandler(_h11)
+_lg11.getLogger("state").addHandler(_h11s)
+try:
+    # (a) with a queue: the dict moves, the event carries the coerced
+    # roster, the funnel itself says nothing (one confession per
+    # write, and the handler owns it)
+    _q = queue.Queue()
+    cfg11 = {"camera": {"index": 0}}
+    config.set_camera_roster(cfg11, (3, 4), events=_q)
+    assert cfg11["camera"]["index"] == [3, 4], cfg11   # tuple -> list
+    assert _q.get_nowait() == ("camera", [3, 4]), "list write lost"
+    config.set_camera_roster(cfg11, -2, events=_q)
+    assert cfg11["camera"]["index"] == -2
+    assert _q.get_nowait() == ("camera", -2), "sentinel stays bare"
+    assert recs11 == [], "the funnel re-logged beside its own event"
+
+    # (b) through the handler: toml, line, release (the m8 idiom)
+    m11 = _monitor()
+    m11.camera_cfg["index"] = [0, 2]
+    m11.camera = FakeCam(index=0)                   # pretend duty
+    m11.events.put(("camera", [2, 4]))
+    m11._drain_tray()
+    assert m11.camera_cfg["index"] == [2, 4], m11.camera_cfg["index"]
+    assert m11.camera is None, "the roster change did not release"
+    assert tomllib.load(open(os.path.join(SCRATCH, "config.toml"),
+                             "rb"))["camera"]["index"] == [2, 4]
+    assert any(r.startswith("camera roster now [2, 4]") for r in recs11), \
+        recs11
+    recs11.clear()
+
+    # (c) no loop to carry the word: the funnel files AND confesses
+    cfg12 = config.get_config(dir=SCRATCH, verbose=False)
+    config.set_camera_roster(cfg12, [6])
+    assert cfg12["camera"]["index"] == [6]
+    assert any(r.startswith("camera roster now [6]") for r in recs11), \
+        recs11
+    # the writer's own shape rule: a one-seat roster lands as a bare
+    # int (the config round-trip's existing law, multi_cam block 10)
+    assert tomllib.load(open(os.path.join(SCRATCH, "config.toml"),
+                             "rb"))["camera"]["index"] == 6
+    recs11.clear()
+
+    # (d) the silent hand is dead at the source: every writer file
+    # imports the funnel and none still assigns the key by hand.
+    from panelboss import cli as _cli11, tray as _tray11
+    from panelboss.ui.window import _preview as _pv11, _general as _gn11
+    for _m11 in (_pv11, _gn11, _cli11, _tray11, _cedit):
+        _src11 = open(_m11.__file__, encoding="utf-8").read()
+        assert "set_camera_roster(" in _src11, _m11.__name__
+        assert 'camera"]["index"] =' not in _src11, (
+            _m11.__name__ + " still writes the roster by hand")
+    # and the applying half is the single one: the event handler routes
+    # through the SAME funnel (its branch owns only the release)
+    import panelboss.state._events as _ev11
+    _esrc = open(_ev11.__file__, encoding="utf-8").read()
+    assert "config.set_camera_roster(self.cfg, value)" in _esrc
+finally:
+    config.log.removeHandler(_h11)
+    _lg11.getLogger("state").removeHandler(_h11s)
+print("roster funnel OK (event, toml, one confession, release - and "
+      "the silent hand is pinned out of every writer file)")
+
+# 12) THE DEAF-EYE ROUNDS + BADGE DATA (ghost law 4): the wear clock's
+#     own stamps, the roster-shuffle's own sweep budget, ONE line per
+#     episode, and a pure spec the duty pane (and this offline suite)
+#     can read - hidden_rows_spec is the caption precedent.
+_lg11.basicConfig(level=_lg11.INFO)
+recs12 = []
+
+
+class _Grab12(_lg11.Handler):
+    def emit(self, record):
+        recs12.append(record.getMessage())
+
+
+_h12 = _Grab12()
+_lg11.getLogger("state").addHandler(_h12)
+try:
+    cfg13 = config.get_config(dir=SCRATCH, verbose=False)
+    cfg13["camera"]["index"] = [3, 4]
+    cfg13["camera"]["enabled"] = True
+    cfg13["timers"]["present_recheck_sec"] = 10   # one round = 20 s
+                                                  # on this two-eye
+                                                  # roster
+    m13 = state_mod.PresenceMonitor(cfg13, Det())
+    m13.ui_events = queue.Queue()
+    m13.last_vote = {3: clock.t, 4: clock.t - 61.0}   # one spoke, one
+                                                     # went quiet (3
+                                                     # full rounds)
+    m13._note_deaf(clock.t)
+    assert m13.deaf_indices(clock.t) == {4: 3}, m13.deaf_indices(clock.t)
+    assert any("eye 4 enrolled but deaf: 3 rounds without a vote" in r
+               and "check device/disconnected" in r for r in recs12), recs12
+    m13._note_deaf(clock.t)                        # the episode is one
+    assert sum("enrolled but deaf" in r for r in recs12) == 1, recs12
+    m13.last_vote[4] = clock.t                     # the next poll sees
+    m13._note_deaf(clock.t)                        # the vote: the
+    assert m13.deaf_indices(clock.t) == {}         # badge, and the
+    # episode, clear
+    m13.last_vote[4] = clock.t - 41.0              # a NEW silence is a
+    m13._note_deaf(clock.t)                        # NEW episode
+    assert sum("enrolled but deaf" in r for r in recs12) == 2, recs12
+    # an eye never heard speaking ages from first notice, not from
+    # -inf (a warm-open eye at boot is not yet deaf)
+    m13.last_vote = {3: clock.t + 21}              # eye 3 just spoke
+    m13.camera_cfg["index"] = [3, 5]               # (its stamp is 21 s
+    assert m13.deaf_indices(clock.t) == {}, m13.deaf_indices(clock.t)
+    assert m13.deaf_indices(clock.t + 40.0) == {5: 2}, \
+        m13.deaf_indices(clock.t + 40.0)
+    # a consent-shut desk owes nothing and says nothing
+    m13.camera_cfg["enabled"] = False
+    assert m13.deaf_indices(clock.t + 1000.0) == {}
+    m13.camera_cfg["enabled"] = True
+    # and the badge data for the duty pane is pure (the scanned flag
+    # tells the caller which card wears the suffix and which card the
+    # ROSTER must hand out)
+    assert _cedit.deaf_rows_spec({"index": [3, 4]},
+                                 [(3, True, 640, "x")], {3, 4}) == \
+        [(3, True), (4, False)], "the scanned flag moved"
+    assert _cedit.deaf_rows_spec({"index": 0}, [], set()) == []
+    assert _cedit.DEAF_SUFFIX.strip().startswith("·")  # post-clip like
+    # every state badge in the pane (the caption law hidden_rows_spec
+    # wrote): the suffix rides the row, never eats the name
+finally:
+    _lg11.getLogger("state").removeHandler(_h12)
+print("deaf-eye law OK (rounds counted on the wear clock, one line per "
+      "episode, cleared by the vote; the never-voted eye gets its boot "
+      "grace; the shut door owes nothing; the rows are pure data)")
+
 print("ALL CAMDIAG TESTS OK")
