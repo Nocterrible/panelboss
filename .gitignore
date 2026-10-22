@@ -34,3 +34,4 @@ scripts/suite_*.log
 
 # pyinstaller spec (build_msi/build_release write it at the repo root)
 PanelBoss.spec
+scratch/
