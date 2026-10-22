@@ -416,6 +416,11 @@ def check():
                 cfg["power"]["assistant_task"] = not flip
                 cfg["gaming"]["enabled"] = flip
                 app._build_power(app.pages["power plan"].inner)
+                app._sync_away_rows()
+                # (the away card's trio - restore, lock, fullscreen
+                # hold-off - moved to the detection tab Oct 22, so its
+                # truth paint seam runs HERE too: the same knob-from-
+                # cfg, both branches, no commands fired)
                 # the hold pair paints from cfg as the SEGMENTED trio
                 # since Oct 21: the same both-branch law, now also
                 # proving the belt's bool->word mapping (flip rides the

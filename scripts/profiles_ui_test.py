@@ -238,7 +238,12 @@ def check():
         #    through the OptionMenu's OWN dispatch (_command(VALUE)) -
         #    the widget always passes the value, so calling the bare
         #    handler would mask a TypeError arity bug on real picks.
-        app._mode_add.set("T2")
+        _lab = [k for k, v in app._mode_add_map.items()
+                if v == "MONITOR\\T2"][0]
+        # (the label rides the identity seam - since the Oct-22 wave
+        # it may carry the gdi tail and a descriptor, so the test
+        # resolves it from the map instead of a literal "T2")
+        app._mode_add.set(_lab)
         _cmd = getattr(app._mode_add, "_command", None)
         if _cmd is not None:
             _cmd(app._mode_add.get())
