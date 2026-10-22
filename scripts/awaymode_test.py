@@ -384,7 +384,11 @@ def test_migration():
         with open(os.path.join(tmp2, "config.toml"), "w") as fh:
             fh.write("[power]\nhold_display = true\n")
         c = config.get_config(dir=tmp2, verbose=False)
-        assert c["away"]["mode"] == "off" and c["away"]["monitors"] == {}
+        # the Oct-22 default flip: the unset-row default word is
+        # "offdisc" (the card's selector is dead; the key lives as
+        # the row-fallback word)
+        assert c["away"]["mode"] == "offdisc" \
+            and c["away"]["monitors"] == {}
         assert "[away]" not in open(os.path.join(tmp2,
                                                 "config.toml")).read()
         print("ok - consent-silent files untouched (E-day law)")
@@ -393,7 +397,7 @@ def test_migration():
         with open(os.path.join(tmp3, "config.toml"), "w") as fh:
             fh.write("[gaming]\nhdr = { AAA = false }\n")
         c = config.get_config(dir=tmp3, verbose=False)   # parses at all?
-        assert c["away"]["mode"] == "off"
+        assert c["away"]["mode"] == "offdisc"
         print("ok - an unknown [gaming] hdr fossil parses and waits")
     finally:
         config._live_shorts = saved_shorts
@@ -412,7 +416,7 @@ def test_substitution():
     slog.addHandler(rec)
     try:
         m._screens_off(1.0)
-        line = [l for l in rec.lines if l.startswith("away: dim")]
+        line = [l for l in rec.lines if l.startswith("away: dark")]
         assert len(line) == 1 and "0 rows blackout-degraded" in line[0], \
             line        # a CONFIG blackout row is not a degradation
         #                   (gate finding 2: the predicate counts only
@@ -540,18 +544,33 @@ def test_remote_desk_exempt():
         m._ledger.undo()
 
 
-def test_stock_path():
+def test_legacy_global_off_fallback():
+    """The owner ruling, Oct 22: the global key is a fallback WORD,
+    not a switch - a legacy file saying mode="off" feeds the row word
+    "off" (the VCP door, byte-identical behavior of that word) to
+    every unset row. The SC_MONITORPOWER broadcast survives only for
+    the empty desk (and the fossil there stays honored)."""
     tmp = tempfile.mkdtemp(prefix="pb_away_o")
     m = make_monitor(tmp, {"mode": "off"})
     try:
         m._screens_off(1.0)
         calls = m._fake["calls"]
-        assert ("turn_off",) in calls, "stock mode powers off"
-        assert not m.away_status
-        assert ("arm", True) not in calls
-        m._away_lift()                        # no-op by law
-        assert ("hide_all",) not in m._fake["overlay"].calls
-        print("ok - stock mode is the old path, untouched")
+        assert ("turn_off",) not in calls, \
+            "the away engine owns the dark on a desk with rows"
+        for gdi in ("D1", "D2", "D3"):
+            assert ("vcp", gdi, 0xD6, 4, _bright.VCP_TRIES) in calls, \
+                "the legacy word still means the VCP door, byte-for-byte"
+        assert set(m.away_status.values()) == {"off (unverified)"}
+        assert ("arm", True) in calls
+        m._away_lift()
+        print('ok - legacy global mode="off": the rows speak, the '
+              "broadcast stands down")
+        # the empty desk keeps the old path verbatim (fossil honored)
+        m._ledger.keep(wm, "monitors", lambda: [])
+        m._screens_off(9.0)
+        assert ("turn_off",) in m._fake["calls"], \
+            "a desk with no rows still takes the stock broadcast"
+        print("ok - the empty desk answers the broadcast")
     finally:
         m._ledger.undo()
 
@@ -724,7 +743,7 @@ def test_off_submode():
         assert not any(c[0] == "vcp_read" and c[1] in ("D1", "D2")
                        for c in calls), \
             "the engage buys no register lie at the door"
-        line = [l for l in rec.lines if l.startswith("away: dim")]
+        line = [l for l in rec.lines if l.startswith("away: dark")]
         assert len(line) == 1 and "3 VCP-off asked" in line[0] \
             and "1 rows blackout-degraded" in line[0], line
         assert m.away_status["CCC"].startswith(
@@ -923,18 +942,38 @@ def test_off_selectable_never_pregrayed():
     the choice too - the dated word is the state machine, gray would
     be pre-judgment). No Tk: the card's menu rule is a module
     function."""
-    from panelboss.ui.window._away import off_choice, DISC_TEXT
+    from panelboss.ui.window._away import (
+        off_choice, DISC_TEXT, DDC_TEXT, MODE_BY_LABEL, preview_label)
+    import panelboss.ui.window._away as _am
     from panelboss.wm import _bright as _b
     aoc = FakeBright({"D1": 75})                # answers 0x10: bus proven
-    assert off_choice(aoc, "D1") == ["blackout", "dim", "off", DISC_TEXT]
+    assert off_choice(aoc, "D1") == ["dim", DDC_TEXT, DISC_TEXT, "blackout"]
     dead = FakeBright({}, no_door=["DX"])       # the gray class - D6 only
-    assert off_choice(dead, "DX") == ["blackout", "dim", DISC_TEXT]
+    assert off_choice(dead, "DX") == ["dim", DISC_TEXT, "blackout"]
     assert DISC_TEXT == "off (disconnect)"     # the shipped label
-    assert off_choice(_b, "NO-SUCH-DISPLAY99")[-1] == DISC_TEXT  # answers
+    assert DDC_TEXT == "off (DDC fast)"        # the FILE word stays "off"
+    assert set(MODE_BY_LABEL) == set(off_choice(aoc, "D1"))
+    assert MODE_BY_LABEL[DDC_TEXT] == "off"    # byte-identical word
+    assert DISC_TEXT in off_choice(_b, "NO-SUCH-DISPLAY99")  # answers
     #                                          per door for D6, always
     #                                          offers the disconnect
+    # THE PREVIEW LABEL CARRIES ITS OWN DURATION (owner law, Oct 22):
+    # derived from PREVIEW_SEC - the fake-constant swap proves the
+    # seam (a literal "15s" beside a 10 s timer fails this pin).
+    assert preview_label() == "preview (%ds)" % _am.PREVIEW_SEC
+    _was, _am.PREVIEW_SEC = _am.PREVIEW_SEC, 15
+    try:
+        assert preview_label() == "preview (15s)"
+    finally:
+        _am.PREVIEW_SEC = _was
+    assert "threading.Timer(PREVIEW_SEC" in open(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
+            __file__))), "panelboss", "ui", "window",
+        "_away.py"), encoding="utf8").read(), \
+        "the timer left the constant the label rides"
     print("ok - off selectable everywhere the app reached; gray only "
-          "for the never-reached; the disconnect is everywhere")
+          "for the never-reached; the disconnect is everywhere; the "
+          "preview label follows its constant")
 
 
 def test_lock_on_away():
@@ -1377,7 +1416,7 @@ def test_offdisc_flavors():
         assert not [c for c in m._fake["calls"] if c[0] == "jail"], \
             "ONE pointer move per engage: the park replaces the jail " \
             "whenever any row paints, retracted rows included"
-        line = [l for l in rec.lines if l.startswith("away: dim")]
+        line = [l for l in rec.lines if l.startswith("away: dark")]
         assert len(line) == 1 and "1 disconnected" in line[0], line
         assert fake.locks == [], "no lock asked (lock off), no lock rung"
         m._away_lift()
@@ -1465,6 +1504,7 @@ def test_offdisc_preview_word_seam():
                                  "offdisc": True}}}}})()
     assert UIM._away_row_mode(stub, "AOC2790") == DISC_TEXT
     assert MODE_BY_LABEL[DISC_TEXT] == "offdisc"
+    assert MODE_BY_LABEL["dim"] == "dim"
     assert set(MODE_BY_LABEL) == set(off_choice(FakeBright({"D1": 1}),
                                                 "D1")), \
         "the menu and the map moved apart - the preview would guess"
@@ -1649,13 +1689,27 @@ def test_hook_lifecycle():
     d = disp.Display()                        # the thread never runs:
     disp.watcher = d                          # the pump is called by hand
     try:
-        assert m._away_engage() == {}         # stock mode, the default law
-        assert d._pump_pause() == disp.IDLE_PAUSE_SEC, "deaf and noteless"
+        led.keep(wm, "_sdc", FakeSDC())       # the suite owns the CCD
+        #                              door: the default desk retracts
+        eng = m._away_engage()                # fresh default: unset rows
+        assert eng and all(s.startswith("offdisc refused")  # fall to the
+                           for s in eng.values()), eng      # disconnect,
+        #                              refused here (no path answers) ->
+        #                              confessed blackout; the ears ride
+        #                              every spell from Oct 22
+        assert d._pump_pause() == disp.ARMED_PAUSE_SEC
         d._service_ears()
         d._service_ears()
-        assert fake.registers == [], fake.registers
+        assert fake.registers == [2], fake.registers
         assert fake.hook_calls == [], "the LL chain is gone for good"
-        print("ok - mode off NEVER registers the ears (no tax, ever)")
+        m._away_lift()
+        d._service_ears()
+        assert fake.unregisters == [2]
+        fake.registers.clear()
+        fake.unregisters.clear()      # section 2 pins the dim spell
+        #                              with a fresh recorder
+        print("ok - the away engine never stands down: ears ride the "
+              "spell, registered once, and the LL trio stays dead")
         m.cfg["away"] = {"mode": "dim", "monitors": {}, "dim_level": 10}
         m._away_engage()
         assert d._pump_pause() == disp.ARMED_PAUSE_SEC, \
@@ -1753,14 +1807,14 @@ def test_park_replaces_jail():
                 "the park replaces the jail for painted modes, not adds"
         finally:
             m2._ledger.undo()
-        m3 = make_monitor(tmp, {"mode": "off"})      # the stock path:
-        try:                                         # pointer rules
-            m3._screens_off(1.0)                     # belong to engage
+        m3 = make_monitor(tmp, {"mode": "off"})      # the legacy word:
+        try:                                         # sleep rows jail,
+            m3._screens_off(1.0)                     # they never park
             assert not [c for c in m3._fake["calls"] if c[0] == "park"]
         finally:
             m3._ledger.undo()
         print("ok - park: once, at the lawful point, replacing the "
-              "jail on painted modes; the stock path stays pointer-blind")
+              "jail on painted modes; sleep rows keep the jail")
     finally:
         m._ledger.undo()
 
@@ -1803,11 +1857,68 @@ def test_deep_key_gone():
           "dies at the next save")
 
 
+def test_default_flip():
+    """THE DEFAULT FLIP, at all three tiers (owner, Oct 22): an unset
+    row -> offdisc; the legacy 'off' word -> the VCP door byte-
+    identical; the chain: row value beats the global key beats the
+    default. The normalize line the whole ruling hangs on is pinned
+    first, as data."""
+    n = config.normalize_away
+    assert n({})["mode"] == "offdisc" == config.AWAY_ROW_DEFAULT
+    tmp = tempfile.mkdtemp(prefix="pb_away_dflt")
+    sdc = FakeSDC(victim={"AAA": "T-A", "BBB": "T-B", "CCC": "T-C"},
+                  active={"T-A", "T-B", "T-C"})
+    m = make_monitor(tmp, {}, sdc=sdc)          # fresh config shape
+    try:
+        m._screens_off(1.0)
+        assert m.away_status == {"AAA": "off (disconnected)",
+                                 "BBB": "off (disconnected)",
+                                 "CCC": "off (disconnected)"}, \
+            m.away_status
+        assert sorted(sdc.retracts) == ["AAA", "BBB", "CCC"]
+        assert not any(c[0] in ("set", "vcp") for c in m._fake["calls"]), \
+            "the default desk spends no brightness and no power code"
+        m._away_lift()
+        print("ok - unset rows answer the disconnect default (PROVEN "
+              "word, adapter door)")
+    finally:
+        m._ledger.undo()
+    # the chain's middle tier: a legacy global key feeds unset rows...
+    m2 = make_monitor(tmp, {"mode": "off"})
+    try:
+        m2._screens_off(1.0)
+        assert set(m2.away_status.values()) == {"off (unverified)"}, \
+            m2.away_status
+        # ...and an explicit row word always outranks it
+        m2.cfg["away"] = config.normalize_away(
+            {"mode": "off", "monitors": {"BBB": {"mode": "blackout"}}})
+        m2._away_lift()
+        m2._screens_off(2.0)
+        assert m2.away_status["BBB"] == "blackout", m2.away_status
+        assert m2.away_status["AAA"] == "off (unverified)"
+        m2._away_lift()
+        print("ok - the fallback chain: row beats global key beats "
+              "default")
+    finally:
+        m2._ledger.undo()
+    # the card-side mirror: _away_row_mode answers the SAME chain
+    from panelboss.ui.window._away import _AwayMixin, DDC_TEXT, DISC_TEXT
+    stub = type("S", (), {"cfg": {"away": {"mode": "dim", "monitors": {
+        "A": {"blackout": False, "off": True, "offdisc": False}}}}})()
+    assert _AwayMixin._away_row_mode(stub, "A") == DDC_TEXT
+    assert _AwayMixin._away_row_mode(stub, "Z") == "dim"   # global tier
+    stub2 = type("S", (), {"cfg": {"away": {}}})()
+    assert _AwayMixin._away_row_mode(stub2, "Z") == DISC_TEXT  # default
+    print("ok - the card mirrors the chain; a row with no key paints "
+          "the word the engine will act on")
+
+
 def main():
     test_migration()
     test_row_shorthands()
+    test_default_flip()
     test_substitution()
-    test_stock_path()
+    test_legacy_global_off_fallback()
     test_remote_desk_exempt()
     test_refusal_degrades()
     test_unverified_trust()

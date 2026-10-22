@@ -1,9 +1,11 @@
-"""The away engine: dim-mode substitution for the display power verb.
+"""The away engine: the per-monitor dark that replaces the power verb.
 
 SIZE LAW header: this part owns the fake-off ledger and nothing else -
 and at ~640 lines (post the park wave, owner Oct 17; the
 stage-two timer rode it three days and fell to the OS screen timer,
-Oct 19; the belt staggered with the door wave, Oct 19) the whole is still one
+Oct 19; the belt staggered with the door wave, Oct 19; the selector
+died with the card's global mode row and the row words inherited its
+key, owner Oct 22) the whole is still one
 law: the ledgers, the door
 calls and the status words interlock line-for-line,
 and splitting the prose from its call sites (or the lift from the
@@ -91,12 +93,12 @@ class _AwayMixin:
         pixel on the dark); a SLEEP-only spell keeps the corner jail
         (display.jail_cursor: the cursor parks at a covered rect's
         far corner, ONCE per engage - SetCursorPos generates no raw
-        input, so neither verb can wake what it covers). Returns {}
-        when
-        the mode is the stock off - the caller takes the broadcast
-        path untouched, and the legacy global hdr_off_when_away block
-        stays readable and honored there (downgrade honesty, one
-        release)."""
+        input, so neither verb can wake what it covers). Returns the
+        per-row status dict for EVERY engage (owner ruling, Oct 22:
+        the rows own the decision - there is no stock-off short-
+        circuit); the empty dict answers only an empty desk, and the
+        caller's broadcast branch takes that case, the legacy
+        hdr_off_when_away fossil's last home."""
         away = self.cfg.get("away") or {}
         from .. import display, wm
         # THE EXEMPTION (2026-10-15, the owner's black remote screen):
@@ -111,8 +113,14 @@ class _AwayMixin:
         # door must not strand a physical panel lit. The row's own
         # bus-root flag is the per-row door either way.
         remote = wm.session_is_remote() is True
-        if away.get("mode") != "dim" and not remote:
-            return {}
+        # THE ROWS OWN THE DECISION (owner ruling, Oct 22): the card's
+        # global mode selector is dead and the mode key is its row-
+        # fallback word, so there is no global stand-down here anymore.
+        # An engage on an EMPTY desk still returns the empty dict and
+        # the caller's broadcast branch answers it - the one honest
+        # home left for the legacy hdr_off_when_away fossil (the
+        # migration at config._migrate_away carries any file that
+        # actually consented onto the row words).
         self.away_status = {}
         # the ledgers ACCUMULATE, never reset: a live preview already
         # holds the true priors (the value at the leaving moment), and
@@ -127,7 +135,7 @@ class _AwayMixin:
         painted = None
         desk = _live_desk()
         for m in desk:
-            mode = _row_mode(rows, m)
+            mode = _row_mode(rows, m, away.get("mode"))
             if remote and mode is not None:
                 mode = None                # the remote session exempts
                 #                          the whole desk: the None leg
@@ -174,8 +182,8 @@ class _AwayMixin:
         elif jail:
             display.jail_cursor(jail)
         display.arm_input_lift(True)
-        log.info("away: dim mode, %d monitors (%d HDR off, %d VCP-off "
-                 "asked, %d disconnected, %d rows blackout-degraded on refusal)",
+        log.info("away: dark spell, %d monitors (%d HDR off, %d VCP-off "
+                 "asked, %d disconnected, %d rows blackout-degraded)",
                  len(self.away_status), len(self._away_hdr),
                  len(self._away_off), len(self._away_disc),
                  sum(1 for s in self.away_status.values()
@@ -598,23 +606,32 @@ class _AwayMixin:
         return "reverted"
 
 
-def _row_mode(rows, m):
-    """The row's sub-mode ("blackout" | "dim" | "off" | "offdisc"),
-    absent-defaulted to DIM (the packet's rule: a monitor NOT in
-    away.monitors is a dim row in dim mode - the migration promise,
-    and the honest default for a panel that joined after the config
-    was written). normalize ships the triple; precedence on a
-    hand-edited file that sets several: offdisc beats off beats
-    blackout (a retracted path cannot hear a power code, and the
-    retraction is the most explicit ask on the row). A VIRTUAL row
-    (the bus-root flag, wm/_monitors._row_is_virtual) answers None:
-    the exemption is not a sub-mode, it is the stand-down of every
-    off leg - the engage's None leg carries the word."""
+def _row_mode(rows, m, away_mode=None):
+    """The row's sub-mode ("blackout" | "dim" | "off" | "offdisc").
+    NO EXPLICIT MODE (owner ruling, Oct 22): a row absent from
+    away.monitors follows the chain - the global [away] mode key when
+    it names a row word, else AWAY_ROW_DEFAULT ("offdisc" - the
+    default is what Windows does, at the adapter). A PRESENT row
+    keeps its behavior byte-identical: triple precedence offdisc
+    beats off beats blackout (a retracted path cannot hear a power
+    code, and the retraction is the most explicit ask on the row), an
+    all-False triple is the explicit dim the card wrote and the bad-
+    word fold lands on, a legacy bare bool reads True=blackout /
+    False=dim. The card's _away_row_mode mirrors THIS chain for
+    paint - the two move together or a knob lies. A VIRTUAL row (the
+    bus-root flag, wm/_monitors._row_is_virtual) answers None: the
+    exemption is not a sub-mode, it is the stand-down of every off
+    leg - the engage's None leg carries the word."""
     if m.get("virtual"):
         return None
     row = rows.get(m["short"])
-    if not row:
-        return "dim"
+    if row is None or row == {}:
+        if away_mode in ("blackout", "dim", "off", "offdisc"):
+            return away_mode
+        from .. import config
+        return config.AWAY_ROW_DEFAULT
+    if isinstance(row, bool):
+        return "blackout" if row else "dim"
     if row.get("offdisc"):
         return "offdisc"
     if row.get("off"):

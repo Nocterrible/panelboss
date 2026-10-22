@@ -324,42 +324,52 @@ DEFAULTS = {
                                  # hand-built cfgs)
     },
     "away": {
-        "mode": "off",          # "off" = the stock SC_MONITORPOWER broadcast
-                                # (today's behavior); "dim" = play dead
-                                # instead of asleep: the panels stay awake
-                                # and the app paints the dark - blackout
-                                # rows get a black overlay, dim rows lose
-                                # HDR and drop to dim_level (no cold ODM
-                                # re-enumeration on wake)
-        "monitors": {},         # EDID short -> {"blackout": bool,
-                                # "off": bool, "offdisc": bool}
-                                # (normalize's shape; the loader also
-                                # takes the bare bool and a bare
-                                # "blackout"/"dim"/"off"/"offdisc"
-                                # string, "off-disc" included). The
-                                # off sub-mode is YOUNG: rows without
-                                # the key simply answer False (no
-                                # migration it must perform). True
-                                # "off" = the real power opcode
-                                # (VCP 0xD6) through wm/_bright.py's
-                                # door - the panel IS the overlay; a
-                                # write refused after the budget
-                                # degrades that row to blackout with
-                                # the confession on its status word
-                                # (the PROBE LAW's two honest halves,
-                                # AUDIT-PUNCHLIST 60121ed). True
-                                # "offdisc" = the DISCONNECT through
-                                # wm/_sdc.py - the path retracted at
-                                # the adapter, the state lives in
-                                # Windows' own display store (one
-                                # door deeper than this app:
-                                # Settings -> Display is always the
-                                # recovery, the boot belt reclaims
-                                # rows this app configured). In dim
-                                # mode an absent row is a dim row -
-                                # the migration promise, and the
-                                # honest default for a panel that
-                                # joined after the config was written
+        "mode": "offdisc",        # THE ROW-FALLBACK WORD, not a switch
+                                 # (owner ruling, Oct 22: the card's
+                                 # global mode selector died; per-
+                                 # monitor modes own the decision).
+                                 # Unset row -> this key -> offdisc.
+                                 # The legacy words "off" (the panel's
+                                 # own power code, VCP 0xD6) and "dim"
+                                 # stay readable and mean exactly what
+                                 # the row words of the same name mean
+                                 # - toml compatibility lives, the
+                                 # stock SC_MONITORPOWER broadcast now
+                                 # only answers a desk with no rows.
+        "monitors": {},          # EDID short -> {"blackout": bool,
+                                 # "off": bool, "offdisc": bool}
+                                 # (normalize's shape; the loader also
+                                 # takes the bare bool and a bare
+                                 # "blackout"/"dim"/"off"/"offdisc"
+                                 # string, "off-disc" included). The
+                                 # off sub-mode is YOUNG: rows without
+                                 # the key simply answer False (no
+                                 # migration it must perform). True
+                                 # "off" = the real power opcode
+                                 # (VCP 0xD6) through wm/_bright.py's
+                                 # door - the panel IS the overlay; a
+                                 # write refused after the budget
+                                 # degrades that row to blackout with
+                                 # the confession on its status word
+                                 # (the PROBE LAW's two honest halves,
+                                 # AUDIT-PUNCHLIST 60121ed). The card
+                                 # renders this word "off (DDC fast)"
+                                 # - the file's word stays "off" byte-
+                                 # identical (owner law, Oct 22). True
+                                 # "offdisc" = the DISCONNECT through
+                                 # wm/_sdc.py - the path retracted at
+                                 # the adapter, the state lives in
+                                 # Windows' own display store (one
+                                 # door deeper than this app:
+                                 # Settings -> Display is always the
+                                 # recovery, the boot belt reclaims
+                                 # rows this app configured). An
+                                 # ABSENT row follows the chain: the
+                                 # global key if it names a row word,
+                                 # else the default offdisc (owner
+                                 # ruling, Oct 22 - "the default is
+                                 # what Windows does"; replaces the
+                                 # old absent-means-dim promise)
         "dim_level": 10,        # brightness %% for the dim rows, clamped
                                 # 1..40 - measured law (wm/_bright.py):
                                 # some panels accept brightness writes
@@ -890,12 +900,21 @@ def normalize_camera_modes(value):
     return out
 
 
-AWAY_MODES = ("off", "dim")
 AWAY_ROW_MODES = ("blackout", "dim", "off", "offdisc")   # the per-row
 #    sub-modes; offdisc = the DISCONNECT flavor (wm/_sdc.py: retracts
 #    at the adapter, comes back as a replug, works regardless of
 #    firmware) - the pair shape grows a third bool, young like "off"
 #    was: absent answers False, no migration it must perform
+AWAY_MODES = AWAY_ROW_MODES          # the global [away] mode key's word
+#    domain (owner ruling, Oct 22): the away card's global mode selector
+#    died, and the key's one job is the fallback WORD for rows that
+#    carry no explicit mode. The legacy words "off" and "dim" stay
+#    readable exactly as the per-row words that already mean them; the
+#    shipped default is AWAY_ROW_DEFAULT.
+AWAY_ROW_DEFAULT = "offdisc"         # THE ENGINE'S NEW DEFAULT WORD
+#    (owner law, Oct 22: "the default is what Windows does" - the
+#    adapter retraction). Unset row -> global key if it names a row
+#    word -> this. The UI renders it 'off (disconnect)'.
 DIM_LEVEL_FLOOR = 1                 # the dim sub-mode never means black
 DIM_LEVEL_CEIL = 40                 # past this the fake-off is a rumor
 
@@ -911,25 +930,30 @@ def _fold_row_mode(v):
 
 def normalize_away(value):
     """[away] in its in-memory shape: {mode, monitors, dim_level, lock}.
-    A mode the engine has never heard of warns and falls back to the
-    stock "off" (the file's other answers still stand); dim_level
-    clamps to 1..40 (a 0%% "dim" is a blackout that lied about itself,
-    a 90%% one is nobody dimming anything); lock is a bool with the
-    mode key's honesty (a bad value warns naming short and value, and
-    folds to False - the default-off law: a spell that locks the
-    session is consent, not a rumor); monitor rows accept the
-    bare-bool shorthand (A = true means {"blackout": true}) and drop
-    malformed rows with a warning naming them; a RETIRED
-    off_after_min key (the stage-two experiment, Oct 17-19: the OS
-    screen-off timer owns the disconnect now, with the driver
-    holding the device lifetime) warns naming itself and is
-    dropped."""
+    The mode key is a row-fallback word, not a switch (owner ruling,
+    Oct 22): the card's global selector died with the per-monitor
+    modes, the key stays READABLE for toml compatibility, and its word
+    domain is the row-word domain - the shipped default is
+    AWAY_ROW_DEFAULT ("offdisc"; the legacy "off"/"dim" files keep
+    their behavior through the same word). A mode this app has never
+    heard of warns and takes the default; dim_level clamps to 1..40 (a
+    0%% "dim" is a blackout that lied about itself, a 90%% one is
+    nobody dimming anything); lock is a bool with the mode key's
+    honesty (a bad value warns naming short and value, and folds to
+    False - the default-off law: a spell that locks the session is
+    consent, not a rumor); monitor rows accept the bare-bool shorthand
+    (A = true means {"blackout": true}) and drop malformed rows with a
+    warning naming them (a dropped row joins the fallback chain like
+    the absent row it becomes); a RETIRED off_after_min key (the
+    stage-two experiment, Oct 17-19: the OS screen-off timer owns the
+    disconnect now, with the driver holding the device lifetime) warns
+    naming itself and is dropped."""
     value = value if isinstance(value, dict) else {}
-    mode = value.get("mode", "off")
+    mode = value.get("mode", AWAY_ROW_DEFAULT)
     if mode not in AWAY_MODES:
-        log.warning("away mode %r is unknown; the screens go off as "
-                    "they always did", mode)
-        mode = "off"
+        log.warning("away mode %r is unknown; the row default takes "
+                    "it: off (disconnect)", mode)
+        mode = AWAY_ROW_DEFAULT
     lock = value.get("lock", False)
     if not isinstance(lock, bool):
         log.warning("away lock %r is not a bool; the away spell will "
@@ -962,10 +986,12 @@ def normalize_away(value):
                 if "mode" in row and v not in AWAY_ROW_MODES:
                     # the dict branch answers with the SAME honesty the
                     # string branch shows a bad name (gate finding 5a):
-                    # warn, fold to dim, name the row
+                    # warn, fold to the explicit dim triple, name the
+                    # row (a folded row is PRESENT, so it does not join
+                    # the absent-row chain - the old meaning lives)
                     log.warning("away monitor %r: mode %r is not a known "
-                                "sub-mode; the monitor keeps the dim "
-                                "default", short, row.get("mode"))
+                                "sub-mode; the monitor goes dim",
+                                short, row.get("mode"))
                     rows[short] = {"blackout": False, "off": False,
                                    "offdisc": False}
                 elif v in AWAY_ROW_MODES:
@@ -975,9 +1001,10 @@ def normalize_away(value):
                                    "off": bool(row.get("off")),
                                    "offdisc": bool(row.get("offdisc"))}
             else:
-                log.warning("away monitor %r: %r is not an away row; "
-                            "the monitor keeps the dim default", short,
-                            row)
+                log.warning("away monitor %r: %r is not an away row; the "
+                            "row is dropped and the monitor takes the "
+                            "fallback chain (off (disconnect) unless "
+                            "the mode key says otherwise)", short, row)
     if "off_after_min" in value:
         log.warning("away off_after_min is gone (Oct 19): Windows' own "
                     "screen-off timer does the deep disconnect now - "

@@ -434,8 +434,10 @@ def check():
                     "enabled eye"
                 assert bool(app.restore_switch.get()) is flip
                 # (hdr_while-away's assert retired with its switch -
-                #  dim-mode wave; the away card's rows are painted by
-                #  _away_sync, a different seam with its own truth)
+                #  dim-mode wave; the away card's rows - and since the
+                #  Oct-22 wave its whole trio of switches - are
+                #  painted by _sync_away_rows, a different seam with
+                #  its own truth)
                 assert bool(app.fullscreen_switch.get()) is flip
                 assert bool(app.power_switch.get()) is (not flip)
                 assert bool(app.gaming_switch.get()) is flip

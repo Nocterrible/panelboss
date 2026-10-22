@@ -286,7 +286,7 @@ class SettingsWindow(
     # names; every entry paints BOTH branches from its truth source -
     # cfg, the registry, the editor dict - and fires no commands.
     SWITCH_SYNC = {
-        "detection": ("_sync_consent_switch",),
+        "detection": ("_sync_consent_switch", "_sync_away_rows"),
         "monitor profiles": ("_sync_restore_switches",
                              "_sync_editor_switches"),
         "power plan": ("_sync_power_switches", "_sync_gaming_switches"),

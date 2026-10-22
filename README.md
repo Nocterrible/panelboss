@@ -80,12 +80,15 @@ webcam - and sets frame changes, pixel delta, and motion hold: how long
 presence lingers after the last movement, because reading a page is stillness,
 not absence.
 
-The away card sets what "away" is. Monitors off sends Windows' own power
-broadcast. Dim keeps panels powered and paints the dark: blackout is an
+The away card sets what "away" is, per monitor: every panel row picks its
+own dark. Dim keeps panels powered and paints the dark: blackout is an
 opaque cover, clicked to wake; dim drops the panel to the shared level, 1-40
-percent; off sends the panel's own DDC/CI power code, so the panel itself
-goes dark as if you pressed its button; off (disconnect) retracts the signal
-at the adapter, and Windows refuses to strand the last active display. Lock
+percent; off (DDC fast) sends the panel's own DDC/CI power code, so the
+panel itself
+goes dark as if you pressed its button; off (disconnect) - the default for
+rows you never touched - retracts the signal at the adapter, and Windows
+refuses to strand the last active display. An unworded row follows the
+legacy [away] mode key before the default. Lock
 when away starts ends the session too: panels wake to the lock screen.
 Preview tries a row for ten seconds and reverts; the second click cancels.
 Some panels refuse DDC/CI writes - a KVM often explains it - and the app

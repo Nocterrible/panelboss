@@ -249,17 +249,19 @@ class SkewCombo(tk.Menubutton):
 
 
 def desk_position(rows, x, y, w, h):
-    """The monitor's RELATIVE slot on the desk (owner law, Oct 15):
-    a name disambiguates panels only when the EDID strings differ;
-    the geometry disambiguates three identical ones. A pure
-    function over the live row list so every card says the same
-    word for the same desk. Rows without geometry are skipped -
-    no row raises inside a card redraw. A single-row desk gets no
-    word: with one panel the position IS the desk and says
-    nothing. Parts that cannot vary are omitted, not faked:
-    side-by-side rows share their top edge and the vertical half
-    of the word is vacuous; a stack shares its x span and the
-    horizontal half is."""
+    """The monitor's EDGE/POSITION descriptor - the single seam (the
+    owner law of Oct 15 made the word disambiguate identical names;
+    the owner law of Oct 22 makes it earn its place):
+    SUPPRESSION BY VARIANCE - each descriptor COMPONENT (the vertical
+    half, the horizontal half) shows iff at least one row in the
+    LISTED SET differs on it. A desk where every panel would read
+    'top' says 'top' nowhere; a single-row context says nothing
+    (one row has no variance); an empty set (before the first
+    desktop capture ever answered) says nothing - absence is not a
+    dash. Pure over the row list, so every card can call it with ITS
+    OWN listed subset and the suppression is per-context by
+    construction; rows without geometry are skipped and no row ever
+    raises inside a card redraw."""
     edges = []
     for rx, ry, rw, rh in rows:
         if not all(isinstance(v, (int, float))
@@ -272,24 +274,51 @@ def desk_position(rows, x, y, w, h):
     max_r = max(e[2] for e in edges)
     min_y = min(e[1] for e in edges)
     max_b = max(e[3] for e in edges)
-    if max_r - min_x <= 0:
-        h_part = ""
-    elif x == min_x:
-        h_part = "left"
-    elif x + w == max_r:
-        h_part = "right"
-    else:
-        h_part = "middle"
-    if max_b - min_y <= 0:
-        v_part = ""
-    elif y == min_y:
-        v_part = "top"
-    elif y + h == max_b:
-        v_part = "bottom"
-    else:
-        v_part = "middle"
-    parts = [p for p in (v_part, h_part) if p]
+
+    def _h_word(e):                       # the horizontal component
+        if max_r - min_x <= 0:
+            return ""
+        if e[0] == min_x:
+            return "left"
+        if e[2] == max_r:
+            return "right"
+        return "middle"
+
+    def _v_word(e):                       # the vertical component
+        if max_b - min_y <= 0:
+            return ""
+        if e[1] == min_y:
+            return "top"
+        if e[3] == max_b:
+            return "bottom"
+        return "middle"
+
+    mine = (x, y, x + w, y + h)
+    h_words = {_h_word(e) for e in edges}
+    v_words = {_v_word(e) for e in edges}
+    parts = [p for p, show in ((_v_word(mine), len(v_words) > 1),
+                               (_h_word(mine), len(h_words) > 1))
+             if p and show]
     return (" [%s]" % " ".join(parts)) if parts else ""
+
+
+def monitor_row_label(listed, m):
+    """A monitor's identity AS UI text - THE seam (owner law, Oct 22):
+    short name, the gdi slot tail for duplicate models, and the edge
+    descriptor from desk_position over the CARD'S OWN listed set.
+    Every row that renders a monitor identity builds its label here,
+    so the suppression law moves once: uniform components vanish, a
+    single-row context says nothing, and an unlisted desk (before the
+    first capture answered) simply has no rows to label."""
+    base = [mm.get("short") or mm.get("id") for mm in listed]
+    label = m.get("short") or m.get("id")
+    if base.count(label) > 1:
+        label = "%s (%s)" % (label, str(m.get("gdi") or "").rsplit(
+            "DISPLAY", 1)[-1] or "?")
+    return label + desk_position(
+        [(mm.get("x", 0), mm.get("y", 0), mm.get("w", 0), mm.get("h", 0))
+         for mm in listed],
+        m.get("x", 0), m.get("y", 0), m.get("w", 0), m.get("h", 0))
 
 
 class _WidgetsMixin:

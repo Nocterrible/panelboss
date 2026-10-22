@@ -137,6 +137,12 @@ display.turn_off = lambda *a, **k: sent.append("off")
 display.set_hold = lambda *a, **k: None
 display.foreground_is_fullscreen = lambda: False
 from panelboss import wm as _wm                      # the away engine's
+_wm.monitors = lambda: []             # the desk is the suite's to
+#                              fake: an EMPTY desk is the one case the
+#                              stock broadcast still answers (Oct 22
+#                              ruling - rows own the dark; without
+#                              this line the away engine would talk to
+#                              the REAL box's DDC/CCD doors)
 _wm.session_is_remote = lambda: False   # transport ear: these are the
 #                                       LOCAL-desk laws, and the box
 #                                       running them may BE a remote

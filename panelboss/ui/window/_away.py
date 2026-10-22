@@ -1,21 +1,26 @@
-"""The away card: what the app does when it turns the displays off.
+"""The away card: what the app does, per monitor, when it turns the
+displays off.
 
-SIZE LAW header: UI only. The sub-mode laws, the ledger and the
-adopt-vs-revert law live engine-side (panelboss/state/_away.py); the
-paint and the brightness ride wm/_overlay.py and wm/_bright.py. This
-file draws one card, keeps its rows honest about what the desk just
-did, and runs the 10 s preview on a threading.Timer whose revert
-calls INTO the engine law, never around it.
+SIZE LAW header: UI only. The sub-mode laws, the ledger, the
+fallback chain and the adopt-vs-revert law live engine-side
+(panelboss/state/_away.py); the paint and the brightness ride
+wm/_overlay.py and wm/_bright.py. This file draws one card, keeps its
+rows honest about what the desk just did, and runs the preview on a
+threading.Timer whose revert calls INTO the engine law, never around
+it.
 
-Visual language: the mode picker is the detection tab's own segmented
-idiom (same widget, same skin call as person/motion); the rows follow
-the profile monitor list (short name first - duplicate models get
-the gdi slot tail, same disambiguation the mode editor uses). Two
-adaptations, logged honestly: the disabled-mode gray pass is written
-HERE (this tab's sibling behavior is pack-forget hiding - no gray
-walker existed to reuse), and the preview's dialog-above-the-paint
-uses topmost+raise on the settings window: transient() is not a word
-across Tk interpreters, and the overlay lives on its own thread.
+The global mode row is DEAD (owner ruling, Oct 22): the per-monitor
+pickers own every answer, and the [away] mode key stays readable as
+the rows' fallback WORD (state/_away._row_mode is the chain;
+config.normalize_away ships its default). Visual language: the pickers
+are the detection tab's own segmented idiom (same widget, same skin
+call as person/motion); the rows follow the profile monitor list
+(short name first - duplicate models get the gdi slot tail, same
+disambiguation the mode editor uses). The card now also hosts the
+away-decision trio (the reskin wave's one-section law): the hold-off,
+the lock and the window restore - the last two traveled in from the
+power-plan tab (owner, Oct 22), same labels, same keys, same write
+paths, because settings live where their behavior is negotiated.
 (Growth, 2026-10-14 off wave: the per-row choice rule, the
 never-reached why-line and the off preview's countdown chain are all
 card paint and stay in this file - splitting the card would scatter
@@ -29,117 +34,116 @@ import threading
 
 import customtkinter as ctk
 
-from ... import wm
-from ._widgets import desk_position, set_text
+from ... import config, wm
+from ._widgets import monitor_row_label, set_text
 
 log = logging.getLogger("ui")
 
-OFF_TEXT = "monitors off"
-DIM_TEXT = "dim"
 DISC_TEXT = "off (disconnect)"
+DDC_TEXT = "off (DDC fast)"        # the word in the file stays "off"
+                                   # (byte-identical migration, owner
+                                   # law); only the LABEL says DDC
 # the row-menu LABEL -> the engine WORD (the offdisc-preview fix:
 # the picker answers labels, _away_apply_row dispatches on words;
 # an unmapped label used to fall through the engine's chain to the
 # silent dim leg - the confession added engine-side, the map made
 # EXHAUSTIVE here and pinned in awaymode_test):
 MODE_BY_LABEL = {"blackout": "blackout", "dim": "dim",
-                 "off": "off", DISC_TEXT: "offdisc"}
+                 DDC_TEXT: "off", DISC_TEXT: "offdisc"}
+LABEL_BY_MODE = {word: label for label, word in MODE_BY_LABEL.items()}
+
+# THE PREVIEW RUNS THIS LONG (owner law, Oct 22: the duration belongs
+# IN the word - the button label interpolates it, the timer and the
+# countdown seed ride it, and the suite pin re-sets the constant and
+# expects the label to follow: a hardcoded "15s" next to a 10 s timer
+# fails the pin).
+PREVIEW_SEC = 10
+
+
+def preview_label():
+    return "preview (%ds)" % PREVIEW_SEC
 
 
 def off_choice(bright, gdi):
-    """A row's sub-mode menu. The D6 OFF is offered on every panel
-    this app REACHED - physical handles opened; the AOC answered
-    brightness at a one-shot probe's NAK-rate all morning and the
-    PROBE LAW says that door works (owner correction: capability
-    verdicts come from in-app attempts with a spent retry budget, so
-    the state machine's UNKNOWN is selectable, unbelieved, and gray
-    was always for never-reached panels only). The DISCONNECT rides
-    the adapter's own CCD door - no DDC/CI needed, firmware never
-    consulted - so it is offered everywhere, and a row whose sdc leg
-    refused after the budget KEEPS the choice: the dated status word
-    is the state machine's truth, gray would be a pre-judgment."""
-    vals = ["blackout", "dim"]
+    """A row's sub-mode menu, in the owner's reading order: dim, the
+    two offs, and the painted blackout last. The D6 OFF - labeled
+    'off (DDC fast)' - is offered on every panel this app REACHED
+    (physical handles opened; the PROBE LAW says capability verdicts
+    come from in-app attempts with a spent retry budget, never from a
+    pre-sentence about firmware, and gray was always for
+    never-reached panels only). Blackout is selectable because the
+    state side ships it as an explicit row word (its label's tip says
+    what it is); the refused row's degradation TO it is a confession,
+    not a menu item. The DISCONNECT rides the adapter's own CCD door -
+    no DDC/CI needed, firmware never consulted - so it is offered
+    everywhere, and a row whose sdc leg refused after the budget KEEPS
+    the choice: the dated status word is the state machine's truth,
+    gray would be a pre-judgment."""
+    vals = ["dim"]
     if bright.reachable(gdi):
-        vals.append("off")
+        vals.append(DDC_TEXT)
     vals.append(DISC_TEXT)
+    vals.append("blackout")
     return vals
 
+
 TIP = {
-    "refresh": "the monitor rows in this window follow the desk: a "
-               "panel that joins or leaves is noticed within two "
-               "seconds and the cards re-read. The button forces the "
-               "same re-read by hand - an identical-model panel "
-               "swapped behind a KVM changes nothing observable, so "
-               "this is the belt the poll cannot wear. Nothing here "
-               "edits a setting you made: the rows show what the "
+    "refresh": "forces the same two-second desk re-read by hand - the "
+               "belt for a panel swap that changes nothing observable, "
+               "like an identical model behind a KVM. Shows what the "
                "config already says.",
-    "mode": "off: the displays get the real power broadcast, exactly "
-            "as always. dim: the panels STAY AWAKE and the app paints "
-            "the dark - no cold re-enumeration on wake (the 16-38 s "
-            "class), no driver drama. blackout rows wear an opaque "
-            "black cover (a click on it wakes the desk); dim rows "
-            "lose their HDR and drop to the brightness below for the "
-            "spell and get it all back on lift; OFF rows ask the "
-            "panel's own power code through the same door the "
-            "brightness rides - the panel itself goes DPMS-dark, no "
-            "paint, and a power write brings it back at the wake (an "
-            "offed panel cannot report input: the desk wakes on the "
-            "lit panels' ears or the idle gate). MEASURED ON THIS "
-            "DESK CLASS: a write accepted and never proven by the "
-            "readback keeps its sub-mode and says (unverified) on the "
-            "row's status word; only a send refused after the retries "
-            "degrades the row to blackout, and it says that too - "
-            "never silent. When a painted spell engages, the pointer "
-            "parks at the bottom of the lowest monitor and stays "
-            "there when you return: nobody remembers where their "
-            "cursor was after leaving the room.",
-    "row": "blackout = the painted lie; dim = HDR off + the shared "
-           "brightness level; off = the panel's own power code (0xD6) "
-           "through the brightness door, blackout as the confessed "
-           "fallback if the send itself refuses. a preview applies "
-           "THIS row's effect for 10 s and reverts it (the second "
-           "click cancels now; a real away arriving mid-preview keeps "
-           "the effect and hands it back at the real wake instead); "
-           "an off preview counts its seconds on this window - the "
-           "dark panel cannot carry a digit - and a dark panel also cannot prove its own darkness: 'off (unverified)' means the write was accepted and the register (or nothing) disagrees, so the eyes and the physical button remain the honest witnesses. an OFF row is a real retraction: the display is disconnected at the adapter, the same act as the re-connect entry in Windows settings, and the state SURVIVES this app - if a panel is left off, Settings -> Display brings it back (windows refuses to disconnect the last active display, so a lone screen can never be stranded).",
-    "offdisc": "'off (disconnect)' is the other off: the path is "
-               "retracted AT THE ADAPTER (SetDisplayConfig), so it "
-               "works regardless of firmware - the panel never hears "
-               "a code, it loses its signal - and it comes back as a "
-               "replug: a re-enumeration, the panel waking like a "
-               "cold attach. Unlike the power-code off its state "
-               "lives in Windows' own display store (it survives the "
-               "app), so Settings -> Display is ALWAYS the recovery "
-               "door, and the app's boot belt re-raises rows it "
-               "configured before it died. The row's word 'off "
-               "(disconnected)' is the ONE dark this app can PROVE, "
-               "and note what 'gone' names here: gone from the "
-               "display store - what got cut is the signal, and "
-               "through your cable that IS the dark. A hub that "
-               "latches its last frame can keep showing a picture "
-               "the store no longer believes, so the app asks the "
-               "store, never the row list (through exactly that "
-               "latch the rows keep lying); and when the store's "
-               "slot and the panel's own EDID name disagree about "
-               "which screen this row is, the row refuses with the "
+    "ddc": "the quick software power-down - some panels refuse the "
+           "DDC/CI write (KVM chains especially); a refused row falls "
+           "back to blackout",
+    "row": "dim keeps the panel awake and drops its brightness; "
+           "blackout paints an opaque cover (a click wakes the desk); "
+           "off (DDC fast) sends the panel's own power code, and a "
+           "refused send falls back to blackout; off (disconnect) "
+           "retracts the signal at the adapter - the same act as the "
+           "re-connect entry in Windows settings. A write accepted "
+           "but unproven keeps its mode and says (unverified); a "
+           "refusal says so next to the panel - never silent. A "
+           "preview applies THIS row's effect for ten seconds and "
+           "reverts (second click cancels). A disconnected panel "
+           "survives this app: Settings -> Display brings it back, "
+           "and a lone screen is never stranded.",
+    "offdisc": "the path is retracted AT THE ADAPTER (SetDisplayConfig): "
+               "the panel never hears a code, it loses its signal, and "
+               "it comes back as a replug. The state lives in Windows' "
+               "own display store - it survives this app, Settings -> "
+               "Display is always the recovery door, and the boot belt "
+               "re-raises rows this app configured before it died. The "
+               "word 'off (disconnected)' is the one dark this app can "
+               "prove: the store is asked, never the row list (a hub "
+               "can latch a picture the store no longer believes), and "
+               "when the store's slot and the panel's own EDID name "
+               "dispute which screen a row is, the row refuses with the "
                "dated word instead of darkening the wrong panel. A "
                "refused retraction (Windows guards the last active "
-               "display) degrades the row to blackout with the dated "
-               "word, exactly like a refused power code.",
+               "display) degrades to blackout, confessed.",
     "level": "where dim rows park their brightness while away, 1 to "
-              "40 percent - shared by every dim row (per-monitor "
-              "levels are a planned follow-up).",
+             "40 percent - shared by every dim row (per-monitor "
+             "levels are a planned follow-up).",
     "lock": "Windows locks when nobody MOVES; this locks when nobody "
-            "is HERE - the presence verdict, not a screensaver clock. "
-            "A returning face gets the lock screen, never somebody "
-            "else's desktop. Behind the lock the dark spell answers "
-            "the camera and the session unlock, NOT the mouse: raw "
-            "input is per-desktop and the lift ears go deaf while "
-            "Winlogon owns the desk (the camera stream is ours and "
-            "keeps running through the lock). A preview never locks - "
-            "yanking the session at setup time would be hostile; the "
-            "lock lands only with a real away that darked at least "
-            "one row, after the corner jail.",
+            "is HERE, and any real away that darks a row locks the "
+            "session - a preview never locks. Behind the lock the "
+            "spell answers the camera and the session unlock, not "
+            "the mouse: raw input is per-desktop and Winlogon owns "
+            "the desk.",
+    # the two rows that moved in from the power-plan tab (owner
+    # ruling, Oct 22): the entries travel VERBATIM with their labels
+    # and write paths; the sweep re-worded them in place.
+    "fullscreen": "exclusive-fullscreen games swallow the power-off "
+                  "broadcast - the app keeps its hands off while a "
+                  "game owns the display.",
+    "restore_windows": "some monitors unplug themselves from Windows "
+                       "on sleep and Windows re-lays the windows wrong "
+                       "on return: the app remembers every window's "
+                       "rect and the monitors' hardware identity "
+                       "before the dark, and moves everything back "
+                       "after any wake once the topology settles. A "
+                       "swapped or unplugged monitor means the saved "
+                       "desk is another desk - nothing moves.",
 }
 
 
@@ -147,31 +151,50 @@ class _AwayMixin:
     # ------------------------------------------------------------------ away --
     def _away_card(self, left):
         box = self._card(left, "when the app turns the displays off",
-                         "play dead instead of asleep: the panels keep "
-                         "their power, the desk gets the dark painted "
-                         "on")
-        row = self._row(box, "mode", TIP["mode"], hint_chars=42)
-        self.away_mode_button = ctk.CTkSegmentedButton(
-            row, values=[OFF_TEXT, DIM_TEXT], height=26, width=190,
-            command=self._away_mode_changed,
-            **self.skin.segmented_style())
-        self.away_mode_button.set(
-            DIM_TEXT if (self.cfg.get("away") or {}).get("mode") == "dim"
-            else OFF_TEXT)
-        self.away_mode_button.grid(row=0, column=1, sticky="e")
-        # lock-on-away, beside the mode pick: it only speaks for a dim
-        # spell (the stock broadcast owns its own dark), so _away_sync
-        # gates its state with the rows - consent and dim mode both,
-        # never a live-looking box on a mode that never locks
+                         "per-monitor off: dim the panel, paint the "
+                         "dark, or take the signal away")
+        # THE GLOBAL MODE ROW IS DEAD (owner ruling, Oct 22). What
+        # remains is the away-decision trio in behavior chronology:
+        # the hold-off (before the dark), the lock (at the dark), the
+        # window restore (after the wake) - the outer two traveled in
+        # from the power-plan tab's rows on purpose: they negotiate
+        # this section's decisions.
+        row = self._row(box, "hold off while a fullscreen app owns "
+                             "the display", TIP["fullscreen"],
+                        hint_chars=42)
+        self.fullscreen_switch = ctk.CTkSwitch(
+            row, text="", font=self.skin.font(12),
+            command=self._fullscreen_changed,
+            **self.skin.switch_style())
+        self.fullscreen_switch.grid(row=0, column=1, sticky="e")
+        if self.cfg["guards"]["fullscreen"]:
+            self.fullscreen_switch.select()
+        else:
+            self.fullscreen_switch.deselect()
+        row = self._row(box, "lock when away starts", TIP["lock"],
+                        hint_chars=42)
         self.away_lock_box = ctk.CTkCheckBox(
-            row, text="lock when away starts", command=self._away_lock_changed,
-            font=self.skin.font(12), checkbox_width=18, checkbox_height=18,
-            border_color=self.skin.border_raised,
+            row, text="",
+            command=self._away_lock_changed,
+            font=self.skin.font(12), checkbox_width=18,
+            checkbox_height=18, border_color=self.skin.border_raised,
             fg_color=self.skin.accent, hover_color=self.skin.accent,
-            text_color=self.skin.text, text_color_disabled=self.skin.txt3)
+            text_color=self.skin.text,
+            text_color_disabled=self.skin.txt3)
         self.away_lock_box.set(bool((self.cfg.get("away") or {})
                                     .get("lock")))
-        self.away_lock_box.grid(row=0, column=2, sticky="e", padx=(10, 0))
+        self.away_lock_box.grid(row=0, column=1, sticky="e")
+        row = self._row(box, "put window positions back after wake",
+                        TIP["restore_windows"], hint_chars=42)
+        self.restore_switch = ctk.CTkSwitch(
+            row, text="", font=self.skin.font(12),
+            command=self._restore_changed,
+            **self.skin.switch_style())
+        self.restore_switch.grid(row=0, column=1, sticky="e")
+        if self.cfg["power"].get("restore_windows"):
+            self.restore_switch.select()
+        else:
+            self.restore_switch.deselect()
 
         # one row per live panel, the profile list's idiom - inside
         # THEIR OWN frame: the desk can change under a living window
@@ -202,30 +225,27 @@ class _AwayMixin:
         self._away_cd.pack(anchor="e", pady=(2, 0))
         self._away_cd_left = 0
         self._away_cd_job = None            # the after-idle of ONE chain
-        self._away_sync()
+        self._sync_away_rows()
         self.after(900, self._away_poll)
 
     def _away_fill_rows(self):
         """Discard-and-refill (the _cam_rows idiom): every live panel
         owns a row in the card's row frame; the settings the rows
         edit come from cfg, so a rebuild cannot lie and cannot lose
-        an answer."""
+        an answer. The gray state is PAINTED FROM THE ROW'S MODE WORD
+        HERE, at build (the first-boot lie, owner Oct 22 - the pump/
+        hold rows' lesson in segmented clothes: never wait for the
+        first change event to tell a control it is disabled)."""
         for widget in self._away_row_frame.winfo_children():
             widget.destroy()
         self._away_rows = {}
         _live = wm.monitors()
-        base = [m.get("short") or m.get("id") for m in _live]
-        dupes = {b for b in base if base.count(b) > 1}
-        for m, short in zip(_live, base):
-            label = short
-            if short in dupes:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
-            label = label + desk_position(
-                [(mm.get("x", 0), mm.get("y", 0), mm.get("w", 0),
-                  mm.get("h", 0)) for mm in _live],
-                m.get("x", 0), m.get("y", 0), m.get("w", 0), m.get("h", 0))
+        # the label (short name, duplicate-model tail, and the edge
+        # descriptor WHEN IT CARRIES NEWS - law 7, Oct 22) is built at
+        # the one seam every identity row shares
+        for m, short in zip(_live, [mm.get("short") or mm.get("id")
+                                    for mm in _live]):
+            label = monitor_row_label(_live, m)
             row = self._row(self._away_row_frame, label, TIP["row"],
                             hint_chars=42)
             vals = off_choice(wm._bright, m["gdi"])
@@ -235,7 +255,7 @@ class _AwayMixin:
                 **self.skin.segmented_style())
             mode = self._away_row_mode(short)
             seg.set(mode if mode in vals else "dim")
-            if "off" not in vals:
+            if DDC_TEXT not in vals:
                 # gray not lie (owner correction): the choice is
                 # ABSENT here because this app never reached the
                 # panel's DDC door - said in one line, in words
@@ -248,9 +268,9 @@ class _AwayMixin:
                                           "disconnect does not)")
             seg.grid(row=0, column=1, sticky="e")
             # the disconnect's paragraph hangs on the picker itself:
-            # the label's tip is the row-wide one, and the 4th choice
-            # is where the question forms (same hover path as the
-            # card sub-lines). CTkSegmentedButton.bind raises
+            # the label's tip is the row-wide one, and the off
+            # choices are where the question forms (same hover path
+            # as the card sub-lines). CTkSegmentedButton.bind raises
             # NotImplementedError (measured via hdrwake's live window
             # build) - the button's own canvas takes the bindings and
             # covers the same pixels (the wheel-swap walker already
@@ -268,6 +288,20 @@ class _AwayMixin:
                                  add="+")
             except Exception:
                 pass                       # no paragraph, no crime
+            # the DDC segment's OWN law text rides the segment button
+            # (owner law, Oct 22: 'off (DDC fast)' says what it is
+            # and where it breaks); same default-capture discipline
+            try:
+                _d = seg._buttons_dict.get(DDC_TEXT)
+                if _d is not None:
+                    _d.bind("<Enter>",
+                            lambda e=None, w=_d: self.tips._schedule(
+                                TIP["ddc"], w), add="+")
+                    _d.bind("<Leave>",
+                            lambda e=None: self.tips._hide_soon(),
+                            add="+")
+            except Exception:
+                pass
             value = ctk.CTkLabel(row, font=self.skin.font(12),
                                  **self.skin.text_style("sub"))
             value.grid(row=0, column=3, sticky="e", padx=(6, 0))
@@ -276,9 +310,14 @@ class _AwayMixin:
                                    command=self._away_level_changed,
                                    **self.skin.slider_style())
             slider.set(self._away_level())
+            if mode != "dim":
+                # an off-mode row's brightness control never gets to
+                # look live, before any event fires (the knob-lie
+                # family's away-card corpse, owner UAT Oct 22)
+                slider.configure(state="disabled")
             slider.grid(row=0, column=2, sticky="e")
             value.configure(text="%d%%" % self._away_level())
-            preview = ctk.CTkButton(row, text="preview", width=84,
+            preview = ctk.CTkButton(row, text=preview_label(), width=84,
                                     command=lambda s=short:
                                     self._away_preview_clicked(s),
                                     **self.skin.secondary())
@@ -287,12 +326,12 @@ class _AwayMixin:
                                font=self.skin.font(10),
                                wraplength=350, justify="left", anchor="w",
                                **self.skin.text_style("sub"))
-            self._away_rows[short] = {"row": row, "seg": seg,
+            self._away_rows[short] = {"row": row, "seg": seg, "vals": vals,
                                       "slider": slider, "value": value,
                                       "preview": preview, "say": say,
                                       "gdi": m["gdi"]}
             say.pack(anchor="w")
-        self._away_sync()
+        self._sync_away_rows()
 
     def _away_rebuild_rows(self):
         """The desk moved, or the button said so. A live preview is
@@ -335,46 +374,69 @@ class _AwayMixin:
         return int((self.cfg.get("away") or {}).get("dim_level", 10))
 
     def _away_row_mode(self, short):
-        """The triple shape normalize ships ({"blackout": b, "off": b,
-        "offdisc": b}); the legacy bare-bool row reads honestly too
-        (one release - the file shape the dim wave wrote). The answer
-        is a MENU LABEL: the disconnect's label differs from its
-        stored word, and the row-menu maps label -> triple."""
-        rows = (self.cfg.get("away") or {}).get("monitors") or {}
+        """The MENU LABEL for the row: the triple shape normalize
+        ships ({"blackout": b, "off": b, "offdisc": b}) and the
+        legacy bare-bool row read honestly (one release - the file
+        shape the dim wave wrote). THE SAME FALLBACK CHAIN the
+        engine's _row_mode runs, mirrored for paint (owner ruling,
+        Oct 22): no explicit mode -> the global [away] key when it
+        names a row word -> the shipped default (offdisc, the label
+        'off (disconnect)'). A present row's words answer byte-
+        identical, the all-False triple is the explicit dim the card
+        wrote. The answer is a MENU LABEL: the disconnect's and the
+        DDC off's labels differ from their stored words, and the
+        row-menu maps label -> triple."""
+        away = self.cfg.get("away") or {}
+        rows = away.get("monitors") or {}
         row = rows.get(short)
-        if not row:
-            return "dim"
+        if row is None or row == {}:
+            word = away.get("mode")
+            if word not in ("blackout", "dim", "off", "offdisc"):
+                word = config.AWAY_ROW_DEFAULT
+            return LABEL_BY_MODE[word]
         if isinstance(row, bool):
             return "blackout" if row else "dim"
         if row.get("offdisc"):
             return DISC_TEXT
         if row.get("off"):
-            return "off"
+            return DDC_TEXT
         return "blackout" if row.get("blackout") else "dim"
 
     # ------------------------------------------------------------- handlers --
-    def _away_mode_changed(self, label):
-        # cfg["away"] IS the engine's dict: writing is applying, the
-        # next _screens_off already engages (or doesn't) the new mode
-        self.cfg.setdefault("away", {})["mode"] = \
-            "dim" if label == DIM_TEXT else "off"
-        self._away_sync()
-        self._save()
-
     def _away_lock_changed(self):
         # the same write-is-applying law: the flag rides the live
         # away dict, the next real engage reads it at its own end
+        # (every away mode can lock now - the engine locks on any
+        # engage that darked a row, and the box grays for consent
+        # only)
         self.cfg.setdefault("away", {})["lock"] = \
             bool(self.away_lock_box.get())
-        self._away_sync()
+        self._sync_away_rows()
+        self._save()
+
+    def _restore_changed(self):
+        # cfg["power"] IS monitor.power_cfg: the snapshot/restore hooks
+        # read restore_windows fresh at every off/wake edge
+        self.cfg["power"]["restore_windows"] = bool(
+            self.restore_switch.get())
+        self._save()
+
+    def _fullscreen_changed(self):
+        self.cfg["guards"]["fullscreen"] = bool(self.fullscreen_switch.get())
         self._save()
 
     def _away_submode_changed(self, short, label):
+        word = MODE_BY_LABEL.get(label)
+        if word is None:
+            return                          # a label from another menu
         rows = self.cfg.setdefault("away", {}).setdefault("monitors", {})
-        rows[short] = {"blackout": label == "blackout",
-                       "off": label == "off",
-                       "offdisc": label == DISC_TEXT}
-        self._away_sync()
+        rows[short] = {"blackout": word == "blackout",
+                       "off": word == "off",
+                       "offdisc": word == "offdisc"}
+        #                    the file shape stays byte-identical: the
+        #                    dim choice arrives as the all-False
+        #                    triple it always wrote
+        self._sync_away_rows()
         self._save()
 
     def _away_level_changed(self, value):
@@ -387,7 +449,7 @@ class _AwayMixin:
                 r["value"].configure(text="%d%%" % level)
         self._save()
 
-    # ------------------------------------------------------------------------------------------------------------------- preview --
+    # -------------------------------------------------------------------------------------------------------------------- preview --
     def _away_preview_clicked(self, short):
         job = self._away_jobs.pop(short, None)
         if job is not None:              # the second click = cancel NOW
@@ -417,11 +479,12 @@ class _AwayMixin:
                         self.after_cancel(self._away_cd_job)
                     except Exception:
                         pass
-                self._away_cd_left = 10
+                self._away_cd_left = PREVIEW_SEC
                 self._away_countdown()
-        timer = threading.Timer(10.0, lambda: self._away_expiry(short, rec))
+        timer = threading.Timer(PREVIEW_SEC,
+                                lambda: self._away_expiry(short, rec))
         timer.daemon = True              # a quit with a live preview must
-        timer.start()                    # never hang the process 10 s
+        timer.start()                    # never hang the process
         self._away_jobs[short] = {"timer": timer, "rec": rec}
         set_text(r["preview"], "cancel")
         self._away_say(short)
@@ -459,7 +522,7 @@ class _AwayMixin:
         set_text(self._away_cd, "")       # the word goes now
         r = self._away_rows.get(short)
         if r is not None:
-            set_text(r["preview"], "preview")
+            set_text(r["preview"], preview_label())
         if verdict == "adopted":
             self._away_says[short] = "away for real now"
         elif manual:
@@ -482,32 +545,45 @@ class _AwayMixin:
             pass                          # gone mid-preview: fine
 
     # ------------------------------------------------------------------ paint --
-    def _away_sync(self):
-        """Visibility under one rule: the rows always render, the mode
-        decides whether they SPEAK. Where the tab has the consent
-        band (reskin wave), that walker owns the gray - including the
-        wheel-swap the owner's UAT demanded, so enabling goes through
-        _gate_widgets, never a bare state=: a mode pick must not
-        unlock a consent-greyed card, so dim mode only enables while
-        consent stands. Without a band (older trees) the card owns its
-        own disable pass, the packet's law. Slider visibility follows
-        the row's own sub-mode exactly like the detection card's mode
-        rows."""
+    def _sync_away_rows(self):
+        """KNOB-FROM-TRUTH, both branches, for the whole card (the
+        pump/hold idiom of 60e0348/e59383a, applied to the away rows
+        after the first-boot lie: the gray state PAINTS FROM THE MODE
+        AT BUILD and on every reveal - the detection tab's
+        SWITCH_SYNC entry calls this by name, the builder ends call
+        it directly, and no interaction is ever the first to learn
+        the truth). The consent band (the reskin wave) owns the
+        card-wide gray through _gate_widgets, never a bare state=: a
+        mode pick must not unlock a consent-greyed card. Per row: the
+        picker shows the row's own mode word (the fallback chain
+        applied), the brightness slider lives only on a dim row and
+        is DISABLED wherever it is not the row's business, and the
+        preview button - the test of the mode itself - rides consent
+        only. The trio above the rows paints from cfg: the lock
+        speaks for EVERY away mode (the engine locks any engage that
+        darked a row - owner law, Oct 22), so its box grays for
+        consent alone."""
         band = getattr(self, "_consent_band", None)
         consent = True if band is None else \
             bool(self.cfg["camera"].get("enabled"))
-        dim = consent and \
-            (self.cfg.get("away") or {}).get("mode") == "dim"
-        # the lock box rides the same gate as the rows: a lock with no
-        # dim spell is a checkbox that cannot speak (the stock path
-        # owns its own dark), and gray-not-lie is this card's law
+        away = self.cfg.get("away") or {}
         try:
-            self.away_lock_box.configure(state="normal" if dim
-                                         else "disabled")
+            want = bool(away.get("lock"))
+            if bool(self.away_lock_box.get()) != want:
+                self.away_lock_box.set(want)          # set fires no command
         except Exception:
-            pass                          # rebuilt mid-toggle: fine
+            pass                                      # rebuilt mid-toggle
+        self._pair_switch(self.away_lock_box, consent)
+        p = self.cfg["power"]
+        self.restore_switch.select() if p.get("restore_windows") \
+            else self.restore_switch.deselect()
+        self._pair_switch(self.restore_switch, consent)
+        self.fullscreen_switch.select() \
+            if self.cfg["guards"]["fullscreen"] \
+            else self.fullscreen_switch.deselect()
+        self._pair_switch(self.fullscreen_switch, consent)
         for short, r in self._away_rows.items():
-            state = "normal" if dim else "disabled"
+            state = "normal" if consent else "disabled"
             gated = False
             if band is not None and hasattr(self, "_gate_widgets"):
                 try:
@@ -516,25 +592,65 @@ class _AwayMixin:
                 except Exception:
                     pass
             if not gated:
-                for key in ("seg", "slider", "preview"):
+                for key in ("seg", "preview"):
                     try:
                         r[key].configure(state=state)
                     except Exception:
                         pass
-            if self._away_row_mode(short) != "dim":
+            # a segmented picker keeps its segments in their OWN
+            # buttons (the power card's gray law reads the same
+            # seam) - cascade consent into them whatever the band
+            # walker did, diff-cheap
+            try:
+                for _b in r["seg"]._buttons_dict.values():
+                    if _b._state != state:
+                        _b.configure(state=state)
+            except Exception:
+                pass
+            mode = self._away_row_mode(short)
+            if mode in r["vals"] and r["seg"].get() != mode:
+                r["seg"].set(mode)                    # set fires no command
+            dim_row = consent and mode == "dim"
+            try:                                      # the slider is the
+                #                            row's mode's own business,
+                #                            band or no band: a dim
+                #                            control on an off-mode row
+                #                            is the knob-lie in place
+                r["slider"].configure(state="normal" if dim_row
+                                      else "disabled")
+            except Exception:
+                pass
+            if mode != "dim":
                 # blackout hides the paint's level, off the panel's -
                 # only a DIM row has a brightness to speak of
                 r["slider"].grid_forget()
                 r["value"].grid_forget()
-            elif dim:
+            elif dim_row:
                 r["slider"].grid(row=0, column=2, sticky="e")
                 r["value"].grid(row=0, column=3, sticky="e",
                                 padx=(6, 0))
+            r["value"].configure(text="%d%%" % self._away_level())
             self._away_say(short)
+
+    def _pair_switch(self, widget, consent):
+        """Enable/gray one moved-in switch (diff-guarded; CTkSwitch
+        tracks its own state string) - the trio's consent gate, the
+        band or the bare card both ending here."""
+        want = "normal" if consent else "disabled"
+        try:
+            if widget.cget("state") != want:
+                widget.configure(state=want)
+        except Exception:
+            pass
 
     def _away_say(self, short):
         """The confession surface: the engine's live status word wins
-        over the last preview's word (a real spell outranks a test)."""
+        over the last preview's word (a real spell outranks a test).
+        This is also the carry the DDC law owed (owner, Oct 22): the
+        engine's refused-VCP word - 'off refused - blackout instead
+        (say)' - lands HERE, next to the panel it happened to, for as
+        long as the spell holds; the poll below is the one field's
+        delivery, zero new plumbing."""
         r = self._away_rows.get(short)
         if r is None:
             return

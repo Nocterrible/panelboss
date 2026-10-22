@@ -273,10 +273,85 @@ def check():
                     _t2.append(x)
                 _titles2(c)
         _titles2(app.pages["detection"].inner)
+        # THE AWAY CARD AFTER THE OWNER'S OCT-22 WAVE (this session's
+        # laws): the global mode selector is DEAD - the retired widget
+        # id is pinned out of the builder source itself - the trio of
+        # away decisions (hold-off, lock, restore) lives here now, the
+        # offdisc default is what a virgin row paints, the per-row
+        # picker answers with the honest labels, the DDC law text is
+        # data, and the preview label states its duration. The gray
+        # is PAINTED AT BUILD: no event has fired on this fresh card,
+        # and a row the chain answers 'off (disconnect)' must already
+        # show its brightness slider disabled and unmapped (the
+        # first-boot lie the pump/hold wave's lesson came to kill).
+        # The grace pair moves the OTHER way: it negotiates the plan's
+        # wake timers, so it pins into the power plan tab below.
+        _usrc = open(os.path.join(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))),
+            "panelboss", "ui", "window", "_away.py"),
+            encoding="utf8").read()
+        assert "away_mode_button" not in _usrc, \
+            "the global mode selector row came back"
         for want in ("lock when away starts",
+                     "hold off while a fullscreen app owns "
+                     "the display",
+                     "put window positions back after wake",
                      "refresh monitors"):
             assert want in _t2, \
                 "the detection tab lost the away card's %r" % want
+        for gone in ("monitors off", "re-off grace", "leave-on grace"):
+            assert gone not in _t2, "the away card grew back %r" % gone
+        from panelboss.ui.window import _away as _am
+        _r = app._away_rows["T"]
+        assert set(_r["seg"]._buttons_dict) == set(_r["vals"]), _r["vals"]
+        assert _am.DISC_TEXT in _r["vals"]      # offered on EVERY row
+        assert set(_r["vals"]) <= {"dim", _am.DDC_TEXT, _am.DISC_TEXT,
+                                   "blackout"}, _r["vals"]
+        assert _am.TIP["ddc"] == (
+            "the quick software power-down - some panels refuse the "
+            "DDC/CI write (KVM chains especially); a refused row falls "
+            "back to blackout")                 # the tip, as data
+        assert _r["preview"].cget("text") == _am.preview_label()
+        assert _am.preview_label() == "preview (%ds)" % _am.PREVIEW_SEC
+        # an off-mode row's sub-controls must NOT be live at build:
+        # CTkSlider has no state option (a bare CTkSlider.configure
+        # (state=...) dies - verified in customtkinter 6), so the
+        # disabled half is carried by the row gate / the unmapped
+        # grid slot - and the slider may only become live again when
+        # its row answers dim (which an event alone can do)
+        assert _r["slider"].winfo_manager() == "", \
+            "the off-mode slider was not unmapped at build"
+        if not app.cfg["camera"].get("enabled"):
+            # no consent yet: the row's own picker says disabled
+            # (the _state seam the power card's gray law reads)
+            assert _r["seg"]._buttons_dict[_am.DISC_TEXT]._state == \
+                "disabled", \
+                "row controls were live at build on a consentless card"
+        # the trio paints from cfg at build (the virgin file's truth:
+        # guards.fullscreen True by default, restore True, lock False)
+        assert _am and bool(app.away_lock_box.get()) is False
+        _t3 = []
+
+        def _titles3(w):
+            for c in w.winfo_children():
+                try:
+                    x = c.cget("text")
+                except Exception:
+                    x = None
+                if isinstance(x, str) and x:
+                    _t3.append(x)
+                _titles3(c)
+        _titles3(app.pages["power plan"].inner)
+        for want in ("unexpected wake", "auto re-off",
+                     "re-off grace", "leave-on grace"):
+            assert want in _t3, \
+                "the wake card lost %r (the grace pair negotiates ITS " \
+                "timers)" % want
+        for gone in ("hold off while a fullscreen app owns "
+                     "the display",
+                     "put window positions back after wake"):
+            assert gone not in _t3, \
+                "%r did not leave the power plan tab" % gone
         # THE HELPER-INSTALL VERB (Oct 16): the doorway row's button
         # EXISTS on the built window - exact label, no substring
         # checks (the placement-trio lesson) - with its id-override
