@@ -24,7 +24,7 @@ from .. import theme
 from ... import wm
 from ._constants import HDR_SET_LABELS, TIPS
 from ._text import SkewText
-from ._widgets import SkewCombo
+from ._widgets import SkewCombo, monitor_row_label
 
 log = logging.getLogger("ui")
 
@@ -142,7 +142,8 @@ class _GamingMixin:
         # update
         self.gaming_hdr_menus = {}
         caps = wm.hdr_caps()
-        for m in wm.monitors():
+        _live = wm.monitors()
+        for m in _live:
             # the driver's offered rates may be EMPTY (a silent or
             # fictional driver - the RDP session display lists one
             # made-up mode at best); the row still renders, because the
@@ -160,7 +161,8 @@ class _GamingMixin:
             game_hz = sorted(set(hz) | ({gs} if isinstance(gs, int) else set()))
             desk_hz = sorted(set(hz) | ({ds} if isinstance(ds, int) else set()))
             row = self._row(self.gaming_row_frame,
-                            "%s - game rate" % m["short"],
+                            "%s - game rate"
+                            % monitor_row_label(_live, m),
                             TIPS["gaming_rates"])
             # 'VRR (pin max)' is not a rate: it declares the panel's
             # scanout belongs to the driver's variable rate, so the
@@ -184,7 +186,8 @@ class _GamingMixin:
                           and shown in game_vals[1:] else "auto")
             game_menu.grid(row=0, column=1, sticky="e")
             row = self._row(self.gaming_row_frame,
-                            "%s - desktop rate" % m["short"],
+                            "%s - desktop rate"
+                            % monitor_row_label(_live, m),
                             TIPS["gaming_rates"])
             # 'keep' is not a rate, it is the ABSENCE of a rule - the
             # menu must show that truth, not a fake '60' that config

@@ -26,7 +26,8 @@ from .. import theme
 from ... import profiles, wm
 from ._constants import TIPS, HDR_ASK_LABELS, HDR_MENU_ORDER
 from ._present import present, clip_siblings
-from ._widgets import SkewCombo, _fresh_pin_edit
+from ._widgets import SkewCombo, desk_position, \
+    monitor_row_label, _fresh_pin_edit
 
 log = logging.getLogger("ui")
 
@@ -437,10 +438,15 @@ class _ProfilesMixin:
         ctk.CTkLabel(head, text="edit panel modes",
                      font=self.skin.font(13, "bold"),
                      **self.skin.text_style()).pack(side="left")
+        _drects = [(d.get("x", 0), d.get("y", 0), d.get("w", 0),
+                    d.get("h", 0)) for d in (prof.get("displays") or [])]
         for d in prof.get("displays") or []:
             self._mode_row(sec, d, live,
                            hdr.get(g_of.get(d.get("id"), ""), ""),
-                           bool(cap.get(g_of.get(d.get("id"), ""))))
+                           bool(cap.get(g_of.get(d.get("id"), ""))),
+                           pos=desk_position(
+                               _drects, d.get("x", 0), d.get("y", 0),
+                               d.get("w", 0), d.get("h", 0)))
         if not (prof.get("displays") or []):
             ctk.CTkLabel(sec, text="no panels yet - add one below",
                          font=self.skin.font(11),
@@ -453,17 +459,12 @@ class _ProfilesMixin:
                       **self.skin.secondary()).pack(side="left")
         in_prof = {d.get("id") for d in prof.get("displays") or []}
         avail = [m for m in mons if m.get("id") not in in_prof]
-        base = [(m.get("short") or m.get("id")) for m in avail]
-        dupes = {b for b in base if base.count(b) > 1}
         add_vals, self._mode_add_map = [], {}
-        for m, b in zip(avail, base):
-            label = b
-            if b in dupes:
-                # two panels of one model share a short: append the
-                # gdi slot tail so the menu can tell them apart
-                label = "%s (%s)" % (
-                    b, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
+        for m in avail:
+            # the seam's own tail law covers duplicate models (the
+            # comment moved with it, Oct 22); the descriptor is
+            # suppressed unless the listed set has variance to show
+            label = monitor_row_label(avail, m)
             add_vals.append(label)
             self._mode_add_map[label] = m["id"]
         self._mode_add = SkewCombo(

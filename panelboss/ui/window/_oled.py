@@ -34,7 +34,7 @@ from ...config import (JOG_CYCLE_CEIL, JOG_CYCLE_DEFAULT,
                    JOG_CYCLE_FLOOR, JOG_STEP_CEIL,
                    JOG_STEP_DEFAULT, JOG_STEP_FLOOR)
 from .. import theme
-from ._widgets import desk_position, set_text
+from ._widgets import monitor_row_label, set_text
 
 log = logging.getLogger("ui.oled")
 
@@ -45,110 +45,80 @@ REVEAL_BY_LABEL = {"hovered only": "hovered", "every bar": "all"}
 LABEL_BY_REVEAL = {w: s for s, w in REVEAL_BY_LABEL.items()}
 
 TIP_JO = {
-    "on": "static content is what ages an OLED unevenly - the bar "
-          "that never moves prints itself in over months. micro-jog "
-          "nudges the app covers around a small zero-drift ring on "
-          "a timer, so no edge of glass ages permanently; the wash "
-          "briefly lights the whole panel to even out what retention "
-          "has already begun. the app cannot read your panel wear "
-          "counters (the one register this desk ever answered was "
-          "caught lying) - this is prevention, not a diagnosis.",
-    "row": "jog covers on THIS monitor only (the same opt-in law as "
-           "the taskbar strip: burn-in is the OLED problem).",
-    "mode": "micro-jog moves the covers a few pixels every cycle. "
-            "pixel wash is the button below - it never happens on its "
-            "own, by law: a wash is a request, not a schedule.",
-    "step": "how far the covers travel around the ring, in pixels - "
-            "1..8; the ring returns to rest, so the travel never "
-            "accumulates.",
-    "cycle": "how often the ring steps: minutes between nudges.",
-    "wash": "lights this monitor white for ten seconds, once. the "
-            "first opted-in monitor answers the button; if none are "
-            "opted in, the word beside the button says so - nothing "
-            "is silent.",
+    "on": "micro-jog moves the app covers around a small ring on a "
+          "timer, so no edge of glass ages permanently; the wash "
+          "briefly lights the whole panel to even out retention that "
+          "has already begun. Opted-in covers only - prevention, not "
+          "a diagnosis: the app cannot read your panel's wear "
+          "counters.",
+    "row": "jog covers on THIS monitor only - the opt-in is per panel "
+           "because burn-in is the OLED problem.",
+    "mode": "micro-jog moves the covers a few pixels every cycle; "
+            "pixel wash happens only on the button below - a wash is "
+            "a request, never a schedule.",
+    "step": "how far the covers travel around the ring, 1..8 pixels; "
+            "the ring returns to rest, so travel never accumulates.",
+    "cycle": "minutes between ring steps.",
+    "wash": "lights this monitor white for ten seconds, once; the "
+            "first opted-in cover answers the button, and if none "
+            "are opted in the word beside the button says so.",
 }
 
 TIP = {
-    "on": "the taskbar is a fixed row of pixels that never moves - on "
-          "an OLED, pixels that never move age unevenly and the bar "
-          "eventually prints itself into the glass. this strip paints "
-          "over the bar and steps aside for the cursor, so the pixels "
-          "rest and the bar works when reached for. nothing changes "
-          "here until you opt in, and nothing breaks if you never do: "
-          "the strip is an ordinary window, and windows die with their "
-          "app.",
-    "row": "one strip per bar on THIS monitor. the opt-in is per "
-           "monitor on purpose: burn-in is the OLED problem - a panel "
-           "that cannot burn in has no reason to wear the strip.",
-    "reveal": "'hovered only' bars the bar you actually reached for. "
-              "'every bar' bares them all together the moment you "
-              "reach for any one - the honest shape for a desk whose "
-              "apps live on more screens than the one under the hand. "
-              "returns stay per-bar timers either way.",
+    "on": "a taskbar that never moves eventually prints itself into "
+          "OLED glass; this strip paints over the bar and steps "
+          "aside for the cursor, so the pixels rest. Nothing changes "
+          "until you opt in, and the strip is an ordinary window "
+          "that dies with the app.",
+    "row": "one strip per bar on THIS monitor; the opt-in is per "
+           "panel because a panel that cannot burn in has no reason "
+           "to wear the strip.",
+    "reveal": "'hovered only' bars the bar you reached for; 'every "
+              "bar' bares them all when you reach for any one. "
+              "Returns stay per-bar timers either way.",
     "hold": "how long the cursor must stay clear of every bar before "
-            "a withdrawn strip covers up again. typing holds it: while "
-            "the caret sits in the search box the strip waits, "
-            "counting its seconds only after the typing stops.",
-    "conflict": "windows' own per-bar auto-hide is switched on for "
-                "this desk. the strip covers the bar either way, so "
-                "the two hiders may double-hide - the taskbar will "
-                "still come back for the cursor, and the strip "
+            "a withdrawn strip covers again; typing holds the count "
+            "until the typing stops.",
+    "conflict": "Windows' own per-bar auto-hide is on for this desk: "
+                "the two hiders may double-hide, but the taskbar "
+                "still comes back for the cursor and the strip "
                 "follows it.",
 }
 
 
 TIP_DIM = {
     "on": "an idle desk puts a dark click-through veil over every "
-          "window you are not using: the still ones dim, the one you "
-          "touch lights up instantly, and anything the sound sensor "
-          "hears stays bright - a video that just went quiet keeps "
-          "its brightness for four honest seconds before the veil "
-          "may return. nothing dims until you opt in, per monitor. "
-          "WINDOWS THAT RUN AS ADMINISTRATOR (Task Manager's class) "
-          "stay bright: a non-admin app's veil cannot guarantee its "
-          "place in the stacking order next to an elevated window, "
-          "and a veil that slips a band too high dims the app ABOVE "
-          "its target - the double veil you saw on Task Manager. The "
-          "veil does reach those windows if this app itself runs as "
-          "administrator - not recommended: the elevation then "
-          "inherits into everything the tray launches, and the "
-          "exemptions that spare your menus get weaker, not "
-          "stronger, from on high.",
-    "row": "dim veils on THIS monitor only (the opt-in law, shared "
-           "with the strip and the refresh).",
-    "always": "dim this panel WITHOUT the idle wait: the veils land "
-              "the moment the focus leaves the panel, and lift when "
-              "it returns - the one you are using never dims. the "
-              "sound exemption and the pause ride here too; only "
-              "the idle countdown is skipped. an opt-in sub-mode, "
-              "exactly like the strip's reveal scope: a panel that "
-              "never opted in never dims by itself.",
+          "window you are not using; the window you touch lights "
+          "instantly, and a window the mic just heard keeps its "
+          "brightness for four seconds. Elevated windows (Task "
+          "Manager's class) never wear a veil this app cannot stack "
+          "against - running the app elevated reaches them but is "
+          "not recommended. Nothing dims until you opt in, per "
+          "monitor.",
+    "row": "dim veils on THIS monitor only - the opt-in law, shared "
+           "with the strip and the refresh.",
+    "always": "dims this panel WITHOUT the idle wait: the veils land "
+              "when focus leaves the panel and lift when it returns. "
+              "The sound exemption and the pause ride here too; only "
+              "the countdown is skipped.",
     "idle": "how still the input must be before the veils land.",
-    "ramp": "how long the fade takes once input returns: the veils "
-            "step down at most three times and are gone - a dimmer "
-            "that blinks off is a screensaver. at zero the blink is "
-            "the choice: the drop is immediate.",
+    "ramp": "how long the fade takes once input returns - the veils "
+            "step down at most three times and are gone; at zero the "
+            "drop is immediate.",
     "level": "how dark the veils are, in percent.",
-    "row_level": "this panel's OWN veil percent. panels answer "
-                 "differently - the same number goes DARK on one and "
-                 "is barely a tint on another - so a panel with a row "
-                 "here ignores the global \"veil level\". the slider "
-                 "opens at the global; the first move stores this "
-                 "panel's number, and only this panel's.",
-    "lift_fade": "when off (the default), the veil drops the instant "
-                 "you touch the desk - no lift ceremony; the \"fade "
-                 "within\" ramp applies to the plain veils only when "
-                 "this is on. the theater frame has its own twin "
-                 "switch on its card.",
+    "row_level": "this panel's OWN veil percent; a panel with a row "
+                 "here ignores the global 'veil level'. The slider "
+                 "opens at the global and the first move stores this "
+                 "panel's number only.",
+    "lift_fade": "off (the default) drops the veil the instant you "
+                 "touch the desk; on reveals it through the 'fade "
+                 "within' ramp. The theater card has its own twin.",
     "apps": "apps that never wear a veil, by exe file name as the "
-            "title bar shows it (chrome.exe). the exclusion is "
-            "yours, per app; it edits here, in the card.",
-    "key": "press a key to bind the pause toggle, esc clears it. no "
-           "chord is stolen before you give one: the app registers "
-           "the hotkey only while the window's pump lives, a binding "
-           "while headless answers with a word and retries once the "
-           "pump is back, a taken combo keeps its predecessor and "
-           "says so, dated. one press pauses, one resumes.",
+            "title bar shows it (chrome.exe), one per line.",
+    "key": "press a key to bind the pause toggle, esc clears it. No "
+           "combo is stolen before you give one; a taken combo keeps "
+           "its predecessor and says so. One press pauses, the next "
+           "resumes.",
     "pause": "pause the dimmer without touching its settings: the "
              "field fades out within the ramp and returns the tick "
              "the pause lifts.",
@@ -156,102 +126,56 @@ TIP_DIM = {
 
 
 TIP_COMP = {
-    "on": "arm movie theater mode: a PLAYING video dims everything "
-          "around it once the input has been still for the \"veil "
-          "after\" wait - the frame lands around the REPORTING WINDOW "
-          "(the hole is the window's bounds, so the browser's chrome "
-          "stays bright with the movie, owner ruling Oct 20), and "
-          "motion lifts the RING, which re-arms after the wait; a "
-          "film's sound never touches it. off is the frame's root "
-          "law: no theater, no ring - and still the eye keeps "
-          "watching the doorway, because the player window stays "
-          "exempt from the PLAIN veils with or without this switch "
-          "(the buddy's report outranks it, and no ring-state or "
-          "clock ever veils the movie itself). the eye learns the "
-          "video's place from the buddy extension's native host: no "
-          "flag, no port, no debugger.",
-    "status": "live words: the consent rail and the buddy "
-              "extension's last push, refreshed on the dimmer's "
-              "own beat. the test-the-geometry answer lands here "
-              "too. a missing answer reads as words, never a crash.",
-    "veil": "test the geometry: measure the video on the clicked tab "
-            "right now, one shot, no waiting on the idle rail. this "
-            "is the calibration/test gesture - the FEATURE is the "
-            "automatic lane (playing AND still), not this button.",
-    "path": "the doorway the extension's native host writes: the "
-            "app's own folder, a fixed path, every browser, every "
-            "download config. the extension's id is the only ACL - "
-            "no pairing, no token; the browser's install check is "
-            "the whole handshake. install the host once (see the "
-            "extension's README) - the one-click helper install "
-            "rides this row: it runs the same script the README "
-            "documents.",
-    "install": "install the buddy's helper in one click: builds "
-               "panelboss-host.exe (PyInstaller, ~40 s), registers "
-               "it under HKCU, and tells the app where it lives. "
-               "the entry is an optional id override - paste the "
-               "32-char id from the browser's extensions page; "
-               "empty derives it from the extension's own path. "
-               "a bad shape answers a word and does NOT fire the "
-               "installer. the manual route stays one line down: "
-               "extension\\host\\install_host.ps1.",
-    "store": "the buddy is ON the Chrome Web Store - one click "
-             "opens the listing, and it installs in Chrome, Edge "
-             "and Opera GX alike (any Chromium browser reads the "
-             "same store). the store id is the one this app's "
-             "helper already trusts (the pinned key makes it "
-             "permanent), so after adding it here comes 'install "
-             "the helper' below - extension first, then the door.",
-    "caps": "what the buddy's API CAN send, read from the host "
-            "itself (the open-API ruling: discover, never assume). "
-            "no host installed reads as the honest words - press "
-            "install above to register it. this line re-checks on "
-            "the veil button and the switch.",
-    "delay": "veil after: the desk frames a PLAYING video only once "
-             "the INPUT has been still this long - the dimmer's "
-             "\"dim after\" shape, one knob for the on-delay and the "
-             "re-arm (any mouse/keyboard move drops the RING until "
-             "this passes again). the clock is the app's raw-input "
-             "pump by default (the 'keep Windows awake' switch "
-             "below): zero-travel device chatter - a stuck macro "
-             "pad, a jiggler, a KVM's re-reports - no longer keeps "
-             "the ring from ever rising, and a deaf pump falls "
-             "back to the OS stamp by itself. motion lifts the "
-             "RING only: the MOVIE "
-             "never wears a veil either way - the window reporting "
-             "the playing rect is exempt from the plain veils no "
-             "matter what any timer says. 0 means instant. a film's "
-             "sound never lifts the theater veils.",
-    "level": "veil level: how dark the four theater pieces are, in "
-             "percent - the theater's OWN darkness, not the idle "
-             "dimmer's number. the movie can go darker (or lighter) "
-             "than the plain idle veils.",
-    "fade": "off (the default): when the frame lifts (you touch the "
-            "mouse or press a key, the video pauses, or its window "
-            "leaves the desk) it is GONE that tick - no fade, no "
-            "ceremony. on: the theater joins the ramp family - one "
-            "beat of hold, then the frame retracts gently over the "
-            "dimmer's \"fade within\" ramp, never a blink.",
-    "pump": "some devices (macro pads, KVMs, jigglers) keep "
-            "claiming you just typed; this makes the app trust "
-            "only real movement. off is the stock Windows idle "
-            "clock verbatim (the behavior the app had its whole "
-            "first life); on, every dim timer reads the app's "
-            "own raw-input pump - a deaf pump falls back to the "
-            "stock clock by itself, so the worst case is off. "
-            "needs a relaunch to take. the screens still wake "
-            "for a remote hand: injection counts for the WAKE "
-            "while the device stream is silent (the away rails "
-            "never take that shortcut).",
-    "mons": "per-monitor theater: the box keeps THIS panel's theater "
-            "(a video on it frames; a panel with no video wears the "
-            "full-field veil while the conjunction holds). unchecked, "
-            "the panel gets no pieces at all and dims like any idle "
-            "desk. the slider is the panel's OWN veil percent - until "
-            "you move it the panel follows the \"veil level\" above. "
-            "a panel you never touched reads checked but has no row "
-            "yet: secondary panels wear the full-field veil only once "
-            "you move one of their controls (rows save on first use).",
+    "on": "movie theater mode: a PLAYING video gets a dimmed frame "
+          "around its window once the input has been still for the "
+          "'veil after' wait; motion lifts the ring, which re-arms "
+          "after the same wait, and a film's sound never touches it. "
+          "The player window stays exempt from the PLAIN veils with "
+          "or without this switch; the app learns the video's place "
+          "from the buddy extension's native host.",
+    "status": "the consent rail, the buddy extension's last push, and "
+              "the geometry-test answer, refreshed on the dimmer's "
+              "beat. A missing answer reads as words, never a crash.",
+    "veil": "measures the video on the clicked tab right now, one "
+            "shot, no idle wait - the calibration gesture; the "
+            "feature is the automatic lane (playing AND still).",
+    "path": "where the extension's native host writes its reports: "
+            "the app's own folder, every browser. The extension id "
+            "is the only credential; install the host once (the "
+            "one-click install rides this row).",
+    "install": "builds panelboss-host.exe (PyInstaller, ~40 s) and "
+               "registers it for your user. The entry takes the "
+               "browser's 32-char extension id, or derives it from "
+               "the extension's path when empty; a bad shape says so "
+               "and does not fire the installer.",
+    "store": "opens the buddy's Chrome Web Store listing - any "
+             "Chromium browser installs it. Add the extension here "
+             "first, then 'install the helper' below.",
+    "caps": "what the buddy's API can send, read from the host "
+            "itself; no host installed reads as honest words and the "
+            "install row is the answer. Re-checks when you touch the "
+            "veil button or the switch.",
+    "delay": "veil after: how long the input must be still before a "
+             "PLAYING video gets its ring - the same number re-arms "
+             "it after a lift. The clock is the app's input pump (by "
+             "the 'keep Windows awake' switch below), so zero-travel "
+             "device chatter no longer keeps the ring down; motion "
+             "lifts the RING only, never the movie. 0 means instant.",
+    "level": "how dark the four theater pieces are, in percent - the "
+             "theater's own darkness, not the idle dimmer's number.",
+    "fade": "off (the default): when the frame lifts it is gone that "
+            "tick. On: it retracts over the dimmer's 'fade within' "
+            "ramp, never a blink.",
+    "pump": "Ignores fake input from devices like macro pads, KVMs "
+            "and jigglers - only real movement and keystrokes count. "
+            "Takes effect after a restart. Remote-control software "
+            "can still wake the screen.",
+    "mons": "per-monitor theater: a checked panel frames its playing "
+            "video (or wears the full-field veil while the "
+            "conjunction holds); unchecked panels get no theater at "
+            "all. The slider is that panel's own veil percent - "
+            "until you move it the panel follows the 'veil level' "
+            "above, and rows save on first use.",
 }
 
 
@@ -345,15 +269,7 @@ class _OledMixin:
         base = [m.get("short") or m.get("id") for m in _live]
         dupes = {b for b in base if base.count(b) > 1}
         for m, short in zip(_live, base):
-            label = short
-            if short in dupes:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
-            label = label + desk_position(
-                [(mm.get("x", 0), mm.get("y", 0), mm.get("w", 0),
-                  mm.get("h", 0)) for mm in _live],
-                m.get("x", 0), m.get("y", 0), m.get("w", 0), m.get("h", 0))
+            label = monitor_row_label(_live, m)
             row = self._row(self._oled_row_frame, label, TIP["row"],
                             hint_chars=42)
             box2 = ctk.CTkCheckBox(
@@ -374,14 +290,11 @@ class _OledMixin:
             widget.destroy()
         self._jog_rows = {}
         jog_cfg = self.cfg.setdefault("jog", {})
-        base = [m.get("short") or m.get("id") for m in wm.monitors()]
+        _live = wm.monitors()
+        base = [m.get("short") or m.get("id") for m in _live]
         dupes = {b for b in base if base.count(b) > 1}
-        for m, short in zip(wm.monitors(), base):
-            label = short
-            if short in dupes:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
+        for m, short in zip(_live, base):
+            label = monitor_row_label(_live, m)
             row = self._row(self._jog_row_frame, label, TIP_JO["row"],
                             hint_chars=42)
             box2 = ctk.CTkCheckBox(
@@ -403,14 +316,11 @@ class _OledMixin:
         self._dim_always = {}
         self._dim_level = {}
         dim = self.cfg.setdefault("dimmer", {})
-        base = [m.get("short") or m.get("id") for m in wm.monitors()]
+        _live = wm.monitors()
+        base = [m.get("short") or m.get("id") for m in _live]
         dupes = {b for b in base if base.count(b) > 1}
-        for m, short in zip(wm.monitors(), base):
-            label = short
-            if short in dupes:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
+        for m, short in zip(_live, base):
+            label = monitor_row_label(_live, m)
             row = self._row(self._dim_row_frame, label, TIP_DIM["row"],
                             hint_chars=42)
             box2 = ctk.CTkCheckBox(
@@ -478,14 +388,10 @@ class _OledMixin:
             widget.destroy()
         self._comp_mon_rows = {}
         vdm = (self.cfg.setdefault("videodim", {})).get("monitors") or {}
-        base_c = [m.get("short") or m.get("id") for m in wm.monitors()]
-        dupes_c = {b for b in base_c if base_c.count(b) > 1}
-        for m, short in zip(wm.monitors(), base_c):
-            label = short
-            if short in dupes_c:
-                label = "%s (%s)" % (
-                    short, str(m.get("gdi") or "").rsplit("DISPLAY", 1)
-                    [-1] or "?")
+        _live_c = wm.monitors()
+        base_c = [m.get("short") or m.get("id") for m in _live_c]
+        for m, short in zip(_live_c, base_c):
+            label = monitor_row_label(_live_c, m)
             crow = self._row(self._comp_row_frame, " ", TIP_COMP["mons"],
                              hint_chars=42)
             cbox = ctk.CTkCheckBox(

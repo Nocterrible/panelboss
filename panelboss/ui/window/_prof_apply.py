@@ -27,7 +27,8 @@ log = logging.getLogger("ui")
 
 
 class _ModeMixin:
-    def _mode_row(self, parent, d, live, hdr_note="", hdr_cap=False):
+    def _mode_row(self, parent, d, live, hdr_note="", hdr_cap=False,
+                 pos=""):
         """One editable panel row: short name (plus its LIVE hdr state,
         the driver's truth, silent when unknowable), a resolution menu, a
         refresh menu, a remove. A panel not on the live desk offers only
@@ -43,7 +44,7 @@ class _ModeMixin:
         row.pack(fill="x", pady=theme.S_FIELD)
         ctk.CTkLabel(
             row, anchor="w",
-            text="%s%s%s" % (d.get("short") or mon_id,
+            text="%s%s%s%s" % (d.get("short") or mon_id, pos,
                              " (primary)" if d.get("primary") else "",
                              "   " + hdr_note if hdr_note else ""),
             font=self.skin.font(11),
