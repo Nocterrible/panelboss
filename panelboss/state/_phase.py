@@ -127,5 +127,13 @@ class _PhaseMixin:
                 pass
             else:
                 self._round_tally(present)
-                if present and self.hits >= self.cfg["inference"]["min_hits"]:
+                # the dark room is OURS and it blinds the eye - a ghost
+                # with a pulse must not re-light a desk: assist-tier
+                # frames (below the strict confidence gate) accrue
+                # hits while dark but only a strict-tier frame closes
+                # the round; returners are strict the moment the panel
+                # lights, and physical input covers the rest
+                if (present
+                        and score >= self.inference_cfg["confidence"]
+                        and self.hits >= self.cfg["inference"]["min_hits"]):
                     self._wake(now, score)

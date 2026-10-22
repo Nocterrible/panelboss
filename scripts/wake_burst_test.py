@@ -22,6 +22,10 @@ cfg["recovery"]["wake_burst_window_sec"] = 120
 cfg["inference"]["min_hits"] = 2             # the two-hit resume below
 # is the test's own shape; the LIVE config on this box says 4 and this
 # test reads the live file (Oct 12: pre-cooloff suite failure, pinned)
+cfg["inference"]["confidence"] = 0.45        # the strict floor the
+# tiered-wake pins below judge against: the same live-file hazard as
+# min_hits above (the owner's slider range reaches 0.95 - a ghost vote
+# must not red the suite because the desk is tuned strict)
 
 
 class StubDetector:
@@ -143,6 +147,30 @@ mon2._off_phase(30110.0, 10.0)
 assert mon2.hits == 0 and len(wakes) == n_wakes, \
     "full empty round resets, no wake"
 print("AND sleep OK (full empty round resets)")
+
+# the dark room is OURS: the off-phase round closes ONLY on a strict-tier
+# frame (the measured burn-in re-light loop: every re-engage line logged
+# 'waking ... (score 0.23-0.30)' - the assist tier rubber-stamping the
+# occupant the blinded eye cannot see). An assist hit still ACCRUES (the
+# economy of the lit desk is untouched; the strict frame that closes the
+# round rides the same streak) but alone it must not re-light the desk.
+mon2.hits = 1
+mon2._round = None
+ghost = iter([(0, (True, 0.30)), (0, (True, 0.60))])   # 0.30 < strict 0.45
+def fake_poll_ghost():
+    idx, verdict = next(ghost)
+    mon2._vote_index = idx               # what _note_vote does inside _poll
+    return verdict
+mon2._poll = fake_poll_ghost
+n_wakes = len(wakes)
+mon2._off_phase(30500.0, 10.0)           # assist frame: hit accrues...
+assert mon2.hits == 2 and len(wakes) == n_wakes and mon2.state == "off", \
+    "the assist tier closed the off-phase round - the ghost re-lit the desk"
+mon2._off_phase(30510.0, 10.0)           # strict frame: the round closes
+assert len(wakes) == n_wakes + 1, \
+    "a strict-tier frame at min_hits must still wake (existing behavior)"
+print("tiered wake OK (assist accrues but refuses while dark; "
+      "strict accepts)")
 
 # hygiene: an on-phase positive wipes stale off-phase round bookkeeping
 mon2.state = "counting"
