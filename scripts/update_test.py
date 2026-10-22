@@ -25,6 +25,24 @@ ASSET_URL = "https://example.test/PanelBoss-0.3.3-user.msi"
 REAL_OPEN = urllib.request.urlopen
 CALLS = []
 
+# THE RUNNING-VERSION PIN (the 0.3.3 bump is what made this load-
+# bearing): check()'s default current binds panelboss.__version__ at
+# import, and the fake releases below all live at v0.3.3 - the day
+# the build ships the version the fakes announced, an unpinned
+# 'behind' silently becomes 'current' and the suite reds on the
+# CALENDAR, not on the code. The suite's running version is 0.3.2
+# here, explicit and forever (the never-the-desk doctrine the state
+# suites already obey for timers and confidence; the updater's own
+# semver table above is baseline-free and untouched).
+_real_check = update.check
+
+
+def _pinned_check(current=None):
+    return _real_check("0.3.2" if current is None else current)
+
+
+update.check = _pinned_check
+
 
 def release(tag, names=("PanelBoss-0.3.3-user.msi", "src.zip")):
     return {"tag_name": tag,
