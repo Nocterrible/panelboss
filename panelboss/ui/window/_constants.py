@@ -41,6 +41,17 @@ TIMER_SPECS = [          # section, key, label, min, max, step, help
      "high lets the stream rest between reads"),
     ("timers", "present_recheck_sec", "present recheck", 10, 300, 5,
      "how often a confirmed person is re-checked while they sit there"),
+]
+
+# THE GRACE PAIR (owner ruling, Oct 22): the same spec rows the Timers
+# card built for the sliders' whole life, byte-identical ranges and
+# steps, edited from the power plan's wake card from today - they
+# negotiate the wake policy above them, not the detection clock. The
+# [timers] and [recovery] config sections are UNCHANGED; _timer_row /
+# _timer_changed serve both lists, so the write paths and the live
+# apply ("monitor.timers / monitor.recovery are these very dicts")
+# did not move an inch.
+WAKE_SPECS = [
     ("timers", "re_off_grace_sec", "re-off grace", 0, 120, 5,
      "after an unexpected wake this is the camera's chance to find "
      "the person before the screens go dark again"),
@@ -68,291 +79,164 @@ PERSON_ROWS = ("device", "cuda gpu id", "confidence", "min hits")
 MOTION_ROWS = ("frame changes", "pixel delta", "motion hold")
 
 TIPS = {
-    "mode": "person: the ONNX model judges every frame. motion: pure "
-            "frame differencing - no ML, nothing learned about faces, "
-            "and it drives infrared and depth sensors exactly like a "
-            "webcam. Switching rebuilds the detector immediately; the "
-            "model's device and thresholds vanish here.",
-    "device": "where the model runs. auto lets onnxruntime choose, "
-                "CPU always works, CUDA is faster when a card exists. "
-                "Applies immediately - the session is rebuilt.",
-    "gpu": "which card, for the record, when device is CUDA. Applies "
+    # THE TOOLTIP LAW (owner sweep, Oct 22): what the control does,
+    # one sentence; a second for the why when the label cannot carry
+    # it; load-bearing facts (restart-required, fallbacks, ranges)
+    # stay as short clauses; no history, no narrative.
+    "mode": "person judges faces with the model; motion judges frame "
+            "changes with no ML. Switching rebuilds the detector "
             "immediately.",
+    "device": "where the model runs. CUDA needs a capable card. "
+              "Applies immediately.",
+    "gpu": "which card, for the record, when device is CUDA. Applies "
+           "immediately.",
     "confidence": "how sure a detection must be before a frame counts "
-                   "as a person. Applied to the next frame; no restart.",
-    "min_hits": "consecutive positive frames before the screens wake - "
-                "any eye on duty may vote. Presence is an OR: a warm "
-                "desk is never vetoed by an empty door, and the rotor "
-                "never resets the streak when cameras rotate (two votes "
-                "may come from different eyes). Absence is an AND - one "
-                "empty eye is noise; a reset needs every eye on duty to "
-                "have voted empty since the last sighting. An "
-                "abstaining (blind or dead) eye never joins that tally.",
-    "frame changes": "share of the (downscaled) frame that must move "
-                      "before a poll counts as motion. Applies "
-                      "immediately.",
-    "pixel delta": "how much one pixel must shift to count as a change "
-                    "- raise it for noisy depth or infrared sensors. "
-                    "Applies immediately.",
-    "motion hold": "presence lingers this long after the LAST motion: "
-                    "reading a page is stillness, not absence. Applies "
-                    "immediately.",
-    "wake": "the screens came back on their own (a mouse jiggle, a "
-             "wake word). re-off darkens them again after the re-off "
-             "grace unless a person is confirmed; leave-on hands the "
-             "desk over for its grace period instead. Applies "
-             "immediately.",
-    "fullscreen": "exclusive-fullscreen games swallow the power-off "
-                   "broadcast - the app keeps its hands off while a "
-                   "game owns the display.",
-    "reoff": "after two unexpected wakes in a row the app stops "
-               "believing its own camera and leaves the screens lit "
-               "until a person shows up or this is resumed here.",
-    "hold_display": "Windows is not allowed to turn the screens off "
-                     "while the app watches a lit desk. Nothing in the "
-                     "power plan changes - the timer is only held back, "
-                     "and only while this app runs: pausing, snoozing "
-                     "or quitting hands it back. 'while present' holds "
-                     "it only while the camera's last verdict sees a "
-                     "person: when the desk reads absent or the eye "
-                     "gives no verdict (a dead camera, no frame, "
-                     "detection off) the timer is handed back on the "
-                     "spot and the plan's own timeout darkens the "
-                     "screens - the app never silently keeps holding.",
-    "hold_sleep": "the plan's sleep timer is held back too. While the "
-                   "screens are dark this is what keeps the watcher "
-                   "alive to notice the return; with it off the box "
-                   "sleeps on schedule and the app re-arms when the "
-                   "power button is pressed. 'while present' holds it "
-                   "only while the camera sees a person - absent or "
-                   "no verdict hands the sleep timer to the plan the "
-                   "same instant.",
-    "restore_windows": "some monitors unplug themselves from Windows "
-                       "when they sleep, and Windows re-lays every window "
-                       "on them to the wrong screen when they return. "
-                       "Before the screens go dark the app remembers every "
-                       "window's pixel rect and the monitors' hardware "
-                       "identity; after any wake - its own, a mouse "
-                       "jiggle, or the power button - it waits for the "
-                       "topology to settle and moves everything back. If a "
-                       "monitor was swapped or unplugged for good, the "
-                       "saved positions belong to another desk and nothing "
-                       "is moved. Minimized windows and popups are left "
-                       "alone.",
-    "profile_picker": "a profile is the whole desk spelled out: which "
-                      "physical monitors (by hardware identity, so "
-                      "renumbered slots fool nothing) are on, where "
-                      "they sit, which is primary, each one's "
-                      "resolution and refresh rate, the HDR ask, and "
-                      "where every pinned window belongs. the picker "
-                      "opens on the profile last used for the layout it "
-                      "sees right now; 'create new...' copies what the "
-                      "desk is doing and lets you name it. the one "
-                      "thing a profile cannot fix is a monitor that is "
-                      "not plugged in - modes can be asked for, a "
-                      "missing panel cannot.",
-    "profile_rescue": "the panic button: every visible window that no "
-                      "screen covers - the classic victim of a "
-                      "resolution change made while it sat on the "
-                      "monitor that just left - comes back to the "
-                      "middle of the primary monitor. minimized "
-                      "windows, dialogs and windows living on other "
-                      "virtual desktops are left alone.",
-    "profile_match": "how a saved seat recognises its live window. "
-                     "'process' is the default: a browser or chat "
-                     "window renames itself a hundred times a day, so "
-                     "a pin that trusts titles was dead the moment you "
-                     "clicked another tab. The price is honest and the "
-                     "editor says it out loud when it applies: a "
-                     "process pin moves EVERY window of that app, not "
-                     "just the one you picked. 'process + title' is the "
-                     "one-window road (right for apps that never "
-                     "retitle); 'title' alone matches by name only.",
+                  "as a person. Applies to the next frame.",
+    "min_hits": "consecutive positive frames before the screens wake. "
+                "An eye that cannot see never votes and never resets "
+                "the streak.",
+    "frame changes": "share of the frame that must move before a poll "
+                     "counts as motion. Applies immediately.",
+    "pixel delta": "how much one pixel must shift to count as a "
+                   "change; raise it for noisy depth or infrared "
+                   "sensors. Applies immediately.",
+    "motion hold": "how long presence lingers after the LAST motion - "
+                   "reading a page is stillness, not absence. Applies "
+                   "immediately.",
+    "wake": "what happens when the screens came back without the app. "
+            "re-off darkens them again after the re-off grace unless "
+            "a person is confirmed; leave-on hands the desk over for "
+            "its grace period. Applies immediately.",
+    "reoff": "after two unexpected wakes in a row the app leaves the "
+             "screens lit; 'resume now' restarts the watch.",
+    "hold_display": "Windows cannot turn the screens off while the app "
+                    "watches a lit desk. 'while present' holds only "
+                    "while the camera sees a person - absent or no "
+                    "verdict hands the timer back the same instant, "
+                    "and pausing, snoozing or quitting always hand it "
+                    "back.",
+    "hold_sleep": "the plan's sleep timer is held back too; 'while "
+                  "present' follows the camera verdict the same way. "
+                  "While the screens are dark this is what keeps the "
+                  "watcher alive to notice the return.",
+    "profile_picker": "a profile stores the monitors (by hardware "
+                      "identity), their places, modes, the HDR ask "
+                      "and the pinned windows. The picker opens on "
+                      "the profile last used for the desk it sees; "
+                      "'create new...' copies the live desk. A "
+                      "profile cannot fix a monitor that is not "
+                      "plugged in.",
+    "profile_rescue": "brings back every visible window no screen "
+                      "covers, centered on the primary monitor. "
+                      "Minimized windows, dialogs and other-desktop "
+                      "windows stay put.",
+    "profile_match": "how a saved seat recognizes its live window. "
+                     "'process' survives app renames but moves EVERY "
+                     "window of that app; 'process + title' pins one "
+                     "window; 'title' matches by name only.",
     "profile_hdr": "what to do with HDR when the profile applies. "
-                   "'restore as captured' puts every panel back the "
-                   "on/off state the profile saw at capture - per "
-                   "monitor, so two HDR panels can each keep their "
-                   "own habits. 'ignore' never asks anything. 'all "
-                   "on/off' forces EVERY hdr-capable panel the same "
-                   "way - both of yours, if both can; panels without "
-                   "hdr are never ordered to do the impossible. on "
-                   "windows 11 24h2 and later hdr is a READABLE "
-                   "fact: the app asks the driver per monitor (the "
-                   "live answer sits next to each monitor above), "
-                   "commands only the monitors that disagree, then "
-                   "reads back to confirm. on older windows that "
-                   "answer cannot be had: 'restore as captured' "
-                   "skips itself (restoring a guess is not "
-                   "restoring), while all-on/all-off fall back to "
-                   "pressing win+alt+b and keeping their own belief. "
-                   "profiles captured before this snapshot existed "
-                   "have nothing to restore - the apply says so.",
-    "profile_apply": "one click reshapes the desk: topology first (new "
-                     "primary last - windows refuses to move the "
-                     "desktop in the same call that hands it over), "
-                     "modes asked only from the driver's own list, hdr "
-                     "commanded at exactly the monitors that disagree "
-                     "(a hotkey only on ancient windows), then a wait "
-                     "until the monitors ANSWER as "
-                     "the profile asked (windows reports success "
-                     "before the modes have settled - measured), and "
-                     "only then the windows. anything the shuffle "
-                     "stranded off-screen is rescued on the spot.",
-    "profile_pins": "a seat reserved for an app: pick one of the "
-                    "open windows, set its terms, pin it - the spot "
-                    "it holds RIGHT NOW becomes the seat it must "
-                    "return to. 'pin every open app' seeds a seat for "
-                    "each running program at once. clicking a pinned "
-                    "row lifts it back into the editor (refreshing "
-                    "the seat = move the window where you want it, "
-                    "then update the pin); x forgets the seat. the "
-                    "profile moves what it pinned and never touches "
-                    "windows it did not.",
-    "profile_pin_open": "'open it if missing' runs the saved exe "
-                        "when no window of that app answered the "
-                        "profile, waits for a window to appear, and "
-                        "moves it the moment it does. naive by honest "
-                        "design: a bare exe run - store apps, stub "
-                        "launchers and shortcut-only programs may "
-                        "start nothing under that name. the advanced "
-                        "rows exist for exactly that: tune how long "
-                        "to wait, and browse to the launcher or "
-                        "binary that really opens the window. the "
-                        "first miss asks whether to fix the profile; "
-                        "say no and later misses stay quiet.",
+                   "'restore as captured' returns each panel to its "
+                   "captured state, 'ignore' asks nothing, and 'all "
+                   "on/off' commands every HDR-capable panel. On "
+                   "older Windows, which cannot report the state, "
+                   "'restore as captured' skips itself rather than "
+                   "restore a guess.",
+    "profile_apply": "one click reshapes the desk: topology first, "
+                     "modes asked only from the driver's own list, "
+                     "HDR at exactly the monitors that disagree, "
+                     "then the windows once the monitors answer. "
+                     "Anything the shuffle stranded off-screen is "
+                     "rescued on the spot.",
+    "profile_pins": "a seat reserved for an app: the spot it holds "
+                    "now becomes where the profile puts it back. "
+                    "Click a pinned row to edit it, x to forget it. "
+                    "The profile moves only what you pinned.",
+    "profile_pin_open": "'open it if missing' runs the saved exe when "
+                        "no window of that app answered the profile, "
+                        "and moves the first window that appears. "
+                        "Store apps and shortcut-only launchers may "
+                        "need the exe line pointed at the real door.",
     "profile_pin_wait": "how long an 'open it' wait lasts before the "
                         "seat counts as missed (5 s to 10 min, "
-                        "default 30). it ends the moment a window "
-                        "shows - this only decides how long patience "
-                        "survives a slow launcher or a cold disk.",
-    "profile_pin_exe": "what 'open it' actually runs. by default the "
-                       "exe of the app as captured while it ran - "
-                       "often the wrong door (store stubs, updater "
-                       "wrappers, relauncher shims that exit "
-                       "instantly). browse points the pin at the "
-                       "launcher or binary that really shows the "
-                       "window; the shell runs it exactly as a "
-                       "double-click would, so a .lnk shortcut works "
-                       "too. the seat's row says [via launcher.exe] "
-                       "when the exe no longer matches the app's own "
-                       "file.",
-    "restore_on": "a profile the app re-applies by itself when it "
-                  "starts: the lever, pre-armed. Knowing the logon "
-                  "copy is a fact, not a guess - the Run entry this "
-                  "app installs carries --autostart (old flagless "
-                  "entries learn it by themselves), so launching "
-                  "the app yourself to fix something can stay a "
-                  "quiet manual start while the logon copy reshapes "
-                  "the desk.",
-    "restore_profile": "'the last one for this desk' picks by the "
-                       "panels physically present (a cold boot may "
-                       "not have reached the profile's modes yet - "
-                       "identity decides, same as an apply's gate). "
-                       "Or name one profile exactly; if it was "
-                       "deleted since, the restore says so on the "
-                       "tray and does nothing else.",
-    "restore_scope": "monitors only: modes, positions, primary, "
-                     "HDR - windows stay exactly where they are. "
-                     "windows only: pinned apps take their seats, "
-                     "the drivers are never asked anything. the "
-                     "desk gate guards every scope: different "
-                     "panels means refuse, not improvise.",
-    "restore_when": "'only logon starts' trusts the flag the Run "
-                    "entry carries - a manual launch never moves "
-                    "the desk while you are debugging it. 'every "
-                    "app start' applies on any launch. Logon "
-                    "copies always get the grace: the FIRST login "
-                    "sits out 2 full minutes and times every app "
-                    "that shows up; later logins launch only after "
-                    "the slowest observed boot + 20 s (never under "
-                    "30 s), and every 'open it' is 60 s more "
-                    "patient than its own number.",
-    "camera": "picks ADD a camera to duty; on-duty cameras show as "
-               "policy rows below (and leave this menu). Opening every "
-               "index is slow (the virtual camera alone takes 16 s), "
-               "so the list fills in after the window opens and "
-               "rescans on demand.",
+                        "default 30). It ends the moment a window "
+                        "shows.",
+    "profile_pin_exe": "what 'open it' actually runs. By default the "
+                       "exe of the window as captured; browse points "
+                       "the pin at the launcher or binary that really "
+                       "shows the window (a .lnk shortcut works too).",
+    "restore_on": "re-applies a profile when the app starts. The "
+                  "logon copy is identified by its --autostart flag, "
+                  "so a manual launch while debugging never moves the "
+                  "desk unless you say every start.",
+    "restore_profile": "'the last one for this desk' matches by the "
+                       "panels physically present; naming a deleted "
+                       "profile says so on the tray and does nothing "
+                       "else.",
+    "restore_scope": "monitors only leaves the windows alone; windows "
+                     "only never asks the drivers anything. Different "
+                     "panels refuse the apply outright - every scope.",
+    "restore_when": "'only logon starts' moves the desk on autostart "
+                    "launches; 'every app start' moves it on any. The "
+                    "first login waits out two full minutes, later "
+                    "ones the slowest observed boot plus 20 s.",
+    "camera": "adds a camera to duty; on-duty cameras show as policy "
+              "rows below (and leave this menu). Opening every index "
+              "is slow (the virtual camera alone takes 16 s), so the "
+              "list fills in after the window opens.",
     "cam_on": "the screens-on default for cameras set to follow "
-               "global: boot per poll rests the LED, always on streams "
-               "through the standby transition.",
+              "global: boot per poll rests the LED, always on streams "
+              "through the standby transition.",
     "cam_off": "the screens-off default for cameras set to follow "
-                "global: always on is the measured-reliable choice (a "
-                "device reopened INSIDE the standby transition never "
-                "streams again).",
+               "global. always on is the reliable choice: a device "
+               "reopened inside the standby transition never streams "
+               "again.",
     "cam_policies": "per-camera overrides of the two defaults above. "
-                    "a camera joins this list when the menu adds it, "
-                    "starting at follow global; remove takes it off "
-                    "duty and wipes its overrides, so re-adding is "
-                    "pristine.",
+                    "A camera joins the list when the menu adds it, "
+                    "starting at follow global; removing it takes it "
+                    "off duty and wipes its overrides.",
     "live": "holds the camera open for this window at ~5 fps so the "
             "picture shows exactly what the detector judged. The hold "
             "is a lease: closing the window releases the device.",
     "assistant": "powercfg /requests needs administrator rights, so a "
-                  "scheduled task dumps it silently instead (one "
-                  "confirm on tick). While another app holds the "
-                  "display - a video wake lock, a presentation - the "
-                  "camera stops defending a screen it does not own.",
+                 "scheduled task dumps it silently instead (one "
+                 "confirm on tick).",
     "skin": "the palette. The layout and all behavior are identical.",
-    "min": "boot puts the tray icon down and nothing else (the "
-            "monitor works fully either way); left-click the icon "
-            "to open the window. Closing the window always hides it "
-            "to the tray anyway - this only skips the first one. "
-            "Applies from the next launch.",
+    "min": "boot starts hidden in the tray; left-click the icon to "
+           "open the window. Applies from the next launch. Closing "
+           "the window always hides it to the tray anyway.",
     "startup": "the per-user Run key - exactly the entry Task "
-                "Manager's startup tab lists. No admin, and the app "
-                "verifies it by reading the registry back.",
+               "Manager's startup tab lists. No admin, and the app "
+               "verifies it by reading the registry back.",
     "logs": "every decision and the reason, in %APPDATA%\\PanelBoss\\logs.",
     "update": "check now asks GitHub for the newest release; update "
-                "now gets it - a git install runs update.bat (pulls "
-                "and refreshes the dependencies), an installed (msi) "
-                "one downloads the -user.msi and hands the silent "
-                "install to a one-shot cmd that waits for this copy "
-                "to close first. either way the app quits - its own "
-                "files are the ones being replaced - and the update "
-                "console says why if it stays closed; run.bat (or "
-                "the shortcut) starts it by hand.",
-    "gaming": "a fullscreen game is owed its panel's top refresh rate; "
-              "the desktop is owed a cooler one. only rates the panel "
-              "already lists are ever traded - the watcher asks for no "
-              "mode the driver will not take, and the resolution is "
-              "never touched. a listed game enters the moment it owns "
-              "a monitor; any other app must hold real evidence "
-              "(sustained 3D-engine load or a loaded controller api) "
-              "for the whole seen time first. leaving game mode rides "
-              "a grace timer: an alt-tab to chat does not flicker the "
-              "rate - the desktop rate comes back once, quietly, after "
-              "the game stops answering.",
-    "gaming_rates": "only the rates that panel's driver already offers "
-                    "are on the list - the watcher trades from this "
-                    "same list, so an unlisted rate is never asked "
-                    "for. 'auto' means the panel's fastest. THE "
-                    "DESKTOP RATE IS LAW WHILE NOT GAMING: the "
-                    "watcher holds the panel at it always and re-heals "
-                    "it whenever the driver forgets (reboots, driver "
-                    "updates). 'keep' means nobody's business - the "
-                    "watcher never starts a rule on that panel (a "
-                    "panel IT clocked up for a game still comes back "
-                    "to a sane 60 - or your rate - when the game "
-                    "ends). VRR panels: tick VRR (pin max) after you "
-                    "enable G-SYNC yourself - PanelBoss never touches "
-                    "drivers, it just stops flipping that panel's "
-                    "mode and keeps it at max; if you never enabled "
-                    "VRR, pick an Hz or keep.",
-    "gaming_games": "the exe names that enter game mode instantly the "
-                    "moment they own a monitor - a title screen "
-                    "renders at near-zero GPU and still owns the "
-                    "panel. any other fullscreen app can still earn "
-                    "in, it just holds its evidence longer. one exe "
-                    "per line; 'add what's in front of me' appends the "
-                    "window that currently covers the screen.",
-    "gaming_ignore": "exe names that must never be treated as games, "
-                     "even if they fool every other test. one exe per "
+              "now installs it and this copy quits - the update "
+              "console says why if it stays closed. run.bat (or the "
+              "shortcut) starts it again by hand.",
+    "gaming": "a game gets its panel's top refresh rate; the desktop "
+              "gets a cooler one. Only rates the panel already lists "
+              "are traded; the resolution is never touched. A listed "
+              "exe enters game mode the moment it owns a monitor; "
+              "any other app must hold real evidence first. Leaving "
+              "rides a grace timer: an alt-tab does not flicker the "
+              "rate.",
+    "gaming_rates": "only rates the panel's driver offers are listed; "
+                    "'auto' is the panel's fastest. The desktop rate "
+                    "is law while not gaming - the watcher re-heals "
+                    "it whenever the driver forgets. 'keep' means "
+                    "hands off. For VRR, tick the box after enabling "
+                    "G-SYNC yourself: the app stops flipping that "
+                    "panel's mode and keeps it at max.",
+    "gaming_games": "exe names that enter game mode the moment they "
+                    "own a monitor, one per line. 'add what's in "
+                    "front of me' appends the window that currently "
+                    "covers the screen.",
+    "gaming_ignore": "exe names that must never count as games, even "
+                     "if they fool every other test. One exe per "
                      "line.",
-    "gaming_plan": "swapped in while a game owns a monitor ('' = "
-                   "never). the plan that was active BEFORE the game "
-                   "comes back when it leaves - never a guessed "
-                   "default - and only if nobody else moved it "
-                   "meanwhile.",
+    "gaming_plan": "the power plan swapped in while a game owns a "
+                   "monitor ('' = never). The plan active before the "
+                   "game comes back when it leaves - only if nobody "
+                   "else moved it.",
 }
 
 

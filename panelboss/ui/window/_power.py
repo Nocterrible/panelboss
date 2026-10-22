@@ -36,7 +36,7 @@ import customtkinter as ctk
 from ... import config
 from .. import theme
 from ..shield import shield_pil
-from ._constants import TIPS
+from ._constants import TIPS, WAKE_SPECS
 from ._text import SkewText
 from ._widgets import SkewCombo
 
@@ -84,17 +84,15 @@ class _PowerMixin:
             "re-off after wake"
             if self.cfg["recovery"]["wake_policy"] == "re_off"
             else "leave on after wake")
-        row = self._row(box, "hold off while a fullscreen app owns "
-                        "the display", TIPS["fullscreen"])
-        self.fullscreen_switch = ctk.CTkSwitch(row, text="",
-                                               font=self.skin.font(12),
-                                               command=self._fullscreen_changed,
-                                               **self.skin.switch_style())
-        self.fullscreen_switch.grid(row=0, column=1, sticky="e")
-        if self.cfg["guards"]["fullscreen"]:
-            self.fullscreen_switch.select()
-        else:
-            self.fullscreen_switch.deselect()
+        # THE GRACE SLIDERS NEGOTIATE THE PLAN'S TIMERS, so they sit
+        # on this tab, directly under the policy they serve (owner
+        # ruling, Oct 22 - they moved from the Timers card; the
+        # [timers]/[recovery] config sections are UNCHANGED, only the
+        # editing card moved, and the WAKE_SPECS rows below are the
+        # same TIMER_SPECS-era constants, byte-identical ranges and
+        # steps).
+        for _spec in WAKE_SPECS:
+            self._timer_row(box, *_spec)
         row = self._row(box, "auto re-off", TIPS["reoff"])
         self.reoff_label = ctk.CTkLabel(row, text="on",
                                         font=self.skin.font(12),
@@ -106,17 +104,10 @@ class _PowerMixin:
             **self.skin.secondary())
         self.reoff_button.grid(row=0, column=2, sticky="e",
                                padx=(theme.S_FIELD, 0))
-        row = self._row(box, "put window positions back after wake",
-                        TIPS["restore_windows"])
-        self.restore_switch = ctk.CTkSwitch(row, text="",
-                                            font=self.skin.font(12),
-                                            command=self._restore_changed,
-                                            **self.skin.switch_style())
-        self.restore_switch.grid(row=0, column=1, sticky="e")
-        if self.cfg["power"].get("restore_windows"):
-            self.restore_switch.select()
-        else:
-            self.restore_switch.deselect()
+        # (the fullscreen hold-off and the window-restore toggle used
+        # to stand on this card: the owner's one-section ruling moved
+        # them to the away card's decisions - see _away.py; the write
+        # paths and keys are untouched)
 
         # the UAC shield before the assistant label is the honest hint
         # that ticking it means one admin confirm (drawn to match the
@@ -233,11 +224,6 @@ class _PowerMixin:
         name = "re_off" if label.startswith("re-off") else "leave_on"
         self.cfg["recovery"]["wake_policy"] = name
         self.monitor.events.put(("wake_policy", name))
-        self._save()
-
-
-    def _fullscreen_changed(self):
-        self.cfg["guards"]["fullscreen"] = bool(self.fullscreen_switch.get())
         self._save()
 
 
@@ -463,19 +449,16 @@ class _PowerMixin:
         p = self.cfg["power"]
         # the hold pair's both-branch truth paint + the gray law moved
         # into _sync_hold_rows with the segmented wave (Oct 21); the
-        # restore/fullscreen/assistant switches keep the select() belt
+        # restore/fullscreen pair left this card with the one-section
+        # ruling (Oct 22) and _sync_away_rows owns their repaint now;
+        # the assistant switch keeps the select() belt
         self._sync_hold_rows()
-        self.restore_switch.select() if p.get("restore_windows") \
-            else self.restore_switch.deselect()
         # hdr_away_switch is gone with its row (dim-mode wave): the
         # fossil key stays readable one release, but a repaint seam
         # must not touch a widget the card no longer builds - this
         # line's AttributeError used to kill the TWO switch repaints
         # below it (V's catch, patch-scale: the merge grew this table
         # around a widget the wave had buried).
-        self.fullscreen_switch.select() \
-            if self.cfg["guards"]["fullscreen"] \
-            else self.fullscreen_switch.deselect()
         self.power_switch.select() if p["assistant_task"] \
             else self.power_switch.deselect()
         self._assistant_ui(bool(p["assistant_task"]))

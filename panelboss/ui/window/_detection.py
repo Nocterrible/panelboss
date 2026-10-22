@@ -323,26 +323,38 @@ class _DetectionMixin:
         self.detect_note.pack(anchor="w", pady=(theme.S_FIELD, 0))
 
 
+    def _timer_row(self, box, section, key, label, lo, hi, step, tip):
+        """One timer row, the shared idiom (moved out of _build_timers
+        when the grace pair moved to the power plan's wake card - the
+        owner ruling of Oct 22: the same WAKE_SPECS entries, byte-
+        identical ranges and steps, edited from the card whose plan
+        they negotiate; the config sections did not move)."""
+        row = self._row(box, label, tip, hint_chars=42)
+        value_label = ctk.CTkLabel(row, font=self.skin.font(12),
+                                   **self.skin.text_style("sub"))
+        value_label.grid(row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
+        slider = ctk.CTkSlider(row, from_=lo, to=hi,
+                               number_of_steps=int((hi - lo) / step),
+                               width=180,
+                               command=lambda v, s=section, k=key:
+                               self._timer_changed(s, k, v),
+                               **self.skin.slider_style())
+        slider.set(self.cfg[section][key])
+        slider.grid(row=0, column=1, sticky="e")
+        value_label.configure(text="%ss" % self.cfg[section][key])
+        labels = getattr(self, "timer_labels", None)
+        if labels is None:
+            labels = self.timer_labels = {}
+        labels.setdefault(key, value_label)
+        return row
+
     def _build_timers(self, left):
         box = self._card(left, "Timers",
                          "written to config.toml, applied while the "
                          "loop runs")
         self.timer_labels = {}
-        for section, key, label, lo, hi, step, tip in TIMER_SPECS:
-            row = self._row(box, label, tip, hint_chars=42)
-            value_label = ctk.CTkLabel(row, font=self.skin.font(12),
-                                       **self.skin.text_style("sub"))
-            value_label.grid(row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
-            slider = ctk.CTkSlider(row, from_=lo, to=hi,
-                                   number_of_steps=int((hi - lo) / step),
-                                   width=180,
-                                   command=lambda v, s=section, k=key:
-                                   self._timer_changed(s, k, v),
-                                   **self.skin.slider_style())
-            slider.set(self.cfg[section][key])
-            slider.grid(row=0, column=1, sticky="e")
-            value_label.configure(text="%ss" % self.cfg[section][key])
-            self.timer_labels[key] = value_label
+        for spec in TIMER_SPECS:
+            self._timer_row(box, *spec)
         self.worst_label = ctk.CTkLabel(box, font=self.skin.font(11),
                                          wraplength=350, justify="left",
                                          anchor="w",
