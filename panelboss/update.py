@@ -160,6 +160,8 @@ if %tries% geq 15 (
     echo files were busy the receipt in update.log will say so
     goto install
 )
+rem ~2 s per lap (update.bat's own ping idiom: timeout's stdin
+rem dependence dies under redirected handles, ping's never does)
 ping -n 3 127.0.0.1 >nul
 goto wait
 :install
