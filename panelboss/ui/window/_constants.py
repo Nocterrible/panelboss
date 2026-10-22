@@ -302,11 +302,15 @@ TIPS = {
                 "Manager's startup tab lists. No admin, and the app "
                 "verifies it by reading the registry back.",
     "logs": "every decision and the reason, in %APPDATA%\\PanelBoss\\logs.",
-    "update": "runs update.bat: pulls the newest copy and refreshes "
-               "the dependencies. the app quits first - its own files "
-               "are the ones being replaced - and the script reopens "
-               "it when it finishes. if it stays closed, the update "
-               "window says why; run.bat starts it by hand.",
+    "update": "check now asks GitHub for the newest release; update "
+                "now gets it - a git install runs update.bat (pulls "
+                "and refreshes the dependencies), an installed (msi) "
+                "one downloads the -user.msi and hands the silent "
+                "install to a one-shot cmd that waits for this copy "
+                "to close first. either way the app quits - its own "
+                "files are the ones being replaced - and the update "
+                "console says why if it stays closed; run.bat (or "
+                "the shortcut) starts it by hand.",
     "gaming": "a fullscreen game is owed its panel's top refresh rate; "
               "the desktop is owed a cooler one. only rates the panel "
               "already lists are ever traded - the watcher asks for no "

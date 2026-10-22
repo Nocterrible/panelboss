@@ -15,7 +15,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from ... import config
+from ... import config, update
 from .. import deps, theme
 from ._constants import TIPS
 from ._widgets import SkewCombo
@@ -53,16 +53,32 @@ class _GeneralMixin:
         else:
             self.min_switch.deselect()
         # the updater lives here because it is meta: it replaces the
-        # app, not anything the app watches. the frozen exe has no
-        # repo to pull, so the row hides itself there.
+        # app, not anything the app watches. BOTH installs answer to
+        # the row now: the git one runs update.bat (its visible
+        # console carries the relaunch), the msi one asks GitHub and
+        # hands a downloaded -user.msi to a one-shot cmd (update.py);
+        # the frozen era of hiding the row is over.
         row = self._row(box, "check for updates", TIPS["update"])
         self.update_row = row
+        self.update_status = ctk.CTkLabel(row, text="",
+                                          font=self.skin.font(11),
+                                          anchor="w",
+                                          **self.skin.text_style("sub"))
+        self.update_status.grid(row=0, column=1, sticky="e",
+                                padx=(0, theme.S_ROW))
+        self.check_button = ctk.CTkButton(
+            row, text="check now", width=90, command=self._check_updates,
+            **self.skin.secondary())
+        self.check_button.grid(row=0, column=2, sticky="e")
         self.update_button = ctk.CTkButton(
             row, text="update now", width=110, command=self._update_now,
             **self.skin.secondary())
-        self.update_button.grid(row=0, column=1, sticky="e")
-        if getattr(sys, "frozen", False):
-            row.pack_forget()
+        self.update_button.grid(row=0, column=3, sticky="e",
+                                padx=(theme.S_ROW, 0))
+        # design 3: the row states the version it is running (so a
+        # user can see what they have, not only whether an answer
+        # came); _update_status_line repaints the very same widget.
+        self.update_status.configure(text="running " + update.__version__)
         row = self._row(box, "open log folder", TIPS["logs"])
         ctk.CTkButton(row, text="open", width=110, command=self._open_log,
                       **self.skin.secondary()).grid(row=0, column=1,
@@ -165,7 +181,13 @@ class _GeneralMixin:
         its own, so the script's console opens fresh, visible, and
         outlives us (it must, it carries the relaunch). extra carries
         the updater's other flags - ("deps",) when a feature is
-        waiting on an optional package."""
+        waiting on an optional package. On a FROZEN install this is
+        the msi handoff below instead (and extra belongs to the bat:
+        the installed app's optional bridges come inside the next
+        release's package, not a pip run)."""
+        if getattr(sys, "frozen", False):
+            self._msi_handoff()
+            return
         script = self.update_script()
         if not script:
             return
@@ -184,6 +206,118 @@ class _GeneralMixin:
                              creationflags=0)   # CONSOLE: deliberate
         except Exception:
             log.exception("update refused to start; the app stays up")
+            return
+        self.monitor.events.put(("quit", True))
+
+
+    def _check_updates(self):
+        """"check now": the answer is a sentence in the row, and the
+        network is a worker thread's job (the _startup_changed
+        idiom: daemon thread, after(0) marshal, dead-root caught);
+        a re-click while one round trip is in flight is ignored -
+        one flight at a time, one sentence at a time."""
+        if getattr(self, "_update_flight", False):
+            return
+        self._update_flight = True
+
+        def work():
+            try:
+                answer = update.check()
+            except Exception:                # check() catches ALL by
+                log.exception("update check died")   # design; even a
+                answer = ("error", None)             # dead worker owes
+                                                 # the row a sentence
+                                                 # and the flag an
+                                                 # unlock
+            try:
+                self.after(0, lambda: self._update_status_line(*answer))
+            except (tk.TclError, RuntimeError):   # +RuntimeError:
+                log.exception("update check lost the marshal")  # dead-
+                                                 # root class, the
+                                                 # measured one
+        threading.Thread(target=work, daemon=True).start()
+
+
+    def _update_status_line(self, status, version):
+        """The row's reporting half: current and behind name their
+        numbers, error says offline and nothing else (offline-by-
+        default is a sentence, never a traceback, never a balloon)."""
+        self._update_flight = False
+        if status == "error":
+            self.update_status.configure(text="could not check - "
+                                              "offline?")
+        elif status == "behind":
+            self.update_status.configure(text="%s available" % version)
+        else:
+            self.update_status.configure(text="up to date (%s)" % version)
+
+
+    def _msi_handoff(self):
+        """The frozen 'update now': the check decides whether anything
+        is worth fetching, the download brings it, and a one-shot
+        apply.bat installs it once the app stops moving. A 'current'
+        click does not download; an 'error' click MAY ride the stored
+        url of the last honest 'behind' (the last one is remembered
+        for exactly this - a flaky API must not unship a known
+        release), and an error with nothing stored says so and the
+        app stays up. check AND download are network verbs, so the
+        whole round trip rides the worker; the quit sequence mirrors
+        the source path exactly - debounced save, spawn, event."""
+        if getattr(self, "_update_flight", False):
+            return
+        self._update_flight = True
+
+        def go():
+            msi = None
+            try:
+                status, version = update.check()
+                rel = update.stored_release()
+                if rel and (status == "behind"
+                            or (status == "error"
+                                and update.is_newer(rel["version"],
+                                                    update.__version__))):
+                    msi = update.download(rel["url"])
+            except Exception:
+                log.exception("the msi update round trip died")
+                status, version = "error", None
+            try:
+                self.after(0, lambda: self._msi_done(status, version,
+                                                     msi))
+            except (tk.TclError, RuntimeError):
+                log.exception("msi update lost the marshal")
+        threading.Thread(target=go, daemon=True).start()
+
+
+    def _msi_done(self, status, version, msi):
+        """The UI-thread half of the handoff: the row reports what the
+        round trip meant, and a fetched msi gets its script and its
+        spawn here. The spawn is the update.bat line's twin and the
+        package's SECOND registered console opt-out - startup_test's
+        ledger counts both, gaming_test's ban accepts both, and the
+        third bare spawn still fails the build."""
+        self._update_flight = False
+        if msi is None:
+            if status == "behind":           # the download died; the
+                self.update_status.configure(     # app stays up honest
+                    text="download failed - try again")
+            else:
+                self._update_status_line(status, version)
+            return
+        self._save_now()                     # the debounced save may
+                                             # never fire again - the
+                                             # source path's courtesy,
+                                             # kept
+        exe = os.path.join(os.path.dirname(sys.executable),
+                           "PanelBoss.exe")
+        bat = update.write_apply(msi, exe, os.getpid(),
+                                 os.path.dirname(msi))
+        try:
+            subprocess.Popen(["cmd.exe", "/c", bat],
+                             cwd=os.path.dirname(bat),
+                             creationflags=0)   # CONSOLE: deliberate
+        except Exception:
+            log.exception("the msi handoff refused to start; the "
+                          "app stays up")
             return
         self.monitor.events.put(("quit", True))
 

@@ -16,9 +16,10 @@ it never gets to type. The belt is BOTH halves -
                         allocates its OWN conhost/WT window, it is
                         born hidden)
 
-The single declared exception to the door is the updater: update.bat
-RUNS IN ITS VISIBLE CONSOLE (the window is the progress UI and it
-carries the relaunch); that call site passes an explicit
+The declared exceptions to the door are the updater, ONE PER INSTALL
+KIND: update.bat (source) and the frozen copy's apply.bat handoff
+BOTH RUN IN THEIR OWN VISIBLE CONSOLE (the window is the progress UI
+and it carries the relaunch); each call site passes an explicit
 creationflags=0 with a "# CONSOLE: deliberate" marker, and
 scripts/startup_test.py + scripts/gaming_test.py fail the build if
 any other bare subprocess/os.system verb appears in the package.

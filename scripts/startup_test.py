@@ -230,18 +230,20 @@ import re as _re
 import panelboss as _pb
 _banned = _spawn_ban(os.path.dirname(os.path.abspath(_pb.__file__)))
 assert not _banned, "console verbs outside the door: %s" % _banned
-# and exactly ONE declared console-verb opt-out in the package (the
-# updater; its window is the progress UI and it carries the
-# relaunch), marked for the humans:
+# and exactly TWO declared console-verb opt-outs in the package (the
+# updater, one per install kind: the source copy's update.bat and the
+# frozen copy's apply.bat handoff - each window is the progress UI
+# and each carries the relaunch), both marked for the humans:
 _gsrc = _io.open(os.path.join(os.path.dirname(os.path.abspath(_pb.__file__)),
                               "ui", "window", "_general.py"),
                  encoding="utf8").read()
 _optouts = _re.findall(r"creationflags=0(?![xX0-9])", _gsrc)
-assert len(_optouts) == 1, "exactly one declared console opt-out " \
-                           "(the updater), found %d" % len(_optouts)
+assert len(_optouts) == 2, "exactly two declared console opt-outs " \
+                           "(the updater, both install kinds), " \
+                           "found %d" % len(_optouts)
 assert "# CONSOLE: deliberate" in _gsrc, "the opt-out must name itself"
 print("no-window door OK (belt pair pinned, silence proven, verbs banned,"
-      " one declared console exception marked)")
+      " two declared console exceptions marked)")   # one per install kind
 
 print("startup OK (command, frozen, round trip, 2 refusals, tray flip,"
       " no-window door)")
