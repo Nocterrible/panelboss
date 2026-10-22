@@ -150,7 +150,13 @@ def main(argv=None):
                                       # before any config read; fail-open
     cfg = config.get_config()
     if args.index is not None:
-        cfg["camera"]["index"] = args.index
+        # law 3 (the ghost-law build): the boot-time roster write rides
+        # the SAME funnel. There is no loop to carry an event yet, so
+        # the funnel writes the file and speaks the "camera roster now"
+        # line itself - the arg-provided duty and the toml agree from
+        # the first second, and the picker can never show a roster the
+        # file does not know (the 00:47 fork, dead at the boot seam)
+        config.set_camera_roster(cfg, args.index)
     if args.no_ui:
         cfg["ui"]["enabled"] = False
 

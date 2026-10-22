@@ -347,11 +347,19 @@ class _GeneralMixin:
 
 
     def _dep_install(self, switch):
-        from ... import camera
+        from ... import camera, config
         if switch:
-            self.cfg["camera"]["index"] = camera.HELLO_IR
-            # no camera event: this process is about to quit, and the
-            # one the updater reopens boots straight into hello IR
+            # law 3 (the ghost-law build): the roster word rides the
+            # ONE funnel. The process is about to quit and the one the
+            # updater reopens boots straight into hello IR, but the
+            # word goes out anyway: the ("camera", ...) event lands
+            # the toml, the "camera roster now" line, and the honest
+            # release in the same drain that carries the quit - a
+            # silent in-memory move is the class this funnel exists to
+            # bury (and _update_now's own save has the file correct
+            # either way before the script runs).
+            config.set_camera_roster(self.cfg, camera.HELLO_IR,
+                                     events=self.monitor.events)
         self._update_now(extra=("deps",))
 
 

@@ -656,8 +656,13 @@ class Tray(threading.Thread):
 
     def _camera_picker(self, index):
         def action(icon):
-            self.config["camera"]["index"] = index
-            self.events.put(("camera", index))
+            # law 3 (the ghost-law build): the tray's pick rides the
+            # roster funnel too - the event carries the toml, the
+            # confession, and the release (the same contract the
+            # window's picker keeps; no bare dict writes left)
+            from . import config
+            config.set_camera_roster(self.config, index,
+                                     events=self.events)
         return action
 
     def _camera_checker(self, index):

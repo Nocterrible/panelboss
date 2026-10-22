@@ -305,16 +305,15 @@ class _EventsMixin:
                 # value is either a bare int (one camera, or the IR
                 # sentinels - the historic contract) or the full
                 # rotation LIST the window assembles when a camera is
-                # ADDED beside the current ones
-                self.camera_cfg["index"] = (
-                    list(value) if isinstance(value, (list, tuple))
-                    else int(value))
-                # the word lands BEFORE the hand (Oct 19): the AV that
-                # owned pid 23004 died in the release and took the toml
-                # with it; camera_diag's order is the shape
+                # ADDED beside the current ones. LAW 3 (the ghost-law
+                # build): the funnel owns the dict write, the toml and
+                # the "camera roster now" confession (the word lands
+                # BEFORE the hand - Oct 19: the AV that owned pid
+                # 23004 died in the release and took the toml with it;
+                # camera_diag's order is the shape); the hand below is
+                # this branch's own half.
                 from .. import config
-                config.write_config(self.cfg)
-                log.info("camera roster now %s", self.camera_cfg["index"])
+                config.set_camera_roster(self.cfg, value)
                 self._release_camera()             # the next poll opens the
                                                    # chosen one
             elif action == "camera_enabled":

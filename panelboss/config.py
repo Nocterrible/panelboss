@@ -811,6 +811,33 @@ def normalize_index(value):
     return [int(value)]
 
 
+def set_camera_roster(cfg, value, events=None):
+    """THE one funnel for every [camera] index write (law 3, the
+    ghost-law build, the 00:47 autopsy: a silent in-memory roster
+    write forked the duty from the toml, and an
+    enrolled-but-deaf eye rendered as invisible). The dict moves
+    HERE; the rest is the loop's: with a queue the ("camera", ...)
+    event carries the word - the _events handler applies the toml,
+    logs "camera roster now <...>" and releases the eye (the event
+    path IS the law's log line; a writer never re-logs a parallel
+    one). With no queue (the boot arg, the about-to-quit dep
+    install) no drain can carry it, so this call writes the file and
+    speaks the same line itself: the roster never moves without a
+    confession. The coercion is the handler's own: a list stays a
+    list (a tuple arrives as a list), a bare int - sentinels
+    included - stays an int, so the event and the direct write are
+    the same write."""
+    camera = cfg["camera"]
+    camera["index"] = (list(value) if isinstance(value, (list, tuple))
+                       else int(value))
+    if events is not None:
+        events.put(("camera", camera["index"]))
+    else:
+        log.info("camera roster now %s", camera["index"])
+        write_config(cfg)
+    return camera["index"]
+
+
 def normalize_name_contains(value):
     """[camera] name_contains in its in-memory shape: a list of
     substrings. Both shapes read - the new stock default is a string,
