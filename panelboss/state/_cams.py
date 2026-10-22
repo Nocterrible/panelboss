@@ -9,8 +9,12 @@ SIZE LAW: measured 395 (Oct 21, the dark-camera record: _poll's
 verdict wrapper + _note_verdict + the accessor grew the file's HEAD
 by 27 - the record lives here because a second camera opinion is the
 one sin the feature cannot commit, and pulling it out would put the
-vote's truth one file from the code that casts it; formerly measured
-368, Oct 13, after the consent gate rode in at
+vote's truth one file from the code that casts it; Oct 22, the
+ghost-law wave: the deaf-eye record (deaf_indices + _note_deaf, ~50
+lines) rode in for the same reason - the wear clock it counts on is
+this file's ledger, and the round budget is _roster_shuffling's own
+arithmetic; formerly measured 368, Oct 13, after the consent gate
+rode in at
 _poll's head - one guard clause, the file's own doctrine): the two
 single-desk vote arms grew, but they
 ARE one contract (the (frame, opened) abstain/fail-closed split) and
@@ -31,6 +35,17 @@ log = logging.getLogger("state")
 # is exactly what paused.
 CAMERA_DARK_MSG = ("the camera stopped seeing - presence-based behavior "
                    "is paused until it sees a person again")
+
+DEAF_MIN_ROUNDS = 2      # law 4 (the ghost-law dispatch, Oct 22): an
+                         # enrolled eye owes a vote EVERY duty round
+                         # (one full sweep = present_recheck_sec x
+                         # roster size, the _roster_shuffling
+                         # arithmetic); this many silent rounds and
+                         # the eye is DEAF - announced once per
+                         # episode, badged on the detection tab's
+                         # roster, cleared by the next vote. The
+                         # 00:47 autopsy's class: "enrolled but deaf"
+                         # must never render as invisibility.
 
 
 class _CamsMixin:
@@ -88,6 +103,72 @@ class _CamsMixin:
         for i in config.normalize_index(self.camera_cfg.get("index", 0)):
             self.last_vote[i] = now
 
+    def deaf_indices(self, now=None):
+        """LAW 4 (the ghost-law dispatch): {index: rounds} for every
+        enrolled eye that has delivered no vote for at least
+        DEAF_MIN_ROUNDS full duty rounds. The cadence is the walk's
+        own bookkeeping (last_vote, the wear clock _note_vote keeps;
+        the round budget is _roster_shuffling's arithmetic: the roster
+        shares the recheck cadence, one full sweep costs
+        present_recheck_sec x roster size). An eye that has never
+        voted ages from the first moment the machine noticed it
+        enrolled - a warm-open eye at boot is not yet deaf - and any
+        delivered frame resets the streak, which IS the badge's clear.
+        Read this for the detection tab's roster (the duty cards); the
+        INFO confession is _note_deaf's job."""
+        if now is None:
+            now = time.monotonic()
+        from .. import config
+        roster = config.normalize_index(self.camera_cfg.get("index", 0))
+        if not self.camera_cfg.get("enabled"):
+            # the consent door is not deafness: while detection is off
+            # NOTHING is due, so the silence is re-based on the spot
+            # (and a door shut all night must not judge its eye at the
+            # first poll after it opens - the stamps are re-based
+            # throughout the shut period, not at the opening)
+            for i in roster:
+                if i in self.last_vote:
+                    self.last_vote[i] = now
+                else:
+                    self._deaf_since[i] = now
+            return {}
+        sweep = self.timers["present_recheck_sec"] * max(1, len(roster))
+        out = {}
+        for i in roster:
+            if self._policy(i) == "off":
+                # a switched-off eye (or one cadence-held until its
+                # fallback turn) owes no vote - it is parked, not
+                # deaf (the _round_tally want-set's own exclusion)
+                self._deaf_since.pop(i, None)
+                continue
+            stamp = self.last_vote.get(i)
+            if stamp is None:
+                stamp = self._deaf_since.setdefault(i, now)
+            else:
+                self._deaf_since[i] = stamp      # a vote re-bases the eye
+            rounds = int((now - stamp) // sweep)
+            if rounds >= DEAF_MIN_ROUNDS:
+                out[i] = rounds
+        return out
+
+    def _note_deaf(self, now=None):
+        """The loop side of law 4: the deaf report, INFO, ONE line per
+        episode (re-armed by the eye's next vote - an episode is one
+        continuous silence, not one silent round). Rides the _poll
+        seam: the duty's own cadence is the only clock that may call
+        an eye deaf, and the ledger is the one the wear guard already
+        writes; no new thread, no new poll."""
+        report = self.deaf_indices(now)
+        self._deaf_reported &= set(report)       # a recovered eye's
+        # episode is over: its next silence gets a fresh confession
+        for index, rounds in sorted(report.items()):
+            if index in self._deaf_reported:
+                continue
+            self._deaf_reported.add(index)
+            log.info("eye %s enrolled but deaf: %d rounds without a vote"
+                     " - check device/disconnected", index, rounds)
+        return report
+
     def _note_verdict(self, present, shuffled=True):
         """The single record point for every camera verdict: _poll
         routes here, and the consent-off drain calls it directly (the
@@ -121,7 +202,13 @@ class _CamsMixin:
         hold's third state and the dark-eye notice read the SAME
         present the phase machine consumes - never a second opinion."""
         present, score = self._poll_camera()
-        return self._note_verdict(present), score
+        present = self._note_verdict(present)
+        # LAW 4 (the ghost-law build): the deaf-eye badge runs at the
+        # duty's own gate - every poll recounts the rounds, the arms
+        # that never landed a frame included (that is exactly the
+        # episode the badge confesses).
+        self._note_deaf()
+        return present, score
 
     def _poll_camera(self):
         if not self.camera_cfg.get("enabled"):
@@ -175,7 +262,7 @@ class _CamsMixin:
             present = present and self.faces.known(frame)
         self.framebox.put(frame, boxes, scores)        # the debug view sees
                                                        # the same truth
-        log.debug("frame: present=%s score=%.2f", present, score)
+        log.info("frame: present=%s score=%.2f", present, score)
         return present, score
 
     def _mode(self):

@@ -102,9 +102,15 @@ class _PhaseMixin:
                 self.next_poll = now + self.on_poll()
                 return
             if unknown_start and present:
-                self._force_on(now, "somebody sits at a desk whose screens"
-                                    " the app cannot prove are lit")
-                return
+                # the ghost law (LAW 1, the 00:47 autopsy: the door's
+                # eye scores person@0.30 on an EMPTY scene): only a
+                # strict-tier verdict gets to light screens the app
+                # cannot prove are lit. A sub-floor True on an unknown
+                # desk falls through and informs, it does not force.
+                if score >= self.inference_cfg["confidence"]:
+                    self._force_on(now, "somebody sits at a desk whose screens"
+                                        " the app cannot prove are lit")
+                    return
             self._schedule_on_poll(now, present, score)
 
     def _check_blockers(self, now):
@@ -128,22 +134,37 @@ class _PhaseMixin:
 
     def _schedule_on_poll(self, now, present, score):
         # a DECISIVE verdict - either way - resets the no-verdict
-        # streak: the fallback never supersedes evidence
+        # streak: the fallback never supersedes evidence. The two
+        # clocks measure different silences: a verdict (ANY verdict,
+        # assist tier included) answers the no-verdict streak, and
+        # only a CONFIRMED person answers the absence clock (below).
         self._blind_since = None
         if present:
-            self.absent_since = None
             self.last_present = now
             self.hits += 1
-            self.re_off_deadline = math.inf   # a confirmed person voids
-            # the re-off budget: the promise was "off again if still
-            # nobody shows up" - somebody showed up
-            if (self.re_off_paused
-                    and self.hits >= self.inference_cfg["min_hits"]):
-                self._resume_re_off("the camera saw somebody again")
-            self.next_poll = now + self.timers["present_recheck_sec"]
-            self._round = None      # stale off-phase round bookkeeping
-                                    # does not cross the wake boundary
-            return
+            if score >= self.inference_cfg["confidence"]:
+                self.absent_since = None
+                self.re_off_deadline = math.inf   # a confirmed person
+                # voids the re-off budget: the promise was "off again
+                # if still nobody shows up" - somebody showed up
+                if (self.re_off_paused
+                        and self.hits >= self.inference_cfg["min_hits"]):
+                    self._resume_re_off("the camera saw somebody again")
+                self.next_poll = now + self.timers["present_recheck_sec"]
+                self._round = None    # stale off-phase round bookkeeping
+                                      # does not cross the wake boundary
+                return
+            # THE GHOST (LAW 1, the 00:47 autopsy, measured 0.6 s): an
+            # assist-tier True INFORMS - the hold rows keep the feed
+            # (_camera_present was already recorded True at the poll
+            # gate, tier-blind by design: _note_verdict never sees the
+            # score; a motionless reading human keeps the screen-lit
+            # hold) - but it does NOT reset absent_since, does NOT
+            # void re_off_deadline, and must not resume a paused
+            # re-off. The absence accrues THROUGH the ghost: fall
+            # through to the absence arm, where the clock the False
+            # streaks started (or this ghost itself, if nobody has
+            # contradicted it yet) keeps its date.
         if self.absent_since is None:
             self.absent_since = now
             log.info("nobody at the desk since now, confirming...")

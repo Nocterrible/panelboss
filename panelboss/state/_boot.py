@@ -129,6 +129,14 @@ class _BootMixin:
                                               # last flip INTO a table)
         self.last_vote = {}                   # index -> last frame vote;
                                               # the degraded cadence gate
+        self._deaf_since = {}                 # index -> baseline for an
+                                              # enrolled eye that has
+                                              # never delivered a vote
+                                              # (law 4; a delivered
+                                              # frame re-bases it to
+                                              # the stamp itself)
+        self._deaf_reported = set()           # the deaf INFO's episode
+                                              # ledger (law 4)
         self._rearm("on")                     # boot: the on table applies
                                               # (unknown counts as on),
                                               # every effective always
