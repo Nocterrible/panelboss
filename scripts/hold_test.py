@@ -131,13 +131,45 @@ m.state = "off"
 cfg["power"]["hold_display"] = "on"
 cfg["power"]["hold_sleep"] = "present"
 m._apply_hold(0.0)
-assert held[-1] == (False, False), \
-    "hold_sleep 'present' in the dark: a silent eye must not hold the box"
+assert held[-1] == (False, True), \
+    "hold_sleep 'present' in OUR dark: the system bit follows its row " \
+    "through the dark spell too (the blinded eye reads absent, and " \
+    "releasing here is the burn-in contract's own half of the fix)"
 cfg["power"]["hold_sleep"] = "on"
 m._apply_hold(0.0)
 assert held[-1] == (False, True), "dark: the booleans still ride on/off"
+# and the DISPLAY bit through our own dark: the 'present' row asserts
+# WHILE DARK (we own the room we darkened - the blinded eye must not
+# hand the panel back to Windows mid-spell), and the 'on' row keeps
+# today's release (a held display claims the screens are wanted; a
+# dark panel is the plan's). The hand-back lives in the WAKE: the
+# moment the state is lit again the bit follows the verdict, exactly
+# as shipped (no-verdict == absent == let the plan's timer run).
+cfg["power"]["hold_display"] = "present"
+cfg["power"]["hold_sleep"] = "off"
+m._note_verdict(None)                          # the dark eye, silent
+m._apply_hold(0.0)
+assert held[-1] == (True, False), \
+    "the 'present' display row went quiet through our own dark"
+m.state = "counting"                           # the wake's hand-back
+m._apply_hold(0.0)
+assert held[-1] == (False, False), \
+    "after the wake the display row must follow the verdict, not the habit"
+m._note_verdict(True)                          # the lit eye sees the returner
+m._apply_hold(0.0)
+assert held[-1] == (True, False), \
+    "the post-wake verdict law moved (it must not)"
+m.state = "off"
+cfg["power"]["hold_display"] = "on"            # the legacy 'on' row: still
+m._apply_hold(0.0)                             # releases while dark
+assert held[-1] == (False, False), \
+    "the 'on' display row learned a new dark habit (the plan owns the dark)"
+cfg["power"]["hold_display"] = "off"
+m._note_verdict(False)
 print("third state OK (present holds on verdict True alone; absent and "
-      "no-verdict both hand the timer to the plan, dark included)")
+      "no-verdict both hand the timer to the plan; the 'present' rows "
+      "assert THROUGH our own dark and hand back at the wake; the 'on' "
+      "display row keeps the dark's release)")
 
 # 2d) the DARK-CAMERA balloon - the owner amendment included: the news
 #     is UNCONDITIONAL (no row-dependence gate), fires on the

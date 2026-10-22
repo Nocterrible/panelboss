@@ -34,23 +34,47 @@ class _PowerMixin:
         off, detection tab off) both hand the timer back to the plan
         the moment they land: presence unknown == absent, the owner's
         explicit ruling, the fail-into-Windows branch. Today's
-        booleans stay valid and mean on/off (hold_state)."""
+        booleans stay valid and mean on/off (hold_state). While OUR
+        OWN dark holds, this is only the on-phase half of the law:
+        the bits through the dark spell are _off_phase_bit's - a
+        blinded verdict is no verdict."""
         word = config.hold_state(self.power_cfg.get(key))
         if word == "present":
             return self._camera_present is True
         return word == "on"
+
+    def _off_phase_bit(self, key):
+        """THE HOLD BIT THROUGH OUR OWN DARK SPELL (DELTA 2, the
+        measured burn-in loop): _apply_hold's off branch and the dark
+        transition share this one computation - we own the room we
+        darkened, so the 'present' row asserts through the dark
+        (the blinded eye reads absent, and letting the bit go mid-spell
+        hands the panel back to Windows); a genuine wake re-lights with
+        a lit camera and the bit follows the verdict again. 'off' rows
+        release per their own law; the 'on' row splits by what the bit
+        is for: the display claim is that the SCREENS are wanted - a
+        dark panel is the plan's, so it releases (as today) - while
+        the sleep claim keeps the box up to see the return, so it
+        stays (as today)."""
+        word = config.hold_state(self.power_cfg.get(key))
+        if word == "present":
+            return True
+        return word == "on" and key == "hold_sleep"
 
     def _apply_hold(self, now):
         """Windows' execution-state policy, restated every tick:
         hold_display suppresses the plan's display timeout, hold_sleep
         the sleep timeout - either may live alone, and each row answers
         'off', 'on' or 'present' (the third state: held only while the
-        camera sees you, _hold_on). The display bit always lets go
-        while dark (holding a display is claiming the screens are
-        wanted); the system bit survives the dark ONLY if the row's
-        answer says so - it is what keeps the watcher alive to see the
-        return, and without it the box sleeps and the app re-arms on
-        the power-button press (unknown-state boot). Paused or snoozing
+        camera sees you, _hold_on). While dark we OWN the spell: a
+        'present' row asserts THROUGH the off-phase (_off_phase_bit -
+        the blinded eye reads absent, and letting the bit go mid-spell
+        hands the panel back to Windows; the display's 'on' row still
+        releases, a dark panel is the plan's); the system bit survives
+        the dark the same way - it is what keeps the watcher alive to
+        see the return, and without it the box sleeps and the app
+        re-arms on the power-button press (unknown-state boot).
+        Paused or snoozing
         releases everything: the app then behaves exactly like an app
         that is not running. The transition log line is the one honest
         dump the burn-in desk reads (diff-guarded: it speaks only when
@@ -58,7 +82,8 @@ class _PowerMixin:
         if self.paused or now < self.snooze_until:
             bits = (False, False)
         elif self.state == "off":
-            bits = (False, self._hold_on("hold_sleep"))
+            bits = (self._off_phase_bit("hold_display"),
+                    self._off_phase_bit("hold_sleep"))
         else:
             bits = (self._hold_on("hold_display"),
                     self._hold_on("hold_sleep"))
@@ -150,11 +175,15 @@ class _PowerMixin:
             return
         self._remember_layout()                # panels lit = the truth
                                                # still intact (see wm)
-        # the display hold lets go BEFORE the broadcast (a held display is
-        # a claim the screens are wanted); the sleep hold survives the dark
-        # only if the row's answer says so - it keeps the watcher alive to
-        # catch the return ('present' rows read the verdict, _hold_on)
-        display.set_hold(False, self._hold_on("hold_sleep"))
+        # the hold bits BEFORE the broadcast: the dark spell is OUR OWN
+        # off-phase, so the bits are computed at the same seam _apply_hold
+        # uses while dark (_off_phase_bit) - a 'present' row asserts
+        # through the dark (we own the room we darkened; the blinded eye
+        # reads absent, and releasing the display bit mid-spell hands the
+        # panel back to Windows); a genuine wake re-lights with a lit
+        # camera and the bits follow the verdict again
+        display.set_hold(self._off_phase_bit("hold_display"),
+                         self._off_phase_bit("hold_sleep"))
         # per-index stream-through: an eye whose off table says
         # always_on keeps its stream THROUGH the standby transition,
         # never released. Reopening inside the transition is the race
