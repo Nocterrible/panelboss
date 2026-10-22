@@ -28,6 +28,7 @@ import customtkinter as ctk
 from .. import theme
 from . import _identity
 from ... import camera
+from ... import config
 from ._constants import TIPS
 from ._widgets import SkewCombo
 
@@ -56,6 +57,27 @@ def duty_roster(camera_cfg):
 NAME_CLIP = 24                    # "cam 0 <name>" must survive the 320
                                   # px zone; the id never clips, only
                                   # the name does
+DEAF_SUFFIX = " · (disconnected)"   # law 4's badge (the ghost-law
+                                    # build): the state suffix rides
+                                    # post-clip like the hidden one
+                                    # and the sweep verdict already
+                                    # do (the pane's caption law);
+                                    # lower-case like every other
+                                    # caption here, DISCONNECTED like
+                                    # the log line never was
+
+
+def deaf_rows_spec(camera_cfg, found, deaf):
+    """[(index, scanned)]: every duty eye the monitor's deaf report
+    names (law 4, the ghost-law build), and whether the scan still
+    enumerates it. hidden_rows_spec is the pattern this matches - the
+    caption is data, the pane is a view. The un-scanned flag is the
+    00:47 autopsy's class: the eye that left the scan AND kept its
+    duty owed a card, and a found-only rebuild rendered it invisible;
+    the caller builds those cards from the roster itself (the IR
+    seat's amendment-5 precedent)."""
+    scanned = {e[0] for e in found or [] if isinstance(e[0], int)}
+    return [(i, i in scanned) for i in duty_roster(camera_cfg) if i in deaf]
 
 
 def hidden_rows_spec(camera_cfg, devs):
@@ -164,22 +186,37 @@ class _CamEditMixin:
         diag = self.cfg["camera"].get("diag") or {}
         covers = bool(diag) and \
             sorted(diag.get("indices") or []) == sorted(e[0] for e in found)
+        # the deaf report is the monitor's own (law 4); a monitor with
+        # no report (the offline fakes) paints the pane exactly as
+        # before - the badge needs evidence, not a guess
+        di = getattr(self.monitor, "deaf_indices", None)
+        deaf = set(di() if callable(di) else ())
         for entry in found:
             index, name = entry[0], names.get(entry[0], "") or entry[3]
             if isinstance(index, int) and index in roster:
                 # a hidden device ON duty keeps its row (the engine
                 # still honors the roster) wearing an honest badge
                 self._cam_row(index, name, index in hid,
-                              (_identity.diag_suffix(self.cfg["camera"],
+                              ((_identity.diag_suffix(self.cfg["camera"],
                                                   entry[0])
-                               if covers else ""))
+                                                   if covers else "")
+                               + (DEAF_SUFFIX if index in deaf else "")))
         # the IR seat's card (amendment 5): duty the cv2 loop cannot
         # see gets its line from the roster itself - name, hidden
         # badge, policy pair, and the remove button the owner was
         # missing on the live pane
         ir = ir_row_spec(self.cfg["camera"])
         if ir is not None:
-            self._cam_row(camera.HELLO_IR, ir[0], ir[1])
+            self._cam_row(camera.HELLO_IR, ir[0], ir[1],
+                          DEAF_SUFFIX if camera.HELLO_IR in deaf else "")
+        # and the eye the scan cannot even answer for: deaf and gone
+        # from enumeration, it still owns duty - the roster, not the
+        # scan, hands it the card (law 4; the invisibility the 00:47
+        # autopsy died on)
+        for index, scanned in deaf_rows_spec(self.cfg["camera"], found, deaf):
+            if not scanned and index not in self._cam_rows:
+                self._cam_row(index, names.get(index, ""),
+                              index in hid, DEAF_SUFFIX)
         self._rebuild_hidden_rows()
         # the empty-pane cue rides the cycle's TAIL (gate finding 1:
         # stage 4's insertion had orphaned it below a return, where
@@ -285,7 +322,13 @@ class _CamEditMixin:
         def command():
             roster = [i for i in duty_roster(self.cfg["camera"])
                       if i != index]
-            self.cfg["camera"]["index"] = roster
+            # law 3 (the ghost-law build): the roster write rides the
+            # ONE funnel - the dict moves here, the ("camera", ...)
+            # event carries the toml write, the "camera roster now"
+            # confession, and the release the hand owes. No silent
+            # in-memory removals anymore (the 00:47 class).
+            config.set_camera_roster(self.cfg, roster,
+                                     events=self.monitor.events)
             for table in ("on", "off"):
                 entries = self.cfg["camera"].get(table)
                 if isinstance(entries, dict):

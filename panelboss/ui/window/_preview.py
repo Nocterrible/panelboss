@@ -20,7 +20,8 @@ from PIL import Image
 
 from .. import theme
 from ._camedit import ADD_LABEL, duty_roster
-from ._identity import diag_suffix, display_names, hidden_indices
+from ._identity import diag_suffix, display_names, hidden_indices, \
+    identity_map
 from ._constants import TIPS
 from ._hints import HINT_WRAP
 from ._widgets import SkewCombo
@@ -165,7 +166,7 @@ class _CameraMixin:
 
 
     def _camera_changed(self, shown):
-        from ... import camera
+        from ... import camera, config
         if shown == ADD_LABEL:
             return                        # the widget's face, not a wish
         if shown == self.IR_INSTALL:
@@ -181,17 +182,48 @@ class _CameraMixin:
                 roster = duty_roster(self.cfg["camera"])
                 if entry[0] not in roster:
                     roster.append(entry[0])
-                self.cfg["camera"]["index"] = roster
-                self.monitor.events.put(("camera", list(roster)))
+                # law 3 (the ghost-law build): the roster write rides
+                # the ONE funnel - event, toml, and the "camera roster
+                # now" confession all come from it (the silent
+                # in-memory move is the 00:47 class this kills)
+                config.set_camera_roster(self.cfg, roster,
+                                         events=self.monitor.events)
+                # law 5: the add populates the human-assertion lane
+                # (see _bind_at_enroll)
+                self._bind_at_enroll(entry[0])
                 self._apply_cameras(self._cams)   # row + picker rebuild
                 self._save()
                 return
         if shown.startswith("index %s" % camera.HELLO_IR):
             # "index -2 hello IR <group>": the bridge lives, the wish
             # is recorded, the state machine swaps the camera
-            self.cfg["camera"]["index"] = camera.HELLO_IR
-            self.monitor.events.put(("camera", camera.HELLO_IR))
+            config.set_camera_roster(self.cfg, camera.HELLO_IR,
+                                     events=self.monitor.events)
             self._save()
+
+
+    def _bind_at_enroll(self, index):
+        """LAW 5 (the ghost-law build, the half-step): the picker's
+        add writes camera.bindings from the scan row's UNIQUE PnP
+        match - identity_map resolves an instance only when its
+        friendly name stands alone in the PnP list and the scanned
+        feed carries it (the same lane the wizard's manual bind uses
+        and re-adoption-by-instance already lives on), so the add
+        posts the existing ("camera_identity", bind) verb and state's
+        handler stores + confesses it (human-wins precedence applies
+        an already-standing claim idempotently). An ambiguous name
+        maps NOTHING: the deaf badge (law 4) and the manual bind path
+        own the twin case, and a guessed bind would be the
+        positional-label lie this pane refuses."""
+        ids = identity_map(getattr(self, "_devs", None) or [],
+                           self._cams or [],
+                           self.cfg["camera"].get("bindings") or {})
+        for inst, mapped in ids.items():
+            if mapped == index:
+                self.monitor.events.put(
+                    ("camera_identity", {"instance": inst,
+                                         "bind": index}))
+                return
 
 
     def _live_changed(self):
