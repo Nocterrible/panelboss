@@ -269,9 +269,12 @@ class _GeneralMixin:
 
         def go():
             msi = None
+            status, version = update.check()  # self-catching: never
+            #                                 # raises - only download
+            #                                 # can, and its failure
+            #                                 # must keep 'behind' to
+            rel = update.stored_release()     # reach the right sentence
             try:
-                status, version = update.check()
-                rel = update.stored_release()
                 if rel and (status == "behind"
                             or (status == "error"
                                 and update.is_newer(rel["version"],
@@ -279,7 +282,6 @@ class _GeneralMixin:
                     msi = update.download(rel["url"])
             except Exception:
                 log.exception("the msi update round trip died")
-                status, version = "error", None
             try:
                 self.after(0, lambda: self._msi_done(status, version,
                                                      msi))

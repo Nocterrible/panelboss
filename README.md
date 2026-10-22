@@ -1,219 +1,210 @@
 # PanelBoss
 
-PanelBoss is a Windows tray app that manages the desk around you. It
-watches a webcam, decides whether someone is at the desk, and dims,
-blacks out, or locks the monitors when you leave. It drops a dark
-veil over the background windows of every monitor you opt in, and
-with the companion browser extension it frames a playing video and
-dims the desk around it: Movie theater mode. It also automates
-gaming refresh rates and HDR, hides the taskbar, jogs pixels against
-OLED burn-in, and restores your window placement after the screens
-go dark. It runs offline: no telemetry, no phone-home, no listening
-port. The only inbound path is the companion's native host, writing
-one file into a folder PanelBoss owns.
+Presence-aware display control for Windows. Offline, per-user, tray-resident.
 
-## Why
-
-The second monitor glows at 1 am because nothing told it you left.
-The movie plays while the chat window beside it burns at full
-brightness. The desk stays lit when the room is empty. PanelBoss
-closes those gaps with rules you set once.
-
-## Install
-
-Windows 11, and Python 3.10+ on PATH (setup tells you if it cannot
-find one). Clone, set up, run:
-
-```powershell
-git clone <this repo>
-cd <the repo directory>
-powershell -File scripts\setup.ps1
-run.bat
-```
-
-`setup.ps1` builds a project-local `.venv` (the base environment is
-never touched), installs the pinned dependencies, and downloads the
-~10.7 MB person-detection model into `models\`. `run.bat` starts the
-windowless interpreter: the console that blinks for a moment is
-cmd's own window, gone when the app starts. From then on PanelBoss
-lives in the tray, no console. `update.bat` pulls and reinstalls
-later; the app's Update button runs it and relaunches. A packaged
-installer (MSI) is planned; today the repo flow is the truth.
-
-## First run
-
-A tray icon appears, a "running" toast confirms it; on a fresh
-Windows 11 box it hides behind the taskbar overflow chevron until you
-drag it out. The icon is a circle; its palette names the states (green
-present, yellow camera polling, dark gray screens off, orange paused
-or snoozed - the recolor hook is in, the state wiring lands with the
-UI pass). Left click opens the settings
-window; right click gives the menu (Settings, camera and mode
-pickers, wake policy, rescue/restore my windows, Pause, Resume,
-Snooze, start with Windows, Quit).
-
-The window has five tabbed cards: detection, monitor profiles, power
-plan, oled, general. Everything applies live: controls write the
-config the engine reads every tick. And no camera opens until you
-say so: the detection tab's switch is consent, not decoration. The
-monitor rows follow your desk: plug something in or pull it out and
-every card re-reads within two seconds; the away card's refresh
-button forces the re-read by hand, for the swap a fingerprint cannot
-see (the identical twin behind a KVM).
-
-## Features
-
-### Away
-
-When you are active, nothing runs; after an idle gate the camera
-boots per poll and votes, so its LED blinks and you always know it
-is watching. Absence confirmed and the screens go dark, the same
-standby the power plan uses. Or set away mode to dim: the panels
-stay awake and the app paints the dark instead, per monitor one of
-blackout (a black overlay), dim (the panel drops to your level, 1 to
-40 percent), or off (the panel's own power code). The DDC/CI door
-forgets handles rather than freeing them, and does not speak for
-five seconds after the desk changes - writes may take one more try
-after a monitor swap, refusals are clean. Set Windows' own screen-off timer
-and the panels take the real power code that way - the driver owns
-the device lifetime the app's timer could not promise. The pointer is parked at the bottom of
-the lowest monitor when away engages, and stays there when you return:
-nobody remembers where their cursor was after leaving the room.
-Optional lock-on-away ends the spell with LockWorkStation: the panels wake to
-the lock screen, not to your desktop.
-
-### Window dimming
-
-Opt a monitor in, and when input has been still for a moment every
-background window on it gets its own dark veil. Each panel can wear
-its own darkness percent. The foreground window is never veiled, an
-app that starts making sound lifts its own veil the tick the sensor
-learns it, and you can exclude named apps. Menus, tooltips and other
-transient popups are never dimmed either - a context menu you are
-about to click is foreground by nature, and the veil reads the window
-style, not the class name, to know one. The taskbar follows the same
-law: permanent chrome does not get dimmed; the taskbar hider paints
-it when you want it gone. (A borderless *game* window is not a popup:
-it keeps dimming like any background app.) Windows running as
-administrator - Task Manager's class - stay bright too: a normal
-app's veil cannot guarantee its place beside an elevated window, and
-a misplaced veil dims the app *above* its target. Run PanelBoss as
-administrator and the veil reaches those windows too, though it is
-not recommended: elevation inherits into everything the tray
-launches. When input returns the
-veils are gone the same tick; a fade toggle opts into a soft lift
-instead. The pause hotkey is bound from the card (press a key, esc
-clears): unbound by default, no chord is stolen before you consent.
-
-### Movie theater
-
-Needs the companion. It measures the playing video and hands the
-rectangle to PanelBoss, which dims everything around it: four dark
-pieces frame the video. The movie's sound does not lift the veil.
-The theater engages when a video is playing and input has been
-still for your idle delay (1 to 30 seconds); the darkness level is
-yours. Other monitors can wear a full-field veil while the movie
-runs. The picture must actually be on your desk: a hidden video (a
-browser's suspended tab parked off-screen, a minimized player) does
-not theater the room. A fade is optional; instant lift is the
-default. The companion's API is open, documented in
-`extension/README.md`.
-
-### Gaming
-
-A fullscreen game takes the rate you picked for its panel; when it
-lets go the panel returns to your desktop rate, and the desktop rate
-is law while no game owns the desk (after a reboot drops the desk to
-60 Hz, the app snaps it back). Evidence decides: sustained 3D-engine
-GPU load, a controller API, or a spot on your games list; alt-tabbing
-does not flicker the panel. VRR: mark a G-SYNC panel and PanelBoss
-pins its highest rate instead of flipping modes. HDR: a desktop
-state per panel, plus an automatic tier that turns HDR on while
-video plays (decoder counters, or the mpv IPC pipe). A power plan
-can be swapped in when a game starts and the previous one handed
-back after.
-
-### Hider
-
-A black strip painted over the taskbar, per opted-in monitor, so the
-bar's fixed pixel row stops aging an OLED. It retracts the moment
-your cursor enters the bar and covers again after a few seconds
-away; a caret in the search box holds it back. It is an ordinary
-window: it dies with the app and strands nothing.
-
-### Jog
-
-Panel refresh: the app's own strips and veils step around a small
-ring of offsets every few minutes (5 to 180), so no pixel line sits
-still for hours. A manual wash lays a brief white veil over a monitor
-when you ask; it never fires on its own.
-
-### Placement restore
-
-Monitors that unplug themselves on standby make Windows re-lay every
-window on the return. PanelBoss snapshots each window's rect and the
-monitors' hardware identity before the screens go dark, waits for
-the topology to settle after any wake, and moves everything back,
-but only while the same panels answer. Off by default: it moves your
-windows, so it asks first. The tray's "restore my windows"
-re-applies your monitor profile at any time.
-
-### Faces
-
-Optional. With `insightface` installed and identities enrolled
-(`panelboss enroll`), only known faces count as presence. Off by
-default.
-
-## The companion (browser extension)
-
-The companion measures the playing video on the streaming sites the
-manifest ships with and hands the geometry over native messaging:
-the browser starts a small local host, the host writes one file. No
-port, no debugger banner, no pairing token; the dead alternatives
-are listed with their causes in `extension/README.md`. The host
-registers under your user account's registry key (no admin), and
-Chrome, Edge, and Opera read the same key: one install covers all
-three. The install button lives on the Movie theater card. The
-extension is on the Chrome Web Store soon; today you load the
-`extension/` folder unpacked and press the button.
-
-## Config
-
-`%APPDATA%\PanelBoss\config.toml`, hand-editable: the file is yours.
-Bad values clamp to the rails or warn and fall back to the default;
-a config that will not parse is renamed aside rather than silently
-overwritten, so the app never bricks on a typo. Logs are in
-`%APPDATA%\PanelBoss\logs`.
-
-## Privacy
-
-Local only. Camera frames are judged in memory and never written to
-disk; the camera diagnostic stores verdicts, not pictures. The app
-opens no listening socket, and the companion's native host (one file
-write into PanelBoss's own folder) is the only inbound path; the
-optional mpv probe only answers a question PanelBoss asked its own
-player. The model download at setup is the only network call, and
-you can drop the file in yourself and run fully offline.
-
-## Developers
-
-`panelboss/` is the app: state machine, tray, settings window, the
-`wm/` display plumbing, the companion reader (`nmhost.py`).
-`scripts/` is the test gauntlet: `powershell -File
-scripts\run_all.ps1` runs all 51 suites (exit 0 = ALL GREEN; honest
-green wants the app stopped; a sweep that skipped window sections
-says DEGRADED). `extension/` holds the companion source, `models/`
-the yolo11n.onnx weights. Run from source after setup:
-`.venv\Scripts\pythonw.exe -m panelboss` (setup.ps1 prints the same
-line). `scripts\make_icon.py` builds `assets\panelboss.ico`;
-`extension\host\install_host.ps1` builds and registers the host exe
-with PyInstaller, and the Movie theater card's button runs that same
-script.
+PanelBoss decides whether anyone sits at the desk and dims, darkens, or locks
+the displays accordingly. OLED-care features keep still pixels from aging
+into the glass. Movie theater mode darkens the desk around a playing video.
+Monitor profiles store and restore a whole desk. Presence runs locally from a
+camera; nothing leaves the machine except the handshake with the optional
+companion browser extension.
 
 ## Screenshots
 
-<!-- TODO(owner): tray menu, dimmed desk, theater ring, card grid -->
+<!-- App art lands before launch. -->
 
-## License
+## How to
 
-MIT, see `LICENSE`.
+### Install
+
+Download `PanelBoss-<version>-user.msi` from
+https://github.com/Nocterrible/panelboss/releases. Per-user: no admin, no UAC
+prompt at install, uninstall, or upgrade. The app lands in
+`%LOCALAPPDATA%\Programs\PanelBoss` with a Start Menu entry. Autostart is an
+in-app opt-in (General tab), never silent. Uninstall removes the app's
+scheduled task, its Run-key entry, and re-lights any display the app left
+disconnected. Settings and logs live in `%APPDATA%\PanelBoss` and survive
+everything around them. First launch has camera detection off: no eye opens
+until you turn it on, and turning it on offers a setup that opens every
+camera once and lets you label, hide, or put on duty up to four.
+
+**From source (git):** clone https://github.com/Nocterrible/panelboss, make
+a virtualenv on Python 3.10+, install `requirements.txt` - or run
+`scripts\setup.ps1`, which also fetches the detection model into `models\`.
+Start with `python run.py`. The logon entry carries `--autostart`; the flag
+is how the app knows a logon start. Source and MSI share `%APPDATA%\PanelBoss`:
+same settings, same logs. One instance runs at a time; a second launch wakes
+the running app's window and exits, or shows a brief "already running" box
+when nothing answers.
+
+To update an MSI install, use **Update now** on the General tab, or
+download and run the newer MSI by hand; settings and logs are untouched
+in both cases.
+
+### PanelBoss Buddy
+
+A browser extension that reports the playing-video rectangle to the app.
+That is all it does. Store listing (as PanelBoss Companion):
+https://chromewebstore.google.com/detail/panelboss-companion/feolhiokchmpphlhllagimnilceldegk
+The app installs the Buddy's local native-message host: the "install the
+helper" button on the Movie theater card builds it and registers it under
+your user account, no admin. Manual route: `extension\host\install_host.ps1`;
+`extension\README.md` documents the API and the rest. The Buddy is optional;
+Movie theater mode is the only feature that needs it.
+
+### Hello IR
+
+Hello IR puts the Windows Hello infrared sensor - the camera that unlocks the
+machine - on presence duty. Hello cameras hide from normal enumeration, so
+the app reads them through `whircam`, an optional MIT package. Pick "hello IR
+camera (optional - pick to install whircam)" in the Detection tab's camera
+menu: the app installs the bridge, relaunches, and the sensor is on duty. It
+keeps serving frames while Windows Hello stays armed, and the seat can be
+labelled and removed like any other camera.
+
+## Features
+
+Five tabs, one subject each. Above them sit the desk commands: rescue my lost
+windows, restore my windows, sleep (pick minutes), Pause, Quit. Tray
+left-click opens the window; right-click adds camera and mode pickers, wake
+policy, pause, snooze 10/30/60, start with Windows, and Quit.
+
+### Detection
+
+The switch on top is consent: off, the tab grays and the note says cameras
+will not open until you enable it. Person (AI) mode runs an ONNX detector
+with device (auto/CPU/CUDA), GPU id, confidence (0.10-0.90) and min hits
+(1-4 positive frames before the screens wake). Motion (no AI) mode is pure
+frame differencing - it drives infrared and depth sensors exactly like a
+webcam - and sets frame changes, pixel delta, and motion hold: how long
+presence lingers after the last movement, because reading a page is stillness,
+not absence.
+
+The away card sets what "away" is. Monitors off sends Windows' own power
+broadcast. Dim keeps panels powered and paints the dark: blackout is an
+opaque cover, clicked to wake; dim drops the panel to the shared level, 1-40
+percent; off sends the panel's own DDC/CI power code, so the panel itself
+goes dark as if you pressed its button; off (disconnect) retracts the signal
+at the adapter, and Windows refuses to strand the last active display. Lock
+when away starts ends the session too: panels wake to the lock screen.
+Preview tries a row for ten seconds and reverts; the second click cancels.
+Some panels refuse DDC/CI writes - a KVM often explains it - and the app
+reports it, never hushes: an accepted write that never proves itself reads
+(unverified) on its row, a refused write falls back to painted blackout, and
+the row says which.
+
+The Timers card holds the seconds: idle gate (0-180, no camera while input is
+recent), absence confirm (10-300), poll while on and first dark re-poll
+(1-15), the always-on re-read gates (1-15, 5-15), present recheck (10-300),
+re-off grace (0-120), leave-on grace (10-600). The card prints the result:
+dark N seconds after the last keystroke.
+
+The Camera card adds cameras from a picker; an on-duty camera leaves the menu
+and gets a policy row. Labels ride the camera's hardware identity, so a
+replug cannot lose a name. Rescan re-scans and re-tests; a camera that serves
+no frame is marked "(no image during diagnostic)". Duty is set per screen
+state - boot per poll opens and closes the camera once per poll, always on
+holds the stream open - and each camera overrides: follow-global, poll,
+always on, off. Four cameras is the duty limit. Live preview shows the exact
+frame the detector judged; hidden cameras get a show button.
+
+### Power plan
+
+Two override rows, screen power off and sleep, each answering off, on, or
+while present (camera). The power plan itself changes nothing: its timers are
+held from firing while the app watches, and handed back when it pauses,
+snoozes, or quits. While present holds only while the camera's last verdict
+sees a person; absent or no-verdict hands the timer to the plan on the spot.
+The choice is grayed, never hidden, while detection is off - and if the eye
+goes quiet mid-watch, one tray notice says it: the camera stopped seeing,
+presence-based behavior paused until it sees a person again.
+
+The wake card picks re-off or leave-on for unexpected wakes, can hold off
+while a fullscreen app owns the display, waits for a resume after two
+unexpected wakes in a row, and can put window positions back after wake. The
+powercfg assistant is opt-in: one admin confirm registers a task that reveals
+which processes hold the display awake; the card lists them, and while one
+holds, the camera stops defending a screen it does not own. Gaming, right
+column, is off by default. A fullscreen game takes the panel's picked rate
+(auto, an explicit Hz, or VRR pin-max for G-SYNC you enabled yourself);
+outside games the desktop rate is law, keep being the no-rule answer;
+HDR-precise drivers get a desktop hdr on/off/keep pick. Listed exes enter
+the moment they own a monitor, anything else must hold sustained 3D load or a
+controller api, and the grace timer keeps alt-tabbing from flickering the
+panel. A power plan can swap in per game; the previous one returns after.
+
+### Monitor profiles
+
+One profile is the desk spelled out: which physical panels by hardware
+identity, their places, the primary, resolution and refresh per panel, the
+HDR ask, and where every pinned window belongs. The picker opens on the
+profile matching the layout you see; create new... copies what the desk is
+doing now. The mode editor offers each panel resolution and refresh menus
+from the driver's own list, its live HDR state, and, where the driver answers
+precisely, a hdr on/off/keep selector. The hdr ask per apply: restore as
+captured, ignore, or force all capable panels on or off; on Windows 11 24H2+
+disagreements are commanded and read back, on older Windows restore skips
+itself rather than guess. The desk gate refuses to apply onto panels the
+profile does not name; try anyway (best effort) appears only then. Applying
+waits until monitors answer, moves windows, and rescues stragglers off-screen.
+Pins reserve seats: a process-matched pin moves every window of that app,
+process-plus-title is the one-window road, and open it if missing launches
+the exe - 5 s to 10 min of patience, browse field for launchers and
+shortcuts. Restore-at-start re-applies a profile at launch: any profile or
+the last one for this desk; whole desk, monitors only, or windows only; on
+logon starts, proved by the Run entry's --autostart, or every start. Restore
+my windows moves pins only and asks the drivers nothing.
+
+### OLED
+
+The taskbar hider paints a strip over the bar's fixed pixel row, opted in per
+monitor. It steps aside for the cursor and covers again after 1-30 seconds;
+reveal is per bar or all bars; the card flags a clash with Windows' own
+auto-hide. Panel refresh walks the app's strips and veils around a zero-drift
+ring every 5-180 minutes, 1-8 pixels a step; the wash is a request, never a
+schedule - run wash now lights opted-in panels white for ten seconds, once.
+
+The dimmer card arms background dimming, opted in per monitor. After dim
+after (0 to 60 seconds of stillness) every background window wears a veil
+at veil level, 10-90 percent, with per-panel overrides. The foreground and
+anything making sound keep their light; menus, tooltips, and transient popups
+never dim; administrator windows stay bright unless PanelBoss runs elevated,
+which is not recommended. Always dims a panel without the idle wait. Fade
+within (0-60 s) shapes the return; lift fade decides whether a plain veil
+fades or drops the instant you touch the desk. Apps are excluded by exe name;
+a pause hotkey binds on keypress, clears on esc, and is unbound until you
+give one.
+
+The pump row asks: does your shit occasionally decide it wants to keep
+Windows awake? Some devices (macro pads, KVMs, jigglers) keep telling Windows
+someone just typed; the pump makes PanelBoss trust only real movement, and
+every idle timer reads it. Switched off, the app uses Windows' own idle clock
+verbatim. It takes a relaunch to change; a deaf pump falls back to the system
+clock by itself.
+
+Movie theater mode is the Buddy's payoff, consented separately. Once a video
+plays and input sits still for the veil-after wait (1-30 s), a ring of
+darkness lands around the window reporting it: the hole is that window's
+bounds, so the browser's chrome stays bright with the movie. The window
+playing your video never dims. Motion lifts the ring, which re-arms after the
+same wait; a film's sound never lifts it. Theater veil level (10-90 percent)
+is the frame's own darkness, independent of the dimmer's, per-panel
+overridable. Per-monitor boxes enroll panels: an enrolled panel with no video
+wears a full-field veil while the conjunction holds; an unenrolled one dims
+like any idle desk. Fade out is the opt-in; the lift is instant by default.
+The card carries open store page, install the helper, the doorway file, the
+host's capability line, and measure now for a one-shot geometry check.
+
+### General
+
+Skin picks the palette; layout and behavior are identical. Start minimized to
+tray applies next launch - closing the window always hides it to the tray
+anyway. Start with Windows writes the per-user Run key, the entry Task
+Manager's Startup tab lists, and reads the registry back to be sure; if the
+entry points at a different copy, the note says so and a flip re-points it.
+Check for updates asks GitHub what the latest release is; Update now
+applies it - a source install pulls and refreshes dependencies, an MSI
+install fetches the newer MSI and hands the switch to Windows Installer.
+Open log folder opens the log folder.
+
+MIT. Plans and known gaps: `AUDIT-PUNCHLIST.md`.

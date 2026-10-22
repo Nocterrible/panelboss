@@ -191,8 +191,9 @@ def write_apply(msi, exe, pid, dest_dir):
     self-known name; the script knows its own path only through
     %~f0, which is how it commits suicide). Returns the script's
     path - the caller spawns it exactly like the git path: cmd.exe
-    /c, creationflags zero, the ONE second console-verb opt-out the
-    ledger (startup_test) now counts as two."""
+    /c, creationflags zero, the package's second
+    declared console opt-out - startup_test's ledger
+    counts it beside the git path's."""
     path = os.path.join(dest_dir, "apply.bat")
     with open(path, "w", encoding="mbcs") as fh:   # the OEM codepage
         fh.write(apply_text(msi, exe, pid,
