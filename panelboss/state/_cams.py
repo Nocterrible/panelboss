@@ -5,7 +5,7 @@ that is opening abstains, a known-dead single open keeps its
 fail-closed ABSENT through the opener's failed record (and camera's
 new evict keeps the boot blink off the loop thread), and no driver's
 17 s tax is ever paid on the loop thread again.
-SIZE LAW: measured 395 (Oct 21, the dark-camera record: _poll's
+SIZE LAW: measured 561 (Oct 22; refresh at the ghost-law gate - the header law is the point, the dark-camera record: _poll's
 verdict wrapper + _note_verdict + the accessor grew the file's HEAD
 by 27 - the record lives here because a second camera opinion is the
 one sin the feature cannot commit, and pulling it out would put the
