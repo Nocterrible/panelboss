@@ -9,7 +9,15 @@
    between ticks (the blackvote/asyncopen house fixture pattern),
    because an unregistered eye never earns round credit
 5) our own OFF echo (0.0 while already off) -> no re-adoption churn
+6) the blinded-eye fallback (owner law, the burned-OLED night, Oct 22):
+   presence unknown == absent - a no-verdict streak of 300 s with the
+   desk's input equally silent engages away the deadline path's way,
+   off the pump seam's honest clock (a-e pins, the stock clock faked
+   lying)
+SIZE LAW note: one scaffold (shared fakes + one _drive); splitting the
+pins would clone the seam fakes five times.
 """
+import logging
 import os
 import sys
 import tempfile
@@ -214,5 +222,130 @@ m5._hold_camera = lambda: hold_calls.append(1)
 m5._notice_screens(300.0, 0.0)
 assert m5.state == "off" and hold_calls == []
 print("off-echo ignored OK")
+
+# 6) THE BLINDED-EYE FALLBACK (owner law, the burned-OLED night, Oct 22):
+# presence unknown == absent. Three minutes of no verdict AND the desk's
+# own input equally silent votes the desk away through the deadline
+# path's own _screens_off - the same code path, so the re_off and
+# fullscreen gates land the same class of state as a confirmed
+# absence. INPUT TRUTH is the dimmer's gated _idle_secs seam, NOT the
+# gate's stock get_idle_time: a lying-desk gadget poisons the stock
+# clock (the macropad class that forced the Oct-20 pump), and this
+# incident family is the blind eye MEETING a poisonable clock, so the
+# fallback asks the honest clock; the pump's own fail-open keeps an
+# opt-out user on the stock reading. The pins fake the seam
+# explicitly; the harness's fakes keep the desk out of every assert.
+import panelboss.dimmer as _dim
+import panelboss.inputtruth as _it
+from panelboss.state._phase import BLINDED_AWAY_SEC
+
+recs6 = []
+
+
+class Grab6(logging.Handler):
+    def emit(self, record):
+        recs6.append(record.getMessage())
+
+
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("state").addHandler(Grab6())
+assert BLINDED_AWAY_SEC == 300, BLINDED_AWAY_SEC
+
+_real_pump_clock, _real_stock = _it.idle_seconds, display.idle_seconds
+
+
+def _blind_mon():
+    mb = PresenceMonitor(cfg, detector=None)
+    mb._release_camera = lambda: None
+    mb._hold_camera = lambda: None
+    mb._drain_tray = lambda: None
+    return mb
+
+
+def _drive(mb, verdict, t0=100, t1=410, idle=90.0):
+    """verdict(t) -> (present, score); the harness ticks once a second,
+    the machine re-polls on its own on_poll cadence."""
+    for t in range(t0, t1 + 1):
+        mb._poll = lambda t=t: verdict(t)
+        mb._on_phase(float(t), idle=idle)
+        if mb.state == "off":
+            break
+    return mb
+
+
+LAW_LINE = "the blinded eye votes absent"
+try:
+    # (a) 300 s of no verdict + input-idle >= 300 -> engaged, and the
+    # stock clock is faked LYING (5 s): only the pump seam's honest
+    # reading could have fired - that IS the pin's point
+    sent.clear()
+    recs6.clear()
+    _it.idle_seconds = lambda: 310.0        # the honest ear
+    display.idle_seconds = lambda: 5.0      # the lying-desk stock clock
+    _dim._PUMP_ON = True                    # the owner's default
+    ma = _drive(_blind_mon(), lambda t: (None, None), 100, 410)
+    assert ma.state == "off" and sent[-1] == "off", (ma.state, sent)
+    assert any(LAW_LINE in r for r in recs6), recs6
+    print("blinded eye (a) OK: 300 s of no verdict + honest idle >= 300 "
+          "engaged off the pump seam; the lying stock clock (5 s) lost")
+
+    # (b) 300 s of no verdict but input IN THE window -> NOT engaged
+    # (the conjunct is real)
+    sent.clear()
+    recs6.clear()
+    _it.idle_seconds = lambda: 45.0
+    _dim._PUMP_ON = True
+    mb = _drive(_blind_mon(), lambda t: (None, None), 100, 430)
+    assert mb.state != "off" and not any(LAW_LINE in r for r in recs6), \
+        (mb.state, recs6)
+    print("blinded eye (b) OK: 330 s of no verdict with input in the "
+          "window did not engage")
+
+    # (c) a decisive present mid-streak resets it: 350 s of None in
+    # total with one True at t=250 -> no engage (the streak restarts
+    # at 250 and would need 550)
+    sent.clear()
+    recs6.clear()
+    _it.idle_seconds = lambda: 310.0
+    _dim._PUMP_ON = True
+    mc = _drive(_blind_mon(),
+                lambda t: (True, 0.9) if t == 250 else (None, None),
+                100, 450)
+    assert mc.state != "off" and not any(LAW_LINE in r for r in recs6), \
+        (mc.state, recs6)
+    print("blinded eye (c) OK: a decisive present at t=250 reset the "
+          "streak - no engage in 350 s of mostly-None")
+
+    # (d) a decisive absent runs the classic confirmed-absence clock,
+    # FASTER than the 300 s fallback - the fallback never supersedes
+    # evidence (off by t~160 here, absent_confirm_sec 60 in this cfg)
+    sent.clear()
+    recs6.clear()
+    _it.idle_seconds = lambda: 310.0
+    _dim._PUMP_ON = True
+    md = _drive(_blind_mon(), lambda t: (False, 0.1), 100, 410)
+    assert md.state == "off" and sent[-1] == "off", (md.state, sent)
+    assert not any(LAW_LINE in r for r in recs6), recs6
+    print("blinded eye (d) OK: a decisive absent ran the "
+          "confirmed-absence clock (off at t=160, far faster than the "
+          "fallback) and the fallback never touched it")
+
+    # (e) opt-out honest: input_pump OFF - the seam falls to the stock
+    # reading and the fallback engages off it (the owner's clock choice
+    # is the pump's; the law's clock is the owner's, either way)
+    sent.clear()
+    recs6.clear()
+    _it.idle_seconds = lambda: 5.0          # the ear, unused now
+    display.idle_seconds = lambda: 310.0    # the stock reading the seam
+                                            # now rides
+    _dim._PUMP_ON = False
+    me = _drive(_blind_mon(), lambda t: (None, None), 100, 410)
+    assert me.state == "off" and sent[-1] == "off", (me.state, sent)
+    assert any(LAW_LINE in r for r in recs6), recs6
+    print("blinded eye (e) OK: pump OFF - the seam fell to the stock "
+          "reading and the fallback engaged off it")
+finally:
+    _it.idle_seconds, display.idle_seconds = _real_pump_clock, _real_stock
+    _dim._PUMP_ON = None
 
 print("ALL UNKNOWN-STATE TESTS OK")

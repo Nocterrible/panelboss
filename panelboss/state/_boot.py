@@ -57,6 +57,11 @@ class _BootMixin:
         self.next_poll = math.inf            # the camera rests until the
                                              # gate opens
         self.absent_since = None              # when the absence started
+        self._blind_since = None              # the no-verdict streak's
+                                              # start (the blinded-eye
+                                              # fallback clock; _phase
+                                              # owns the law, this is
+                                              # only the zero state)
         self.hits = 0                         # consecutive positive frames
         self._blind = {}              # index -> bool: served-black state
                                       # (transition-confessions only)

@@ -6,6 +6,13 @@ import math
 
 log = logging.getLogger("state")
 
+BLINDED_AWAY_SEC = 300   # owner law (the burned-OLED night, Oct 22):
+                         # presence unknown == absent - a no-verdict
+                         # streak of this length, with the desk's own
+                         # input equally silent, votes the desk away
+                         # (a FIXED window by the owner's choice, not
+                         # a config slider)
+
 
 class _PhaseMixin:
 
@@ -23,6 +30,9 @@ class _PhaseMixin:
                 self._check_blockers(now)
             self.state = "active"
             self.absent_since = None
+            self._blind_since = None       # presence resets the fallback
+                                           # clock the way it resets the
+                                           # absence clock
             self.next_poll = math.inf      # the camera rests; typing won
             return
         unknown_start = self.state == "unknown"   # the poll below may
@@ -53,7 +63,30 @@ class _PhaseMixin:
                 # no camera delivered a frame: no verdict. It neither
                 # starts the absence clock, nor logs "nobody at the
                 # desk", nor forces anything on; the next poll gets
-                # its own turn
+                # its own turn - until the fallback law (below) says
+                # the silence has gone on long enough. The streak
+                # clock rides the tick's now; a DECISIVE verdict
+                # (either way) resets it - a confirmed absence runs
+                # its own, faster, clock, and presence resets the
+                # fallback the way it resets the absence clock.
+                if self._blind_since is None:
+                    self._blind_since = now
+                from .. import dimmer
+                # INPUT TRUTH: the dimmer's gated _idle_secs (the
+                # input_pump-routed seam), not the stock get_idle_time
+                # the gate above already consumes - a lying-desk
+                # gadget can poison the stock clock, and this whole
+                # incident family is the blind eye MEETING a poisonable
+                # clock, so the fallback asks the honest one (the
+                # pump's own fail-open keeps an opt-out user on the
+                # stock reading - consistent, never split).
+                if (now - self._blind_since >= BLINDED_AWAY_SEC
+                        and dimmer._idle_secs() >= BLINDED_AWAY_SEC):
+                    log.info("screens off after 300 s with no verdict "
+                             "and no input (the blinded eye votes "
+                             "absent)")
+                    self._screens_off(now)
+                    return
                 self.next_poll = now + self.on_poll()
                 return
             if unknown_start and present:
@@ -82,6 +115,9 @@ class _PhaseMixin:
         self.display_held_reported = held
 
     def _schedule_on_poll(self, now, present, score):
+        # a DECISIVE verdict - either way - resets the no-verdict
+        # streak: the fallback never supersedes evidence
+        self._blind_since = None
         if present:
             self.absent_since = None
             self.last_present = now
