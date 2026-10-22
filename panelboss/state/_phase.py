@@ -82,10 +82,22 @@ class _PhaseMixin:
                 # stock reading - consistent, never split).
                 if (now - self._blind_since >= BLINDED_AWAY_SEC
                         and dimmer._idle_secs() >= BLINDED_AWAY_SEC):
-                    log.info("screens off after 300 s with no verdict "
-                             "and no input (the blinded eye votes "
-                             "absent)")
                     self._screens_off(now)
+                    # LAW LINE ONLY ON ACTUAL DARK: _screens_off can
+                    # defer on the fullscreen guard (silent, debug-only);
+                    # the streak re-hits every on_poll, so logging
+                    # BEFORE would spam a Netflix foreground all night
+                    # - the same incident family this law serves. The
+                    # leave-on grace is deliberately NOT consulted:
+                    # the banner's default budget (180 s) expires under
+                    # the 300 s of honest input silence the conjunct
+                    # already demands - the promise is capped, not
+                    # broken, and the blind arm shares the deadline
+                    # path's ledger, snooze immunity, and wake budget.
+                    if self.state == "off":
+                        log.info("screens off after 300 s with no verdict "
+                                 "and no input (the blinded eye votes "
+                                 "absent)")
                     return
                 self.next_poll = now + self.on_poll()
                 return

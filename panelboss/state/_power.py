@@ -116,6 +116,9 @@ class _PowerMixin:
         self._apply_hold(now)                # present: the plan's timers
                                              # stay suppressed from here on
         self.absent_since = None
+        self._blind_since = None             # unknown->lit presence is
+        #                                    # DECISIVE too - the streak
+        #                                    # must not boot-into-a-truth
         self.hits = 0
         self.next_poll = now + self.timers["present_recheck_sec"]
         self._restore_layout()
