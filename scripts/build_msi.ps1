@@ -99,7 +99,14 @@ $msi = Join-Path $repo ('dist\PanelBoss-' + $version + '-user.msi')
 # design: that folder outlives the installer, it is the user's).
 # Every real cross-check (missing refs, dangling keypaths) stays
 # armed.
-& $light -nologo -ext WixUIExtension -sice:ICE91 -sice:ICE38 -sice:ICE64 -o $msi (Get-ChildItem $work -Filter '*.wixobj' | ForEach-Object FullName)
+# WixUtilExtension (added with the finish-page launch checkbox):
+# the Binary:WixCA stream that carries the WixShellExec entry
+# point (wixca.dll) is shipped by the util extension, and light
+# resolves the finish-page LaunchApplication custom action against
+# it (LGHT0094 'Unresolved reference to symbol Binary:WixCA'
+# without it). Same reason the WiX run_program_after_install how-to
+# names both extensions on the command line.
+& $light -nologo -ext WixUIExtension -ext WixUtilExtension -sice:ICE91 -sice:ICE38 -sice:ICE64 -o $msi (Get-ChildItem $work -Filter '*.wixobj' | ForEach-Object FullName)
 if ($LASTEXITCODE -ne 0) { throw "light failed ($LASTEXITCODE)" }
 
 # --- law 4: MEASURE the bundle ---------------------------------------

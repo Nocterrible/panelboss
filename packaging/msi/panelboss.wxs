@@ -43,6 +43,44 @@
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicRtf)"/>
     <UIRef Id="WixUI_Minimal"/>
 
+    <!-- ============ the finish page asks before it launches ============
+         WiX's own run_program_after_install how-to, verbatim shape.
+         The Minimal template's finish dialog (WixUIExtension's
+         ExitDialog, read at tag wix3141rtm ExitDialog.wxs) ALREADY
+         ships the optional checkbox (OptionalCheckBox,
+         Property=WIXUI_EXITDIALOGOPTIONALCHECKBOX CheckBoxValue=1,
+         shown via ControlCondition when
+         WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT is set and NOT
+         Installed) - so the library shape needs no custom dialog,
+         just the properties below plus one Publish row. Property
+         CHECKBOX=1 makes the box appear CHECKED at dialog init;
+         unchecking publishes 0 and the Publish condition stops
+         matching. WixShellExecTarget points at the harvested exe:
+         the fil id is heat's name-hash, identical across re-harvest
+         (diff-verified against a fresh heat run before referencing).
+         Impersonate=yes is load-bearing on this per-user package:
+         the launched app must run as the interactive user (HKCU
+         config, tray), never an elevated context. Return: candle
+         REFUSES asyncNoWait on a DllEntry CA ('requires ExeCommand',
+         CNDL0038) - MSI's async+continue bits are EXE-only
+         (msi/custom-action-return-processing-options). The
+         no-wait guarantee lives in the CA itself instead: WixCA's
+         WixShellExec docs state it 'launches an application without
+         waiting for it to close', so the install closing never
+         waits on PanelBoss. NOT Installed guard mirrors the
+         how-to: repair/modify must not launch. -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1"/>
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
+              Value="Launch PanelBoss when the installer closes"/>
+    <Property Id="WixShellExecTarget"
+              Value="[#filAEEF82E925FC1F1406CA08D75C4068DC]"/>
+    <CustomAction Id="LaunchApplication" BinaryKey="WixCA"
+                  DllEntry="WixShellExec" Impersonate="yes"/>
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction"
+               Value="LaunchApplication" Order="1">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+    </UI>
+
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="LocalAppDataFolder">
         <Directory Id="ProgramsFolder" Name="Programs">
