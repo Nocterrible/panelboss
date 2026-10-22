@@ -18,6 +18,12 @@ function Invoke-OnedirBuild {
     )
     $py = Join-Path $repo '.venv\Scripts\python.exe'
     Write-Output 'building exe (minutes: onnxruntime + opencv ride along)'
+    # MSVCP140!+0x12f58 c0000005 loading onnxruntime_pybind11_state.pyd
+    # against the split 14.36/14.51 set collected from the JRE bin,
+    # 2026-10-22 autopsy: the JRE dirs on PATH ship 14.36 CRTs and the
+    # collection scans PATH - strip them before the build inherits them.
+    $env:Path = ($env:Path -split ';' |
+        Where-Object { $_ -notmatch 'Adoptium|Oracle|[Jj]re' }) -join ';'
     & $py -m PyInstaller --noconfirm --clean --windowed --name $exe `
         --distpath (Join-Path $repo 'dist') `
         --workpath (Join-Path $repo 'build') `
@@ -31,6 +37,20 @@ function Invoke-OnedirBuild {
         --exclude-module pip `
         (Join-Path $repo 'run_exe.py')
     if ($LASTEXITCODE -ne 0) { Write-Output "pyinstaller failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
+    # the one process slot makes same-name roulette the wound; the
+    # re-pin makes provenance a build FACT, not a PATH accident: every
+    # same-named CRT file under _internal (recursive) is overwritten
+    # from System32's matched 14.51 set; hash-named private sets
+    # (numpy.libs et al.) are name-isolated and stay untouched.
+    $crt = Join-Path (Join-Path $repo 'dist') ($exe + '\_internal')
+    foreach ($n in 'msvcp140.dll', 'MSVCP140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+        $src = Join-Path ([Environment]::SystemDirectory) $n
+        Get-ChildItem -Path $crt -Recurse -File -Filter $n |
+            ForEach-Object {
+                Copy-Item -Path $src -Destination $_.FullName -Force
+                Write-Output ('crt re-pin: ' + $_.FullName)
+            }
+    }
     $models = Join-Path $repo 'models'
     $target = Join-Path $repo ('dist\' + $exe + '\models')
     if (Test-Path $models) {
