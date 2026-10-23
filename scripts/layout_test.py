@@ -187,9 +187,18 @@ try:
     k = _MoveU32(iconic=True)
     wm.u32 = k
     assert wm._move({"hwnd": 7, "rect": (10, 20, 30, 40),
+                     "zoomed": False}) == "skip", \
+        "a pre-bit record may not guess: the SHOWWINDOW flag would " \
+        "de-iconify what no capture proved"
+    assert k.seq == [], \
+        "an old capture leaves a minimized window UNTOUCHED (the " \
+        "exact pre-0.3.6 answer)"
+    p = _MoveU32(iconic=False)
+    wm.u32 = p
+    assert wm._move({"hwnd": 7, "rect": (10, 20, 30, 40),
                      "zoomed": False}) == "ok"
-    assert k.seq == [("pos", 10, 20, 30, 40)], \
-        "an old capture restores POSITION ONLY, zero ShowWindow"
+    assert p.seq == [("pos", 10, 20, 30, 40)], \
+        "position-only still MOVES an old capture that sits visible"
     n = _MoveU32(iconic=False)
     wm.u32 = n
     assert wm._move({"hwnd": 7, "rect": (10, 20, 30, 40),
@@ -199,7 +208,7 @@ try:
 finally:
     wm.u32 = _real_u32
 print("restore v3 OK (un-minimize sequence, user state honored, old "
-      "captures position-only)")
+      "captures: visible moved, iconic untouched)")
 
 
 # 4) wait_settled: quiet-and-matching, cancelled, timed-out.

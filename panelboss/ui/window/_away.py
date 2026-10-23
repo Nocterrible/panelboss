@@ -310,7 +310,8 @@ class _AwayMixin:
                                     for mm in _live]):
             label = monitor_row_label(_live, m)
             vals = off_choice(wm._bright, m["gdi"])
-            _blocked = _nvidia and DDC_TEXT in vals
+            _offered = DDC_TEXT in vals
+            _blocked = _nvidia and _offered
             if _blocked:
                 # the verdict rides the LABEL (amendment 3): display
                 # value only - the state key, the config word, and
@@ -334,13 +335,17 @@ class _AwayMixin:
             _cur = (DDC_BLOCKED_LABEL if mode == DDC_TEXT and _blocked
                     else mode)
             seg.set(_cur if _cur in vals else "dim")
-            if DDC_TEXT not in vals:
+            if not _offered:
                 # gray not lie (owner correction): the choice is
                 # ABSENT here because this app never reached the
                 # panel's DDC door - said in one line, in words
                 # about our reach, not the firmware's soul. The
                 # disconnect is NOT absent: the CCD door is the
-                # adapter's, and it does not ask the panel.
+                # adapter's, and it does not ask the panel. The
+                # test rides the PRE-SWAP offer (gate round, Oct 23):
+                # a gated row carries the value under its suffix,
+                # and a swap must never fake a never-reached
+                # confession under the gray.
                 self._away_says[short] = ("the power-code off needs a "
                                           "DDC/CI door; none answered "
                                           "for this monitor (the "

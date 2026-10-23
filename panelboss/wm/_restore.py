@@ -47,7 +47,10 @@ def _move(w):
     both with the same word (up, then placed); a window captured
     minimized is the USER's state - honored, left exactly so. An OLD
     capture without the field (the bit is younger than some files on
-    disk) restores POSITION ONLY and never guesses a show state."""
+    disk) restores POSITION ONLY and never guesses a show state: a
+    window sitting minimized under a pre-bit record is left minimized
+    (the SetWindowPos SHOWWINDOW flag would de-iconify it - a guess
+    in code clothing), and one that is already visible is placed."""
     if not u32.IsWindow(w["hwnd"]) or not u32.IsWindowVisible(w["hwnd"]):
         return "gone"
     if u32.IsIconic(w["hwnd"]):
@@ -55,13 +58,20 @@ def _move(w):
         if _cap is True:
             return "skip"                    # captured minimized: the
             #                                user's own state, honored
-        if _cap is False:
-            # captured OPEN: the un-minimize is PART of the restore,
-            # not a second feature - the sequence (up, then place) is
-            # pinned in layout_test; the zoomed dance below rides the
-            # same SW_RESTORE a second time, harmless by law.
-            u32.ShowWindow(w["hwnd"], SW_RESTORE)
-        # _cap None: pre-bit capture: position only, no guess
+        if _cap is not False:
+            # _cap None: a pre-bit record (the profiles/tray path
+            # hands none) may not GUESS the show state, and the
+            # SetWindowPos below would de-iconify it with its
+            # SWP_SHOWWINDOW flag: the skip is the exact pre-0.3.6
+            # answer. (_cap True returned above; live captures
+            # screen iconic windows out via wanted() - the bit is
+            # the belt for hand-made and future records.)
+            return "skip"
+        # captured OPEN: the un-minimize is PART of the restore,
+        # not a second feature - the sequence (up, then place) is
+        # pinned in layout_test; the zoomed dance below rides the
+        # same SW_RESTORE a second time, harmless by law.
+        u32.ShowWindow(w["hwnd"], SW_RESTORE)
     x, y, cx, cy = w["rect"]
     if w["zoomed"]:
         u32.ShowWindow(w["hwnd"], SW_RESTORE)

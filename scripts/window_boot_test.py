@@ -370,6 +370,24 @@ def check():
             # the tip rode the bound lambda, not a live dict read:
             # the schedule call carries the captured string - the
             # ddc_tip entry is that captured value, pinned above.
+            # THE SAY-LINE (gate round, Oct 23): the door ANSWERED
+            # here (the _door fake above), so the gated row rides
+            # the verdict ALONE - the never-reached confession
+            # belongs to never-reached desks only.
+            app._away_says.pop("T", None)
+            app._away_fill_rows()
+            assert "none answered" not in str(
+                app._away_says.get("T", "")).lower(), \
+                "the gate faked a never-reached confession under the gray"
+            # and the converse: a row whose door never answered says
+            # it on ANY desk - the gate must not eat the old honesty.
+            app._away_says.pop("T", None)
+            WM._bright = type("Door", (), {"reachable": lambda s, g: False})()
+            app._away_fill_rows()
+            assert "none answered" in str(
+                app._away_says.get("T", "")).lower(), \
+                "the never-reached confession went silent"
+            WM._bright = _door
             # and _sync_away_rows must not walk the consent cascade
             # over the gate: force consent on, sync, the gate holds.
             app.cfg["camera"]["enabled"] = True
