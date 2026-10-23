@@ -34,15 +34,35 @@ def snapshot():
 
 
 def _move(w):
-    """Back to the saved rect. A maximized window cannot simply be
-    moved (it fills its monitor by definition): restore to floating,
-    move onto its OWN old monitor, maximize again - the result is
-    maximized exactly where it lived, which is the whole point."""
+    """Back to the saved rect - and back to the CAPTURED STATE:
+    position AND minimization (owner ruling, Oct 23: restore means
+    RESTORED). A maximized window cannot simply be moved (it fills
+    its monitor by definition): restore to floating, move onto its
+    OWN old monitor, maximize again - the result is maximized exactly
+    where it lived, which is the whole point. THE MINIMIZE BIT IS
+    THE CONTRACT, decided by the capture ALONE - no 'likely ours'
+    heuristics about who minimized: the dark spell's own minimizing
+    and a user's click mid-dark both leave the window
+    currently-minimized-but-captured-open, and the contract answers
+    both with the same word (up, then placed); a window captured
+    minimized is the USER's state - honored, left exactly so. An OLD
+    capture without the field (the bit is younger than some files on
+    disk) restores POSITION ONLY and never guesses a show state."""
     if not u32.IsWindow(w["hwnd"]) or not u32.IsWindowVisible(w["hwnd"]):
         return "gone"
     if u32.IsIconic(w["hwnd"]):
-        return "skip"                        # minimized in the dark by
-    x, y, cx, cy = w["rect"]                 # somebody/something: leave
+        _cap = w.get("iconic")
+        if _cap is True:
+            return "skip"                    # captured minimized: the
+            #                                user's own state, honored
+        if _cap is False:
+            # captured OPEN: the un-minimize is PART of the restore,
+            # not a second feature - the sequence (up, then place) is
+            # pinned in layout_test; the zoomed dance below rides the
+            # same SW_RESTORE a second time, harmless by law.
+            u32.ShowWindow(w["hwnd"], SW_RESTORE)
+        # _cap None: pre-bit capture: position only, no guess
+    x, y, cx, cy = w["rect"]
     if w["zoomed"]:
         u32.ShowWindow(w["hwnd"], SW_RESTORE)
     # (NOZORDER | NOACTIVATE | SHOWWINDOW) - NOOWNERZORDER measured

@@ -2043,6 +2043,26 @@ def test_default_flip():
           "the word the engine will act on")
 
 
+def test_restore_minimize_law():
+    """THE RESTORE-MEANS-RESTORED TOOLTIP (owner amendment, Oct 23,
+    08:3x; plain-language law per amendment 3 at 14:0x): 'restore my
+    windows should un minimize windows'. The row's TIP carries the
+    law as DATA, two clauses, plain words - the owner's own sentence
+    pinned verbatim, the technical why moved to the comment beside
+    the entry. The behavior halves (the SW_RESTORE-then-position
+    SEQUENCE, the captured-minimized skip, the old-capture
+    position-only tolerance) are pinned where the restore pass
+    lives: layout_test section 3e."""
+    import panelboss.ui.window._away as _am
+    assert _am.TIP["restore_windows"] == (
+        "Put windows back where they were after the screens wake. "
+        "Un-minimizes windows that were open when the screens went "
+        "dark; what you minimized yourself stays minimized."), \
+        _am.TIP["restore_windows"]
+    print("ok - the restore row tip says both halves in plain words: "
+          "un-minimize what was open, honor what the user minimized")
+
+
 def main():
     test_migration()
     test_row_shorthands()
@@ -2065,6 +2085,7 @@ def main():
     test_off_preview_release()
     test_off_selectable_never_pregrayed()
     test_nvidia_vendor_gate()
+    test_restore_minimize_law()
     test_preview_adopt_law()
     test_lock_on_away()
     test_session_unlock_ear()

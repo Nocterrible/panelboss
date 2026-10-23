@@ -142,6 +142,66 @@ finally:
 print("placement repair OK (stale rewritten centered, healthy ignored)")
 
 
+# 3e) THE RESTORE-MEANS-RESTORED LAW (owner ruling, Oct 23): the
+# capture's minimize bit is the contract - position AND show state.
+# Captured-open + now minimized -> ShowWindow(SW_RESTORE) FIRST,
+# then the position (the sequence IS the claim - a position written
+# onto a still-iconic window restores onto a ghost). Captured-
+# minimized -> the user's own state, honored: zero calls. An OLD
+# capture without the bit -> position only, never a guess about
+# show state (honest to files written by prior versions).
+class _MoveU32:
+    def __init__(self, iconic):
+        self.iconic, self.seq = iconic, []
+
+    def IsWindow(self, h):
+        return 1
+
+    def IsWindowVisible(self, h):
+        return 1
+
+    def IsIconic(self, h):
+        return 1 if self.iconic else 0
+
+    def ShowWindow(self, h, cmd):
+        self.seq.append(("show", cmd))
+        return 1
+
+    def SetWindowPos(self, h, ins, x, y, cx, cy, flags):
+        self.seq.append(("pos", x, y, cx, cy))
+        return 1
+
+
+try:
+    f = _MoveU32(iconic=True)
+    wm.u32 = f
+    assert wm._move({"hwnd": 7, "rect": (10, 20, 30, 40),
+                     "zoomed": False, "iconic": False}) == "ok"
+    assert f.seq == [("show", wm.SW_RESTORE), ("pos", 10, 20, 30, 40)], \
+        "captured-open now minimized: SW_RESTORE FIRST, then position"
+    g = _MoveU32(iconic=True)
+    wm.u32 = g
+    assert wm._move({"hwnd": 7, "rect": (10, 20, 30, 40),
+                     "zoomed": False, "iconic": True}) == "skip"
+    assert g.seq == [], "captured-minimized: the user's state honored"
+    k = _MoveU32(iconic=True)
+    wm.u32 = k
+    assert wm._move({"hwnd": 7, "rect": (10, 20, 30, 40),
+                     "zoomed": False}) == "ok"
+    assert k.seq == [("pos", 10, 20, 30, 40)], \
+        "an old capture restores POSITION ONLY, zero ShowWindow"
+    n = _MoveU32(iconic=False)
+    wm.u32 = n
+    assert wm._move({"hwnd": 7, "rect": (10, 20, 30, 40),
+                     "zoomed": False, "iconic": False}) == "ok"
+    assert n.seq == [("pos", 10, 20, 30, 40)], \
+        "an open window is only ever placed - the bit changed nothing"
+finally:
+    wm.u32 = _real_u32
+print("restore v3 OK (un-minimize sequence, user state honored, old "
+      "captures position-only)")
+
+
 # 4) wait_settled: quiet-and-matching, cancelled, timed-out.
 class FakeTime:
     def __init__(self):

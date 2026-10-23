@@ -185,14 +185,22 @@ TIP = {
     "fullscreen": "exclusive-fullscreen games swallow the power-off "
                   "broadcast - the app keeps its hands off while a "
                   "game owns the display.",
-    "restore_windows": "some monitors unplug themselves from Windows "
-                       "on sleep and Windows re-lays the windows wrong "
-                       "on return: the app remembers every window's "
-                       "rect and the monitors' hardware identity "
-                       "before the dark, and moves everything back "
-                       "after any wake once the topology settles. A "
-                       "swapped or unplugged monitor means the saved "
-                       "desk is another desk - nothing moves.",
+    # THE PLAIN WORDS (launch amendment 3, owner at the desk Oct 23):
+    # the row's tip is for the desk, not the changelog - the
+    # technical why lives HERE, in the comment: some monitors unplug
+    # themselves from Windows on sleep and Windows re-lays the
+    # windows wrong on return; the app remembers every window's rect
+    # and the monitors' hardware identity before the dark, moves
+    # everything back after any wake once the topology settles, and
+    # a swapped or unplugged monitor means the saved desk is another
+    # desk - nothing moves. The restore law itself (owner ruling):
+    # back-to-CAPTURED-state, position AND minimization - the
+    # minimize bit in the capture record is the contract, no
+    # heuristics about who minimized; see wm/_restore._move.
+    "restore_windows": "Put windows back where they were after the "
+                       "screens wake. Un-minimizes windows that were "
+                       "open when the screens went dark; what you "
+                       "minimized yourself stays minimized.",
 }
 
 
