@@ -37,6 +37,53 @@ def _row_is_virtual(adapter_id):
     return not a.startswith(("PCI\\", "ACPI\\"))
 
 
+def display_vendor_scan():
+    """The adapter walk's THREE verdicts: 'nvidia' when ANY adapter
+    names NVIDIA, 'clear' when the walk completed and none did,
+    'fail' when the walk could not prove anything (zero adapters or
+    an error mid-way). display_vendor_scan exists so the away card's
+    log line can name WHICH kind of block it is (launch amendment 3,
+    owner at the desk Oct 23); the bool is the law, this is the
+    confession. Fail doctrine and the conservative hybrid/Optimus
+    matching (adapter-level, StateFlags read for nothing) are the
+    probe's own - see display_vendor_is_nvidia."""
+    _seen = 0
+    try:
+        _i = 0
+        while True:
+            d = DISPLAY_DEVICEW()
+            d.cb = sizeof(d)
+            if not u32.EnumDisplayDevicesW(None, _i, byref(d), 0):
+                break
+            _seen += 1
+            if "NVIDIA" in str(d.DeviceString or "").upper():
+                return "nvidia"
+            _i += 1
+    except Exception:
+        return "fail"                      # the walk died mid-desk
+    return "fail" if _seen == 0 else "clear"
+
+
+def display_vendor_is_nvidia():
+    """True when ANY display adapter on this desk reports an NVIDIA
+    DeviceString (case-insensitive; the user32 adapter walk, index 0
+    up to the end of the list). The away card's launch gate asks ONCE
+    per window build: adapters are not hot, the card's refresh/
+    rebuild IS the recompute seam. The walk is ADAPTER-level, not
+    panel-level: a hybrid/Optimus desk whose panel rides the iGPU
+    still matches on its dGPU row - conservative by design, the
+    freeze lives in the driver, not in the wiring; StateFlags are
+    read for nothing here (a parked adapter row is still that
+    vendor's driver). FAIL-CLOSED (launch posture, owner Oct 23):
+    zero adapters, or any error mid-walk, answers True. The doctrine
+    mirrors the presence pump's fail-open INVERTED, because this
+    wound KILLS: the pump must not dark a desk it cannot see, the
+    gate must not trust a desk it cannot prove innocent - against
+    the published kernel hang (0x133 DPC_WATCHDOG, NVIDIA bucket
+    0x133_ISR_nvlddmkm) an unprovable vendor loses the DDC fast-off."""
+    return display_vendor_scan() != "clear"
+
+
 def monitors():
     """Every attached monitor as {id, short, gdi, x, y, w, h, rate,
     bits, primary, adapter_id, virtual}. The identity is the MONITOR

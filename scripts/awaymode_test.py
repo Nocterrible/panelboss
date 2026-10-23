@@ -976,6 +976,136 @@ def test_off_selectable_never_pregrayed():
           "preview label follows its constant")
 
 
+def test_nvidia_vendor_gate():
+    """THE LAUNCH GATE (owner ruling at 08:2x, Oct 23, decided at the
+    dump pile): 'off (DDC fast)' is kernel-freeze-adjacent on NVIDIA
+    drivers (0x133 DPC_WATCHDOG, published NVIDIA bucket
+    0x133_ISR_nvlddmkm) - an NVIDIA desk must not be able to ENABLE
+    it, while AMD (and everyone without an NVIDIA adapter) keeps the
+    button. The faked-vendor legs, no Tk: the probe's truth table
+    (NVIDIA / AMD / hybrid / fail-closed - the wound KILLS, so a scan
+    that cannot prove innocence answers True, the pump's fail-open
+    inverted), the block text pinned as the OWNER'S OWN data, and
+    the ENGINE ignorant of the gate: an off:True row under a faked
+    NVIDIA scan still resolves 'off' and still spends the VCP trio
+    (the config is the escape hatch for the bug's survivors), and
+    the card's mirror still answers the LABEL - a configured-off row
+    rides SELECTED under the gray (gray not lie, the hold rows'
+    precedent). The widget halves - the disabled state, the swapped
+    tip, the selected-and-gray honesty - ride the built card in
+    window_boot_test."""
+    from panelboss.ui.window._away import (
+        _AwayMixin, DDC_TEXT, DDC_NVIDIA_TIP, DDC_BLOCKED_SUFFIX,
+        DDC_BLOCKED_LABEL)
+    # (a) the block text, verbatim owner words, pinned as data:
+    assert DDC_NVIDIA_TIP == (
+        "disabled on nvidia drivers while a kernel DPC-watchdog bug "
+        "freezes panels resuming over DDC/CI - returns when the "
+        "vendor patches. off (disconnect) darkens the same way.")
+    # the label verdict (amendment 3, shape endorsed off the desk
+    # shot): the suffix is data, the state key stays the plain word
+    assert DDC_BLOCKED_SUFFIX == " - this driver blocks it"
+    assert DDC_BLOCKED_LABEL == DDC_TEXT + DDC_BLOCKED_SUFFIX
+
+    # (b) the probe's truth table: a scripted adapter walk behind the
+    # same facade seam every suite patch rides (wm.u32 fans out).
+    class _Walk:
+        def __init__(self, rows, raise_at=None):
+            self.rows = list(rows)
+            self.raise_at = raise_at
+
+        def EnumDisplayDevicesW(self, dev, i, pdev, flags):
+            if i == self.raise_at:
+                raise OSError("the desk went out from under the walk")
+            if i >= len(self.rows):
+                return 0
+            d = ctypes.cast(pdev, ctypes.POINTER(wm.DISPLAY_DEVICEW))\
+                .contents
+            d.DeviceString = self.rows[i]
+            d.StateFlags = 1                # attached - the walk
+            #                              reads no flags: a parked
+            #                              row is still that driver
+            return 1
+
+    led = Ledger()
+    try:
+        led.keep(wm, "u32", _Walk(["NVIDIA GeForce RTX 5090"]))
+        assert wm.display_vendor_is_nvidia() is True, \
+            "one adapter naming NVIDIA is the desk's verdict"
+        led.keep(wm, "u32", _Walk(["Intel UHD 770", "nvidia GeForce "
+                                               "GTX 1650"]))
+        assert wm.display_vendor_is_nvidia() is True, \
+            "the hybrid desk matches on its dGPU row even with the " \
+            "panel on the iGPU (conservative by design)"
+        led.keep(wm, "u32", _Walk(["AMD Radeon RX 7900",
+                                   "Microsoft Basic Render Driver"]))
+        assert wm.display_vendor_is_nvidia() is False, \
+            "AMD keeps the button"
+        led.keep(wm, "u32", _Walk([]))
+        assert wm.display_vendor_is_nvidia() is True, \
+            "zero adapters proves nothing: fail-CLOSED"
+        led.keep(wm, "u32", _Walk(["AMD Radeon RX 7900"], raise_at=0))
+        assert wm.display_vendor_is_nvidia() is True, \
+            "a scan that dies mid-walk is not innocence: fail-closed"
+    finally:
+        led.undo()
+    # (b2) THE GATE SPEAKS TO THE LOG (owner question at the desk,
+    # amendment 3: 'also app writes anything about it to log?'): one
+    # INFO per card build/refresh at the probe seam, the VERDICT
+    # NAMED - a user's %APPDATA%\PanelBoss log answers 'why is that
+    # button gray' without a repro. The three lines are the owner's,
+    # pinned verbatim.
+    import panelboss.ui.window._away as _am
+    rec = Recorder()
+    uilog = logging.getLogger("ui")
+    was = uilog.level
+    uilog.setLevel(logging.INFO)
+    uilog.addHandler(rec)
+    led3 = Ledger()
+    try:
+        led3.keep(wm, "display_vendor_scan", lambda: "nvidia")
+        assert _am.vendor_gate() is True
+        assert ("vendor gate: NVIDIA display driver present - off "
+                "(DDC fast) blocked in UI (config word still honored)"
+                ) in rec.lines, rec.lines
+        led3.keep(wm, "display_vendor_scan", lambda: "fail")
+        assert _am.vendor_gate() is True
+        assert ("vendor gate: driver scan failed - off (DDC fast) "
+                "blocked (fail-closed)") in rec.lines, rec.lines
+        led3.keep(wm, "display_vendor_scan", lambda: "clear")
+        assert _am.vendor_gate() is False
+        assert ("vendor gate: no NVIDIA adapter found - off (DDC "
+                "fast) available") in rec.lines, rec.lines
+    finally:
+        uilog.removeHandler(rec)
+        uilog.setLevel(was)
+        led3.undo()
+    # (c) the engine is ignorant of the gate: under a faked NVIDIA
+    # answer the off row still resolves 'off' and the VCP trio still
+    # runs; the card mirror still answers the LABEL (the grayed
+    # segment rides selected, not deselected).
+    tmp = tempfile.mkdtemp(prefix="pb_away_nvg")
+    led2 = Ledger()
+    led2.keep(wm, "display_vendor_is_nvidia", lambda: True)
+    m = make_monitor(tmp, {"mode": "dim", "monitors": {
+        "AAA": {"blackout": False, "off": True, "offdisc": False}}})
+    try:
+        rec = m._away_apply_row(dict(DESK[0]), "off", 10)
+        assert rec["status"].startswith("off"), rec
+        assert any(c[0] == "vcp" for c in m._fake["calls"]), \
+            "a faked-NVIDIA desk still spends the power codes - the " \
+            "gate is UI-only, the config is the escape hatch"
+        stub = type("S", (), {"cfg": m.cfg})()
+        assert _AwayMixin._away_row_mode(stub, "AAA") == DDC_TEXT, \
+            "the card still answers the label: selected under gray"
+        print("ok - launch gate: probe answers NVIDIA/AMD/fail-closed, "
+              "the block text is the owner's data, and the engine and "
+              "the card mirror stay ignorant of the gate")
+    finally:
+        m._ledger.undo()
+        led2.undo()
+
+
 def test_lock_on_away():
     """lock-on-away (owner-ruled, 2026-10-14): a REAL engage that darked
     at least one applied row locks the workstation ONCE at its end; a
@@ -1934,6 +2064,7 @@ def main():
     test_deep_key_gone()
     test_off_preview_release()
     test_off_selectable_never_pregrayed()
+    test_nvidia_vendor_gate()
     test_preview_adopt_law()
     test_lock_on_away()
     test_session_unlock_ear()

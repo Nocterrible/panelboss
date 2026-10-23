@@ -60,6 +60,12 @@ WM.list_windows = lambda: []
 WM.launch = lambda exe: ""
 WM.rescue_lost = lambda: []
 WM.place = lambda h, r, z=False: "ok"
+# the launch gate's desk truth is the SUITE's, never the probe box's
+# GPU (app-up compatible includes NVIDIA-compatible): the window is
+# built on a faked CLEAR desk, and the gate block below drives both
+# verdicts through the same seam.
+WM.display_vendor_scan = lambda: "clear"
+WM.display_vendor_is_nvidia = lambda: False
 power.task_installed = lambda: True
 cam.optional_present = lambda pkg: False
 cam.hello_ir_names = lambda: []
@@ -330,6 +336,84 @@ def check():
         # the trio paints from cfg at build (the virgin file's truth:
         # guards.fullscreen True by default, restore True, lock False)
         assert _am and bool(app.away_lock_box.get()) is False
+        # THE VENDOR GATE (launch posture, owner Oct 23): on a desk
+        # whose adapter scan says NVIDIA, the DDC segment is DISABLED
+        # (gray not hidden - the choice rides visible, and for a
+        # configured-off row it rides SELECTED under the gray: the
+        # hold rows' exact precedent), its per-segment tip is the
+        # block text IN PLACE OF the feature tip, and the row tip
+        # gained the clause; an AMD scan gets exactly this morning's
+        # card. The scan is faked BY THE SUITE - the probe law - and
+        # the answer re-reads the facade per fill, so the flip needs
+        # only a rebuild.
+        _vreal = WM.display_vendor_scan
+        _breal = WM._bright
+        _door = type("Door", (), {"reachable": lambda s, gdi: True})()
+        try:
+            WM._bright = _door               # the suite owns its desk's
+            #                              truth: the segment is OFFERED
+            #                              here, the gate decides its
+            #                              state (the probe law)
+            WM.display_vendor_scan = lambda: "nvidia"
+            app._away_fill_rows()                    # re-build with gate
+            _r2 = app._away_rows["T"]
+            assert _r2["ddc_blocked"] is True
+            _seg2 = _r2["seg"]
+            assert _am.DDC_TEXT + _am.DDC_BLOCKED_SUFFIX in \
+                set(_seg2._buttons_dict), \
+                "the verdict does not ride the blocked label"
+            _dd = _seg2._buttons_dict[_am.DDC_BLOCKED_LABEL]
+            assert _dd._state == "disabled", \
+                "the gated DDC segment was live at build"
+            assert _r2["ddc_tip"] == _am.DDC_NVIDIA_TIP, \
+                "the gated segment's tip is not the block text"
+            # the tip rode the bound lambda, not a live dict read:
+            # the schedule call carries the captured string - the
+            # ddc_tip entry is that captured value, pinned above.
+            # and _sync_away_rows must not walk the consent cascade
+            # over the gate: force consent on, sync, the gate holds.
+            app.cfg["camera"]["enabled"] = True
+            app._sync_away_rows()
+            assert _dd._state == "disabled", \
+                "the consent cascade re-enabled the gated segment"
+            assert _seg2._buttons_dict[_am.DISC_TEXT]._state == \
+                "normal", "consent itself still cascades (gate is one " \
+                "segment, not the row)"
+            # a configured-off row on the NVIDIA desk: selected AND
+            # disabled AND explained (the three-state honesty pin).
+            app.cfg["away"]["monitors"] = {
+                "T": {"blackout": False, "off": True, "offdisc": False}}
+            app._away_fill_rows()
+            _r3 = app._away_rows["T"]
+            assert _r3["seg"].get() == _am.DDC_BLOCKED_LABEL, \
+                "the grayed segment lost its selection (gray not lie)"
+            assert _r3["seg"]._buttons_dict[
+                _am.DDC_BLOCKED_LABEL]._state == "disabled"
+            assert _r3["ddc_tip"] == _am.DDC_NVIDIA_TIP
+            # and the AMD desk: exactly this morning's card, plain
+            # label and all
+            WM.display_vendor_scan = lambda: "clear"
+            app._away_fill_rows()
+            _r4 = app._away_rows["T"]
+            assert _r4["ddc_blocked"] is False
+            assert _am.DDC_BLOCKED_LABEL not in \
+                set(_r4["seg"]._buttons_dict), \
+                "the suffix leaked onto a clear desk"
+            assert _r4["ddc_tip"] == _am.TIP["ddc"], \
+                "AMD lost the feature tooltip"
+            assert _r4["seg"]._buttons_dict[_am.DDC_TEXT]._state == \
+                "normal", "AMD's segment was grayed without cause"
+            assert _am.DDC_NVIDIA_TIP not in _r4["row"]._tip, \
+                "the block clause leaked onto a non-NVIDIA row"
+            print("ok - vendor gate: NVIDIA grays the DDC segment "
+                  "(suffixed label, selected, block-tipped, cascade-"
+                  "proof), AMD is untouched")
+        finally:
+            WM.display_vendor_scan = _vreal
+            WM._bright = _breal
+            app.cfg["camera"]["enabled"] = False
+            app.cfg["away"]["monitors"] = {}
+            app._away_fill_rows()            # the real seams, no residue
         _t3 = []
 
         def _titles3(w):

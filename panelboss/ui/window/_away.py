@@ -43,6 +43,55 @@ DISC_TEXT = "off (disconnect)"
 DDC_TEXT = "off (DDC fast)"        # the word in the file stays "off"
                                    # (byte-identical migration, owner
                                    # law); only the LABEL says DDC
+# THE LAUNCH-GATE BLOCK TEXT (owner ruling at 08:2x, Oct 23, decided
+# at the dump pile): 'off (DDC fast)' is kernel-freeze-adjacent on
+# NVIDIA drivers (0x133 DPC_WATCHDOG, published NVIDIA bucket
+# 0x133_ISR_nvlddmkm, current driver lines) - on such a desk the
+# segment is configured DISABLED (gray, NOT hidden: the choice stays
+# visible, its own tip says why) and every tip on it carries these
+# words. The text is DATA, pinned verbatim in awaymode_test; a
+# re-word is a deliberate act. The ENGINE is untouched: a config
+# that says off:True on an NVIDIA desk still runs the VCP trio - the
+# escape hatch for the bug's survivors and for us; the gate is
+# UI-only, and the vendor's patch re-opens the door by answering the
+# probe (wm.display_vendor_is_nvidia) False.
+DDC_NVIDIA_TIP = ("disabled on nvidia drivers while a kernel "
+                  "DPC-watchdog bug freezes panels resuming over "
+                  "DDC/CI - returns when the vendor patches. off "
+                  "(disconnect) darkens the same way.")
+# THE VERDICT RIDES THE LABEL (launch amendment 3, owner at the desk,
+# Oct 23 14:0x, shape endorsed off the live desk shot): a blocked
+# segment SAYS why in the menu itself. The suffixed text is the
+# DISPLAY value only - the state key stays DDC_TEXT (the engine's
+# word, the config file, MODE_BY_LABEL's domain), and
+# _sync_away_rows maps display <-> stored word; the segment grows
+# its few pixels on blocked rows alone. Pin as data.
+DDC_BLOCKED_SUFFIX = " - this driver blocks it"
+DDC_BLOCKED_LABEL = DDC_TEXT + DDC_BLOCKED_SUFFIX
+# one INFO per card build/refresh at the probe call site (the owner
+# question at the desk: 'also app writes anything about it to log?')
+# so %APPDATA%\PanelBoss's log answers 'why is that button gray'
+# without a repro. The verdict is the scan's, fail-closed included.
+GATE_LOG = {
+    "nvidia": "vendor gate: NVIDIA display driver present - off "
+              "(DDC fast) blocked in UI (config word still honored)",
+    "fail": "vendor gate: driver scan failed - off (DDC fast) "
+            "blocked (fail-closed)",
+    "clear": "vendor gate: no NVIDIA adapter found - off (DDC fast) "
+             "available",
+}
+
+
+def vendor_gate():
+    """The away card's per-build verdict: one call to the scan (the
+    adapters are not hot - the card's fill IS the recompute seam,
+    once per build/refresh, never per row), one confession line for
+    the log, and the bool the builder paints from. Fail-closed: an
+    unprovable desk is a blocked desk (the doctrine is the probe's,
+    wm/_monitors.py)."""
+    _verdict = wm.display_vendor_scan()
+    log.info(GATE_LOG[_verdict])
+    return _verdict != "clear"
 # the row-menu LABEL -> the engine WORD (the offdisc-preview fix:
 # the picker answers labels, _away_apply_row dispatches on words;
 # an unmapped label used to fall through the engine's chain to the
@@ -240,21 +289,43 @@ class _AwayMixin:
             widget.destroy()
         self._away_rows = {}
         _live = wm.monitors()
+        # THE VENDOR SCAN, ONE CALL PER BUILD/REFRESH (launch posture
+        # + amendment 3, owner Oct 23): adapters are not hot - the
+        # rebuild IS the recompute seam - and the verdict rides one
+        # INFO line, so the log answers 'why is that button gray'
+        # without a repro.
+        _nvidia = vendor_gate()
         # the label (short name, duplicate-model tail, and the edge
         # descriptor WHEN IT CARRIES NEWS - law 7, Oct 22) is built at
         # the one seam every identity row shares
         for m, short in zip(_live, [mm.get("short") or mm.get("id")
                                     for mm in _live]):
             label = monitor_row_label(_live, m)
-            row = self._row(self._away_row_frame, label, TIP["row"],
-                            hint_chars=42)
             vals = off_choice(wm._bright, m["gdi"])
+            _blocked = _nvidia and DDC_TEXT in vals
+            if _blocked:
+                # the verdict rides the LABEL (amendment 3): display
+                # value only - the state key, the config word, and
+                # the MODE_BY_LABEL domain stay DDC_TEXT below
+                vals = [DDC_BLOCKED_LABEL if v == DDC_TEXT else v
+                        for v in vals]
+            row = self._row(
+                self._away_row_frame, label,
+                TIP["row"] + (" " + DDC_NVIDIA_TIP if _blocked else ""),
+                hint_chars=42)
             seg = ctk.CTkSegmentedButton(
                 row, values=vals, height=26, width=200,
                 command=lambda v, s=short: self._away_submode_changed(s, v),
                 **self.skin.segmented_style())
             mode = self._away_row_mode(short)
-            seg.set(mode if mode in vals else "dim")
+            # the display<->word seam of the suffixed label: a row the
+            # chain answers DDC_TEXT SELECTS the suffixed button on a
+            # blocked row (gray not lie; _away_submode_changed maps
+            # back by startswith, and a disabled segment cannot be
+            # clicked to trip it anyway)
+            _cur = (DDC_BLOCKED_LABEL if mode == DDC_TEXT and _blocked
+                    else mode)
+            seg.set(_cur if _cur in vals else "dim")
             if DDC_TEXT not in vals:
                 # gray not lie (owner correction): the choice is
                 # ABSENT here because this app never reached the
@@ -290,16 +361,28 @@ class _AwayMixin:
                 pass                       # no paragraph, no crime
             # the DDC segment's OWN law text rides the segment button
             # (owner law, Oct 22: 'off (DDC fast)' says what it is
-            # and where it breaks); same default-capture discipline
+            # and where it breaks); same default-capture discipline.
+            # THE LAUNCH GATE (owner, Oct 23): on an NVIDIA desk the
+            # law text is REPLACED by the block text and the segment
+            # is configured DISABLED - gray, not hidden: the choice
+            # stays visible, the tip says why, and a configured-off
+            # row keeps its selection UNDER the gray (the hold rows'
+            # exact precedent: gray not lie). The state rides the
+            # _buttons_dict/_state seam, and _sync_away_rows defends
+            # it against the consent cascade.
+            _ddc_tip = DDC_NVIDIA_TIP if _blocked else TIP["ddc"]
             try:
-                _d = seg._buttons_dict.get(DDC_TEXT)
+                _d = seg._buttons_dict.get(
+                    DDC_BLOCKED_LABEL if _blocked else DDC_TEXT)
                 if _d is not None:
                     _d.bind("<Enter>",
-                            lambda e=None, w=_d: self.tips._schedule(
-                                TIP["ddc"], w), add="+")
+                            lambda e=None, w=_d, t=_ddc_tip:
+                            self.tips._schedule(t, w), add="+")
                     _d.bind("<Leave>",
                             lambda e=None: self.tips._hide_soon(),
                             add="+")
+                    if _blocked:
+                        _d.configure(state="disabled")
             except Exception:
                 pass
             value = ctk.CTkLabel(row, font=self.skin.font(12),
@@ -329,7 +412,12 @@ class _AwayMixin:
             self._away_rows[short] = {"row": row, "seg": seg, "vals": vals,
                                       "slider": slider, "value": value,
                                       "preview": preview, "say": say,
-                                      "gdi": m["gdi"]}
+                                      "gdi": m["gdi"],
+                                      # the launch gate's truth, per
+                                      # row: the state the sync must
+                                      # defend, the tip the probes read
+                                      "ddc_blocked": _blocked,
+                                      "ddc_tip": _ddc_tip}
             say.pack(anchor="w")
         self._sync_away_rows()
 
@@ -426,6 +514,12 @@ class _AwayMixin:
         self._save()
 
     def _away_submode_changed(self, short, label):
+        if label == DDC_BLOCKED_LABEL:
+            label = DDC_TEXT          # the suffixed display unwraps
+            #                         to the state word (the blocked
+            #                         segment cannot be clicked -
+            #                         disabled - this is the seam's
+            #                         honesty, not a live path)
         word = MODE_BY_LABEL.get(label)
         if word is None:
             return                          # a label from another menu
@@ -600,14 +694,25 @@ class _AwayMixin:
             # a segmented picker keeps its segments in their OWN
             # buttons (the power card's gray law reads the same
             # seam) - cascade consent into them whatever the band
-            # walker did, diff-cheap
+            # walker did, diff-cheap. THE LAUNCH GATE survives the
+            # cascade (owner, Oct 23): the gated DDC segment answers
+            # disabled at EVERY sync, consent on or off, band or no
+            # band - the gray is the law's own, never a paint race.
             try:
-                for _b in r["seg"]._buttons_dict.values():
-                    if _b._state != state:
-                        _b.configure(state=state)
+                for _lbl, _b in r["seg"]._buttons_dict.items():
+                    _want = ("disabled"
+                             if r.get("ddc_blocked") and _lbl in (
+                                 DDC_TEXT, DDC_BLOCKED_LABEL)
+                             else state)
+                    if _b._state != _want:
+                        _b.configure(state=_want)
             except Exception:
                 pass
             mode = self._away_row_mode(short)
+            if r.get("ddc_blocked") and mode == DDC_TEXT:
+                mode = DDC_BLOCKED_LABEL       # the suffixed value is
+            #                                 the picker's own; the
+            #                                 chain's word maps here
             if mode in r["vals"] and r["seg"].get() != mode:
                 r["seg"].set(mode)                    # set fires no command
             dim_row = consent and mode == "dim"

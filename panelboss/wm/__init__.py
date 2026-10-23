@@ -76,7 +76,8 @@ from ._inspect import (_class_name, _cloaked, _facts, _proc_info,
                        _toplevel_facts, proc_name, true_rect,
                                               wanted, win_title)
 
-from ._monitors import (_shell32, _short_id, fingerprint, launch,
+from ._monitors import (_shell32, _short_id, display_vendor_is_nvidia,
+                        display_vendor_scan, fingerprint, launch,
                         list_windows, monitor_for, monitors)
 
 from ._sessions import (WTS_SESSION_INFOW, remote_session_ids,
@@ -139,7 +140,8 @@ __all__ = [
     "SW_SHOWMAXIMIZED", "SW_SHOWNORMAL", "SW_RESTORE", "VK",
     "WAIT_BUDGET_SEC", "WS_CHILD", "WS_EX_TOOLWINDOW",
     "WS_EX_TRANSPARENT", "WNDENUMPROC", "WINDOWPLACEMENT", "apply", "apply_layout",
-    "byref", "ctypes", "current_mode", "dwm", "foreground",
+    "byref", "ctypes", "current_mode", "display_vendor_is_nvidia",
+    "display_vendor_scan", "dwm", "foreground",
     "fingerprint", "has_xinput", "k32", "launch", "list_windows",
     "log", "lost", "monitor_for", "monitors", "offered_modes",
     "place", "proc_name", "press_keys", "rescue_lost", "restore",

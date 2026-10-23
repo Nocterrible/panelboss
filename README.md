@@ -85,7 +85,9 @@ own dark. Dim keeps panels powered and paints the dark: blackout is an
 opaque cover, clicked to wake; dim drops the panel to the shared level, 1-40
 percent; off (DDC fast) sends the panel's own DDC/CI power code, so the
 panel itself
-goes dark as if you pressed its button; off (disconnect) - the default for
+goes dark as if you pressed its button. On NVIDIA drivers this option starts
+disabled - the vendor has a kernel bug here, and the option returns with the
+driver patch; AMD and Intel desks get it on day one. off (disconnect) - the default for
 rows you never touched - retracts the signal at the adapter, and Windows
 refuses to strand the last active display. An unworded row follows the
 legacy [away] mode key before the default. Lock when away starts ends
