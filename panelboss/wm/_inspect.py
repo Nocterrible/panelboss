@@ -56,35 +56,42 @@ def win_title(hwnd):
 
 
 def _proc_info(hwnd):
-    """(name, full exe path) - one OpenProcess, two answers. The
-    name is the identity a profile matches on (hwnds die, pids are
-    recycled, the name survives relaunches); the full path is what
-    a pin can re-run when the app is not open any more."""
+    """(name, full exe path, owner pid) - one OpenProcess, three
+    answers, zero extra syscalls beyond the window's own pid read.
+    The name is the identity a profile matches on (hwnds die, pids
+    are recycled, the name survives relaunches); the full path is
+    what a pin can re-run when the app is not open any more; the
+    pid is the thread-through of the GetWindowThreadProcessId the
+    path already needs (dossier C: the rescue skips OUR rows with
+    it, no second syscall). A window dying mid-walk answers pid 0/
+    None: never our own pid, so the rescue treats it as foreign -
+    the conservative arm (a dead window's move is a harmless
+    no-op)."""
     try:
         pid = wintypes.DWORD()
         if not u32.GetWindowThreadProcessId(hwnd, byref(pid)):
-            return "", ""
+            return "", "", 0
         h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False,
                             pid.value)
         if not h:
-            return "", ""
+            return "", "", pid.value
         try:
             buf = ctypes.create_unicode_buffer(4096)
             n = wintypes.DWORD(len(buf))
             if not k32.QueryFullProcessImageNameW(h, 0, buf, byref(n)):
-                return "", ""
+                return "", "", pid.value
             full = buf.value
-            return full.split("\\")[-1].lower(), full
+            return full.split("\\")[-1].lower(), full, pid.value
         finally:
             k32.CloseHandle(h)
     except Exception:
-        return "", ""                      # a window dying mid-walk;
-                                           # a profile entry with no
-                                           # proc is simply unmatched
+        return "", "", None              # a window dying mid-walk;
+                                         # a profile entry with no
+                                         # proc is simply unmatched
 
 
 def proc_name(hwnd):
-    name, _ = _proc_info(hwnd)
+    name, _, _ = _proc_info(hwnd)
     return name
 
 
@@ -113,13 +120,16 @@ def _facts(hwnd):
     style = u32.GetWindowLongW(hwnd, GWL_STYLE)
     ex = u32.GetWindowLongW(hwnd, GWL_EXSTYLE)
     cls = _class_name(hwnd)
-    proc, exe = _proc_info(hwnd)
+    proc, exe, pid = _proc_info(hwnd)
     return {
         "hwnd": hwnd,
         "rect": true_rect(hwnd),
         "title": win_title(hwnd),
         "proc": proc,
         "exe": exe,
+        "pid": pid,                       # owner pid (dossier C):
+                                          # the rescue skips its own
+                                          # rows with it
         "visible": bool(u32.IsWindowVisible(hwnd)),
         "owned": u32.GetAncestor(hwnd, GA_ROOT) != hwnd,
         "iconic": bool(u32.IsIconic(hwnd)),

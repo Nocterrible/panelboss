@@ -211,6 +211,59 @@ print("restore v3 OK (un-minimize sequence, user state honored, old "
       "captures: visible moved, iconic untouched)")
 
 
+# 3f) THE OWN-PID LAW (dossier C, launch patch): the rescue never
+# fetches OUR OWN windows. The power sink rides visible at -32000 BY
+# DESIGN (the Oct-13 broadcast law), and rescue_lost fetched it as a
+# lost toplevel anyway - 'wm: rescue: brought back pythonw.exe' parked
+# CENTER PANEL as a captioned 64x64 white box (no bg brush, Win11
+# default paint): benign, feature-ugly, and a lie about where we
+# parked it. The facts row carries the owner pid (threaded through
+# _proc_info, no new syscall); an own-pid row is skipped whole -
+# neither moved nor placement-repaired. A foreign lost window still
+# comes back (the no-regression twin).
+_own = ctypes.windll.kernel32.GetCurrentProcessId()
+_sink = {"hwnd": 91, "visible": True, "cloaked": False,
+         "furniture": False, "iconic": False, "zoomed": False,
+         "title": "PanelBossPowerSink", "proc": "pythonw.exe",
+         "pid": _own, "rect": (-32000, -32000, 64, 64)}
+_foreign = dict(_sink, hwnd=92, pid=_own + 1, title="team.exe",
+                proc="teams.exe", rect=(5000, 0, 800, 600))
+
+
+class _RescueU32:
+    """A u32 that records every fetch; NO GetWindowPlacement - a
+    placement read on any row would raise and confess."""
+
+    def __init__(self):
+        self.seq = []
+
+    def ShowWindow(self, h, cmd):
+        self.seq.append(("show", h))
+        return 1
+
+    def SetWindowPos(self, h, ins, x, y, cx, cy, flags):
+        self.seq.append(("pos", h, x, y, cx, cy))
+        return 1
+
+
+_real_rz = (_rz._toplevel_facts, _rz.monitors, _rz.u32)
+try:
+    f = _RescueU32()
+    _rz._toplevel_facts = lambda: [_sink, _foreign]
+    _rz.monitors = lambda: MONS
+    _rz.u32 = f
+    out = _rz.rescue_lost()
+    assert out == ["team.exe"], out       # only the foreign row came back
+    assert f.seq == [("pos", 92, 1520, 780, 800, 600)], f.seq
+    #                                     # centered on the primary;
+    #                                     # the sink was NEVER touched:
+    #                                     # no show, no pos, no read
+finally:
+    _rz._toplevel_facts, _rz.monitors, _rz.u32 = _real_rz
+print("rescue own-pid OK (the parked sink stays parked, the foreign "
+      "lost window still comes back)")
+
+
 # 4) wait_settled: quiet-and-matching, cancelled, timed-out.
 class FakeTime:
     def __init__(self):

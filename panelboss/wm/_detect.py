@@ -56,9 +56,10 @@ def foreground():
         if _cloaked(hwnd):
             return None             # a UWP suspension lie: the hwnd is
                                     # alive but nothing is visible
-        proc, exe = _proc_info(hwnd)
-        if not proc:
-            return None
+        proc, exe, _pid = _proc_info(hwnd)   # the row's own pid (line
+        if not proc:                        # 54) stays the answer:
+            return None                     # _proc_info's thread-
+                                            # through shares the read
         title = win_title(hwnd)
         rect = true_rect(hwnd)
         if rect is None:

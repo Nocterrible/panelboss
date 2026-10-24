@@ -9,7 +9,8 @@ import logging
 from ._inspect import _toplevel_facts
 from ._monitors import monitors
 from ._winapi import (LOST_EDGE, SWP_NOACTIVATE, SWP_SHOWWINDOW,
-                      SW_RESTORE, WINDOWPLACEMENT, byref, sizeof, u32)
+                      SW_RESTORE, WINDOWPLACEMENT, byref, k32, sizeof,
+                      u32)
 
 log = logging.getLogger("wm")
 
@@ -84,6 +85,11 @@ def rescue_lost():
     brought, repaired, denied = [], [], []
     for w in _toplevel_facts():
         if not w["visible"] or w["cloaked"] or w["furniture"]:
+            continue
+        if w.get("pid") == k32.GetCurrentProcessId():
+            # the rescue never touches our own windows - every one
+            # is parked where we put it (Oct-13 broadcast law; the
+            # white-box rescue is the confession)
             continue
         name = (w["title"] or w["proc"] or "(untitled)").strip()[:48]
         if w["iconic"]:
