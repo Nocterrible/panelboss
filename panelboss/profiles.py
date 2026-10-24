@@ -65,6 +65,17 @@ LOGIN_BUFFER = 20           # the safety margin on learned times
 LOGIN_CAP = 600             # even a nightmare boot cannot stall past 10 min
 LOGIN_PATIENCE = 60
 
+# The manual restore's bounded ARRIVAL GRACE (owner desk-report,
+# refresh D, riding under the launch-day law): what a manual launch
+# may wait is the WINDOW's own startup - not the app's whole storm.
+# The owner clicked and watches THIS launch, so a fixed, honest 15 s
+# replaces the rail after the launch is issued; the stored patience
+# (the rail) belongs to the logon path alone, where the whole
+# desktop races the apps' startup. The value is UI-invisible by
+# design - the rail stays a boot word - and the no-shows dialog may
+# say "did not turn up" only once this grace is spent, never at t=0.
+STARTUP_GRACE_SEC = 15
+
 
 def launch_delay(data):
     """How long a login restore sits out before LAUNCHING anything.
@@ -569,46 +580,68 @@ def pin_hits(row, live, taken, fallback="process"):
 
 
 def relaunch(row, taken, fallback, extra=0, boot=False):
-    """The naive re-open: run the exe the pin saved. THE PATIENCE IS
-    A BOOT GRACE ONLY (owner ruling, Oct 24 launch day - the discord
-    false-error): boot races the apps' own startup and the desk is
-    still settling, so the logon path waits the row's stored wait
-    (new rows store 0; LOGIN_PATIENCE rides on top) and moves the
-    window the moment it wakes. A MANUAL restore does not race
-    anything - the user is watching: the launch is issued and
-    NOTHING is waited (a re-list catches a window that was already
-    on its way, in the same beat, no sleep). Either way, a window
-    that was merely MINIMIZED never reaches this function at all:
-    the seat walk answers iconic windows and restores them (the
-    present law) - re-launching a single-instance app and then
+    """The naive re-open: run the exe the pin saved. THE PRE-LAUNCH
+    PATIENCE IS A BOOT GRACE ONLY (owner ruling, Oct 24 launch day -
+    the discord false-error): boot races the apps' own startup and
+    the desk is still settling, so the logon path waits the row's
+    stored wait (new rows store 0; LOGIN_PATIENCE rides on top) and
+    moves the window the moment it wakes. A MANUAL restore waits
+    NOTHING before the launch and gets the bounded ARRIVAL GRACE
+    after it (owner desk-report, refresh D: a cold Outlook or Teams
+    needs real seconds for its first window, and the single
+    no-sleep re-list used to miss it - burying a successful launch
+    under a lying no-show and never placing the seat). Either way,
+    a window that was merely MINIMIZED never reaches this function
+    at all: the seat walk answers iconic windows and restores them
+    (the present law) - re-launching a single-instance app and then
     blaming its launcher for the silence was the disease. Returns
     (hits, trouble); trouble is what to say when even the wish
-    failed."""
+    failed - a manual timeout says NOTHING and lets the walker's
+    no_shows speak the earned word past the grace."""
     trouble = wm.launch(row.get("exe") or "")
     if trouble:
         return [], trouble
-    if not boot:
-        return pin_hits(row, wm.list_windows(include_minimized=True),
-                        taken, fallback), ""
-    try:
-        budget = max(0, min(600, int(row.get("wait") or 0)
-                            + int(extra or 0)))
-    except (TypeError, ValueError):
-        budget = max(0, int(extra or 0))   # junk stored word: the
-    #                                      # login grace still rides
-    if budget <= 0:
-        return pin_hits(row, wm.list_windows(include_minimized=True),
-                        taken, fallback), ""
-    end = time.monotonic() + budget
+    if boot:
+        try:
+            budget = max(0, min(600, int(row.get("wait") or 0)
+                                + int(extra or 0)))
+        except (TypeError, ValueError):
+            budget = max(0, int(extra or 0))   # junk stored word: the
+        #                                      # login grace still rides
+        if budget <= 0:
+            return pin_hits(row, wm.list_windows(include_minimized=True),
+                            taken, fallback), ""
+        end = time.monotonic() + budget
+        while time.monotonic() < end:
+            time.sleep(1.0)
+            hits = pin_hits(row, wm.list_windows(include_minimized=True),
+                            taken, fallback)
+            if hits:
+                return hits, ""
+        return [], "no window of %s showed up within %d s" % (
+            (row.get("proc") or row.get("exe") or "?").split("\\")[-1],
+            budget)
+    # MANUAL: the fast-path re-list rides FIRST - an app that
+    # answers instantly (or was already on its way) costs zero
+    # sleep, the refresh-D pin.
+    hits = pin_hits(row, wm.list_windows(include_minimized=True),
+                    taken, fallback)
+    if hits:
+        return hits, ""
+    end = time.monotonic() + STARTUP_GRACE_SEC
     while time.monotonic() < end:
         time.sleep(1.0)
         hits = pin_hits(row, wm.list_windows(include_minimized=True),
                         taken, fallback)
         if hits:
+            # iconic included, law E intact: a cold-started window
+            # arriving MINIMIZED is a present window too - the
+            # walker's hits loop un-minimizes and seats it through
+            # the same restore-then-place path
             return hits, ""
-    return [], "no window of %s showed up within %d s" % (
-        (row.get("proc") or row.get("exe") or "?").split("\\")[-1],
-        budget)
+    return [], ""     # truly absent past the grace: the no-shows
+    #                 dialog earns its sentence there, and no
+    #                 waited-through blame line exists for manual
 
 
 # -------------------------------------------------------------- HDR ----

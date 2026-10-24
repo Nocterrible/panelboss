@@ -384,7 +384,9 @@ class _ProfilesMixin:
         # exists - scope="windows" runs the windows leg alone (monitors
         # untouched) and its pins still spawn what is missing - the
         # spawn's patience is a BOOT grace (Oct-24): a manual click
-        # launches and moves on without waiting (profiles.apply's open
+        # launches with no pre-wait, and the launched window then
+        # gets a fixed fifteen-second arrival grace before the
+        # miss is spoken (profiles.apply's open
         # leg, pinned by profiles_test 6b/6c) - so this button adds no
         # engine code and no
         # new dialect: it rides the same _profile_apply, which means the

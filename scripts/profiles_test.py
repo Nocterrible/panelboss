@@ -676,27 +676,95 @@ try:
     assert info7["no_shows"] == [], info7
 
     # wakes on the next poll: the exe ran once, the window was moved,
-    # and the wait ended the moment it showed - not a second longer
+    # and the wait ended the moment it showed - not a second longer.
+    # (refresh-D pin: it showed on the OPTIMISTIC re-list, so the
+    # whole path cost ZERO sleeps - the fast path stays free.)
     ok7, say7, info7, w7 = run7(wake_after=1)
     assert ok7 and w7.launches == [r"C:\x\opera.exe"], (say7,
                                                         w7.launches)
     assert w7.placed == [(7, (10, 10, 100, 100), False)], w7.placed
     assert info7["no_shows"] == [], info7
-    assert w7.polls <= 3, "waited far past the window's arrival"
+    assert w7.polls == 2, "the optimistic path polled past the free re-list"
+    assert profiles.time.monotonic() == w7.launch_times[0], \
+        "the optimistic path slept"
 
-    # never wakes, MANUALLY (Oct-24 law): the launch is issued with
-    # NO delay and NO patience - a restore the owner watches waits
-    # for nothing, so the waited-through health-check line does not
-    # exist ("would not start"/"within N s" are boot-path words);
-    # the seat is a miss this walk saw, and it is LOUD once anyway.
+    # never wakes, MANUALLY (Oct-24 law + the refresh-D arrival
+    # grace): the launch is issued with NO delay and NO pre-wait,
+    # and the waited-through health-check line does not exist
+    # ("would not start"/"within N s" are boot-path words) - but
+    # the miss is spoken only PAST the fixed fifteen seconds: the
+    # grace burns all 15 fake-seconds re-listing once per second,
+    # and only then does the seat land in no_shows, loud once.
+    # Never at t=0: "did not turn up" is earned, not premature.
     ok7, say7, info7, w7 = run7()
     assert ok7 and info7["no_shows"] == [
         {"proc": "opera.exe", "title": "A"}], info7
     assert w7.launches == [r"C:\x\opera.exe"], w7.launches
     assert "within" not in say7 and "would not start" not in say7, \
         say7                                    # no blame, no wait
-    assert profiles.time.monotonic() == w7.launch_times[0], \
-        "the manual path spent patience after the launch"
+    assert profiles.time.monotonic() - w7.launch_times[0] == \
+        profiles.STARTUP_GRACE_SEC, \
+        "the miss was not earned on the grace's own clock"
+    assert w7.polls == 2 + profiles.STARTUP_GRACE_SEC, w7.polls
+    #   (seat-walk list + optimistic re-list + one grace re-list per
+    #   fake second)
+
+    # the window arrives COLD at +6 s (the outlook/teams desk-report
+    # itself): the grace catches it, the seat gets placed, and the
+    # no-show never speaks - a successful launch must never be
+    # buried by a premature miss. wake_after counts every list call
+    # (seat-walk 1, optimistic 1, then one per grace second), so
+    # the window answers from call 8 = grace-second 6 on the fake
+    # clock.
+    ok7, say7, info7, w7 = run7(wake_after=7)
+    assert ok7 and w7.placed == [(7, (10, 10, 100, 100), False)], \
+        w7.placed
+    assert info7["no_shows"] == [], info7
+    assert "would not start" not in say7, say7
+    assert profiles.time.monotonic() - w7.launch_times[0] == 6.0, \
+        w7.launch_times
+
+    # and the cold window may arrive MINIMIZED (law E stays intact
+    # inside the grace): the arrival un-minimizes and rides the
+    # same restore-then-place walker - a present window, not a miss.
+    prof9 = {"fp": TARGET, "match": "process + title",
+             "hdr": "leave alone",
+             "displays": [dict(AAA), dict(BBB)],
+             "wins": [{"proc": "opera.exe", "title": "A",
+                       "rect": [10, 10, 100, 100], "zoomed": False,
+                       "monitor": "AAA", "exe": r"C:\x\opera.exe",
+                       "match": "process + title", "open": True,
+                       "wait": 10}]}
+    tmp9 = tempfile.mkdtemp()
+    profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
+                   "last": {}, "profiles": {"p": prof9}}, tmp9)
+
+    class ColdWM(FakeWM):
+        def __init__(self2):
+            FakeWM.__init__(self2, DESK, [TARGET])
+            self2.base_wins, self2.n = [], 0
+
+        def list_windows(self2, include_minimized=False):
+            self2.n += 1
+            if self2.n <= 7:                    # seat walk, optimistic
+                return []                       # re-list, 5 grace secs
+            return [{"proc": "opera.exe", "title": "A", "hwnd": 9,
+                     "rect": [-32000, -32000, 100, 100],
+                     "zoomed": False, "iconic": True}]
+
+    f9 = ColdWM()
+    profiles.wm = f9
+    t9 = profiles.time.monotonic()
+    ok9, say9, info9 = profiles.apply(profiles.load(tmp9), "p",
+                                      dir=tmp9, scope="windows")
+    assert ok9 and f9.launches == [r"C:\x\opera.exe"], say9
+    assert f9.unmin == [9], f9.unmin
+    assert f9.placed == [(9, (10, 10, 100, 100), False)], f9.placed
+    assert info9["no_shows"] == [], info9
+    assert profiles.time.monotonic() - t9 == 6.0    # six grace seconds
+    print("manual arrival OK (cold window seated at +6 s, minimized "
+          "arrival restored inside the grace, miss earned at 15 s, "
+          "optimistic path costs zero)")
 
     # the user once said "let it be": the same miss is silent now
     ok7, say7, info7, w7 = run7(lambda r: r.update(quiet=True))

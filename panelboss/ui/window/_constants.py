@@ -170,8 +170,11 @@ TIPS = {
                         "before calling the seat a miss (0 s to 10 "
                         "min, default 0 - the wait exists because "
                         "boot races the apps' own startup; a manual "
-                        "restore waits nothing). It ends the moment "
-                        "a window shows.",
+                        "restore waits nothing to LAUNCH, and the "
+                        "window it launched then gets a fixed, "
+                        "unspoken fifteen seconds of its own, which "
+                        "this rail does not speak for). It ends the "
+                        "moment a window shows.",
     "profile_pin_exe": "what 'open it' actually runs. By default the "
                        "exe of the window as captured; browse points "
                        "the pin at the launcher or binary that really "
