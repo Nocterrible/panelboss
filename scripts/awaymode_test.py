@@ -452,6 +452,62 @@ def test_substitution():
         m._ledger.undo()
 
 
+def test_fake_off_handback_is_the_leaving_state():
+    """THE FAKE-OFF LEDGER AT THE STATE LEVEL (launch-night dossier
+    13a1d50, delta 2): the state a fake-off leaves must be the one
+    written back at away end - the value the panel had WHEN THE SPELL
+    TOOK IT - never the value read at boot, never the dimmed value
+    the spell itself painted. The running 0.3.5 build cleared the
+    ledger at __init__ BEFORE the attribute existed (every fresh boot
+    died AttributeError); an empty ledger is the same disease one
+    step on: the lift restores the boot's guess and the owner's own
+    number is gone. So the test moves the panel BETWEEN boot and
+    away: the boot read (70) and the leaving moment (42) are
+    different numbers, and only 42 may answer the lift."""
+    tmp = tempfile.mkdtemp(prefix="pb_away_hb")
+    bright = FakeBright({"D1": 80, "D2": 70, "D3": 50})
+    m = make_monitor(tmp, {"mode": "dim",
+                           "monitors": {"AAA": {"blackout": True}},
+                           "dim_level": 12}, bright=bright)
+    try:
+        # THE INIT-ORDER PIN (the crash itself): a freshly constructed
+        # monitor carries the crash's own attribute as a plain mutable
+        # (the two hand-back ledgers ride the lazy guard below), and
+        # the clear-before-attr order bet is banned out of the boot
+        # source (the static-ban idiom, the hook trio's school).
+        assert isinstance(m._away_bright, dict)
+        assert isinstance(m._away_hdr, list)
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        boot = open(os.path.join(root, "panelboss", "state",
+                                 "_boot.py"), encoding="utf-8").read()
+        assert "_away_bright.clear()" not in boot, \
+            "the clear-before-init bet grew back (the launch-night crash)"
+        away = open(os.path.join(root, "panelboss", "state",
+                                 "_away.py"), encoding="utf-8").read()
+        for led in ("_away_bright", "_away_off", "_away_disc"):
+            assert '"%s", None) or {}' % led in away, \
+                "the accumulate-guard at the engage head is gone for " \
+                "%s - a re-engage would wipe the true priors again" % led
+        # the owner touches the panel after boot: 42 is the leaving
+        # moment; 70 (the boot read) may NEVER wear the hand-back
+        bright.cur["D2"] = 42
+        m._screens_off(1.0)
+        assert ("set", "D2", 12) in m._fake["calls"], m._fake["calls"]
+        assert m._away_bright == {"D2": 42, "D3": 50}, m._away_bright
+        m._away_lift()
+        assert ("restore", "D2", 42) in m._fake["calls"], m._fake["calls"]
+        assert ("restore", "D2", 70) not in m._fake["calls"], \
+            "the boot read wore the hand-back - the leaving state is law"
+        assert ("restore", "D3", 50) in m._fake["calls"]
+        assert bright.cur["D2"] == 42, \
+            "the fake-off left the panel in a state it never held"
+        print("ok - the fake-off hand-back answers with the leaving-moment "
+              "state (not the boot read, not the spell's dim); ledgers "
+              "plain at boot (the init-order crash pinned out both ways)")
+    finally:
+        m._ledger.undo()
+
+
 def test_remote_desk_exempt():
     """THE REMOTE-DESK STAND-DOWN (the owner's black remote screen,
     Oct 15): a row is exempt from EVERY off leg - off, offdisc AND
@@ -2068,6 +2124,7 @@ def main():
     test_row_shorthands()
     test_default_flip()
     test_substitution()
+    test_fake_off_handback_is_the_leaving_state()
     test_legacy_global_off_fallback()
     test_remote_desk_exempt()
     test_refusal_degrades()

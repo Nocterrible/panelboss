@@ -96,7 +96,10 @@ the session too: panels wake to the lock screen. Preview tries a row for
 Some panels refuse DDC/CI writes - a KVM often explains it - and the app
 reports it, never hushes: an accepted write that never proves itself reads
 (unverified) on its row, a refused write falls back to painted blackout, and
-the row says which.
+the row says which. A dimmed panel comes back at away end with the brightness
+it had the instant the spell took it - not whatever value a boot read - and
+the ledger that law rides initializes at boot, so a fresh install starts with
+it in hand.
 
 The Timers card holds the seconds: idle gate (0-180, no camera while input is
 recent), absence confirm (10-300), poll while on and first dark re-poll
