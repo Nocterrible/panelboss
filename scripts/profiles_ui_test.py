@@ -197,9 +197,65 @@ def _texts(widget):
     return out
 
 
+def _add_desk_profile(name, used):
+    """A profile that IS the fake desk by identity (T1+T2) wearing
+    modes the desk has NOT landed (saved 200x200@144; live answers
+    100x100@60/75, and the fake fingerprint is the constant TESTFP).
+    Cappy's disappearing-profile demo, written into the store the
+    live pane reads: the strict opener stays blind, identity cannot
+    be. (Oct-24 dossier pins 0a/0b.)"""
+    d = [{"id": "MONITOR\\T1", "short": "T1", "gdi": r"\\.\DISPLAY1",
+          "on": True, "primary": True, "x": 0, "y": 0, "w": 200,
+          "h": 200, "rate": 144, "bits": 32, "hdr_cap": None,
+          "hdr_state": None},
+         {"id": "MONITOR\\T2", "short": "T2", "gdi": r"\\.\DISPLAY2",
+          "on": True, "primary": False, "x": 100, "y": 0, "w": 200,
+          "h": 200, "rate": 144, "bits": 32, "hdr_cap": None,
+          "hdr_state": None}]
+    with open(TEST_PROFILES, encoding="utf-8") as f:
+        data = json.load(f)
+    data["profiles"][name] = {"fp": PF.target_fp(d), "created": 0.0,
+                              "used": used, "match": "process",
+                              "hdr": "snap", "displays": d, "wins": []}
+    with open(TEST_PROFILES, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
 def check():
     global _done
     try:
+        # 0a) THE PICKER SELF-HEALS WHEN MODES LAND (Oct-24 dossier,
+        #     the frozen instant thawed): the pane opened on create-
+        #     new (nothing in the seed wears this desk's identity);
+        #     a fitting profile lands in the store and the desk
+        #     ear's OWN seam (a bare _profiles_render - exactly what
+        #     MONITOR_ROW_REBUILDERS calls on a fingerprint change)
+        #     moves the UNTOUCHED opener onto it, values list and
+        #     all. The disappearing profile returns the moment the
+        #     desk settles, without a reopen.
+        assert app._prof_sel == PF.NEW, app._prof_sel
+        _add_desk_profile("r", 1.0)
+        app._profiles_render()
+        assert app._prof_sel == "r", app._prof_sel
+        assert app.profile_menu.get() == "r", app.profile_menu.get()
+        assert "r" in app.profile_menu.cget("values"), \
+            app.profile_menu.cget("values")
+        print("[PASS] the untouched picker self-heals onto the desk's "
+              "profile at the desk-ear seam (identity, not the frozen fp)")
+
+        # 0b) NEVER STOMP A DELIBERATE PICK: one manual pick arms the
+        #     touched flag, and the same seam with a NEWER fitting
+        #     profile in the store (the fingerprint-change route)
+        #     must not move the opener. The owner's word outranks the
+        #     desk's opinion.
+        app._profile_picked("offline")
+        assert app._prof_sel_touched is True
+        _add_desk_profile("r2", 9.0)
+        app._profiles_render()
+        assert app._prof_sel == "offline", \
+            "the desk ear stomped a deliberate pick"
+        print("[PASS] picked-then-desk-change never moves the opener")
+
         # 1) the window builds; the mode editor (a 'monitors' section
         #    with a status line and an add-monitor picker) appears for
         #    a real profile on the profiles tab

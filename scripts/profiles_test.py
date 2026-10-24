@@ -130,6 +130,27 @@ assert "MONITOR\\AAA" not in s and "MONITOR\\BBB" not in s, s
 print("gate OK (identity set; swapped panel named both ways; panels "
       "the profile knows addressed by short)")
 
+# 4b) THE PICKER LANDS BY IDENTITY (Oct-24 dossier, the disappearing
+# profile as a FROZEN INSTANT): Cappy's A/B/C demo against the app's
+# own code. ONE row at a mode the desk has not landed yet: the strict
+# fingerprint matcher answers None (a cold boot never wears the
+# profile's settled fp), the identity matcher answers the NAME. Once
+# the modes land, strict agrees - identity was never a looser truth,
+# only an earlier one.
+cold = [{"id": "MONITOR\\R1", "short": "R1", "x": 0, "y": 0,
+         "w": 1024, "h": 768, "rate": 60, "primary": True}]
+want = [dict(cold[0], w=3840, h=2160, rate=144)]
+pdata = {"profiles": {"r": {"fp": profiles.target_fp(want),
+                            "created": 0.0, "used": 0.0,
+                            "match": "process", "hdr": "snap",
+                            "displays": want, "wins": []}},
+         "last": {}}
+assert profiles.default_name(pdata, profiles.target_fp(cold)) is None
+assert profiles.name_for_desk(pdata, cold) == "r"
+assert profiles.default_name(pdata, profiles.target_fp(want)) == "r"
+print("picker OK (identity lands where the frozen fingerprint is "
+      "blind; the strict matcher still answers once modes arrive)")
+
 # 5) target fingerprint: order-proof, dark panels excluded
 t1 = profiles.target_fp([{"id": "B", "x": 0, "y": 0, "w": 9,
                            "h": 9, "on": True},

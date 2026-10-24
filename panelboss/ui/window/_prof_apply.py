@@ -110,6 +110,11 @@ class _ModeMixin:
 
     # ---- profiles: handlers ---------------------------------------------
     def _profile_picked(self, name):
+        # the FIRST line: a pick through this door is deliberate (the
+        # user, or a create's own switch-to-what-you-just-captured),
+        # and from here on the desk ear's self-heal may not move the
+        # opener (Oct-24 dossier: NEVER stomp a deliberate pick)
+        self._prof_sel_touched = True
         self._prof_sel = name
         self._prof_msg = ""
         self._prof_err = False                  # the shout is per-

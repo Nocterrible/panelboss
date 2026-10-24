@@ -60,6 +60,11 @@ class _ProfilesMixin:
         row = self._row(box, "profile", TIPS["profile_picker"])
         self._prof_data = profiles.load()
         self._prof_msg = ""
+        self._prof_sel_touched = False     # the picker's self-heal arm
+        #                          (Oct-24 dossier): True the moment a
+        #                          pick is DELIBERATE - the desk ear
+        #                          may re-land an untouched opener,
+        #                          never the owner's own choice
         self._prof_err = False     # the loud-voice wave: the failure
         #                          flag the status label SHOUTS with
         #                          (paints danger while set; resets
@@ -71,8 +76,15 @@ class _ProfilesMixin:
         self._mode_add = None
         self._pin_edit = _fresh_pin_edit()
         names = [profiles.NEW] + sorted(self._prof_data["profiles"])
-        start = profiles.default_name(self._prof_data,
-                                      wm.fingerprint()) or profiles.NEW
+        # THE PICKER LANDS BY IDENTITY (Oct-24 dossier): the strict
+        # fingerprint answer was a FROZEN INSTANT - a cold boot that
+        # has not re-applied its modes yet wears a different fp, and
+        # the profile that fits the desk's HARDWARE vanished from the
+        # opener (the disappearing-profile report). name_for_desk is
+        # the apply's own gate view (desk_mismatch): panels first,
+        # modes are what a profile APPLIES, not what it demands.
+        start = profiles.name_for_desk(self._prof_data,
+                                       wm.monitors()) or profiles.NEW
         self.profile_menu = SkewCombo(
             row, values=names, width=220, command=self._profile_picked,
             **self.skin.menu_style())
@@ -114,6 +126,24 @@ class _ProfilesMixin:
         own synchronous walks (today's behavior); a dict = the
         hdr-walk's payload, painted WITHOUT touching the driver -
         see _hdr_refresh_async and the hdr_data arm in _runtime."""
+        # THE SELF-HEAL (Oct-24 dossier, same law as the opener): the
+        # desk ear already routes THIS method on a fingerprint change
+        # (MONITOR_ROW_REBUILDERS), so when the modes finally land,
+        # the untouched picker lands on the profile that fits - the
+        # frozen instant thaws instead of staying frozen. A
+        # DELIBERATE pick (the flag) is the owner's word and is never
+        # stomped; reload first so a profile captured or edited
+        # since the last paint is in the table the recompute reads.
+        self._prof_data = profiles.load()
+        if not getattr(self, "_prof_sel_touched", False):
+            start = profiles.name_for_desk(self._prof_data,
+                                           wm.monitors()) or profiles.NEW
+            if start != self._prof_sel:
+                self.profile_menu.configure(
+                    values=[profiles.NEW] + sorted(
+                        self._prof_data["profiles"]))
+                self._prof_sel = start
+                self.profile_menu.set(start)
         old = self._prof_body
         old_r = self._prof_pins_body
         self._prof_body = ctk.CTkFrame(self._prof_anchor,
