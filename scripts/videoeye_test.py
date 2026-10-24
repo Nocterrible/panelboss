@@ -1230,7 +1230,7 @@ ok("theater OFF: no frame at all, yet the window playing the reported "
 #      law of the plain veil): the window holding a PLAYING report
 #      sheds it from ANY window state - foreground or background -
 #      and the exemption OUTRANKS the [dimmer].always rows. A PAUSED
-#      row holds no mask (tonight's DELA census - the paused browser
+#      row holds no mask (the Oct-24 DELA census - the paused browser
 #      under the always row's veil - was LAWFUL and is pinned as
 #      law); a DEAD row holds no mask either (the eye's own age rule,
 #      the Oct-21 no-ghost doctrine, the plain-veil half). Desk: MONA
@@ -1258,7 +1258,8 @@ f.tick(101, vidle=130, dim_idle=120, always={"MONA": True})
 assert f.rec.painted == {1: ((50, 50, 900, 700), 0.3),
                          3: ((60, 60, 100, 60), 0.3)}, f.rec.painted
 #       PAUSED re-wears the dim layer, THIS tick, at full alpha (a
-#       new birth never ramps in) - the DELA census, pinned as law.
+#       new birth never ramps in) - the Oct-24 DELA census, pinned
+#       as law.
 #   and at the DOOR, the dead row's truth (the grace idiom of pin 8):
 #   a fresh click row holds the exemption, the AGED one holds NOTHING
 #   - no ghost may mask the dimmer.

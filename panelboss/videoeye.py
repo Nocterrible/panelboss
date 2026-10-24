@@ -253,8 +253,9 @@ def live_pair(cfg, now=None):
     seams on. Same ungated consent as live_rect. Either half reads
     None on its own law: no live row answers (None, None); a row
     whose bounds the host never reported answers (rect, None) and
-    the dimmer keeps the VIDEO rect as the ring's hole (the compat
-    lane - old hosts). The liveness gates ride the VIDEO rect
+    the dimmer keeps the VIDEO rect as the ring's hole - the default
+    law since the Oct-24 ruling (the reported window frames the hole
+    only when the config word says 'window'). The liveness gates ride the VIDEO rect
     throughout (min_rect_px, paused, visible-picture): a tiny ad in
     a huge window is a tiny video - the min rail is the video's,
     only the hole is the window's."""
@@ -335,7 +336,7 @@ def video_rect(cfg, now=None):
         row is a durable STATE, not a snapshot. It stays live until a
         paused:true push (pause/end) or the app restarts - no short
         grace ages out a movie mid-roll. A browser that dies mid-play
-        without a pause/end leaves the row; under the Oct-20 law its
+        without a pause/end leaves the row; under the eye's law its
         window stays plain-veil-exempt until a pause push or an app
         restart - admitted cost: the buddy's report is the fact, and
         the buddy is the first to know when the tab goes.

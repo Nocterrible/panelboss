@@ -508,8 +508,8 @@ class Veils:
             #                 # panel's route to dimming reaches the
             #                 # player). A PAUSED row re-earns the
             #                 # veil (the eye answers (None, None)
-            #                 # from the pause tick - tonight's
-            #                 # census, pinned as law); a dead row or
+            #                 # from the pause tick - the Oct-24
+            #                 # DELA census, pinned as law); a dead row or
             #                 # a GHOST report holds no mask (the same
             #                 # holder identity the ring's birth gate
             #                 # rides, Oct-21 d1). Never on sound (a
