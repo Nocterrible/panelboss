@@ -809,6 +809,10 @@ class Display(threading.Thread):
                 arr, len(arr), ctypes.sizeof(RAWINPUTDEVICE)):
             log.debug("raw lift ears unregister was declined (%s)",
                       k32.GetLastError())
+        from . import inputtruth
+        inputtruth.re_register()
+        # our remove is process-wide; the sibling ear re-arms or the
+        # desk goes deaf (Oct-23 dossier A)
         self._hooked = False
 
     def _raw_probe(self, handle):

@@ -224,6 +224,31 @@ class RawEars:
             self._pump.mouse(mo.lastX, mo.lastY, mo.flags, self._now())
         # else: a joystick hopper speaks - the pump is for hands
 
+    def _register(self):
+        """The (1,2)/(1,6) INPUTSINK pairs on this thread's
+        message-only hwnd. Idempotent: re-issuing the same pairs to
+        the same hwnd is the documented re-arm - display's away-ear
+        RIDEV_REMOVE is process-wide (it addresses the pair, not one
+        window) and silences these same pairs while its own thread
+        keeps pumping. The call shape stays argtypes-neutral (the
+        Oct-21 cross-module disease): display clears the shared
+        binding at its own calls, and a plain array converts under
+        both its cleared handle and this module's own binding."""
+        arr = (RAWINPUTDEVICE * 2)()
+        for row, (page, usage) in zip(arr, ((1, 2), (1, 6))):
+            row.usUsagePage = page
+            row.usUsage = usage
+            row.flags = RIDEV_INPUTSINK
+            row.hwndTarget = self._hwnd
+        if U32.RegisterRawInputDevices(arr, 2,
+                                       ctypes.sizeof(RAWINPUTDEVICE)):
+            return True
+        self._fail[0] = ("RegisterRawInputDevices refused: Win32 "
+                         "error %d" % K32.GetLastError())
+        U32.DestroyWindow(self._hwnd)
+        self._hwnd = None
+        return False
+
     def _run(self):
         msg = wt.MSG()
         self._tid = K32.GetCurrentThreadId()
@@ -262,18 +287,7 @@ class RawEars:
                              "Win32 error %d" % K32.GetLastError())
             self._ready.set()
             return
-        arr = (RAWINPUTDEVICE * 2)()
-        for row, (page, usage) in zip(arr, ((1, 2), (1, 6))):
-            row.usUsagePage = page
-            row.usUsage = usage
-            row.flags = RIDEV_INPUTSINK
-            row.hwndTarget = self._hwnd
-        if not U32.RegisterRawInputDevices(arr, 2,
-                                           ctypes.sizeof(RAWINPUTDEVICE)):
-            self._fail[0] = ("RegisterRawInputDevices refused: Win32 "
-                             "error %d" % K32.GetLastError())
-            U32.DestroyWindow(self._hwnd)
-            self._hwnd = None
+        if not self._register():
             self._ready.set()
             return
         self._ready.set()
@@ -289,7 +303,10 @@ class RawEars:
                 break
             else:
                 U32.DispatchMessageW(ctypes.byref(msg))
+        arr = (RAWINPUTDEVICE * 2)()
         for row, (page, usage) in zip(arr, ((1, 2), (1, 6))):
+            row.usUsagePage = page
+            row.usUsage = usage
             row.flags = RIDEV_REMOVE
             row.hwndTarget = 0
         U32.RegisterRawInputDevices(arr, 2, ctypes.sizeof(RAWINPUTDEVICE))
@@ -315,3 +332,18 @@ def attach(pump):
     """The seam inputtruth.install() calls: live raw ears or an
     OSError carrying the desk's refusal."""
     return RawEars(pump)
+
+
+def re_register():
+    """The re-arm the away ear owes us: its RIDEV_REMOVE is
+    process-wide (hwndTarget must be NULL - it cannot address one
+    window), so it silences our identical (1,2)/(1,6) pairs while the
+    pump's thread keeps living in GetMessageW and the corpse-detection
+    never sees it. Re-issuing RIDEV_INPUTSINK to the same hwnd is the
+    documented re-arm (the argtypes-neutral call shape above). No pump
+    up (the ears object None / not built) - no-op, False."""
+    from . import inputtruth
+    ear = inputtruth._ear
+    if ear is None:
+        return False
+    return bool(ear._register())

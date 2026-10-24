@@ -209,6 +209,14 @@ def uninstall():
             _ear = None
 
 
+def re_register():
+    """The display seam (dossier A, Oct 23): the away ear's
+    process-wide RIDEV_REMOVE silences the pump's own pairs; the
+    re-arm lives in the hook module, this is the call seam."""
+    from . import _inputtruth_hook
+    return _inputtruth_hook.re_register()
+
+
 def _fail_open():
     """The deaf pump's ONE dated word, then the stock clock."""
     global _warned

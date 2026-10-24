@@ -1116,6 +1116,74 @@ ok("the raw ear: installs, survives an idle desk, unstalls "
    "idempotently; a refusal fail-opens to the stock clock with "
    "exactly ONE DATED warning line (the packeted deaf-pump law)")
 
+#      RE-ARM (Oct-23 dossier A, launch patch): the away ear's
+#      RIDEV_REMOVE is PROCESS-WIDE (hwndTarget must be NULL - it
+#      cannot address one window), so every away-lift teardown
+#      silences the pump's identical (1,2)/(1,6) pairs while the
+#      pump's thread keeps living in GetMessageW - the corpse
+#      detection never sees it and the theater/veil motion-lift
+#      goes deaf for the session. The teardown therefore owes the
+#      re-arm: _release_ears' RIDEV_REMOVE succeeds ->
+#      inputtruth.re_register() fires (the re-arms ride the fake's
+#      RegisterRawInputDevices, flags INPUTSINK vs the away ear's
+#      own REMOVE); the no-pump desk (the ears object None) gets a
+#      no-op False from the seam, never a raise.
+_real_reg = _inputtruth_hook.U32.RegisterRawInputDevices
+_real_ear = inputtruth._ear
+_removed, _rearmed = [], []
+
+
+class _RegReplay:
+    """A register that records WHICH pairs passed: the away ear's
+    REMOVE (flags 1) and, behind it, the pump's INPUTSINK re-arm."""
+
+    def __call__(self, arr, n, size):
+        flags = [r.flags for r in arr]
+        if flags == [1, 1]:
+            _removed.append(1)
+        elif flags == [0x100, 0x100]:
+            _rearmed.append(1)
+        return 1
+
+
+class _RearmEar:
+    """A live-ear stand-in: re_register only ever asks _register()
+    - and the re-arm issues through the SAME documented entry
+    point (the fake replay sees the INPUTSINK pairs pass)."""
+
+    def _register(self):
+        arr = (_inputtruth_hook.RAWINPUTDEVICE * 2)()
+        for row, (page, usage) in zip(arr, ((1, 2), (1, 6))):
+            row.usUsagePage = page
+            row.usUsage = usage
+            row.flags = 0x100                # RIDEV_INPUTSINK
+            row.hwndTarget = None
+        return bool(_inputtruth_hook.U32.RegisterRawInputDevices(
+            arr, 2, ctypes.sizeof(_inputtruth_hook.RAWINPUTDEVICE)))
+
+
+from panelboss import display as disp  # noqa: E402
+try:
+    _inputtruth_hook.U32.RegisterRawInputDevices = _RegReplay()
+    _w = disp.Display(verbose=False)   # __init__ only, no run() (the
+    _w._hooked = True                  # enumwatch idiom): _release_ears
+    inputtruth._ear = _RearmEar()      # never ran, so the live state
+    _w._release_ears()                 # below is the no-pump desk's
+    assert _removed == [1] and _rearmed == [1], (_removed, _rearmed)
+    #                                     # the teardown AND the
+    #                                     # re-arm, in that order
+    assert _w._hooked is False
+    inputtruth._ear = None             # the no-pump desk: the seam
+    assert inputtruth.re_register() is False
+    #                                    # is a no-op, never a raise
+finally:
+    _inputtruth_hook.U32.RegisterRawInputDevices = _real_reg
+    inputtruth._ear = _real_ear
+ok("the away ear's process-wide teardown re-arms the pump: a "
+   "successful RIDEV_REMOVE fires inputtruth.re_register() (the "
+   "INPUTSINK pairs ride the same entry point), and the no-pump "
+   "desk's re-register is a no-op - the ring lifts again (dossier A)")
+
 # 19b. the SAME desk with the THEATER OFF: the switch owns the frame
 #      (no negative keys), but the player window STILL never wears the
 #      plain veil - the exemption is the buddy's report, not the
