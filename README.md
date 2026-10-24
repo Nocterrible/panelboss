@@ -174,7 +174,8 @@ after (0 to 60 seconds of stillness) every background window wears a veil
 at veil level, 10-90 percent, with per-panel overrides. The foreground and
 anything making sound keep their light; menus, tooltips, and transient popups
 never dim; administrator windows stay bright unless PanelBoss runs elevated,
-which is not recommended. Always dims a panel without the idle wait. Fade
+which is not recommended. Always dims a panel without the idle wait - that
+row yields to the foreground, never to motion. Fade
 within (0-60 s) shapes the return; lift fade decides whether a plain veil
 fades or drops the instant you touch the desk. Apps are excluded by exe name;
 a pause hotkey binds on keypress, clears on esc, and is unbound until you
@@ -192,7 +193,9 @@ plays and input sits still for the veil-after wait (1-30 s), a ring of
 darkness lands around the window reporting it: the hole is that window's
 bounds, so the browser's chrome stays bright with the movie. The window
 playing your video never dims. Motion lifts the ring, which re-arms after the
-same wait; a film's sound never lifts it. Theater veil level (10-90 percent)
+same wait; a film's sound never lifts it. When the video window fills its
+panel that panel shows no ring - the darkness lands on the other enrolled
+panels only; window the browser and the frame appears around it. Theater veil level (10-90 percent)
 is the frame's own darkness, independent of the dimmer's, per-panel
 overridable. Per-monitor boxes enroll panels: an enrolled panel with no video
 wears a full-field veil while the conjunction holds; an unenrolled one dims
