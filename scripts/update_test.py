@@ -182,11 +182,34 @@ assert "--autostart" not in text, \
     "update.bat:48 carries no stamp (a relaunch is not a login) - \
 mirrored: none here either"
 assert 'del "%~f0"' in text, "one-shot: it deletes itself"
+# THE STORE FIRST (owner law, Oct-24): both handoff paths back the
+# store up before anything installs or pulls. The placement IS the
+# pin: the copies sit AFTER the :install label (both goto paths pass
+# them - a pre-label insert the `goto install` jumps over would be
+# dead code on the normal death path, the deviation the dossier's
+# literal wording hides) and BEFORE msiexec; one echo names the
+# folder into the console; update.bat mirrors the lines before its
+# git pull.
+i_lab = text.find(":install")
+assert i_lab > 0 and i_lab < text.find("%bkdir%\\profiles.json.bak") \
+    < text.find("%bkdir%\\config.toml.bak") < text.find("msiexec /i "), \
+    "the backup must sit after the label (both goto paths) and " \
+    "before the install verb"
+assert 'echo store backed up to %bkdir%' in text, \
+    "the echo naming the backup folder is gone"
+ub = open(os.path.join(os.path.dirname(os.path.dirname(
+             os.path.abspath(__file__))), "update.bat"),
+          encoding="utf-8").read()
+assert "%bkdir%\\profiles.json.bak" in ub and \
+    "%bkdir%\\config.toml.bak" in ub, "the mirror lines left update.bat"
+assert ub.find("config.toml.bak") < ub.find("git pull"), \
+    "the mirror must back up BEFORE the pull moves the ground"
 bat = update.write_apply(r"C:\u\PanelBoss-0.3.3-user.msi",
                          r"C:\p\PanelBoss.exe", 1234, os.path.join(TMP, "drop"))
 assert bat == os.path.join(old_dir, "apply.bat") and os.path.exists(bat)
 print("ok - apply.bat: waits-on-pid, /qn /l*v, unstamped relaunch, "
-      "self-delete")
+      "self-delete; the store (.bak pair) rides first, mirrored in "
+      "update.bat before the pull")
 
 # ---- 7) the FROZEN branch, simulated: fake sys.frozen + a LOCALAPPDATA
 #         pointing into TMP; the spawn must be cmd.exe /c +

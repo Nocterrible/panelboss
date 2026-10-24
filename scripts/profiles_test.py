@@ -114,6 +114,51 @@ assert "rot" not in half["profiles"] and "good" in half["profiles"]
 assert half["hdr_key"] == "win+alt+b", "empty hotkey accepted"
 print("store OK (atomic, quarantine, rotted rows dropped alone)")
 
+# 3b) KEPT ASIDE, NEVER FOLDED AWAY (owner law, Oct-24 losslessness):
+# the rotted entry rides _fossils through a FULL load+save cycle
+# verbatim, and the picker's table stays clean of it. A too-strict
+# fold may cost invisibility, never the record.
+with open(p, "w", encoding="utf-8") as fh:
+    fh.write('{"profiles": {"good": {"displays": [], "wins": []},'
+             ' "rot": {"displays": "not-a-list"}}, "last": {}}')
+got = profiles.load(tmp)
+assert "rot" not in got["profiles"] and "good" in got["profiles"]
+assert got["_fossils"]["rot"] == {"why": "dropped rotted profile",
+                                  "raw": {"displays": "not-a-list"}}, \
+    got["_fossils"]
+assert profiles.save(got, tmp)
+back = profiles.load(tmp)
+assert back["_fossils"] == got["_fossils"], "the fossil rotted on rewrite"
+assert "rot" not in back["profiles"], "the picker grew it back"
+# the login/last drops fossil too - same law, different door
+with open(p, "w", encoding="utf-8") as fh:
+    fh.write('{"profiles": {}, "last": "not-a-table",'
+             ' "login": "junk"}')
+got2 = profiles.load(tmp)
+assert got2["_fossils"]["login"] == {
+    "why": "dropped rotted login record", "raw": "junk"}, got2["_fossils"]
+assert got2["_fossils"]["last"] == {
+    "why": "dropped rotted last table", "raw": "not-a-table"}
+assert got2["last"] == {} and "login" not in got2
+print("fossils OK (rotted entries survive load+save inside _fossils;"
+      " login/last drops ride the same door; picker reads profiles only)")
+
+# 3c) WRITE-ON-APPLY (the fear-killer made permanent): a relaunch
+# wearing a login costume - autostart stamp on an OLD session,
+# when='autostart' - returns BEFORE the store is even opened. Not
+# one save: the mtime proof from tonight, pinned forever.
+import panelboss.cli as CLI
+_saves = []
+_real_save, _real_age = profiles.save, CLI._session_age_sec
+profiles.save = lambda *a, **k: _saves.append(1)
+CLI._session_age_sec = lambda: 300.0          # > LOGIN_FRESH_SEC 180
+try:
+    CLI._restore({"restore": {"when": "autostart"}}, True, None)
+finally:
+    profiles.save, CLI._session_age_sec = _real_save, _real_age
+assert not _saves, _saves
+print("write-on-apply OK (stale login stamp: the store is untouched)")
+
 # 4) the gate: identity only. positions/modes may differ freely -
 # they are what the profile APPLIES, not what it demands.
 prof = {"displays": [{"id": "MONITOR\\AAA", "short": "AAA"},

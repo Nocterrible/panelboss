@@ -165,6 +165,16 @@ rem dependence dies under redirected handles, ping's never does)
 ping -n 3 127.0.0.1 >nul
 goto wait
 :install
+rem THE STORE FIRST (owner law, Oct-24 launch night): the two files
+rem the settings window writes ride into "%bkdir%" as .bak BEFORE
+rem anything installs over the package (label-first placement: both
+rem goto paths above must pass the backup, and the backup must pass
+rem before msiexec - the receipts' own folder carries them)
+set "bkdir=%LOCALAPPDATA%\\PanelBoss\\update"
+if not exist "%bkdir%" mkdir "%bkdir%"
+copy /y "%APPDATA%\\PanelBoss\\profiles.json" "%bkdir%\\profiles.json.bak" >nul
+copy /y "%APPDATA%\\PanelBoss\\config.toml" "%bkdir%\\config.toml.bak" >nul
+echo store backed up to %bkdir% (profiles.json.bak, config.toml.bak)
 msiexec /i "{msi}" /qn /l*v "{log}"
 if errorlevel 1 (
     echo the install FAILED - read the receipt:

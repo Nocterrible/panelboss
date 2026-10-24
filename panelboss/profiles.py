@@ -112,8 +112,17 @@ def load(dir=None):
         got = None
     if isinstance(got, dict):
         data.update(got)
-    for key in ("last", "profiles"):       # never trust a half file
+    for key in ("last", "profiles", "_fossils"):   # never trust a half
         if not isinstance(data.get(key), dict):
+            if key != "_fossils" and data.get(key) is not None:
+                # a rotted table is kept
+                #                          aside too (Oct-24 loss-
+                #                          lessness): junk bytes,
+                #                          not absent bytes; junk
+                #                          FOSSILS reset in silence
+                data.setdefault("_fossils", {})[key] = {
+                    "why": "dropped rotted %s table" % key,
+                    "raw": data[key]}
             data[key] = {}
     if not isinstance(data.get("hdr_key"), str) or \
             not data["hdr_key"].strip():
@@ -122,8 +131,16 @@ def load(dir=None):
         if not isinstance(prof, dict) or \
                 not isinstance(prof.get("displays"), list) or \
                 not isinstance(prof.get("wins"), list):
-            del data["profiles"][name]     # one rotted row does not
-            log.warning("dropped rotted profile '%s'", name)
+            # KEPT ASIDE, NEVER FOLDED AWAY (owner law, Oct-24): the
+            # rotted entry leaves the picker but keeps its bytes -
+            # _fossils rides save() verbatim, so a too-strict fold
+            # costs invisibility, not the record (the disappearing-
+            # profile's second door: gone by validation, not edit).
+            data.setdefault("_fossils", {})[name] = {
+                "why": "dropped rotted profile", "raw": prof}
+            log.warning("dropped rotted profile '%s' (kept aside in "
+                        "_fossils)", name)
+            del data["profiles"][name]
             continue
         # hand-edited junk rows die HERE, before layout+HDR are
         # committed (audit: a string row passed load, apply died after
@@ -158,8 +175,11 @@ def load(dir=None):
         prof["wins"] = [w for w in prof["wins"] if w is not None]
     lg = data.get("login")                  # the "last" validation
     if lg is not None and not isinstance(lg, dict):   # pattern, aimed
-        log.warning("dropped rotted 'login' section (not a dict)")   # at the
-        del data["login"]                   # login record
+        data.setdefault("_fossils", {})["login"] = {  # at the
+            "why": "dropped rotted login record",     # login record
+            "raw": lg}                                # (Oct-24: kept
+        log.warning("dropped rotted 'login' section (not a dict)")   # aside,
+        del data["login"]                   # not folded away)
     else:
         if isinstance(lg, dict):
             # REAL shapes (writer at apply: took[who] = ...): 'took' is

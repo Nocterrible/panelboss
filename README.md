@@ -153,7 +153,10 @@ panel. A power plan can swap in per game; the previous one returns after.
 One profile is the desk spelled out: which physical panels by hardware
 identity, their places, the primary, resolution and refresh per panel, the
 HDR ask, and where every pinned window belongs. The picker opens on the
-profile matching the layout you see; create new... copies what the desk is
+profile matching this desk's hardware identity even when a panel has not
+landed its wanted modes yet, and updates keep a backup of profiles and config
+in %LOCALAPPDATA%\PanelBoss\update, the folder beside the log location named
+on the General tab; create new... copies what the desk is
 doing now. The mode editor offers each panel resolution and refresh menus
 from the driver's own list, its live HDR state, and, where the driver answers
 precisely, a hdr on/off/keep selector. The hdr ask per apply: restore as

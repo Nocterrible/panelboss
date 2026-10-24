@@ -20,6 +20,15 @@ if errorlevel 1 (
     echo no remote configured; continuing with the local install anyway
 )
 
+rem THE STORE FIRST (owner law, Oct-24 launch night, mirrored from
+rem update.py's APPLY text): profiles and config ride into the
+rem update folder as .bak before the pull moves the ground under them
+set "bkdir=%LOCALAPPDATA%\PanelBoss\update"
+if not exist "%bkdir%" mkdir "%bkdir%"
+copy /y "%APPDATA%\PanelBoss\profiles.json" "%bkdir%\profiles.json.bak" >nul
+copy /y "%APPDATA%\PanelBoss\config.toml" "%bkdir%\config.toml.bak" >nul
+echo store backed up to %bkdir% (profiles.json.bak, config.toml.bak)
+
 echo pulling...
 git pull
 

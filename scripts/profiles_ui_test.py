@@ -128,7 +128,9 @@ _SEED = {"profiles": {
                                "w": 640, "h": 480, "rate": 50,
                                "bits": 32, "hdr_cap": None,
                                "hdr_state": None}],
-                 "wins": []}}}
+                 "wins": []}},
+    "_fossils": {"gone": {"why": "dropped rotted profile",
+                          "raw": {"displays": "not-a-list"}}}}
 with open(TEST_PROFILES, "w", encoding="utf-8") as f:
     json.dump(_SEED, f)
 
@@ -255,6 +257,17 @@ def check():
         assert app._prof_sel == "offline", \
             "the desk ear stomped a deliberate pick"
         print("[PASS] picked-then-desk-change never moves the opener")
+
+        # 0c) THE KEPT-ASIDE CONFESSION (Oct-24 losslessness): the
+        #     seed store carries one fossil the loader moved aside;
+        #     the tab states it in ONE line and the picker's table
+        #     stays clean of it - never folded away in silence.
+        _ft = _texts(app._prof_body)
+        assert any("1 entry you may not recognize kept aside - see the "
+                   "log" in t for t in _ft), _ft
+        assert "gone" not in app.profile_menu.cget("values"), \
+            app.profile_menu.cget("values")
+        print("[PASS] one fossil line on the tab, picker clean")
 
         # 1) the window builds; the mode editor (a 'monitors' section
         #    with a status line and an add-monitor picker) appears for

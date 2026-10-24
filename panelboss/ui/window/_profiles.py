@@ -167,6 +167,22 @@ class _ProfilesMixin:
         self._pins_cols = None         #   (the pins list's ONE column
         try:
             self._profiles_fill(driver)
+            fos = self._prof_data.get("_fossils") or {}
+            if fos:
+                # the kept-aside confession (owner law, Oct-24): one
+                # line when rotted entries rode the loader out of the
+                # picker and into _fossils - the store says so on the
+                # tab, the load's warning names them in the log.
+                n = len(fos)
+                ctk.CTkLabel(
+                    self._prof_body,
+                    text=("%d entr%s you may not recognize kept "
+                          "aside - see the log"
+                          % (n, "y" if n == 1 else "ies")),
+                    font=self.skin.font(11), wraplength=560,
+                    justify="left", anchor="w",
+                    **self.skin.text_style("sub")).pack(
+                    anchor="w", pady=(theme.S_FIELD, 0))
         finally:
             # re-pin the fill target to the LEFT body no matter how
             # the fills went (gate finding 6): the pin fills retarget

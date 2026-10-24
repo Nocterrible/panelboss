@@ -218,7 +218,11 @@ TIPS = {
     "update": "check now asks GitHub for the newest release; update "
               "now installs it and this copy quits - the update "
               "console says why if it stays closed. run.bat (or the "
-              "shortcut) starts it again by hand.",
+              "shortcut) starts it again by hand. Before either path "
+              "touches anything, the store is backed up: "
+              "profiles.json and config.toml copy to "
+              "%LOCALAPPDATA%\\PanelBoss\\update as .bak, beside the "
+              "receipts.",
     "gaming": "a game gets its panel's top refresh rate; the desktop "
               "gets a cooler one. Only rates the panel already lists "
               "are traded; the resolution is never touched. A listed "
