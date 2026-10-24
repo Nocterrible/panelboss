@@ -60,7 +60,7 @@ _FAKE_DESK = [{"id": "MONITOR\\T1", "short": "T1",
                 "h": 100, "rate": 75, "bits": 32, "primary": False}]
 WM.monitors = lambda: [dict(m) for m in _FAKE_DESK]
 WM.fingerprint = lambda: "TESTFP"
-WM.list_windows = lambda: []
+WM.list_windows = lambda include_minimized=False: []
 WM.launch = lambda exe: ""
 WM.rescue_lost = lambda: []
 WM.place = lambda h, r, z=False: "ok"

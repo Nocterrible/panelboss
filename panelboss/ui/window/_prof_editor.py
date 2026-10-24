@@ -367,9 +367,9 @@ class _EditorMixin:
         badges = ""
         if w.get("open"):
             try:
-                wt = int(w.get("wait") or 30)
+                wt = int(w.get("wait") or 0)
             except (TypeError, ValueError):
-                wt = 30
+                wt = 0
             badges += "  [open it%s]" % (
                 "" if wt == 30 else " in %ds" % wt)
             ex = (w.get("exe") or "").split("\\")[-1].lower()

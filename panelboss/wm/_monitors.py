@@ -7,7 +7,7 @@ the part graph acyclic - its body is verbatim."""
 import ctypes
 from ctypes import wintypes
 
-from ._inspect import _toplevel_facts, wanted
+from ._inspect import _toplevel_facts, _wanted_body, wanted
 from ._winapi import (DEVMODEW, DISPLAY_DEVICEW,
                       DISPLAY_DEVICE_ATTACHED_TO_DESKTOP,
                       DISPLAY_DEVICE_MIRRORING_DRIVER,
@@ -151,10 +151,19 @@ def fingerprint():
         for m in monitors()))
 
 
-def list_windows():
+def list_windows(include_minimized=False):
     """Every window the app dares to move (wanted's rules), with the
-    identity fields a profile needs."""
-    return [w for w in _toplevel_facts() if wanted(w)]
+    identity fields a profile needs. include_minimized (Oct-24 pin
+    law): the seat walk ALSO answers iconic windows - they are
+    PRESENT, and the walker restores them into their seats; every
+    other caller keeps wanted's screens-out law (the wake snapshot,
+    the rescue, the picker)."""
+    out = []
+    for w in _toplevel_facts():
+        if wanted(w) or (include_minimized and w["iconic"]
+                         and _wanted_body(w)):
+            out.append(w)
+    return out
 
 
 # A PRIVATE shell32 handle: windll.shell32 is the one power.py already

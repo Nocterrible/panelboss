@@ -160,13 +160,18 @@ TIPS = {
                     "The profile moves only what you pinned.",
     "profile_pin_open": "'open it if missing' runs the saved exe when "
                         "no window of that app answered the profile, "
-                        "and moves the first window that appears. "
+                        "and moves the first window that appears. A "
+                        "MINIMIZED window is not missing: it answers "
+                        "its seat and gets restored, not re-launched. "
                         "Store apps and shortcut-only launchers may "
                         "need the exe line pointed at the real door.",
-    "profile_pin_wait": "how long an 'open it' wait lasts before the "
-                        "seat counts as missed (5 s to 10 min, "
-                        "default 30). It ends the moment a window "
-                        "shows.",
+    "profile_pin_wait": "BOOT grace only (Oct-24): how long the "
+                        "LOGON restore waits for an 'open it' window "
+                        "before calling the seat a miss (0 s to 10 "
+                        "min, default 0 - the wait exists because "
+                        "boot races the apps' own startup; a manual "
+                        "restore waits nothing). It ends the moment "
+                        "a window shows.",
     "profile_pin_exe": "what 'open it' actually runs. By default the "
                        "exe of the window as captured; browse points "
                        "the pin at the launcher or binary that really "
@@ -251,7 +256,7 @@ TIPS = {
 }
 
 
-WAIT_CHOICES = (5, 10, 15, 30, 45, 60, 90, 120, 180, 300, 600)
+WAIT_CHOICES = (0, 5, 10, 15, 30, 45, 60, 90, 120, 180, 300, 600)
 
 # the restore-at-start lever's vocabularies: (stored value, shown
 # label) - the cfg file stays English-stable, the menus stay human

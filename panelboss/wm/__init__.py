@@ -107,7 +107,7 @@ from ._rescue import GRAB_EDGE, lost, rescue_lost
 
 from ._restore import (SETTLE_SEC, WAIT_BUDGET_SEC, _move, apply,
                        place, restore, restore_async, snapshot,
-                       wait_settled)
+                       unminimize, wait_settled)
 
 from ._detect import foreground, has_xinput
 
@@ -148,7 +148,7 @@ __all__ = [
     "restore_async", "remote_session_ids", "set_mode",
     "session_connected", "session_is_remote",
     "sizeof", "snapshot", "threading", "time", "true_rect", "u32",
-    "wait_settled", "wanted", "win_title", "WTS_SESSION_INFOW",
+    "unminimize", "wait_settled", "wanted", "win_title", "WTS_SESSION_INFOW",
     "wintypes",
 ]
 

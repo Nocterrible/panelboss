@@ -167,8 +167,13 @@ profile does not name; try anyway (best effort) appears only then. Applying
 waits until monitors answer, moves windows, and rescues stragglers off-screen.
 Pins reserve seats: a process-matched pin moves every window of that app,
 process-plus-title is the one-window road, and open it if missing launches
-the exe - 5 s to 10 min of patience, browse field for launchers and
-shortcuts. Restore-at-start re-applies a profile at launch: any profile or
+the exe. A minimized window is present, not missing: the apply restores it
+into its seat instead of re-launching the app and blaming the launcher for a
+single-instance silence. The patience behind 'open it' (0 to 10 min, default
+0) is a boot grace only - a manual restore launches and moves on waiting
+nothing, while the logon restore waits the stored number because the desktop
+is still settling and the apps race their own startup. A browse field points
+the pin at launchers and shortcuts. Restore-at-start re-applies a profile at launch: any profile or
 the last one for this desk; whole desk, monitors only, or windows only; on
 logon starts, proved by the Run entry's --autostart, or every start. Restore
 my windows moves pins only and asks the drivers nothing.

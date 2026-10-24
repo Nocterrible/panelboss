@@ -239,6 +239,9 @@ class FakeWM:
         self.pressed, self.placed, self.rescued = [], [], []
         self.hdr, self.sets = hdr or [], []
         self.launches = []
+        self.unmin = []                  # Oct-24: restored seats
+        self.extra_wins = []             # iconic rows the seat walk
+        #                                # answers (present-law tests)
         self.commit_rc = 0             # the gate's finding 4 knob:
         #                    a fake whose FINAL commit died (-3 class)
 
@@ -301,12 +304,27 @@ class FakeWM:
                 r["state"] = "on" if on else "off"
         return ""
 
-    def list_windows(self):
-        return [{"proc": "opera.exe", "title": "A", "hwnd": 2,
-                 "rect": [0, 0, 5, 5], "zoomed": False}]
+    def list_windows(self, include_minimized=False):
+        # the Oct-24 feed law mirrored: iconic rows answer ONLY when
+        # the caller asked (the seat walk does; capture never does).
+        base = (self.base_wins if getattr(self, "base_wins", None)
+                is not None else
+                [{"proc": "opera.exe", "title": "A", "hwnd": 2,
+                  "rect": [0, 0, 5, 5], "zoomed": False}])
+        return [dict(w) for w in base] + [
+            dict(w) for w in getattr(self, "extra_wins", [])
+            if include_minimized or not w.get("iconic")]
 
-    def place(self, hwnd, rect, zoomed):
-        self.placed.append((hwnd, rect))
+    def unminimize(self, hwnd):
+        self.unmin.append(hwnd)
+        return "ok"
+
+    def launch(self, exe):
+        self.launches.append(exe)
+        return ""
+
+    def place(self, hwnd, rect, zoomed=False):
+        self.placed.append((hwnd, rect, bool(zoomed)))
         return "ok"
 
     def rescue_lost(self):
@@ -367,7 +385,7 @@ try:
     assert ("layout", [AAA["gdi"], BBB["gdi"]]) in f6.calls or \
         ("layout", [BBB["gdi"], AAA["gdi"]]) in f6.calls, f6.calls
     assert f6.pressed == ["win+alt+b"], f6.pressed
-    assert f6.placed == [(2, (10, 10, 100, 100))], f6.placed
+    assert f6.placed == [(2, (10, 10, 100, 100), False)], f6.placed
     assert f6.rescued, "auto-rescue skipped"
     assert disk["hdr_now"] == "on", "belief not persisted"
     assert disk["last"].get(TARGET) == "p"
@@ -624,7 +642,7 @@ try:
             self.launch_times.append(profiles.time.monotonic())
             return refuse
 
-        def w_windows(self):
+        def w_windows(self, include_minimized=False):
             self.polls += 1
             if wake_after is not None and self.polls > wake_after:
                 return [{"proc": "opera.exe", "title": "A",
@@ -652,7 +670,7 @@ try:
     # path's own "monitors untouched (windows only)" line, pinned here.)
     ok7, say7, info7, w7 = run7(wake_after=1, scope="windows")
     assert ok7 and w7.launches == [r"C:\x\opera.exe"], (say7, w7.launches)
-    assert w7.placed == [(7, (10, 10, 100, 100))], w7.placed
+    assert w7.placed == [(7, (10, 10, 100, 100), False)], w7.placed
     assert "monitors untouched" in say7, say7
     assert w7.entries == [], "windows-only asked the drivers"
     assert info7["no_shows"] == [], info7
@@ -662,17 +680,23 @@ try:
     ok7, say7, info7, w7 = run7(wake_after=1)
     assert ok7 and w7.launches == [r"C:\x\opera.exe"], (say7,
                                                         w7.launches)
-    assert w7.placed == [(7, (10, 10, 100, 100))], w7.placed
+    assert w7.placed == [(7, (10, 10, 100, 100), False)], w7.placed
     assert info7["no_shows"] == [], info7
     assert w7.polls <= 3, "waited far past the window's arrival"
 
-    # never wakes: the miss is LOUD once, and patience obeyed the
-    # pin's own wait (10 s here, not the 30 s default)
+    # never wakes, MANUALLY (Oct-24 law): the launch is issued with
+    # NO delay and NO patience - a restore the owner watches waits
+    # for nothing, so the waited-through health-check line does not
+    # exist ("would not start"/"within N s" are boot-path words);
+    # the seat is a miss this walk saw, and it is LOUD once anyway.
     ok7, say7, info7, w7 = run7()
     assert ok7 and info7["no_shows"] == [
         {"proc": "opera.exe", "title": "A"}], info7
-    assert "within 10 s" in say7, say7
-    assert w7.polls <= 12, "ignored the pin's own wait"
+    assert w7.launches == [r"C:\x\opera.exe"], w7.launches
+    assert "within" not in say7 and "would not start" not in say7, \
+        say7                                    # no blame, no wait
+    assert profiles.time.monotonic() == w7.launch_times[0], \
+        "the manual path spent patience after the launch"
 
     # the user once said "let it be": the same miss is silent now
     ok7, say7, info7, w7 = run7(lambda r: r.update(quiet=True))
@@ -696,7 +720,7 @@ try:
     # the app DID show, answering an earlier pin of the same
     # process: the later pin's silence is not a miss worth nagging
     class ShowWM(FakeWM):
-        def list_windows(self):
+        def list_windows(self, include_minimized=False):
             return [{"proc": "opera.exe", "title": "whoever",
                      "hwnd": 8, "rect": [0, 0, 5, 5],
                      "zoomed": False}]
@@ -713,9 +737,55 @@ try:
     ok7, say7, info7 = profiles.apply(profiles.load(tmp7), "p",
                                       dir=tmp7)
     assert ok7 and info7["no_shows"] == [], (say7, info7)
-    assert w7.placed == [(8, (10, 10, 100, 100))], w7.placed
+    assert w7.placed == [(8, (10, 10, 100, 100), False)], w7.placed
+
+    # --- A MINIMIZED WINDOW IS PRESENT (owner ruling, Oct 24 launch
+    # day): the seat walk answers iconic windows, RESTORES them, and
+    # places them - zero launch issued (the open pin never reached
+    # the launcher) and zero patience spent (a manual restore waits
+    # nothing). A zoomed seat rides place()'s dance (the SW_RESTORE
+    # then SW_SHOWMAXIMIZED sequence is pinned in layout_test 3e).
+    prof8 = {"fp": TARGET, "match": "process + title",
+             "hdr": "leave alone",
+             "displays": [dict(AAA), dict(BBB)],
+             "wins": [{"proc": "opera.exe", "title": "A",
+                       "rect": [10, 10, 100, 100], "zoomed": True,
+                       "monitor": "AAA", "exe": r"C:\x\opera.exe",
+                       "match": "process + title", "open": True,
+                       "wait": 10}]}
+    tmp8 = tempfile.mkdtemp()
+    profiles.save({"hdr_key": "win+alt+b", "hdr_now": "unknown",
+                   "last": {}, "profiles": {"p": prof8}}, tmp8)
+    f8 = FakeWM(DESK, [TARGET])
+    f8.base_wins = []                      # the app shows NOTHING
+    #                                       open: only the taskbar
+    #                                       button answers the seat
+    f8.extra_wins = [{"proc": "opera.exe", "title": "A", "hwnd": 9,
+                      "rect": [9000, 9000, 100, 100],
+                      "zoomed": False, "iconic": True}]
+    profiles.wm = f8
+    t8 = profiles.time.monotonic()
+    ok8, say8, info8 = profiles.apply(profiles.load(tmp8), "p",
+                                      dir=tmp8, scope="windows")
+    assert ok8 and f8.unmin == [9], (say8, f8.unmin)
+    assert f8.placed == [(9, (10, 10, 100, 100), True)], f8.placed
+    assert f8.launches == [], "a minimized window was RE-LAUNCHED"
+    assert profiles.time.monotonic() == t8, \
+        "the manual walk spent patience on a window that was alive"
+    assert info8["no_shows"] == [], info8
+    assert "1 placed" in say8 and "would not start" not in say8, say8
+
+    # patience is a BOOT grace, and boot HONORS the rail: 300 s
+    # stored (the 5-minute end), the login grace on top, and the
+    # fake clock waits every second of it before the miss is spoken.
+    ok7, say7, info7, w7 = run7(lambda r: r.update(wait=300),
+                                login=True)
+    assert "within 360 s" in say7, say7      # 300 rail + 60 login
+    assert w7.polls >= 360, "the boot grace skipped the rail"
     print("open pins OK (wake, per-pin wait, loud once then quiet, "
           "refused launch, launcher browse, no double-nag)")
+    print("present law OK (minimized restored and seated, zero "
+          "launches, manual waits nothing; boot honors the rail)")
 
     # 6b-login) the logon special. First login: two full minutes of
     # calibration before ANY launch, and whatever shows up is timed

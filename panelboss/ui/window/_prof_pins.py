@@ -58,9 +58,9 @@ class _PinMixin:
                   if (r["proc"], r["title"]) == (w["proc"], w["title"])),
                  w)
         try:
-            wait = max(5, min(600, int(w.get("wait") or 30)))
+            wait = max(0, min(600, int(w.get("wait") or 0)))
         except (TypeError, ValueError):
-            wait = 30
+            wait = 0
         self._pin_edit.update(key=(w["proc"], w["title"]),
                               pick=(w["proc"], w["title"]),
                               match=w.get("match")

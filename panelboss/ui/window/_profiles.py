@@ -382,9 +382,11 @@ class _ProfilesMixin:
         # THE OWNER'S ONE CLICK (Oct 16): "applies the window layout from
         # the captured layout and opens missing windows". The verb already
         # exists - scope="windows" runs the windows leg alone (monitors
-        # untouched) and its pins still spawn what is missing and place it
-        # the moment it wakes (profiles.apply's open leg, pinned by
-        # profiles_test 6b/6c) - so this button adds no engine code and no
+        # untouched) and its pins still spawn what is missing - the
+        # spawn's patience is a BOOT grace (Oct-24): a manual click
+        # launches and moves on without waiting (profiles.apply's open
+        # leg, pinned by profiles_test 6b/6c) - so this button adds no
+        # engine code and no
         # new dialect: it rides the same _profile_apply, which means the
         # say line, the refusal balloon, the no-shows dialog and the apply
         # lock are the same words and the same code as "apply profile".

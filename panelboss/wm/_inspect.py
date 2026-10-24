@@ -108,11 +108,23 @@ def true_rect(hwnd):
 
 
 def wanted(w):
-    """Pure decision, one place, testable: what we dare to move.
-    Everything else is left exactly as it is."""
-    return (w["visible"] and not w["owned"] and not w["iconic"]
-            and not w["cloaked"] and not w["tool"] and not w["ghost"]
-            and not w["furniture"] and w["rect"] is not None
+    """Pure decision, one place, testable: what we dare to MOVE.
+    Everything else is left exactly as it is. The iconic screens-out
+    is the LAYOUT law (a minimized window has no position to move
+    it around with; the wake snapshot and the picker read this);
+    PRESENT is a different question - the pin seat answers it via
+    list_windows(include_minimized=True), the Oct-24 launch-day
+    ruling (a minimized window that answers a seat is restored,
+    never re-launched)."""
+    return _wanted_body(w) and not w["iconic"]
+
+
+def _wanted_body(w):
+    """wanted() without the show-state clause: every other screens
+    stay, the iconic bit is the only question the pin walk re-asks."""
+    return (w["visible"] and not w["owned"] and not w["cloaked"]
+            and not w["tool"] and not w["ghost"] and not w["furniture"]
+            and w["rect"] is not None
             and w["rect"][2] > 0 and w["rect"][3] > 0)
 
 

@@ -452,7 +452,9 @@ def pin(data, name, win, match="process + title", open_if_missing=False,
     way), so the UI says so before saving it, and offers `exe` to
     outsmart that: the user can point the pin at a launcher or the
     right binary when the auto-captured one starts nothing. `wait`
-    is how long to trust the wish before calling it a miss. The exe
+    is how long to trust the wish before calling it a miss - a BOOT
+    grace only (Oct-24): a manual restore launches and moves on,
+    new rows store 0. The exe
     path is captured while the window is alive, because afterwards
     nobody knows where it was installed. Returns (ok, note) like the
     other profile primitives: a dead selection (create-new, or a name
@@ -465,9 +467,11 @@ def pin(data, name, win, match="process + title", open_if_missing=False,
                     if (w["proc"], w["title"]) != (win["proc"],
                                                    win["title"])]
     try:
-        seconds = int(wait or 30)
+        # patience defaults ZERO (Oct-24): a new row waits nothing;
+        # stored numbers are the BOOT grace's only (relaunch)
+        seconds = int(wait or 0)
     except (TypeError, ValueError):
-        seconds = 30
+        seconds = 0
     prof["wins"].append({"proc": win["proc"], "title": win["title"],
                          "rect": list(win["rect"]),
                          "zoomed": bool(win.get("zoomed")),
@@ -476,7 +480,7 @@ def pin(data, name, win, match="process + title", open_if_missing=False,
                                  else win.get("exe")) or "",
                          "match": match,
                          "open": bool(open_if_missing),
-                         "wait": max(5, min(600, seconds))})
+                         "wait": max(0, min(600, seconds))})
     save(data, dir)
     return True, ""
 
@@ -564,28 +568,42 @@ def pin_hits(row, live, taken, fallback="process"):
     return out
 
 
-def relaunch(row, taken, fallback, extra=0):
-    """The naive re-open: run the exe the pin saved, then wait for
-    a window that answers the pin - as long as the pin's own `wait`
-    says (the slider the user set, default 30 s; slow machines and
-    patient people get to choose) - and move on as soon as it
-    shows. `extra` is login's contribution: apps boot slower when
-    everything boots at once. Re-lists every tick, because the
-    whole point is that the window does not exist yet. Returns
+def relaunch(row, taken, fallback, extra=0, boot=False):
+    """The naive re-open: run the exe the pin saved. THE PATIENCE IS
+    A BOOT GRACE ONLY (owner ruling, Oct 24 launch day - the discord
+    false-error): boot races the apps' own startup and the desk is
+    still settling, so the logon path waits the row's stored wait
+    (new rows store 0; LOGIN_PATIENCE rides on top) and moves the
+    window the moment it wakes. A MANUAL restore does not race
+    anything - the user is watching: the launch is issued and
+    NOTHING is waited (a re-list catches a window that was already
+    on its way, in the same beat, no sleep). Either way, a window
+    that was merely MINIMIZED never reaches this function at all:
+    the seat walk answers iconic windows and restores them (the
+    present law) - re-launching a single-instance app and then
+    blaming its launcher for the silence was the disease. Returns
     (hits, trouble); trouble is what to say when even the wish
     failed."""
-    try:
-        budget = max(5, min(600, int(row.get("wait") or 30)
-                            + int(extra or 0)))
-    except (TypeError, ValueError):
-        budget = 30
     trouble = wm.launch(row.get("exe") or "")
     if trouble:
         return [], trouble
+    if not boot:
+        return pin_hits(row, wm.list_windows(include_minimized=True),
+                        taken, fallback), ""
+    try:
+        budget = max(0, min(600, int(row.get("wait") or 0)
+                            + int(extra or 0)))
+    except (TypeError, ValueError):
+        budget = max(0, int(extra or 0))   # junk stored word: the
+    #                                      # login grace still rides
+    if budget <= 0:
+        return pin_hits(row, wm.list_windows(include_minimized=True),
+                        taken, fallback), ""
     end = time.monotonic() + budget
     while time.monotonic() < end:
         time.sleep(1.0)
-        hits = pin_hits(row, wm.list_windows(), taken, fallback)
+        hits = pin_hits(row, wm.list_windows(include_minimized=True),
+                        taken, fallback)
         if hits:
             return hits, ""
     return [], "no window of %s showed up within %d s" % (
@@ -1000,13 +1018,20 @@ def apply(data, name, best_effort=False, scope="full", login=False,
 
     # 5. windows, only against a settled desk they were pinned for.
     # A pin that finds no window and carries the naive wish re-runs
-    # the saved exe and waits; a pin whose app DID show up (just
-    # answered an earlier pin of the same process first) is not a
-    # failure worth a dialog - only apps that truly stayed away are
-    # reported, and only until the user once declined to fix them.
+    # the saved exe - waiting its patience ONLY at boot (Oct-24: a
+    # manual restore waits nothing); a pin whose app DID show up
+    # (just answered an earlier pin of the same process first, or
+    # sat MINIMIZED and gets restored) is not a failure worth a
+    # dialog - only apps that truly stayed away are reported, and
+    # only until the user once declined to fix them.
     no_shows = []
     if wins_scope and (matched or best_done):
-        live = wm.list_windows()
+        # THE PRESENT SET INCLUDES THE MINIMIZED (owner ruling,
+        # Oct 24 launch day): the seat walk answers iconic windows
+        # too - a live window matching a pinned seat is PRESENT no
+        # matter its show state (the wake snapshot and the picker
+        # keep wanted's screens-out law; only THIS walk re-asks it).
+        live = wm.list_windows(include_minimized=True)
         taken, placed, silent = set(), 0, 0
         moved_procs, troubles = set(), []
         if login:
@@ -1031,12 +1056,17 @@ def apply(data, name, best_effort=False, scope="full", login=False,
                 t_launch = time.monotonic()
                 hits, trouble = relaunch(
                     s, taken, fb,
-                    extra=LOGIN_PATIENCE if login else 0)
+                    extra=LOGIN_PATIENCE if login else 0,
+                    boot=login)
                 if trouble:
                     troubles.append(trouble)
-                if hits:
+                if hits and login:
                     # the lesson, timed from OUR launch: an app
                     # that was already open at boot told us nothing
+                    # (manual launches measure nothing at all: the
+                    # Oct-24 walk waits no patience, so a hit this
+                    # beat is a coincidence, not a timing - the
+                    # login dict stays out of it)
                     who = ((s.get("proc") or s.get("exe") or "?")
                            ).split("\\")[-1].lower()
                     took[who] = max(time.monotonic() - t_launch, 1.0)
@@ -1051,6 +1081,17 @@ def apply(data, name, best_effort=False, scope="full", login=False,
                                          # failure may be loud again
             for l in hits:
                 taken.add(l["hwnd"])
+                if l.get("iconic"):
+                    # A MINIMIZED WINDOW IS PRESENT (owner ruling,
+                    # Oct 24 launch day): SW_RESTORE FIRST, then the
+                    # seat - the same sequence law _move pins for
+                    # snapshots (up, then position), and a zoomed
+                    # seat rides place()'s own dance from here
+                    # upright. A window that died under the walk is
+                    # nobody's miss: silent, like a refused place.
+                    if wm.unminimize(l["hwnd"]) == "gone":
+                        silent += 1
+                        continue
                 try:
                     cur = wm.true_rect(l["hwnd"])
                 except Exception:

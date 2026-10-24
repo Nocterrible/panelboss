@@ -36,7 +36,7 @@ def _fresh_pin_edit():
     """The pin editor's blank slate, in one place so no reset ever
     forgets a field the editor grew later."""
     return {"key": None, "pick": None, "match": "process",
-            "open": False, "wait": 30, "exe": None}
+            "open": False, "wait": 0, "exe": None}
 
 
 class _SleepPrompt(ctk.CTkToplevel):

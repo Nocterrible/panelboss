@@ -371,7 +371,8 @@ WM.fingerprint = lambda: "TESTFP"
 _FAKE_WINS = [{"proc": "a.exe", "title": "one", "hwnd": 11,
                "rect": [0, 0, 50, 50], "zoomed": False,
                "exe": r"C:\a\a.exe"}]
-WM.list_windows = lambda: [dict(w) for w in _FAKE_WINS]
+WM.list_windows = lambda include_minimized=False: [
+    dict(w) for w in _FAKE_WINS]
 WM.launch = lambda exe: ""
 WM.rescue_lost = lambda: []
 WM.place = lambda h, r, z=False: "ok"
@@ -588,7 +589,11 @@ def check():
         app.pin_open_box.select()
         app._pin_open()
         app.update_idletasks()
-        assert app.pin_wait_menu.get() == "30 s"
+        assert app.pin_wait_menu.get() == "0 s"   # Oct-24: patience
+        #                              defaults ZERO - a manual
+        #                              restore waits nothing, and
+        #                              new rows store the boot
+        #                              grace the owner chooses
         assert any("naive" in t for t in _ptexts()), "no fine print"
         # the human who knows better tunes patience and points the
         # pin at the launcher that actually works (browse is faked:
@@ -634,7 +639,7 @@ def check():
             _ptexts()
         app._pin_cancel()
         assert app._pin_edit["pick"] is None and \
-            app._pin_edit["key"] is None and app._pin_edit["wait"] == 30
+            app._pin_edit["key"] is None and app._pin_edit["wait"] == 0
         _FAKE_WINS.pop()                   # the second window closes
         # and x forgets the seat (row=None: the verb takes its
         # full-repaint honest path - Oct 12 made the x's lambda hand

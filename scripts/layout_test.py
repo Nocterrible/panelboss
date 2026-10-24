@@ -205,10 +205,31 @@ try:
                      "zoomed": False, "iconic": False}) == "ok"
     assert n.seq == [("pos", 10, 20, 30, 40)], \
         "an open window is only ever placed - the bit changed nothing"
+    # THE PIN DANCE (Oct-24 present law, launch day): the pin walk
+    # restores first (wm.unminimize - the walk's own restore leg),
+    # and a MAXIMIZED seat then rides the _move dance upright: the
+    # SW_SHOWMAXIMIZED comes AFTER the position, never onto a still
+    # -asleep window (a maximize pins to the wrong monitor when the
+    # window wakes mid-dance - the owner asked for the maximizing,
+    # not for a re-launch nobody forced).
+    class _PinDance(_MoveU32):
+        def ShowWindow(self, h, cmd):
+            self.seq.append(("show", cmd))
+            if cmd == wm.SW_RESTORE:
+                self.iconic = False            # the live flip
+            return 1
+    d = _PinDance(iconic=True)
+    wm.u32 = d
+    assert wm.unminimize(7) == "ok"            # the walk's restore
+    assert wm.place(7, (10, 20, 30, 40), True) == "ok"   # the seat
+    assert d.seq == [("show", wm.SW_RESTORE),  # up FIRST (unminimize)
+                     ("show", wm.SW_RESTORE),  # the dance's own wake
+                     ("pos", 10, 20, 30, 40),  # onto the seat...
+                     ("show", wm.SW_SHOWMAXIMIZED)], d.seq   # maximized
 finally:
     wm.u32 = _real_u32
 print("restore v3 OK (un-minimize sequence, user state honored, old "
-      "captures: visible moved, iconic untouched)")
+      "captures: visible moved, iconic untouched, pin dance pinned)")
 
 
 # 3f) THE OWN-PID LAW (dossier C, launch patch): the rescue never

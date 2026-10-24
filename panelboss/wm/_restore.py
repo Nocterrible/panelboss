@@ -23,6 +23,21 @@ def place(hwnd, rect, zoomed=False):
                   "zoomed": bool(zoomed)})
 
 
+def unminimize(hwnd):
+    """SW_RESTORE on a window the pin walk found LIVE but minimized
+    (owner ruling, Oct 24 launch day: a minimized window is PRESENT
+    - its seat is earned by restore-then-place, never by launching
+    the exe again and blaming the launcher when the single-instance
+    app answers nothing). The walk calls THIS before place(): the
+    sequence (up, then positioned) is the same claim layout_test
+    pins for _move; a zoomed seat rides place()'s dance from here
+    with the window already upright. Returns ok/gone."""
+    if not u32.IsWindow(hwnd):
+        return "gone"                     # died under the walk
+    u32.ShowWindow(hwnd, SW_RESTORE)
+    return "ok"
+
+
 def snapshot():
     """The desk as it truly is, while the screens are still on."""
     wins = [w for w in _toplevel_facts() if wanted(w)]
