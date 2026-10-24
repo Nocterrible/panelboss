@@ -202,8 +202,7 @@ never wears the dim layer, backgrounded included; pause the video and the
 dim layer comes back. Fade
 within (0-60 s) shapes the return; lift fade decides whether a plain veil
 fades or drops the instant you touch the desk. Apps are excluded by exe name;
-a pause hotkey binds on keypress, clears on esc, and is unbound until you
-give one.
+the pause hotkey lives on the General tab's keybindings card, not here.
 
 Movie theater mode is the Buddy's payoff, consented separately. Once a video
 plays and input sits still for the veil-after wait (1-30 s), a ring of
@@ -235,5 +234,14 @@ Check for updates asks GitHub what the latest release is; Update now
 applies it - a source install pulls and refreshes dependencies, an MSI
 install fetches the newer MSI and hands the switch to Windows Installer.
 Open log folder opens the log folder.
+
+The keybindings card binds four global hotkeys - pause dimming, movie
+theater mode, restore my windows, and the detection consent switch. Each
+binds on keypress (hold a modifier and press the key), clears on esc, and
+is unbound until you give one; a taken combo keeps its predecessor and
+says so. A press runs the same verb as the matching switch or button, so
+pause toggles the dimmer the way the card's checkbox does, theater flips
+the companion switch, restore applies the captured windows layout, and
+detection flips the big consent switch on the Detection tab.
 
 MIT. Plans and known gaps: `AUDIT-PUNCHLIST.md`.

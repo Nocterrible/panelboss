@@ -605,14 +605,10 @@ class _OledMixin:
         self._save()
 
     # ------------------------------------------------------------------
-    # third card: the background dimmer. The capture seam is honest:
-    # the button arms a pending flag, the ONE <KeyPress> the all-tag
-    # routes while it stands becomes the binding (esc clears it), and
-    # the module does the actual RegisterHotKey against the watcher's
-    # pump - the say row carries the confession (taken / no pump yet),
-    # never a silent lie.
+    # third card: the background dimmer. The keybind row it once carried
+    # (the pause hotkey) moved to the General tab's keybindings card -
+    # the registry (hotkeys.py) does the RegisterHotKey arm.
     # ------------------------------------------------------------------
-    _DIM_BIND_TXT = "press a key to bind (esc clears)"
 
     def _build_dimmer(self, parent):
         box = self._card(parent, "background dimmer",
@@ -731,6 +727,13 @@ class _OledMixin:
                       command=self._oled_dim_app_add,
                       **self.skin.secondary()).grid(
             row=0, column=2, sticky="e", padx=(theme.S_FIELD, 0))
+        self.oled_app_say = ctk.CTkLabel(row, text="",
+                                         font=self.skin.font(11),
+                                         wraplength=180, justify="left",
+                                         anchor="e",
+                                         **self.skin.text_style("sub"))
+        self.oled_app_say.grid(row=0, column=3, sticky="e",
+                               padx=(theme.S_FIELD, 0))
         row = self._row(box, "excluded", TIP_DIM["apps"], hint_chars=42)
         # zero-size on purpose: CTk's frame default is 200x200, and this
         # box is EMPTY until an app is excluded - the default request was
@@ -740,19 +743,6 @@ class _OledMixin:
                                           fg_color="transparent")
         self._dim_apps_box.grid(row=0, column=1, columnspan=2, sticky="e")
         self._dim_apps_repaint()
-
-        row = self._row(box, "pause hotkey", TIP_DIM["key"],
-                        hint_chars=42)
-        self.oled_bind_btn = ctk.CTkButton(
-            row, text=self._DIM_BIND_TXT, height=26, width=220,
-            command=self._oled_dim_bind, **self.skin.secondary())
-        self.oled_bind_btn.grid(row=0, column=1, sticky="e")
-        self.oled_say3 = ctk.CTkLabel(row, font=self.skin.font(11),
-                                      wraplength=200, justify="left",
-                                      anchor="e",
-                                      **self.skin.text_style("sub"))
-        self.oled_say3.grid(row=0, column=2, sticky="e",
-                            padx=(theme.S_FIELD, 0))
 
         row = self._row(box, "pause", TIP_DIM["pause"], hint_chars=42)
         self.oled_pause_box = ctk.CTkCheckBox(
@@ -764,20 +754,16 @@ class _OledMixin:
             text_color_disabled=self.skin.txt3)
         self.oled_pause_box.set(dimmer.paused())
         self.oled_pause_box.grid(row=0, column=1, sticky="e")
-        self._dim_words()
         self.after(1000, self._dim_poll)
 
     def _dim_poll(self):
-        """The confession and the pause switch follow the engine
-        while the card is alive - a taken combo answered AFTER the
-        capture (the arm speaks on a later beat than the click)
-        surfaces here, not only in the log. 1000 ms,
-        self-rescheduling, diff-guarded (set_text): the away card's
-        _away_poll idiom, verbatim."""
+        """The pause switch follows the engine while the card is alive
+        (a hotkey pause toggles the flag the checkbox mirrors). 1000 ms,
+        self-rescheduling, diff-guarded: the away card's _away_poll
+        idiom, verbatim."""
         try:
             if getattr(self, "_dying", False):
                 return
-            self._dim_words()
             self.oled_pause_box.set(dimmer.paused())
             self._comp_words()          # the companion's status
             #                            # line rides this same
@@ -856,8 +842,8 @@ class _OledMixin:
     def _oled_dim_app_add(self):
         name = (self.dim_app_entry.get() or "").strip().lower()
         if not name:
-            set_text(self.oled_say3, "the entry was empty - nothing "
-                                     "was excluded")
+            set_text(self.oled_app_say, "the entry was empty - nothing "
+                                        "was excluded")
             return
         self.cfg.setdefault("dimmer", {}).setdefault(
             "apps", {})[name] = True
@@ -896,80 +882,6 @@ class _OledMixin:
                           command=lambda n=name: self._oled_dim_app_rm(n),
                           **self.skin.secondary()).pack(
                 side="right", padx=theme.S_FIELD // 2)
-
-    def _oled_dim_bind(self):
-        if getattr(self, "_dim_pending", False):
-            self._oled_dim_disarm()
-            return
-        self._dim_pending = True
-        self.bind_all("<KeyPress>", self._oled_dim_capture)
-        # the cancel on walking away: while the capture flag stands,
-        # the window losing focus (an alt+tab, a click on another app)
-        # disarms it - a pending capture that outlives the intent is
-        # the stolen-keystroke class of bug
-        self.bind("<FocusOut>", self._oled_dim_focus_out)
-        self.oled_bind_btn.configure(text="press a key now")
-
-    def _oled_dim_disarm(self):
-        self._dim_pending = False
-        self.unbind_all("<KeyPress>")
-        self.unbind("<FocusOut>")
-        self.oled_bind_btn.configure(text=self._DIM_BIND_TXT)
-
-    def _oled_dim_focus_out(self, _event=None):
-        if getattr(self, "_dim_pending", False):
-            self._oled_dim_disarm()
-
-    def _oled_dim_capture(self, event):
-        if not getattr(self, "_dim_pending", False):
-            return
-        if event.keysym in ("Control_L", "Control_R", "Shift_L",
-                            "Shift_R", "Alt_L", "Alt_R",
-                            "Super_L", "Super_R"):
-            # the ordering truth the mask pins cannot see (gate, F4):
-            # a modifier's OWN keydown carries state=0 - disarming
-            # here would refuse the first half of every real chord
-            # before its letter ever arrived. keep waiting.
-            return "break"
-        self._oled_dim_disarm()
-        dim = self.cfg.setdefault("dimmer", {})
-        if event.keysym == "Escape":
-            dim["bound"] = None
-            set_text(self.oled_say3, "unbound")
-            self._save()
-            return
-        # the bare-key rule lives in the module (capture_word) so the
-        # suite can drive it with fake events: a letter is typed, not
-        # stolen, and the OLD binding stands
-        pair, word = dimmer.capture_word(event.state, event.keycode)
-        # the Oct-15 truth line for the false-"taken" hunt: raw
-        # event.state as Tk THIS platform set it, and the word the
-        # table made of it - a dropped or phantom modifier is now
-        # visible before registration ever calls it a clash. MOD_
-        # NOREPEAT rides only at registration; it has no Tk analogue
-        # (0x40000000 in state is Tk's own lock-mask territory and
-        # the table reads neither it nor 0x2 capslock in/out).
-        log.info("dimmer: capture: raw state=%#x keycode=%#x -> "
-                 "stored %r", event.state, event.keycode, pair)
-        if word:
-            set_text(self.oled_say3, word)
-            return
-        dim["bound"] = pair
-        self._save()
-        self._dim_words()
-
-    def _dim_words(self):
-        note = dimmer.bind_note()
-        if note:
-            set_text(self.oled_say3, note)      # the dated refusal
-        elif dimmer.bound_live():
-            set_text(self.oled_say3, "live - one press pauses")
-        elif (self.cfg.get("dimmer") or {}).get("bound"):
-            set_text(self.oled_say3, "stored - the loop answers "
-                                     "next beat")
-        else:
-            set_text(self.oled_say3, "unbound - nothing is stolen "
-                                     "from your desk")
 
     def _oled_pause_changed(self):
         dimmer.set_paused(bool(self.oled_pause_box.get()))

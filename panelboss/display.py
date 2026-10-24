@@ -409,9 +409,9 @@ class Display(threading.Thread):
         self._lift_armed = False               # the away engine's flag
         self._lift_origin = None               # mouse travel accumulator
         self._ear_req = None                   # pending register/unregister
-        self._hotkey_req = None                # the dimmer's pending
-        #                                      # (op, mods, vk,
-        #                                      # done_event, result) note
+        self._hotkey_req = None                # a pending (op, id, mods,
+        #                                      # vk, done_event, result)
+        #                                      # note from hotkeys.py
         #                                      # set AFTER __init__: the
         #                                      # pump reads it in
         #                                      # _pump_pause, and a field
@@ -519,8 +519,7 @@ class Display(threading.Thread):
                         "carries the lift", k32.GetLastError())
         self._hooked = False
         self._ear_req = None
-        self._hotkey_req = None              # the dimmer's pending
-        #                                    # (op, mods, vk,
+        self._hotkey_req = None              # a pending (op, id, mods, vk,
         #                                    # done_event, result) note
         while not self._stop:
             # Drain EVERY pending message per cycle (the inner while
@@ -532,28 +531,24 @@ class Display(threading.Thread):
                 # and never rides this queue; only the REGISTERED
                 # power notification lands as a queued message
                 if msg.message == WM_HOTKEY:
-                    # the dimmer's pause toggle: the key was registered
-                    # against this window, so the post lands in this
-                    # queue. One flag-set on the pump thread - the flip
-                    # belongs on the state loop's own beat (the cross-Tk
-                    # law says a foreign-thread checkbox write is the
-                    # bug class). The belt: only OUR id wakes the
-                    # dimmer - a foreign WM_HOTKEY falls through
-                    # untouched. The Oct-15 wire truth (the "presses
-                    # and nothing happens" hunt): the arrival itself is
-                    # logged - if a press never prints this line, the
-                    # message never reached this queue; if it prints
-                    # with a foreign wParam, the id belt is honest.
+                    # a registered hotkey posts to this queue (the
+                    # registration is bound to this window's thread).
+                    # wParam is the id; the registry routes it to the
+                    # verb, a foreign id falls through untouched. The
+                    # Oct-15 wire truth (the "presses and nothing
+                    # happens" hunt): the arrival itself is logged - if
+                    # a press never prints this line, the message never
+                    # reached this queue. The Oct-24 root cause rode ONE
+                    # step further in: the press never MATCHED, because
+                    # the old card registered Tk's keycode as the vk.
                     try:
-                        from . import dimmer
+                        from . import hotkeys
                         log.info("display: WM_HOTKEY wParam=%#x on "
-                                 "hwnd=%#x (want %#x)", msg.wParam,
-                                 self._hwnd or 0, dimmer.HOTKEY_ID)
-                        if msg.wParam == dimmer.HOTKEY_ID:
-                            dimmer.hotkey_press()
+                                 "hwnd=%#x", msg.wParam, self._hwnd or 0)
+                        hotkeys.dispatch(msg.wParam)
                     except Exception:
-                        pass           # a dimmer that cannot hear is a
-                                       # dimmer, not a dead pump
+                        pass           # a registry that cannot hear is
+                                       # a registry, not a dead pump
                 elif msg.message == WM_POWER and msg.wParam == PBT_POWER:
                     if not msg.lParam:
                         # NULL is an ACCESS VIOLATION, not an exception:
@@ -619,8 +614,8 @@ class Display(threading.Thread):
             #                                  # now, never a caller left
             #                                  # waiting on a dead queue
             _req, self._hotkey_req = self._hotkey_req, None
-            _req[4] = (False, 0)
-            _req[3].set()
+            _req[5] = (False, 0)
+            _req[4].set()
         try:
             if self._wts_reg:
                 wts.WTSUnRegisterSessionNotification(self._hwnd)
@@ -692,23 +687,24 @@ class Display(threading.Thread):
             self._release_ears()
         self._ear_req = None
 
-    def request_hotkey(self, op, mods=0, vk=0):
-        """The dimmer's hotkey knock, NOTE-AND-WAIT (the _ear_req
-        idiom's twin): the store and a WM_APP+1 post - the pump's
-        wait already wakes on posted input - and the PUMP thread
-        applies it against its own window (1408, measured Oct-15:
-        RegisterHotKey from a foreign thread is refused for a foreign
-        window; the un-knock crosses too, a wrong-thread unregister
-        leaks the registration in the owning queue). Blocks on the
-        note's event: a wedged pump answers (False, 0) after the
-        wait's bound, never a silent hang - the monitor tick that
-        carries the arm may not die on the desk's behalf."""
+    def request_hotkey(self, op, hkid, mods=0, vk=0):
+        """A hotkey knock, NOTE-AND-WAIT (the _ear_req idiom's twin):
+        the store and a WM_APP+1 post - the pump's wait already wakes
+        on posted input - and the PUMP thread applies it against its own
+        window (1408, measured Oct-15: RegisterHotKey from a foreign
+        thread is refused for a foreign window; the un-knock crosses
+        too, a wrong-thread unregister leaks the registration in the
+        owning queue). hkid is the app's registered id - the wParam the
+        WM_HOTKEY comes back with. Blocks on the note's event: a wedged
+        pump answers (False, 0) after the wait's bound, never a silent
+        hang - the monitor tick that carries the arm may not die on the
+        desk's behalf."""
         done = threading.Event()
-        note = [op, int(mods), int(vk), done, (False, 0)]
+        note = [op, int(hkid), int(mods), int(vk), done, (False, 0)]
         self._hotkey_req = note
         u32.PostMessageW(self._hwnd, WM_APP + 1, 0, 0)
         done.wait(5.0)
-        return note[4]
+        return note[5]
 
     def _service_hotkey(self):
         """Apply the pending hotkey note, on the pump loop (every
@@ -722,18 +718,16 @@ class Display(threading.Thread):
         if note is None:
             return
         self._hotkey_req = None
-        op, mods, vk, done, _res = note
+        op, hkid, mods, vk, done, _res = note
         ok, err = False, 0
         try:
-            from . import dimmer
             if op == "register":
-                ok = bool(u32.RegisterHotKey(self._hwnd, dimmer.HOTKEY_ID,
-                                             mods, vk))
+                ok = bool(u32.RegisterHotKey(self._hwnd, hkid, mods, vk))
             elif op == "unregister":
-                ok = bool(u32.UnregisterHotKey(self._hwnd, dimmer.HOTKEY_ID))
+                ok = bool(u32.UnregisterHotKey(self._hwnd, hkid))
             if not ok:
                 # the windll handle here carries no ctypes copy
-                # (use_last_error is dimmer's shape, display's house
+                # (use_last_error is the caller's shape, display's house
                 # verb is the real k32.GetLastError, as every refusal
                 # line in this module already reads): the pump thread
                 # calls the API directly, the number is its own.
@@ -742,7 +736,7 @@ class Display(threading.Thread):
             err = k32.GetLastError()          # the refusal rides the
             #                                 # same (False, errno)
             #                                 # road back, no raise
-        note[4] = (ok, err)
+        note[5] = (ok, err)
         done.set()
 
     _DEVICES = ((1, 2), (1, 6))      # generic-desktop pointer, keyboard
@@ -1137,8 +1131,8 @@ def hotkey_window():
     return _ACTIVE[0]._hwnd if _ACTIVE else None
 
 
-def request_hotkey(op, mods=0, vk=0):
-    """The dimmer's hotkey door: (op, mods, vk) -> (ok, err). The
+def request_hotkey(op, hkid, mods=0, vk=0):
+    """A hotkey door: (op, id, mods, vk) -> (ok, err). The
     registration is APPLIED on the pump thread against the pump's own
     window - the Oct-15 measuring: RegisterHotKey from a foreign
     thread answers ERROR_INVALID_HOTKEY_WINDOW (1408, same-thread
@@ -1150,7 +1144,7 @@ def request_hotkey(op, mods=0, vk=0):
     w = _ACTIVE[0] if _ACTIVE else None
     if w is None or not w._hwnd:
         return False, 0
-    return w.request_hotkey(op, mods, vk)
+    return w.request_hotkey(op, hkid, mods, vk)
 
 
 def foreground_is_fullscreen():

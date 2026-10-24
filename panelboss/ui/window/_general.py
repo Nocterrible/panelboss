@@ -18,7 +18,7 @@ import customtkinter as ctk
 from ... import config, update
 from .. import deps, theme
 from ._constants import TIPS
-from ._widgets import SkewCombo
+from ._widgets import SkewCombo, set_text
 
 log = logging.getLogger("ui")
 
@@ -101,6 +101,127 @@ class _GeneralMixin:
                                          **self.skin.text_style("sub"))
         self.startup_note.pack(anchor="w")
         self._startup_sync(startup.enabled())
+        self._build_hotkeys(col)
+
+
+    # ------------------------------------------------------ keybindings --
+    # Four verbs, one card (the four-verb wave, Oct 24): the pause
+    # hotkey moved here from the dimmer card. Each verb binds on
+    # keypress, esc clears, and is unbound until the owner gives one.
+    # The capture rides hotkeys.capture (keysym -> the win32 VK), the
+    # arm rides hotkeys.sync on the state loop's beat, and the say row
+    # shows the dated confession - never a silent lie. The registry owns
+    # the RegisterHotKey; this card owns only the words' UI.
+    _HOTKEY_VERBS = (("pause", "pause dimming",
+                      "pause the dimmer without touching its settings; "
+                      "one press pauses, the next resumes"),
+                     ("theater", "movie theater",
+                      "toggle movie theater mode - the same switch the "
+                      "companion card owns"),
+                     ("restore", "restore my windows",
+                      "put the windows back where the captured profile "
+                      "left them"),
+                     ("detection", "detection toggle",
+                      "flip the detection tab's big consent switch "
+                      "on or off"))
+
+    def _build_hotkeys(self, col):
+        box = self._card(col, "keybindings",
+                         "bind a combo on keypress, esc clears it; "
+                         "nothing is stolen until you give one - a "
+                         "taken combo keeps its predecessor and says so")
+        self._hotkey_btns = {}
+        self._hotkey_says = {}
+        from ... import hotkeys
+        for name, label, tip in self._HOTKEY_VERBS:
+            row = self._row(box, label, tip, hint_chars=42)
+            btn = ctk.CTkButton(
+                row, text="press a key to bind", height=26, width=170,
+                command=lambda n=name: self._hotkey_bind(n),
+                **self.skin.secondary())
+            btn.grid(row=0, column=1, sticky="e")
+            say = ctk.CTkLabel(row, text="", font=self.skin.font(11),
+                               wraplength=120, justify="left", anchor="e",
+                               **self.skin.text_style("sub"))
+            say.grid(row=0, column=2, sticky="e",
+                     padx=(theme.S_FIELD, 0))
+            self._hotkey_btns[name] = btn
+            self._hotkey_says[name] = say
+            self._hotkey_words(name)
+        self.after(1000, self._hotkey_poll)
+
+    def _hotkey_bind(self, name):
+        if getattr(self, "_hk_pending", None) == name:
+            self._hotkey_disarm()
+            return
+        self._hk_pending = name
+        self.bind_all("<KeyPress>", self._hotkey_capture)
+        self.bind("<FocusOut>", self._hotkey_focus_out)
+        self._hotkey_btns[name].configure(text="press a key now")
+
+    def _hotkey_disarm(self):
+        self._hk_pending = None
+        self.unbind_all("<KeyPress>")
+        self.unbind("<FocusOut>")
+        for name in self._hotkey_btns:
+            self._hotkey_btns[name].configure(text="press a key to bind")
+
+    def _hotkey_focus_out(self, _event=None):
+        if getattr(self, "_hk_pending", None) is not None:
+            self._hotkey_disarm()
+
+    def _hotkey_capture(self, event):
+        name = getattr(self, "_hk_pending", None)
+        if name is None:
+            return
+        if event.keysym in ("Control_L", "Control_R", "Shift_L",
+                            "Shift_R", "Alt_L", "Alt_R",
+                            "Super_L", "Super_R"):
+            return "break"          # a modifier's own keydown carries
+                                    # state=0; keep waiting for the chord
+        self._hotkey_disarm()
+        from ... import hotkeys
+        if event.keysym == "Escape":
+            hotkeys.set_bound(self.cfg, name, None)
+            self._save()
+            self._hotkey_words(name)
+            return
+        pair, word = hotkeys.capture(event.keysym, event.state)
+        log.info("hotkeys: capture: %s keysym=%r state=%#x -> stored %r",
+                 name, event.keysym, event.state, pair)
+        if word:
+            set_text(self._hotkey_says[name], word)
+            return
+        hotkeys.set_bound(self.cfg, name, pair)
+        self._save()
+        self._hotkey_words(name)
+
+    def _hotkey_words(self, name):
+        from ... import hotkeys
+        note = hotkeys.note(name)
+        if note:
+            set_text(self._hotkey_says[name], note)     # the dated refusal
+        elif hotkeys.live(name):
+            set_text(self._hotkey_says[name], "live")
+        elif hotkeys.bound(name, self.cfg):
+            set_text(self._hotkey_says[name], "stored - answers next beat")
+        else:
+            set_text(self._hotkey_says[name], "unbound")
+
+    def _hotkey_poll(self):
+        """The say rows follow the engine (a taken combo answered AFTER
+        the capture surfaces here) - the away card's poll idiom."""
+        try:
+            if getattr(self, "_dying", False):
+                return
+            for name in self._hotkey_btns:
+                self._hotkey_words(name)
+        except Exception:
+            log.debug("hotkey poll failed", exc_info=True)
+        try:
+            self.after(1000, self._hotkey_poll)
+        except Exception:
+            pass                            # destroyed mid-tick
 
 
     # ------------------------------------------------------------- helpers --

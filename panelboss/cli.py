@@ -205,6 +205,41 @@ _FAULT = None          # the crash-receipt file (set by main after the
                        # closes it under the handler's feet)
 
 
+def _wire_hotkeys(cfg, monitor, ui_events):
+    """Populate the hotkey registry's dispatch table. The pump thread
+    runs each verb's handler on a WM_HOTKEY press; every handler is
+    thread-safe - either a bare flag (pause) or a queue put (the rest
+    ride the UI/state loops on their own beats). The write paths are
+    the SAME verbs the cards and the tray already run: pause flips the
+    dimmer flag, theater toggles [videodim].on, restore posts
+    restore_windows, detection posts camera_enabled."""
+    from . import dimmer, hotkeys
+
+    hotkeys.INVOKE["pause"] = dimmer.hotkey_press
+
+    def theater():
+        # [videodim].on is the one consent key (the companion card's
+        # switch writes it); the toggle lands here, the UI repaints on
+        # the companion_sync arm below.
+        want = not bool((cfg.get("videodim") or {}).get("on"))
+        cfg.setdefault("videodim", {})["on"] = want
+        config.write_config(cfg)
+        ui_events.put(("companion_sync", None))
+
+    def restore():
+        ui_events.put(("restore_windows", None))
+
+    def detection():
+        # the consent switch's exact write path (_detection.py): a
+        # camera_enabled event the state loop drains and repaints.
+        want = not bool((cfg.get("camera") or {}).get("enabled"))
+        monitor.events.put(("camera_enabled", want))
+
+    hotkeys.INVOKE["theater"] = theater
+    hotkeys.INVOKE["restore"] = restore
+    hotkeys.INVOKE["detection"] = detection
+
+
 def _single_instance():
     """Named mutex; a second copy exits before touching the camera.
     Global\\ so the guard spans sessions (MSDN kernel-object-namespaces;
@@ -408,6 +443,7 @@ def _run(cfg, autostart=False):
     # "probing..." placeholders where the slow submenus will be
     ui_events = queue.Queue()               # tray <-> window messages
     monitor = state.PresenceMonitor(cfg, None, None, ui_events=ui_events)
+    _wire_hotkeys(cfg, monitor, ui_events)
     icon = tray.Tray(monitor.events, cfg, ui_events=ui_events,
                      monitor=monitor)
     icon.start()                            # the tray always runs beside

@@ -174,6 +174,12 @@ class _RuntimeMixin:
                 except Exception:
                     log.exception("tray restore_windows lost in the "
                                   "window pump")
+            if message == "companion_sync":
+                # the theater hotkey's repaint (the toggle wrote cfg on
+                # the pump thread; the switch re-reads it here on the Tk
+                # thread - never a cross-Tk checkbox write).
+                if hasattr(self, "_sync_companion_switches"):
+                    self._sync_companion_switches()
             if message == "later":
                 # the queue-side fallback for a worker's done() marshal
                 # when the pump thread was not yet in its loop (the

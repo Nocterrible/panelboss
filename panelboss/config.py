@@ -590,6 +590,16 @@ DEFAULTS = {
                                 # in the Run key is the proof, never an
                                 # inference; "always" = every app start
     },
+    "hotkeys": {
+        # the three NEW verbs (the four-verb wave, Oct 24). Each word is
+        # a [mods, vk] pair or absent (= UNBOUND, default-off law: no
+        # chord stolen before the owner gives one). The pause verb keeps
+        # its OWN storage: [dimmer].bound, byte-compat with every file
+        # that already holds one.
+        "theater": None,        # the movie-theater mode toggle
+        "restore": None,        # "restore my windows" verb
+        "detection": None,      # the detection consent switch
+    },
     # the release-boundary stamp (wave B): the file's own answer for
     # itself. Its ABSENCE marks a pre-law file to the one-shot load
     # migration below; the first loop-owned save lands it, which makes
@@ -1457,6 +1467,36 @@ def normalize_videodim(value):
             "hole": hole, "monitors": mons}
 
 
+def _norm_hotkey_bound(bound):
+    """One [hotkeys] verb's stored word in its canonical [mods, vk]
+    shape, or None: the dimmer 'bound' normalization's twin, spoken as
+    a function so the four-verb registry reads the same law in one
+    place. A [mods, vk] pair (two int-coercible members) round-trips;
+    junk warns and folds to None (unbound - the only state besides a
+    stored pair the card can promise honestly)."""
+    if isinstance(bound, (list, tuple)) and len(bound) == 2:
+        try:
+            return [int(bound[0]), int(bound[1])]
+        except (TypeError, ValueError):
+            log.warning("a hotkey bound %r holds no two ints; the "
+                        "verb is unbound", bound)
+            return None
+    if bound is not None:
+        log.warning("a hotkey bound %r is not a [mods, vk] pair; the "
+                    "verb is unbound", bound)
+    return None
+
+
+def normalize_hotkeys(value):
+    """[hotkeys] in its in-memory shape: the three new verbs, each a
+    [mods, vk] pair or None (absent = unbound, the default-off law).
+    The pause verb is NOT here - it lives at [dimmer].bound for the
+    byte-compat law."""
+    value = value if isinstance(value, dict) else {}
+    return {k: _norm_hotkey_bound(value.get(k))
+            for k in ("theater", "restore", "detection")}
+
+
 def _live_shorts():
     """The desk's panel shorts, for the migration's rows. A seam on
     purpose: the suite patches this instead of the Win32 enum, and a
@@ -1605,6 +1645,7 @@ def get_config(dir=CONFIG_DIR, initialize=True, verbose=True):
     merged["jog"] = normalize_jog(merged.get("jog"))
     merged["dimmer"] = normalize_dimmer(merged.get("dimmer"))
     merged["videodim"] = normalize_videodim(merged.get("videodim"))
+    merged["hotkeys"] = normalize_hotkeys(merged.get("hotkeys"))
     # THE BOOT TRUTH, one INFO line (Oct 19, the "theater turns itself
     # back on" hunt: the claim contradicts a persisted on=false and a
     # strict-True knob; every code path checked clean, so the next

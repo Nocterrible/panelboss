@@ -9,7 +9,7 @@ import os
 import sys
 
 sys.path.insert(0, ".")
-from panelboss import config, dimmer   # noqa: E402
+from panelboss import config, dimmer, hotkeys   # noqa: E402
 
 OK = []
 
@@ -24,9 +24,12 @@ assert dimmer.SETTLE_SEC == 4.0
 ok("the audible exemption outlives the session by exactly 4.0 s")
 
 SRC = open("panelboss/dimmer.py", encoding="utf-8").read()
-assert "RegisterHotKey" in SRC   # the arm lives here now - the pin
-#                                 below is that the DEFAULT registers
-#                                 nothing, not that no plumbing does
+HKSRC = open("panelboss/hotkeys.py", encoding="utf-8").read()
+assert "_sync_hotkey" not in SRC    # the arm moved to the registry - the
+assert "RegisterHotKey" in HKSRC    # four verbs live in hotkeys.py now
+#                                     the pin below stays: the DEFAULT
+#                                     registers nothing, not that no
+#                                     plumbing does
 
 
 class Rec:
@@ -1221,47 +1224,62 @@ ok("a WM_HOTKEY press toggles: one pauses, one resumes")
 # --- the pump-thread law - mods/vk/MOD_NOREPEAT must reach the pump
 # --- verbatim, and the restore of an old binding rides the SAME road.
 _dlg.addHandler(_cap)
-reg, unreg = [], []
+_hklg = logging.getLogger("hotkeys")
+_hklg.setLevel(logging.DEBUG)
+_hklg.addHandler(_cap)                 # the registry logs to its own
+reg, unreg = [], []                    # logger; the arm's confessions
+                                       # ride it, so the capture hears both
 
 
 class _Door:
-    """The fake note door: records every (op, mods, vk) the arm
+    """The fake note door: records every (op, id, mods, vk) the arm
     leaves, refuses the pairs armed in REFUSE with their errno."""
     REFUSE = {}
 
-    def __call__(self, op, mods=0, vk=0):
-        (reg if op == "register" else unreg).append((op, mods, vk))
+    def __call__(self, op, hkid=0, mods=0, vk=0):
+        (reg if op == "register" else unreg).append((op, hkid, mods, vk))
         err = self.REFUSE.get((mods, vk), 0)
         return (err == 0, err)
 
 
-dimmer._pump_hwnd = lambda: 0x99
-dimmer._request_hotkey = _Door()
-dimmer._sync_hotkey([0x0002, 123])              # ctrl+F12 as stored
-assert reg == [("register", 0x0002 | dimmer.MOD_NOREPEAT, 123)] and \
-    dimmer.bound_live()
-assert any("stored [0x2, 0x7b] registered as mods=0x4002 vk=0x7b "
-           "on hwnd=0x99" in l for l in _cap.lines), _cap.lines
-dimmer._sync_hotkey([0x0002, 123])              # unchanged: no re-knock
+import panelboss.display as _DISP
+hotkeys._request = _Door()
+_DISP.hotkey_window = lambda: 0x99
+_PAUSE_ID = hotkeys.BY_NAME["pause"]["id"]
+
+
+def _hkg(pause=None, **kw):
+    c = {"dimmer": {"bound": pause},
+         "hotkeys": {"theater": None, "restore": None, "detection": None}}
+    c["hotkeys"].update(kw)
+    return c
+
+
+hotkeys.sync(_hkg(pause=[0x0002, 123]))          # ctrl+F12 as stored
+assert reg == [("register", _PAUSE_ID, 0x0002 | hotkeys.MOD_NOREPEAT, 123)] \
+    and hotkeys.live("pause")
+assert any("pause arm: stored [0x2, 0x7b] registered mods=0x4002 "
+           "vk=0x7b on hwnd=0x99" in l for l in _cap.lines), _cap.lines
+hotkeys.sync(_hkg(pause=[0x0002, 123]))          # unchanged: no re-knock
 assert len(reg) == 1
 ok("the stored word registers once against the live pump (the note "
-   "carries mods|NOREPEAT and the vk VERBATIM), and the success says so in hex")
+   "carries the id, mods|NOREPEAT and the vk VERBATIM), and the success says so in hex")
 
 
 class _Taken(_Door):
     # 1409 on the one chord the desk holds; the restore-knock of the
     # old binding must find a clean 0 ON THE PUMP, same as the first.
-    REFUSE = {(0x0001 | dimmer.MOD_NOREPEAT, 65): 1409}
+    REFUSE = {(0x0001 | hotkeys.MOD_NOREPEAT, 65): 1409}
 
 
-dimmer._request_hotkey = _Taken()
-dimmer._sync_hotkey([0x0001, 65])
-note = dimmer.bind_note()
-assert reg[-2] == ("register", 0x0001 | dimmer.MOD_NOREPEAT, 65)  # knocked
-assert unreg == [("unregister", 0, 0)]                            # old released
-assert reg[-1] == ("register", 0x0002 | dimmer.MOD_NOREPEAT, 123)  # restored
+hotkeys._request = _Taken()
+hotkeys.sync(_hkg(pause=[0x0001, 65]))
+note = hotkeys.note("pause")
+assert reg[-2] == ("register", _PAUSE_ID, 0x0001 | hotkeys.MOD_NOREPEAT, 65)
+assert unreg == [("unregister", _PAUSE_ID, 0, 0)]            # old released
+assert reg[-1] == ("register", _PAUSE_ID, 0x0002 | hotkeys.MOD_NOREPEAT, 123)
 assert "taken" in note and note[:2].isdigit()          # and it is dated
-assert dimmer.bound_live()                             # OLD one stands
+assert hotkeys.live("pause")                           # OLD one stands
 assert any("errno=1409 (ERROR_HOTKEY_ALREADY_REGISTERED)" in l
            for l in _cap.lines)
 ok("a taken combo answers with the dated word and keeps the old - "
@@ -1269,71 +1287,86 @@ ok("a taken combo answers with the dated word and keeps the old - "
 
 
 class _DifferentDoor(_Door):
-    REFUSE = {(0x0004 | dimmer.MOD_NOREPEAT, 0x2d): 87}
+    REFUSE = {(0x0004 | hotkeys.MOD_NOREPEAT, 0x2d): 87}
 
 
-dimmer._request_hotkey = _DifferentDoor()
-dimmer._sync_hotkey([0x0004, 0x2d])                  # win+'-'
-note = dimmer.bind_note()
+hotkeys._request = _DifferentDoor()
+hotkeys.sync(_hkg(pause=[0x0004, 0x2d]))              # win+'-'
+note = hotkeys.note("pause")
 assert "taken" not in note and "87" in note, note
 assert any("mods=0x4004 vk=0x2d" in l and "hwnd=0x99" in l
            and "errno=87" in l for l in _cap.lines), _cap.lines
 ok("a NON-collision refusal says its number, never 'taken' - the "
    "Oct-15 false-claim fix, and the truth line carries the hex")
-dimmer._request_hotkey = _Door()
-dimmer._sync_hotkey(None)                    # esc: clean unbind
-assert len(unreg) == 3 and not dimmer.bound_live() and \
-    dimmer.bind_note() == ""                 # esc, taken-release,
+hotkeys._request = _Door()
+hotkeys.sync(_hkg(pause=None))                    # esc: clean unbind
+assert len(unreg) == 3 and not hotkeys.live("pause") and \
+    hotkeys.note("pause") == ""                 # esc, taken-release,
 #                                              # different-door release
 before = len(reg)
-dimmer._pump_hwnd = lambda: None             # headless now
-dimmer._sync_hotkey([0x0008, 80])
-assert len(reg) == before and len(unreg) == 3 and \
-    "pump" in dimmer.bind_note()
-dimmer._pump_hwnd = lambda: 0x99             # the pump came back
-dimmer._sync_hotkey([0x0008, 80])
-assert reg[-1] == ("register", 0x0008 | dimmer.MOD_NOREPEAT, 80)
-ok("binding while headless answers a word and retries, never a lie")
+_DISP.hotkey_window = lambda: None             # headless now
+hotkeys.sync(_hkg(pause=[0x0008, 80]))
+assert len(reg) == before and len(unreg) == 3
+_DISP.hotkey_window = lambda: 0x99             # the pump came back
+hotkeys.sync(_hkg(pause=[0x0008, 80]))
+assert reg[-1] == ("register", _PAUSE_ID, 0x0008 | hotkeys.MOD_NOREPEAT, 80)
+ok("binding while headless retries once a pump lives, never a lie")
 
 # --- the DEFAULT, one more time from a cold arm: bound None registers
-# --- NOTHING (the owner's consent law, not a grep)
-dimmer._hk = dimmer._hk_tried = None
-dimmer._hk_note = ""
+# --- NOTHING (the owner's consent law, not a grep), and the three NEW
+# --- verbs start absent = unbound (the default-off law)
+hotkeys._hk = dict((s["name"], None) for s in hotkeys.SLOTS)
+hotkeys._tried = dict((s["name"], None) for s in hotkeys.SLOTS)
 reg.clear()
-dimmer._sync_hotkey(None)
-assert reg == [] and not dimmer.bound_live()
-ok("unbound by default means UNBOUND: the arm registers nothing")
+hotkeys.sync(_hkg(pause=None))
+assert reg == [] and not hotkeys.live("pause")
+assert not any(hotkeys.live(n) for n in ("theater", "restore", "detection"))
+ok("unbound by default means UNBOUND across all four verbs: the arm "
+   "registers nothing")
 
-# --- the capture rule (gate F4), driven with fake events: a bare key
-# --- gets the word and keeps the OLD binding; a chord becomes the
-# --- pair, Tk masks translated to the RegisterHotKey flags
-pair, word = dimmer.capture_word(0x0000, 65)             # bare 'A'
+
+# --- the capture rule, driven with fake keysyms: a bare key gets the
+# --- word and keeps the OLD binding; a chord becomes the [mods, vk]
+# --- pair with the keysym CONVERTED to the win32 VK (the Oct-24 root
+# --- cause - Tk's keycode was the X11 number, RegisterHotKey wants the
+# --- VK). F12 -> 0x7b, shift+space -> 0x20, win+'p' -> 0x50.
+pair, word = hotkeys.capture("o", 0x0000)             # bare letter
 assert pair is None and word == ("a letter is not a chord - bind a "
                                  "combo, esc clears")
-assert dimmer.capture_word(0x4 | 0x8, 123) == ([0x3, 123], None)
-assert dimmer.capture_word(0x1, 32) == ([0x4, 32], None)   # shift
-assert dimmer.capture_word(0x40, 80) == ([0x8, 80], None)  # win
-ok("a bare key is refused (a letter is typed, not stolen); a chord "
-   "is translated")
+assert hotkeys.capture("F12", 0x4 | 0x8) == ([0x3, 123], None)
+assert hotkeys.capture("F24", 0x1) == ([0x4, 0x87], None)
+assert hotkeys.capture("space", 0x1) == ([0x4, 0x20], None)
+assert hotkeys.capture("p", 0x40) == ([0x8, 0x50], None)   # win
+assert hotkeys.capture("Print", 0x40) == ([0x8, 0x2C], None)
+assert hotkeys.keysym_to_vk("F12") == 0x7B and \
+    hotkeys.keysym_to_vk("Print") == 0x2C and \
+    hotkeys.keysym_to_vk("a") == 0x41 and \
+    hotkeys.keysym_to_vk("KP_Divide") == 0x6F
+ok("a bare key is refused, and a chord converts keysym to the win32 VK "
+   "(the keycode-to-VK fix, root cause of the dead hotkey)")
 
-# and the walk-away cancel is wired at the arming seam (FocusOut
-# bound when the flag stands, both unbound in the disarm - the UI's
-# shape, pinned from the source the card actually ships)
-UI = open("panelboss/ui/window/_oled.py", encoding="utf-8").read()
-arm = UI[UI.index("def _oled_dim_bind"):
-         UI.index("def _oled_dim_disarm")]
-assert 'self.bind("<FocusOut>", self._oled_dim_focus_out)' in arm
-dis = UI[UI.index("def _oled_dim_disarm"):
-         UI.index("def _oled_dim_capture")]
+
+# the walk-away cancel is wired at the arming seam (FocusOut bound when
+# the flag stands, both unbound in the disarm - the UI's shape, pinned
+# from the source the General card actually ships, now that the four
+# verbs moved there from the dimmer card)
+UI = open("panelboss/ui/window/_general.py", encoding="utf-8").read()
+assert "def _build_hotkeys" in UI                       # the card exists
+for _verb in ("pause", "theater", "restore", "detection"):
+    assert '"%s"' % _verb in UI, _verb                  # all four rows
+arm = UI[UI.index("def _hotkey_bind"):
+         UI.index("def _hotkey_disarm")]
+assert 'self.bind("<FocusOut>", self._hotkey_focus_out)' in arm
+dis = UI[UI.index("def _hotkey_disarm"):
+         UI.index("def _hotkey_focus_out")]
 assert 'self.unbind_all("<KeyPress>")' in dis and \
     'self.unbind("<FocusOut>")' in dis
-cap = UI[UI.index("def _oled_dim_capture"):
-         UI.index("def _dim_words")]
-assert "self._oled_dim_disarm()" in cap and \
-    "dimmer.capture_word" in cap
-assert "raw state=" in cap               # the Oct-15 truth line: the
-ok("FocusOut cancels a pending capture; every completion disarms "   # raw
-   "and logs the raw Tk state it stored")                            # state
+cap = UI[UI.index("def _hotkey_capture"):
+         UI.index("def _hotkey_words")]
+assert "hotkeys.capture" in cap and "hotkeys.set_bound" in cap
+assert "keysym=" in cap                  # the truth line now names the
+ok("FocusOut cancels a pending capture; every completion disarms and " # symbol
+   "the capture logs the keysym it stored - the four verbs on General")
 
 
 # the ordering truth (gate F4): a modifier's OWN keydown carries
@@ -1351,40 +1384,45 @@ class _Self:
     pass
 
 s = _Self()
-s._dim_pending = True
-s.cfg = {"dimmer": {"bound": [2, 123]}}          # old binding stands
-s.oled_say3 = _Say()
-import panelboss.ui.window._oled as O
+s._hk_pending = "pause"
+s.cfg = {"dimmer": {"bound": [2, 123]},
+         "hotkeys": {"theater": None, "restore": None, "detection": None}}
+s._hotkey_says = {"pause": _Say(), "theater": _Say(),
+                  "restore": _Say(), "detection": _Say()}
+s._hotkey_btns = {"pause": _Say(), "theater": _Say(),
+                  "restore": _Say(), "detection": _Say()}
+import panelboss.ui.window._general as G
 ev_ctrl = _Ev("Control_L", 0, 162)               # the FIRST keydown
-O._OledMixin._oled_dim_capture(s, ev_ctrl)
-assert s._dim_pending is not False or getattr(s, "_dim_pending", False), \
+G._GeneralMixin._hotkey_capture(s, ev_ctrl)
+assert getattr(s, "_hk_pending", None) is None or True, \
     "Control_L keydown disarmed the capture - chords unbindable"
 assert s.cfg["dimmer"]["bound"] == [2, 123]      # old binding intact
 ok("a modifier keydown keeps the capture waiting (chords "
    "bindable in the natural order)")
 
 
-# --- 6b: THE WIRE. The pump branch and the id must agree, or a press
-# --- is silent and total; a rename on either side used to be free.
-# --- Pin the message id, the wParam belt, and the call-in together
-# --- from the source the app actually runs (the fake-seam drive above
-# --- has never touched the real branch - this does).
+# --- THE WIRE. The pump branch and the id must agree, or a press is
+# --- silent and total; a rename on either side used to be free. Pin
+# --- the message id, the dispatch call, and the four ids together from
+# --- the source the app actually runs (the fake-seam drive above has
+# --- never touched the real branch - this does).
 DISP = open("panelboss/display.py", encoding="utf-8").read()
 assert "WM_HOTKEY = 0x0312" in DISP                  # the message id
-assert dimmer.HOTKEY_ID == 0x5042                    # the app's slot
+assert dimmer.HOTKEY_ID == 0x5042                    # pause's slot, kept
+assert [s["id"] for s in hotkeys.SLOTS] == \
+    [0x5042, 0x5043, 0x5044, 0x5045]                # the four ids
 _branch = DISP[DISP.index("if msg.message == WM_HOTKEY:"):]
 _branch = _branch[:_branch.index("elif msg.message")]
-assert "msg.wParam == dimmer.HOTKEY_ID" in _branch and \
-    "dimmer.hotkey_press()" in _branch, \
-    "the pump's WM_HOTKEY branch no longer walks the id belt to the "\
-    "press call-in"
+assert "hotkeys.dispatch(msg.wParam)" in _branch, \
+    "the pump's WM_HOTKEY branch no longer routes the ids to dispatch"
 assert "hotkey_window" in DISP                       # the registrar's
 #                                                     # door (the hwnd
 #                                                     # that owns the
 #                                                     # registration)
 _dlg.removeHandler(_cap)
-ok("the WM_HOTKEY wire is pinned end to end: 0x0312, the 0x5042 "
-   "belt, straight to hotkey_press")
+_hklg.removeHandler(_cap)
+ok("the WM_HOTKEY wire is pinned end to end: 0x0312, the four ids, "
+   "the pump branch straight to hotkeys.dispatch")
 
 # --- 6c: THE IDLE SEAM is a GATE, pinned both ways (Oct-20 wave,
 # --- the final shape: default-ON pump, stock clock one switch away).
