@@ -66,10 +66,11 @@ n = config.normalize_videodim({"on": "junk", "enabled": True,
                                "sites": ["youtube.com"]})
 check(n == {"on": False, "min_rect_px": 200000, "grace_s": 3,
             "idle_sec": 15, "level": 20, "fade": False,
-            "monitors": {}},
+            "hole": "video", "monitors": {}},
       "junk on folds to False and the retired keys never survive the "
       "normalizer (the per-panel monitors table defaults to the "
-      "legacy empty - the Oct-16 wave's shape)")
+      "legacy empty - the Oct-16 wave's shape; the hole word lands on "
+      "the Oct-24 video default)")
 
 # the companion module: junk answers the off words, never raises
 for junk in (None, {}, {"videodim": "junk"}, {"videodim": 7},

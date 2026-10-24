@@ -550,6 +550,17 @@ DEFAULTS = {
                                     # opts into the ramp family (one-tick
                                     # hold, retract over the dimmer's
                                     # ramp).
+        "hole": "video",             # the ring's hole shape (owner ruling,
+                                     # Oct 24, restoring the founder's
+                                     # shape): "video" - the ring hugs the
+                                     # video itself, so the page and the
+                                     # browser's chrome wear the darkness
+                                     # with the desk; "window" - the Oct-20
+                                     # shape (the hole is the reporting
+                                     # window's bounds 8 px expanded, the
+                                     # chrome stays bright). An unknown
+                                     # word warns naming itself and folds
+                                     # to "video".
         "monitors": {},             # {EDID short: {"on": bool, "level":
                                     # int}} - the per-panel theater rows
                                     # (owner, Oct 16): a row's panel
@@ -1335,11 +1346,16 @@ VIDEODIM_LEVEL_DEFAULT = 20        #   10..90, 20 is the Oct-15 OLED
                                    #   ruling mirrored). The theater pieces
                                    #   draw at THIS darkness, NOT the idle
                                    #   dimmer's [dimmer].level number.
+VIDEODIM_HOLES = ("video", "window")  # the ring's hole words (owner, Oct
+                                   #   24): video = the law (the ring hugs
+                                   #   the video); window = the Oct-20
+                                   #   reporting-window shape, opt-in by
+                                   #   word alone
 
 
 def normalize_videodim(value):
     """[videodim] in its in-memory shape: {on, min_rect_px, grace_s,
-    idle_sec, level, fade, monitors}. The same honesty law as
+    idle_sec, level, fade, hole, monitors}. The same honesty law as
     normalize_dimmer, mirrored:
     a bad on warns and folds to False (the default-off root - the feature
     sleeps until the owner wakes it), the rails clamp in silence. The
@@ -1385,6 +1401,16 @@ def normalize_videodim(value):
         log.warning("videodim fade %r is not a bool; the frame drops "
                     "without a fade", fade)
         fade = False
+    # hole: the ring's shape word (owner ruling, Oct 24). One of
+    # VIDEODIM_HOLES; the ABSENT key answers the stock word (a byte-
+    # compatible file loads untouched and rings the video), and an
+    # unknown word warns naming itself and folds to the default - the
+    # fossil-law idiom, the away off_after_min retirement line.
+    hole = value.get("hole", DEFAULTS["videodim"]["hole"])
+    if hole not in VIDEODIM_HOLES:
+        log.warning("videodim hole %r is not one of %s; the ring's "
+                    "hole stays the video", hole, VIDEODIM_HOLES)
+        hole = "video"
     # monitors: the per-panel theater rows (owner, Oct 16). A row is
     # the EDID short -> {"on": bool, "level": int|None}. on absent is
     # True: a row EXISTS to opt out too, so the stock word is consent.
@@ -1421,7 +1447,7 @@ def normalize_videodim(value):
             mons[short] = {"on": on, "level": level}
     return {"on": on, "min_rect_px": mins, "grace_s": grace,
             "idle_sec": idle, "level": level, "fade": fade,
-            "monitors": mons}
+            "hole": hole, "monitors": mons}
 
 
 def _live_shorts():

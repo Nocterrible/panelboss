@@ -90,10 +90,13 @@ TIP_DIM = {
     "on": "an idle desk puts a dark click-through veil over every "
           "window you are not using; the window you touch lights "
           "instantly, and a window the mic just heard keeps its "
-          "brightness for four seconds. Elevated windows (Task "
-          "Manager's class) never wear a veil this app cannot stack "
-          "against - running the app elevated reaches them but is "
-          "not recommended. Nothing dims until you opt in, per "
+          "brightness for four seconds. The window the buddy reports "
+          "as playing a video never wears the veil either - "
+          "backgrounded included, always rows included; pause the "
+          "video and the dim layer comes back. Elevated windows "
+          "(Task Manager's class) never wear a veil this app cannot "
+          "stack against - running the app elevated reaches them but "
+          "is not recommended. Nothing dims until you opt in, per "
           "monitor.",
     "row": "dim veils on THIS monitor only - the opt-in law, shared "
            "with the strip and the refresh.",
@@ -126,13 +129,27 @@ TIP_DIM = {
 
 
 TIP_COMP = {
-    "on": "movie theater mode: a PLAYING video gets a dimmed frame "
-          "around its window once the input has been still for the "
-          "'veil after' wait; motion lifts the ring, which re-arms "
-          "after the same wait, and a film's sound never touches it. "
-          "The player window stays exempt from the PLAIN veils with "
-          "or without this switch; the app learns the video's place "
-          "from the buddy extension's native host.",
+    "card": "a playing video dims the desk around it, once the input "
+            "sits still for the \"veil after\" wait; motion lifts the "
+            "frame and it re-arms after the wait. The ring hugs the "
+            "video: the page and the window's own chrome wear the "
+            "darkness with the desk, and the calmer window-hole shape "
+            "is one config word away ([videodim] hole = 'window'). "
+            "While it plays the MOVIE never wears a veil: the window "
+            "reporting the playing rect is exempt from the plain "
+            "veils in any window state (a film's sound never lifts "
+            "it)",
+    "on": "movie theater mode: a PLAYING video gets a dimmed ring "
+          "around the video itself once the input has been still for "
+          "the 'veil after' wait; motion lifts the ring, which "
+          "re-arms after the same wait, and a film's sound never "
+          "touches it. The page and the window's own chrome wear the "
+          "darkness with the desk (the calmer window-hole shape is "
+          "one config word away: [videodim] hole = 'window'). The "
+          "player window stays exempt from the PLAIN veils with or "
+          "without this switch; a paused row re-earns them, and the "
+          "app learns the video's place from the buddy extension's "
+          "native host.",
     "status": "the consent rail, the buddy extension's last push, and "
               "the geometry-test answer, refreshed on the dimmer's "
               "beat. A missing answer reads as words, never a crash.",
@@ -996,15 +1013,7 @@ class _OledMixin:
 
     def _build_companion(self, parent):
         box = self._card(parent, "Movie theater mode",
-                         "a playing video dims the desk around it, "
-                         "once the input sits still for the \"veil "
-                         "after\" wait; motion lifts the frame and "
-                         "it re-arms after the wait - but the MOVIE "
-                         "never wears a veil either way: the window "
-                         "reporting the playing rect is exempt from "
-                         "the plain veils, and the ring's hole is "
-                         "that window's bounds (a film's sound "
-                         "never lifts it)")
+                         TIP_COMP["card"])
         row = self._row(box, "Movie theater mode", TIP_COMP["on"],
                         hint_chars=42)
         self.oled_comp_box = ctk.CTkSwitch(

@@ -26,8 +26,11 @@ field comes back the tick the pause lifts.
 An [dimmer.always] row is a SUB-MODE of the opt-in, not a bypass:
 that panel dims without waiting for idle_sec, but it bows to the
 foreground (its center inside the panel's rect un-dims the panel -
-if the focused app is ON it, you are using it) and to the audible
-exemption; an unattributable focus dims the always rows and
+if the focused app is ON it, you are using it), to the audible
+exemption, and to the player exemption (owner, Oct 24: the window
+holding the buddy's PLAYING report never wears the dim layer -
+backgrounded included; paused or dead re-earns it); an
+unattributable focus dims the always rows and
 confesses once per transition. The veil LEVEL defaults to 20% (the
 Oct-15 OLED ruling: 45 was aggressive) and the RAMP rail reaches 0,
 where the drop is immediate - the fade arithmetic guards that case
@@ -263,14 +266,16 @@ class Veils:
     covered panels - the frame already darkens everything outside
     the hole there, and a window veil under the frame would stack
     its alpha (the stratum's own no-stacking law). The foreground
-    gets NO exclusion on those panels. THE HOLE IS THE REPORTING
-    WINDOW when the row bounds it (owner clause 1, Oct 20: the veil
-    never interacts with a window reporting an active playing rect
-    - the ring's hole grows from the video rect to the window's
-    bounds, 8 px expanded, _frame_pieces; liveness stays on the
-    VIDEO rect, and the compat lane - a row without the bounds
-    report, or any pre-pair fake - keeps the video rect as the
-    hole). The frame's
+    gets NO exclusion on those panels. THE HOLE IS THE VIDEO (owner
+    ruling, Oct 24, restoring the founder's shape): the ring is cut
+    around the playing rect itself, so the page and the reporting
+    window's own chrome wear the darkness with the desk. The Oct-20
+    window-hole - the hole grown to the window's bounds, 8 px
+    expanded, the chrome left bright (owner clause 1, Oct 20) -
+    survives as an opt-in: the [videodim] hole word ("window"),
+    honored at the fold below and in _frame_pieces; liveness never
+    left the VIDEO rect, and the word-less compat answer is this
+    same video shape. The frame's
     alpha is its OWN [videodim] level (the theater rail, default
     20 - NOT the idle dimmer's shared level; the Oct-16 replacement
     wave) and the fade/ramp rules apply unchanged; a gone rect
@@ -320,14 +325,24 @@ class Veils:
         # THE TWO DOORS, ONE WALK (clause 1's second answer): the one
         # seam call answers the pair - the live PLAYING rect (the
         # player exemption's and the frame's door: the buddy's report
-        # outranks the theater switch, owner Oct 20: the player window
-        # is never plain-veiled, with or without movie theater mode)
-        # and the REPORTING WINDOW's bounds (the ring's hole when the
-        # row carries them). vrect is praw plus the theater's gates.
+        # outranks the theater switch, owner Oct 20 as closed Oct 24:
+        # the window holding a PLAYING report is never plain-veiled,
+        # in any window state; paused or dead re-earns the veil)
+        # and the REPORTING WINDOW's bounds (the ring's hole ONLY
+        # under the hole word - the Oct-24 reversal made the VIDEO
+        # the law). vrect is praw plus the theater's gates.
         praw, wraw = self._raw_rect(cfg, now)
         vrect = self._live_rect(cfg, now, praw)
+        # THE HOLE WORD (owner ruling, Oct 24): the ring's hole is
+        # the VIDEO rect - the founder's shape (the window half rides
+        # the fold only on the word; the compat lane inside
+        # _frame_pieces is this same geometry). normalize guarantees
+        # the word; an absent key answers video and the byte-
+        # compatible file is left alone.
+        hole = vd.get("hole", "video")
         frame = self._frame_pieces(vrect, vd.get("monitors"), valpha,
-                                   window_rect=wraw)
+                                   window_rect=wraw if hole == "window"
+                                   else None)
         # THE RING IS BORN ONLY OVER A LIVE HOLDER (d1, the owner's
         # freshness ruling): a reported rect the census says NO
         # window holds is a ghost - the tab closed, the player died,
@@ -338,8 +353,10 @@ class Veils:
         # per theater tick); fade ticks carry vrect None, pay
         # nothing, and the documented census-free economy below
         # stands untouched. Caveat, honest: a tab closed inside a
-        # still-running browser holder-MATCHES (benign - the hole is
-        # the WINDOW's bounds); the content.js pagehide->paused push
+        # still-running browser holder-MATCHES (benign since the
+        # Oct-24 reversal - the hole is the last reported VIDEO rect,
+        # and the ring only dims the page area that just stopped
+        # playing); the content.js pagehide->paused push
         # is the parked one-line complement.
         _wins = None
         if vrect is not None:                    # only a ring-birth tick pays
@@ -480,18 +497,24 @@ class Veils:
             #                 # the sound-independent backstop that
             #                 # holds during exactly that settle edge.
             if praw is not None and _rect_has(w["rect"], praw):
-                continue     # THE PLAYER EXEMPTION (owner, Oct 20):
-            #                 # THIS window is the one playing the
-            #                 # video the buddy reports - the regular
-            #                 # veil may never activate on it, EVEN
-            #                 # while the theater is down (tabbing to
-            #                 # another screen mid-film: the ring may
-            #                 # be mid-ramp or the feature switched
-            #                 # off, and the movie must still not go
-            #                 # dark under an idle veil). Keys on the
-            #                 # rect containing the playing video -
-            #                 # never on sound (a muted film is still
-            #                 # a film), never on the theater switch.
+                continue     # THE PLAYER EXEMPTION (owner, Oct 20;
+            #                 # the shape CLOSED by the Oct-24
+            #                 # ruling): the window whose census rect
+            #                 # holds the buddy's PLAYING report
+            #                 # never wears the dim layer -
+            #                 # backgrounded included, and the always
+            #                 # rows bow to it (this check sits ahead
+            #                 # of the dimming-membership gate, so no
+            #                 # panel's route to dimming reaches the
+            #                 # player). A PAUSED row re-earns the
+            #                 # veil (the eye answers (None, None)
+            #                 # from the pause tick - tonight's
+            #                 # census, pinned as law); a dead row or
+            #                 # a GHOST report holds no mask (the same
+            #                 # holder identity the ring's birth gate
+            #                 # rides, Oct-21 d1). Never on sound (a
+            #                 # muted film is still a film), never on
+            #                 # the theater switch.
             if w["monitor"] not in dimming:
                 continue
             if w["pid"] in self._exempt:
@@ -605,8 +628,9 @@ class Veils:
         switch or the ring: a user who turned theater off still told
         the eye where their movie is. The seam answers videoeye.
         live_pair; an answer that is a plain rect (a legacy seam or
-        a fake) reads as (rect, None) - no window half, the frame
-        keeps the video rect as its hole (the compat lane). Liveness
+        a fake) reads as (rect, None) - no window half, and the hole
+        is the video rect either way (the Oct-24 law; the window word
+        simply has no partner on such a row). Liveness
         (paused lift, min_rect_px, visible-picture) is the eye's law
         for both doors and both halves. Fail-open: no seam or a
         raising eye reads as (None, None), LOUDLY once per call -
@@ -691,24 +715,25 @@ class Veils:
         this geometry ships with, named in the delivery). Zero-size
         pieces (the rect touching an edge) drop; the full ring is
         FOUR, an edge kiss is three, a panel-covering rect is none.
-        THE HOLE IS THE WINDOW (owner clause 1, Oct 20): when the
-        row reports its OUTER bounds (window_rect - the pair answer,
-        physical px), the hole GROWS from the video rect to those
-        bounds EXPANDED 8 px: the GDI-lie direction, the class
-        docstring's geometry note - the rect a foreign report carries
-        lies by a few px around a rounded window, and a hole that is
-        too SMALL clips window px the veil must never touch, while a
-        hole too big darkens only the chrome the ring dims anyway
-        (70eb8fa's own open A/B, answered by the owner: the ring may
-        not darken the reporting window AT ALL). THE NAMED
+        THE WINDOW WORD (owner clause 1, Oct 20, made an opt-in by
+        the Oct-24 reversal): only when the caller passes the
+        reporting window's OUTER bounds (window_rect - the pair
+        answer, physical px, which the fold hands over ONLY for
+        [videodim] hole = "window") does the hole GROW from the
+        video rect to those bounds EXPANDED 8 px: the GDI-lie
+        direction, the class docstring's geometry note - the rect a
+        foreign report carries lies by a few px around a rounded
+        window, a hole too SMALL clips window px the veil must never
+        touch, and a hole too big darkens only chrome. THE NAMED
         ASYMMETRY: liveness (min_rect_px, paused, visible-picture)
         rode the VIDEO rect the whole way up (the eye's law) - a
         tiny ad in a huge window cannot carve a huge hole from a
-        tiny video: the min rail is the video's, the hole is the
-        window's. window_rect None (no bounds report - old hosts,
-        and every fake predating the pair) keeps the VIDEO rect as
-        the hole: the compat lane, the shape every existing pin
-        above runs on.
+        tiny video: the min rail is the video's. window_rect None is
+        the DEFAULT law since the Oct-24 ruling (the hole is the
+        video itself - the founder's shape), and it is also what a
+        row without the bounds report answers (old hosts, and every
+        fake predating the pair): the compat lane, the shape every
+        existing pin above runs on.
         Keys are synthetic NEGATIVE ints: the painter takes
         (hwnd, rect, alpha) and keys nothing off hwnd realism - and
         the negative key IS the law the pump obeys (Oct-16 buried-ring
@@ -1467,8 +1492,11 @@ def _video_rect(cfg, now):
     path gates the switch (and the stillness conjunct - clause 2) in
     _live_rect, above. THE PAIR (clause 1, Oct 20): (playing rect,
     reporting window's bounds) from one walk - the second half is
-    the ring's hole; a seam answering a bare rect (every pre-pair
-    fake) reads as (rect, None): the compat lane."""
+    the ring's hole ONLY under the [videodim] hole = "window" word
+    (the Oct-24 reversal made the video rect the law); a seam
+    answering a bare rect (every pre-pair fake) reads as
+    (rect, None): the word has no partner, the hole stays the
+    video."""
     from . import videoeye
     return videoeye.live_pair(cfg, now)
 

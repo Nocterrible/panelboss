@@ -175,7 +175,9 @@ at veil level, 10-90 percent, with per-panel overrides. The foreground and
 anything making sound keep their light; menus, tooltips, and transient popups
 never dim; administrator windows stay bright unless PanelBoss runs elevated,
 which is not recommended. Always dims a panel without the idle wait - that
-row yields to the foreground, never to motion. Fade
+row yields to the foreground, never to motion. The window playing your video
+never wears the dim layer, backgrounded included; pause the video and the
+dim layer comes back. Fade
 within (0-60 s) shapes the return; lift fade decides whether a plain veil
 fades or drops the instant you touch the desk. Apps are excluded by exe name;
 a pause hotkey binds on keypress, clears on esc, and is unbound until you
@@ -190,12 +192,14 @@ clock by itself.
 
 Movie theater mode is the Buddy's payoff, consented separately. Once a video
 plays and input sits still for the veil-after wait (1-30 s), a ring of
-darkness lands around the window reporting it: the hole is that window's
-bounds, so the browser's chrome stays bright with the movie. The window
+darkness hugs the video itself: the hole is the video's own rect, so the
+page and the browser's chrome wear the darkness with the desk. The window
 playing your video never dims. Motion lifts the ring, which re-arms after the
-same wait; a film's sound never lifts it. When the video window fills its
-panel that panel shows no ring - the darkness lands on the other enrolled
-panels only; window the browser and the frame appears around it. Theater veil level (10-90 percent)
+same wait; a film's sound never lifts it. When the video covers its panel
+that panel has no room to ring - the darkness lands on the other enrolled
+panels only. (The calmer window-hole shape - a ring around the whole window,
+chrome and page bright - is one config word away: [videodim] hole =
+"window".) Theater veil level (10-90 percent)
 is the frame's own darkness, independent of the dimmer's, per-panel
 overridable. Per-monitor boxes enroll panels: an enrolled panel with no video
 wears a full-field veil while the conjunction holds; an unenrolled one dims

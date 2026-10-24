@@ -8,10 +8,14 @@ the video column, plain veils skipped on the covered panels only, the
 ramp retraction, the pause, the STILLNESS CONJUNCT (owner clause 2,
 restored Oct 20: the ring rides the [videodim].idle_sec rail - motion
 lifts it, the rail re-arms it; Frame.idle drives the fake clock), the
-WINDOW HOLE (clause 1: the ring's hole is the REPORTING WINDOW, bounds
-expanded 8 px, when the row reports one; the VIDEO rect stays the hole
-without the report - the compat lane; liveness never left the video
-rect), THE PUMP (the conjunct's clock: inputtruth's filter core pinned
+HOLE WORD (owner, Oct 24: the ring's hole is the VIDEO - the founder's
+shape made law again; the REPORTING WINDOW hole of clause 1, Oct 20
+(bounds expanded 8 px) survives as the [videodim] hole = "window"
+word, pinned byte-for-byte; liveness never left the video rect), THE
+DIM LAYER AND THE PLAYER (owner, Oct 24: a PLAYING report sheds the
+plain veil from its holder window in ANY window state and outranks the
+always rows; PAUSED re-wears the veil - tonight's DELA census, lawful
+and pinned as law; a DEAD row holds no mask), THE PUMP (the conjunct's clock: inputtruth's filter core pinned
 as a PURE function on synthetic report events - boot infinite idle,
 the zero-travel chatter refusal, the 3 px dead-zone accumulation, the
 injected masks - the hook thread a smoke test only, and the deaf pump
@@ -463,18 +467,24 @@ class Frame:
             monitors=lambda: MON)
 
     def tick(self, now, level=30, dim_on=True, vidle=0, von=True,
-             dim_idle=120):
+             dim_idle=120, hole=None, always=None):
+        # hole: the [videodim] hole word - None leaves the key ABSENT
+        # (the byte-compatible file's shape; the Oct-24 video-hole
+        # default law rides the absence), "window" asks the Oct-20
+        # shape. always: the [dimmer].always rows (19g drives the
+        # owner's desk shape: a panel that dims WITHOUT the idle wait).
+        vd = {"on": von, "min_rect_px": 1, "grace_s": 3,
+              "idle_sec": vidle, "level": self.vlevel,
+              "fade": self.vfade, "monitors": self.vmons}
+        if hole is not None:
+            vd["hole"] = hole
         self.v.tick({"dimmer": {"on": dim_on,
                                 "monitors": {"MONA": True,
                                              "MONB": True},
-                                "always": {}, "apps": {},
+                                "always": always or {}, "apps": {},
                                 "idle_sec": dim_idle, "ramp_sec": 8,
                                 "level": level, "bound": None},
-                     "videodim": {"on": von, "min_rect_px": 1,
-                                  "grace_s": 3, "idle_sec": vidle,
-                                  "level": self.vlevel,
-                                  "fade": self.vfade,
-                                  "monitors": self.vmons}},
+                     "videodim": vd},
                     now)
 
 
@@ -749,23 +759,39 @@ ok("the owner's desk, honestly: a never-aging clock starves the ring, "
    "never the MOVIE - the player exemption is clock-independent, so "
    "the movie never wears a veil whatever the timer says")
 
-# 19c. THE WINDOW HOLE (owner clause 1, Oct 20): when the row reports
-#      its bounds the ring's hole is the REPORTING WINDOW, the bounds
-#      8 px EXPANDED (the GDI-lie direction, dimmer's geometry note -
-#      a too-small hole would clip the reporting window's px, and
-#      THAT the veil may never do). The ring lands entirely outside
-#      the expanded bounds - the browser's chrome stays bright with
-#      the movie it plays. MONA is (0,0,1000,800); the window
-#      (100,50,800,700) expands to (92,42,816,716):
+# 19c. THE HOLE IS THE VIDEO (owner reversal, Oct 24): even when the
+#      row reports its bounds, the DEFAULT hole is the video rect -
+#      the page and the browser's own chrome wear the darkness with
+#      the desk (the Oct-20 window law survives one config word away,
+#      pinned next, byte-for-byte). MONA is (0,0,1000,800); the video
+#      (300,300,400,200):
 f = Frame([w(1)], idle=999.0)
 RECT[0] = (300, 300, 400, 200)       # a video INSIDE the window
-WRECT[0] = (100, 50, 800, 700)
+WRECT[0] = (100, 50, 800, 700)       # reported - and IGNORED by the
+#                                    # default law
 f.tick(100)
+assert {v[0] for v in f.rec.painted.values()} == {
+    (0, 0, 1000, 300), (0, 500, 1000, 300), (0, 300, 300, 200),
+    (700, 300, 300, 200)}, f.rec.painted
+ok("the hole is the VIDEO by default, even over a reported window "
+   "(the Oct-24 reversal): the ring is cut around the video, the "
+   "chrome dims with the desk")
+
+# 19c'. THE WINDOW WORD: hole = "window" answers the Oct-20 shape -
+#       the REPORTING WINDOW, the bounds 8 px EXPANDED (the GDI-lie
+#       direction, dimmer's geometry note - a too-small hole would
+#       clip the reporting window's px, and THAT the veil may never
+#       do). The ring lands entirely outside the expanded bounds -
+#       the browser's chrome stays bright with the movie it plays.
+#       The window (100,50,800,700) expands to (92,42,816,716):
+f = Frame([w(1)], idle=999.0)
+f.tick(100, hole="window")
 assert {v[0] for v in f.rec.painted.values()} == {
     (0, 0, 1000, 42), (0, 758, 1000, 42), (0, 42, 92, 716),
     (908, 42, 92, 716)}, f.rec.painted
-ok("the hole is the REPORTING WINDOW (bounds + 8 px, the GDI-lie "
-   "direction): the ring is cut around the window, not the video")
+ok("hole = \"window\": the Oct-20 shape survives one word away - the "
+   "ring cut around the reporting window (bounds + 8 px), the old "
+   "set byte-for-byte")
 
 # 19d. THE NAMED ASYMMETRY (clause 1's honest half): liveness stayed
 #      on the VIDEO rect - a tiny ad in a huge window must not carve
@@ -1200,6 +1226,66 @@ assert f.rec.painted == {2: ((750, 500, 200, 150), 0.3)}, f.rec.painted
 ok("theater OFF: no frame at all, yet the window playing the reported "
    "video stays untouchable - every OTHER window dims as always")
 
+# 19g. THE DIM LAYER AND THE PLAYER (owner ruling, Oct 24, the final
+#      law of the plain veil): the window holding a PLAYING report
+#      sheds it from ANY window state - foreground or background -
+#      and the exemption OUTRANKS the [dimmer].always rows. A PAUSED
+#      row holds no mask (tonight's DELA census - the paused browser
+#      under the always row's veil - was LAWFUL and is pinned as
+#      law); a DEAD row holds no mask either (the eye's own age rule,
+#      the Oct-21 no-ghost doctrine, the plain-veil half). Desk: MONA
+#      is the always panel, the focus sits on MONB (the always row
+#      dims MONA the moment focus leaves - no idle wait anywhere in
+#      this section) and the desk MOVES (idle 0 under both rails), so
+#      the ring never comes: the PLAIN law alone is under test. w1
+#      holds the video, w3 is an unrelated window on the same panel.
+f = Frame([w(1, rect=(50, 50, 900, 700)),
+           w(2, monitor="MONB", fg=True, rect=(1100, 50, 800, 600)),
+           w(3, rect=(60, 60, 100, 60))], idle=0.0)
+RECT[0] = (500, 300, 300, 200)       # PLAYING, held by w1
+WRECT[0] = None
+f.tick(100, vidle=130, dim_idle=120, always={"MONA": True})
+assert f.rec.painted == {3: ((60, 60, 100, 60), 0.3)}, f.rec.painted
+#       the always row dims the panel its own way (no idle wait), the
+#       unrelated window wears the veil, and the BACKGROUNDED player
+#       sheds it - the ruling's heart.
+RECT[0] = None                       # paused: the eye answers
+f.tick(101, vidle=130, dim_idle=120, always={"MONA": True})
+#                                    # (None, None) (the pause-lift
+#                                    # is the eye's law, pinned at
+#                                    # the door just below; here: the
+#                                    # answer the exemption reads)
+assert f.rec.painted == {1: ((50, 50, 900, 700), 0.3),
+                         3: ((60, 60, 100, 60), 0.3)}, f.rec.painted
+#       PAUSED re-wears the dim layer, THIS tick, at full alpha (a
+#       new birth never ramps in) - the DELA census, pinned as law.
+#   and at the DOOR, the dead row's truth (the grace idiom of pin 8):
+#   a fresh click row holds the exemption, the AGED one holds NOTHING
+#   - no ghost may mask the dimmer.
+videoeye._STATE.clear()
+door((100, 200, 800, 450), bounds=(600, 200, 1600, 900),
+     view=(1584, 649), paused=True)
+videoeye.tick(vcfg(), CLK.monotonic())
+assert videoeye.live_pair(vcfg(), CLK.monotonic()) == (None, None)
+#                                    # the PAUSE lifts both halves at
+#                                    # the door: no rect, no window
+os.remove(videoeye.RECT_PATH)
+videoeye._STATE.clear()
+door((100, 200, 800, 450), bounds=(600, 200, 1600, 900),
+     view=(1584, 649))
+videoeye.tick(vcfg(), CLK.monotonic())
+assert videoeye.live_pair(vcfg(), CLK.monotonic())[0] is not None
+CLK.advance(4)                       # past the 3 s click grace
+videoeye.tick(vcfg(), CLK.monotonic())
+assert videoeye.live_pair(vcfg(), CLK.monotonic()) == (None, None)
+os.remove(videoeye.RECT_PATH)
+videoeye._STATE.clear()
+ok("the Oct-24 dim-layer triple: PLAYING exempts the holder from the "
+   "plain veil in any window state and outranks the always rows; "
+   "PAUSED re-wears the veil (the DELA census, lawful, now pinned); "
+   "DEAD ages the mask away at the door - the veil returns, no "
+   "ghost holds it")
+
 # --- config: the rails at the boundary --------------------------------
 n = config.normalize_videodim({"on": "yes", "min_rect_px": 9e9,
                                "grace_s": -2, "idle_sec": 9999,
@@ -1210,7 +1296,16 @@ assert n["on"] is False and n["min_rect_px"] == 4_000_000 \
 d = config.normalize_videodim({})
 assert d == {"on": False, "min_rect_px": 200000, "grace_s": 3,
              "idle_sec": 15, "level": 20, "fade": False,
-             "monitors": {}}, d
+             "hole": "video", "monitors": {}}, d
+# the hole word (owner, Oct 24): the ABSENT key answers video (the
+# byte-compatible file is untouched and the ring hugs the video),
+# "window" survives for the Oct-20 shape, and an unknown word warns
+# naming itself and folds to the default (the fossil-law idiom, the
+# away off_after_min retirement line's shape).
+assert config.normalize_videodim({"hole": "video"})["hole"] == "video"
+assert config.normalize_videodim({"hole": "window"})["hole"] == "window"
+assert config.normalize_videodim({"hole": "chrome"})["hole"] == "video"
+assert config.normalize_videodim({"hole": None})["hole"] == "video"
 assert config.normalize_videodim({"idle_sec": -5})["idle_sec"] == 1
 assert config.normalize_videodim({"idle_sec": 0})["idle_sec"] == 1
 assert config.normalize_videodim({"level": 999})["level"] == 90
@@ -1236,8 +1331,10 @@ assert config.normalize_videodim({"monitors": {"MONA": False}})[
     "monitors"] == {"MONA": {"on": False, "level": None}}
 ok("normalize_videodim: bad on warns and folds, the rails clamp "
    "(idle_sec 1..30 default 15 - the owner's sticky-veil floor and "
-   "timer law, Oct 16; level 10..90 default 20), the monitors table "
-   "normalizes to {on: bool, level: int|None}, absent is dark")
+   "timer law, Oct 16; level 10..90 default 20), the hole word folds "
+   "to video (the Oct-24 default; unknown words warn naming "
+   "themselves), the monitors table normalizes to {on: bool, level: "
+   "int|None}, absent is dark")
 
 # --- the wire: the manifest carries the native-messaging law ----------
 MAN = json.load(open(os.path.join("extension", "manifest.json"),
@@ -1367,6 +1464,54 @@ _top.destroy()
 _root.destroy()
 ok("the branch's exact verb lifts a real window into the topmost band "
    "(Win32 itself as the witness)")
+
+# --- THE CARD'S WORDS, PINNED VERBATIM (pin-as-data, owner law): the
+#     theater card and the dimmer card tell the Oct-24 law - the ring
+#     hugs the video, the calmer window shape is one config word
+#     away, and the player sheds the dim layer from any state (paused
+#     re-wears it). A reword without a ruling fails the suite. The
+#     card module imports with no Tk and no root (the window_boot
+#     _away idiom); the pin compares the DATA, not the file's shape.
+from panelboss.ui.window import _oled                    # noqa: E402
+assert _oled.TIP_COMP["card"] == (
+    "a playing video dims the desk around it, once the input "
+    "sits still for the \"veil after\" wait; motion lifts the "
+    "frame and it re-arms after the wait. The ring hugs the "
+    "video: the page and the window's own chrome wear the "
+    "darkness with the desk, and the calmer window-hole shape "
+    "is one config word away ([videodim] hole = 'window'). "
+    "While it plays the MOVIE never wears a veil: the window "
+    "reporting the playing rect is exempt from the plain "
+    "veils in any window state (a film's sound never lifts "
+    "it)"), _oled.TIP_COMP["card"]
+assert _oled.TIP_COMP["on"] == (
+    "movie theater mode: a PLAYING video gets a dimmed ring "
+    "around the video itself once the input has been still for "
+    "the 'veil after' wait; motion lifts the ring, which "
+    "re-arms after the same wait, and a film's sound never "
+    "touches it. The page and the window's own chrome wear the "
+    "darkness with the desk (the calmer window-hole shape is "
+    "one config word away: [videodim] hole = 'window'). The "
+    "player window stays exempt from the PLAIN veils with or "
+    "without this switch; a paused row re-earns them, and the "
+    "app learns the video's place from the buddy extension's "
+    "native host."), _oled.TIP_COMP["on"]
+assert _oled.TIP_DIM["on"] == (
+    "an idle desk puts a dark click-through veil over every "
+    "window you are not using; the window you touch lights "
+    "instantly, and a window the mic just heard keeps its "
+    "brightness for four seconds. The window the buddy reports "
+    "as playing a video never wears the veil either - "
+    "backgrounded included, always rows included; pause the "
+    "video and the dim layer comes back. Elevated windows "
+    "(Task Manager's class) never wear a veil this app cannot "
+    "stack against - running the app elevated reaches them but "
+    "is not recommended. Nothing dims until you opt in, per "
+    "monitor."), _oled.TIP_DIM["on"]
+ok("the theater and dimmer cards' words are pinned verbatim: the "
+   "video-hole ring, the one-word window shape, and the player's "
+   "place under the dim layer are now the card's own data - a reword "
+   "without a ruling fails the suite")
 
 
 if os.path.exists(videoeye.RECT_PATH):

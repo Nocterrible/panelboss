@@ -84,11 +84,24 @@ def enumerate_windows():
 
 def folded_row():
     """The doorway row folded exactly like the eye does it (the app's
-    own module does the work - no second implementation of the fold)."""
+    own module does the work - no second implementation of the fold).
+    THE HOLE IS THE VIDEO (owner, Oct 24): this guard expects the
+    DEFAULT law - the ring cut around the reporting row's own video
+    rect, no window-bounds expansion (a desk that opts into
+    [videodim] hole = "window" will see the guard red the same way it
+    saw it red under the pre-reversal Oct-20 code: the guard speaks
+    the law, the word is the exception). THE PAUSE GATE (Oct-24
+    ruling): a PAUSED row legitimately wears no ring (the eye lifts
+    the exemption's own rect at the pause, and the window wears the
+    PLAIN veil instead) - so a paused row folds to None here and the
+    honest FAIL below says it: play the video, then check the ring."""
     sys.path.insert(0, os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))
     from panelboss import videoeye
-    return videoeye._rect_px(videoeye._read(time.monotonic(), time.time()))
+    row = videoeye._read(time.monotonic(), time.time())
+    if row is None or row.get("paused"):
+        return None
+    return videoeye._rect_px(row)
 
 
 def expected_pieces(hole):
