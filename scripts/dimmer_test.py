@@ -1427,25 +1427,47 @@ _wake = BOOT[BOOT.index("idle = display.get_idle_time()"):]
 assert "self._off_phase(now, inputtruth.wake_idle_seconds(idle))" \
     in _wake and "self._on_phase(now, idle)" in _wake, \
     "the exemption moved onto the wrong phase"
-# the owner's verbatim label ships on the card, word for word
+# the owner's verbatim label ships byte-identical - the pin FOLLOWS
+# the widget: the row moved to the Detection tab's timers card on the
+# Oct-24 launch-night ruling ("it affects the background dimmer but
+# it's mainly for the screen off check"), and the dimmer card carries
+# no ghost of it. The label, the key and the callback now live in
+# _detection.py; [dimmer].input_pump never moved.
 OLED = open("panelboss/ui/window/_oled.py", encoding="utf-8").read()
-assert '\"Does your shit occasionally decide \"' in OLED or \
-    'Does your shit occasionally decide ' in OLED, \
+DETSRC = open("panelboss/ui/window/_detection.py",
+              encoding="utf-8").read()
+assert '\"Does your shit occasionally decide \"' in DETSRC or \
+    'Does your shit occasionally decide ' in DETSRC, \
     "the owner's own words left the label"
-assert 'input_pump' in OLED and '_oled_comp_pump_changed' in OLED
-# the pump row lives ON THE DIMMER CARD (owner ruling, Oct 22): the
-# [dimmer].input_pump key belongs to this section, so the row builds
-# inside _build_dimmer - between the lift-fade bind and the veil-level
-# row. The companion card no longer carries it (companions_test pins
-# the ABSENT half of this law).
+assert 'input_pump' in DETSRC and '_pump_changed' in DETSRC
 _DIM = OLED[OLED.index("def _build_dimmer"):]
 _DIM = _DIM[:_DIM.index("\n    def ")]
-assert 'keep Windows awake' in _DIM, \
-    "the pump row left the dimmer card"
-assert 'TIP_COMP["pump"]' in _DIM, "the pump tip did not travel with the row"
+assert 'keep Windows awake' not in _DIM and \
+    'Does your shit' not in _DIM and \
+    'oled_comp_pump_box' not in _DIM, \
+    "the pump row grew back on the dimmer card (or left a ghost)"
+# the row belongs BESIDE THE IDLE TIMERS (the pump IS an idle-clock
+# policy - every idle timer reads it): it builds inside
+# _build_timers, next to the rails it steers
+_DT = DETSRC[DETSRC.index("def _build_timers"):]
+_DT = _DT[:_DT.index("\n    def ")]
+assert 'Does your shit' in _DT, \
+    "the pump row is not on the timers card"
+assert 'TIPS["pump"]' in _DT, "the pump tip did not travel with the row"
+# the two honest caveats travel with the row (Oct-24 ruling): the
+# relaunch law and the deaf-pump fallback. The tab's tip idiom keeps
+# the WORDS in _constants' TIPS data and the REFERENCE on the row;
+# both seams pin here (pin-as-data, the card-words precedent).
+CONST = open("panelboss/ui/window/_constants.py", encoding="utf-8").read()
+assert 'Takes effect after a restart' in CONST, \
+    "the relaunch caveat left the pump's tip"
+assert 'own idle clock' in CONST, \
+    "the stock-clock fallback left the pump's tip"
 ok("the idle seam is the gate: source pins both branches, sentinels "
    "drive both clocks, default-ON normalizes (junk folds to on), the "
    "exemption lives only at the off-phase door, and the owner's label "
-   "is verbatim on the card (6c) - the pump row now builds on THIS "
-   "card, where its [dimmer].input_pump key lives")
+   "is verbatim (6c) - the pump row builds on the DETECTION tab's "
+   "timers card, beside the idle rails it steers (Oct-24), the "
+   "dimmer card carrying no ghost, the relaunch and fallback caveats "
+   "riding the tip")
 print("\nDIMMER TESTS OK (%d)" % len(OK))

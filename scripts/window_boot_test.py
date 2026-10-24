@@ -307,6 +307,70 @@ def check():
                 "the detection tab lost the away card's %r" % want
         for gone in ("monitors off", "re-off grace", "leave-on grace"):
             assert gone not in _t2, "the away card grew back %r" % gone
+        # THE PUMP ROW LANDED ON THIS TAB (owner ruling, Oct 24,
+        # launch night): the verbatim label rides the Timers card -
+        # the pump IS an idle-clock policy, it sits with the idle
+        # clocks it moves. The switch paints CHECKED off the absent
+        # key (the default-on law travels byte-identical); the
+        # relaunch and fallback caveats ride the row's tip data
+        # (dimmer_test pins the words at the source, companions_test
+        # holds the companion card's absent half).
+        assert "Does your shit occasionally decide it wants to keep " \
+            "Windows awake?" in _t2, \
+            "the pump row's verbatim label is not on the detection tab"
+        assert bool(app.pump_box.get()) is True, \
+            "the moved switch lost the absent-key default (on)"
+        # THE THEATER CARD'S GLOBAL LEVEL IS GONE - removed means
+        # NOT BUILT, not hidden (Oct-24): walk the theater card's own
+        # subtree. The enroll row keeps its per-panel slider and
+        # seeds its percent from the silent file fallback (a virgin
+        # file answers the 20 default), and the only veil-level rail
+        # left on the tab lives under the dimmer card - the dimmer's
+        # own knob, untouched by the ruling.
+        def _card_with_text(w, want):
+            for c in w.winfo_children():
+                try:
+                    x = c.cget("text")
+                except Exception:
+                    x = None
+                if x == want:
+                    return c.master
+                got = _card_with_text(c, want)
+                if got is not None:
+                    return got
+            return None
+        _tc = _card_with_text(app.pages["oled"].inner,
+                              "Movie theater mode")
+        assert _tc is not None, "the theater card is gone entirely"
+        _t3 = []
+
+        def _titles3(w):
+            for c in w.winfo_children():
+                try:
+                    x = c.cget("text")
+                except Exception:
+                    x = None
+                if isinstance(x, str) and x:
+                    _t3.append(x)
+                _titles3(c)
+        _titles3(_tc)
+        assert "veil level" not in _t3, \
+            "the theater card grew the retired global knob back"
+        assert "theater on T" in _t3 and "20%" in _t3, \
+            "the enroll row lost the level law (the box, or its " \
+            "seed from the silent fallback)"
+        _knob = _card_with_text(app.pages["oled"].inner, "veil level")
+        _dc = _card_with_text(app.pages["oled"].inner,
+                              "background dimmer")
+        assert _knob is not None and _dc is not None
+        _under = _knob
+        while _under is not None and _under is not app:
+            if _under is _dc:
+                break
+            _under = getattr(_under, "master", None)
+        assert _under is _dc, \
+            "the surviving veil-level rail does not live under the " \
+            "dimmer card"
         from panelboss.ui.window import _away as _am
         _r = app._away_rows["T"]
         assert set(_r["seg"]._buttons_dict) == set(_r["vals"]), _r["vals"]

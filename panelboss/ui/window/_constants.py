@@ -104,6 +104,12 @@ TIPS = {
     "motion hold": "how long presence lingers after the LAST motion - "
                    "reading a page is stillness, not absence. Applies "
                    "immediately.",
+    "pump": "Ignores fake input from devices like macro pads, KVMs "
+            "and jigglers - only real movement and keystrokes count. "
+            "Takes effect after a restart. Off, the app uses Windows' "
+            "own idle clock, and a deaf pump falls back to it by "
+            "itself. Remote-control software can still wake the "
+            "screen.",
     "wake": "what happens when the screens came back without the app. "
             "re-off darkens them again after the re-off grace unless "
             "a person is confirmed; leave-on hands the desk over for "

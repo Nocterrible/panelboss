@@ -104,6 +104,13 @@ recent), absence confirm (10-300), poll while on and first dark re-poll
 re-off grace (0-120), leave-on grace (10-600). The card prints the result:
 dark N seconds after the last keystroke.
 
+The pump row on that card asks: does your shit occasionally decide it wants
+to keep Windows awake? Some devices (macro pads, KVMs, jigglers) keep telling
+Windows someone just typed; the pump makes PanelBoss trust only real
+movement, and every idle timer on every tab reads it. Switched off, the app
+uses Windows' own idle clock verbatim. It takes a relaunch to change; a deaf
+pump falls back to the system clock by itself. The switch ships on.
+
 The Camera card adds cameras from a picker; an on-duty camera leaves the menu
 and gets a policy row. Labels ride the camera's hardware identity, so a
 replug cannot lose a name. Rescan re-scans and re-tests; a camera that serves
@@ -183,13 +190,6 @@ fades or drops the instant you touch the desk. Apps are excluded by exe name;
 a pause hotkey binds on keypress, clears on esc, and is unbound until you
 give one.
 
-The pump row asks: does your shit occasionally decide it wants to keep
-Windows awake? Some devices (macro pads, KVMs, jigglers) keep telling Windows
-someone just typed; the pump makes PanelBoss trust only real movement, and
-every idle timer reads it. Switched off, the app uses Windows' own idle clock
-verbatim. It takes a relaunch to change; a deaf pump falls back to the system
-clock by itself.
-
 Movie theater mode is the Buddy's payoff, consented separately. Once a video
 plays and input sits still for the veil-after wait (1-30 s), a ring of
 darkness hugs the video itself: the hole is the video's own rect, so the
@@ -199,9 +199,11 @@ same wait; a film's sound never lifts it. When the video covers its panel
 that panel has no room to ring - the darkness lands on the other enrolled
 panels only. (The calmer window-hole shape - a ring around the whole window,
 chrome and page bright - is one config word away: [videodim] hole =
-"window".) Theater veil level (10-90 percent)
-is the frame's own darkness, independent of the dimmer's, per-panel
-overridable. Per-monitor boxes enroll panels: an enrolled panel with no video
+"window".) Theater levels are per-monitor on the card: each enrolled panel's
+row dims it to its own level (10-90 percent, the frame's own darkness,
+independent of the dimmer's); there is no global knob, and a file without a
+panel's level uses the silent default. Per-monitor boxes enroll panels: an
+enrolled panel with no video
 wears a full-field veil while the conjunction holds; an unenrolled one dims
 like any idle desk. Fade out is the opt-in; the lift is instant by default.
 The card carries open store page, install the helper, the doorway file, the

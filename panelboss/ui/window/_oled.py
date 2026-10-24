@@ -138,7 +138,8 @@ TIP_COMP = {
             "While it plays the MOVIE never wears a veil: the window "
             "reporting the playing rect is exempt from the plain "
             "veils in any window state (a film's sound never lifts "
-            "it)",
+            "it). Each enrolled panel dims to its own level; there "
+            "is no global knob.",
     "on": "movie theater mode: a PLAYING video gets a dimmed ring "
           "around the video itself once the input has been still for "
           "the 'veil after' wait; motion lifts the ring, which "
@@ -175,24 +176,21 @@ TIP_COMP = {
     "delay": "veil after: how long the input must be still before a "
              "PLAYING video gets its ring - the same number re-arms "
              "it after a lift. The clock is the app's input pump (by "
-             "the 'keep Windows awake' switch below), so zero-travel "
-             "device chatter no longer keeps the ring down; motion "
+             "the 'keep Windows awake' switch on the Detection tab), "
+             "so zero-travel device "
+             "chatter no longer keeps the ring down; motion "
              "lifts the RING only, never the movie. 0 means instant.",
-    "level": "how dark the four theater pieces are, in percent - the "
-             "theater's own darkness, not the idle dimmer's number.",
     "fade": "off (the default): when the frame lifts it is gone that "
             "tick. On: it retracts over the dimmer's 'fade within' "
             "ramp, never a blink.",
-    "pump": "Ignores fake input from devices like macro pads, KVMs "
-            "and jigglers - only real movement and keystrokes count. "
-            "Takes effect after a restart. Remote-control software "
-            "can still wake the screen.",
     "mons": "per-monitor theater: a checked panel frames its playing "
             "video (or wears the full-field veil while the "
             "conjunction holds); unchecked panels get no theater at "
-            "all. The slider is that panel's own veil percent - "
-            "until you move it the panel follows the 'veil level' "
-            "above, and rows save on first use.",
+            "all. The slider SETS that panel's own veil percent: it "
+            "opens at the file's silent level word (a file without "
+            "one gets the default), the first move stores the panel's "
+            "override, and rows save on first use. The per-monitor "
+            "levels are the law now - there is no global knob.",
 }
 
 
@@ -694,25 +692,12 @@ class _OledMixin:
         self.oled_dim_lift_fade.bind(
             "<Leave>", lambda e=None: self.tips._hide_soon(), add="+")
 
-        # THE PUMP'S DOOR (Oct-20 wave; the owner's words verbatim
-        # as the label - the card may be boring, the owner's desk
-        # may not). It steers [dimmer].input_pump: on (the owner's
-        # default) routes every idle rail through the raw-input
-        # pump, off is the stock clock verbatim. The tip carries
-        # the fail-open honesty and the relaunch law; the switch
-        # ships CHECKED like the key it reads.
-        row = self._row(box, "Does your shit occasionally decide "
-                         "it wants to keep Windows awake?",
-                        TIP_COMP["pump"], hint_chars=42)
-        self.oled_comp_pump_box = ctk.CTkSwitch(
-            row, text="", font=self.skin.font(12),
-            command=self._oled_comp_pump_changed,
-            **self.skin.switch_style())
-        self.oled_comp_pump_box.select() if (
-            self.cfg.get("dimmer") or {}).get("input_pump",
-                                                 True) is True \
-            else self.oled_comp_pump_box.deselect()
-        self.oled_comp_pump_box.grid(row=0, column=1, sticky="e")
+        # THE PUMP'S DOOR MOVED (owner ruling, Oct 24 launch night):
+        # "the screenshotted option probably belongs in the detection
+        # tab - it affects the background dimmer but it's mainly for
+        # the screen off check". The row builds on the Timers card
+        # now (_detection.py), beside the idle rails it steers;
+        # [dimmer].input_pump keeps its meaning untouched.
 
         row = self._row(box, "veil level", TIP_DIM["level"],
                         hint_chars=42)
@@ -866,15 +851,6 @@ class _OledMixin:
     def _oled_level_changed(self, value):
         self.cfg.setdefault("dimmer", {})["level"] = int(round(value))
         self.oled_level_label.configure(text="%s%%" % round(value))
-        self._save()
-
-    def _oled_comp_pump_changed(self):
-        # [dimmer].input_pump - the clock choice (Oct-20 wave,
-        # the owner's default-on override). RESTART-required
-        # like the rest of the section: the card's word lands,
-        # the relaunch makes it true.
-        self.cfg.setdefault("dimmer", {})["input_pump"] = bool(
-            self.oled_comp_pump_box.get())
         self._save()
 
     def _oled_dim_app_add(self):
@@ -1056,28 +1032,13 @@ class _OledMixin:
         self.oled_vee_delay_label.grid(row=0, column=2, sticky="e",
                                        padx=(theme.S_FIELD, 0))
 
-        # "veil level" - the theater pieces' OWN darkness (owner, Oct
-        # 16): the four dark pieces draw at THIS percent, not the idle
-        # dimmer's [dimmer].level. Sibling of the dimmer's veil-level
-        # rail, same clamp (10..90), same honesty.
-        row = self._row(box, "veil level", TIP_COMP["level"],
-                        hint_chars=42)
-        self.oled_vee_level_label = ctk.CTkLabel(
-            row, font=self.skin.font(12), **self.skin.text_style("sub"))
-        slider = ctk.CTkSlider(
-            row, from_=VIDEODIM_LEVEL_FLOOR, to=VIDEODIM_LEVEL_CEIL,
-            number_of_steps=VIDEODIM_LEVEL_CEIL - VIDEODIM_LEVEL_FLOOR,
-            width=180, command=self._oled_comp_level_changed,
-            **self.skin.slider_style())
-        slider.set(int((self.cfg.get("videodim") or {}).get(
-            "level", VIDEODIM_LEVEL_DEFAULT)))
-        slider.grid(row=0, column=1, sticky="e")
-        self.oled_vee_level_label.configure(
-            text="%s%%" % int((self.cfg.get("videodim") or {}).get(
-                "level", VIDEODIM_LEVEL_DEFAULT)))
-        self.oled_vee_level_label.grid(row=0, column=2, sticky="e",
-                                       padx=(theme.S_FIELD, 0))
-
+        # THE GLOBAL VEIL-LEVEL KNOB RETIRES TO THE FILE (owner
+        # ruling, Oct 24, launch night): the per-monitor rows below
+        # are the level law now; [videodim] level keeps its meaning
+        # as the SILENT fallback - the panel's own row seeds from it,
+        # and a file without the word gets the default (20). The
+        # dimmer card's veil-level rail is a different owner's knob
+        # and stays.
         # "fade out" - the theater retract style (owner, Oct 16: "I
         # don't like the fade, so I won't use it - but having the
         # option is the right move"): OFF by default, the frame is
@@ -1101,9 +1062,10 @@ class _OledMixin:
         # wears a FULL-FIELD veil while the conjunction holds. An
         # UNCHECKED panel gets no pieces at all - a video on it dims
         # like any idle desk. The slider is the panel's OWN veil
-        # percent: it opens at the global "veil level" and the first
-        # move stores the row (an untouched slider = follow the
-        # global, the honest absent-key law).
+        # percent: it opens at the file's silent level word and the
+        # first move stores the row (an untouched slider = follow the
+        # file, the honest absent-key law; the Oct-24 ruling retired
+        # the global knob - the rows are the law).
         self._comp_row_frame = ctk.CTkFrame(box, fg_color="transparent")
         self._comp_row_frame.pack(anchor="w", fill="x")
         self._comp_fill_rows()
@@ -1230,14 +1192,6 @@ class _OledMixin:
         # input timers"); it steers the theater's stillness rail.
         self.cfg.setdefault("videodim", {})["idle_sec"] = int(round(value))
         self.oled_vee_delay_label.configure(text="%s s" % round(value))
-        self._save()
-
-    def _oled_comp_level_changed(self, value):
-        # [videodim].level - the theater pieces' OWN darkness (the
-        # dimmer's veil-level sibling): the frame draws at THIS, not the
-        # idle dimmer's level. Clamped 10..90 by the slider's own range.
-        self.cfg.setdefault("videodim", {})["level"] = int(round(value))
-        self.oled_vee_level_label.configure(text="%s%%" % round(value))
         self._save()
 
     def _oled_comp_fade_changed(self):

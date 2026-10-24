@@ -181,11 +181,14 @@ def main():
           "failed replace sweeps the litter, 4 voting threads + 50 "
           "enrolls never tear the dict")
 
-    # 6) THE PUMP ROW LEFT THIS CARD (owner ruling, Oct 22): the
-    #    [dimmer].input_pump switch moved home to the dimmer card, so
-    #    _build_companion no longer builds it. The PRESENT half of the
-    #    law pins in dimmer_test; this pin inverts it here - the row
-    #    must be ABSENT from the companion builder.
+    # 6) THE PUMP ROW LEFT THIS CARD (owner rulings): the Oct-22 wave
+    #    moved it off the companion card, the Oct-24 launch-night
+    #    ruling moved it on to the Detection tab's timers card
+    #    (dimmer_test pins the PRESENT half and the dimmer card's
+    #    clean exit; this pin holds the ABSENT half here). The
+    #    theater card also lost its global veil-level knob the same
+    #    night - the per-monitor rows are the level law, so the
+    #    builder must not grow the slider back.
     oled = open(os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "panelboss", "ui", "window", "_oled.py"), encoding="utf-8").read()
@@ -197,8 +200,14 @@ def main():
         "the pump tip is back on the companion card"
     assert "oled_comp_pump_box" not in _comp, \
         "the pump switch is back on the companion card"
+    assert '"veil level"' not in _comp, \
+        "the retired global theater level grew back on the card"
+    assert "oled_vee_level_label" not in _comp and \
+        "_oled_comp_level_changed" not in _comp, \
+        "the removed slider left a ghost on the companion card"
     print("[PASS] 6: the pump row is absent from the companion card "
-          "(it lives on the dimmer card now)")
+          "(it lives on the detection tab's timers card now) and the "
+          "retired global level knob never grew back")
 
     print("companions OK")
 

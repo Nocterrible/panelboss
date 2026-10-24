@@ -1431,20 +1431,27 @@ def normalize_videodim(value):
                 row = {"on": row}
             if not isinstance(row, dict):
                 continue
-            on = row.get("on", True)
-            if not isinstance(on, bool):
+            # THE CLOBBER FIX (Oct-24, caught by the fold's precedence
+            # pins): these were bare `on`/`level`, and the loop's LAST
+            # row overwrote the folded globals the return below
+            # reports - a file whose [videodim] on is absent came back
+            # consented by a row default (breaking the default-off
+            # root), and the fallback level came back as some other
+            # panel's override. The rows are ROUNDED, not the file.
+            ron = row.get("on", True)
+            if not isinstance(ron, bool):
                 log.warning("videodim monitor %r: on %r is not a bool; "
-                            "the panel keeps its theater", short, on)
-                on = True
-            level = row.get("level")
-            if level is not None:
+                            "the panel keeps its theater", short, ron)
+                ron = True
+            rlevel = row.get("level")
+            if rlevel is not None:
                 try:
-                    level = max(VIDEODIM_LEVEL_FLOOR,
-                                min(VIDEODIM_LEVEL_CEIL, int(level)))
+                    rlevel = max(VIDEODIM_LEVEL_FLOOR,
+                                 min(VIDEODIM_LEVEL_CEIL, int(rlevel)))
                 except (TypeError, ValueError):
-                    level = None      # the silent clamp family: junk
+                    rlevel = None     # the silent clamp family: junk
                                       # follows the global veil
-            mons[short] = {"on": on, "level": level}
+            mons[short] = {"on": ron, "level": rlevel}
     return {"on": on, "min_rect_px": mins, "grace_s": grace,
             "idle_sec": idle, "level": level, "fade": fade,
             "hole": hole, "monitors": mons}

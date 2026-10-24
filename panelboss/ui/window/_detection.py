@@ -357,6 +357,26 @@ class _DetectionMixin:
         # of THIS card must not orphan their readouts
         for spec in TIMER_SPECS:
             self._timer_row(box, *spec)
+        # THE PUMP'S DOOR (moved from the dimmer card by the owner's
+        # Oct-24 launch-night ruling: "it affects the background
+        # dimmer but it's mainly for the screen off check" - an
+        # idle-clock policy sits with the idle clocks it moves). The
+        # label ships the owner's words verbatim, byte for byte as
+        # they left the dimmer card; [dimmer].input_pump keeps its
+        # meaning (absent = on). The tip carries the two honest
+        # caveats: the relaunch law and the deaf-pump fallback.
+        row = self._row(box, "Does your shit occasionally decide "
+                         "it wants to keep Windows awake?",
+                        TIPS["pump"], hint_chars=42)
+        self.pump_box = ctk.CTkSwitch(
+            row, text="", font=self.skin.font(12),
+            command=self._pump_changed,
+            **self.skin.switch_style())
+        self.pump_box.select() if (
+            self.cfg.get("dimmer") or {}).get("input_pump",
+                                                 True) is True \
+            else self.pump_box.deselect()
+        self.pump_box.grid(row=0, column=1, sticky="e")
         self.worst_label = ctk.CTkLabel(box, font=self.skin.font(11),
                                          wraplength=350, justify="left",
                                          anchor="w",
@@ -463,6 +483,17 @@ class _DetectionMixin:
         self._update_worst()
         self._save()
 
+
+    def _pump_changed(self):
+        # [dimmer].input_pump - the clock choice (Oct-20 wave, the
+        # owner's default-on override). RESTART-required like the
+        # rest of the section: the row's word lands, the relaunch
+        # makes it true. The row moved home to the timers card on the
+        # Oct-24 ruling; the key never moved - every idle rail in the
+        # app still reads this one word.
+        self.cfg.setdefault("dimmer", {})["input_pump"] = bool(
+            self.pump_box.get())
+        self._save()
 
     def _update_worst(self):
         timers = self.cfg["timers"]

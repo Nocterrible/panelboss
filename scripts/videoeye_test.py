@@ -1330,6 +1330,29 @@ assert m == {"MONA": {"on": False, "level": None},
 assert config.normalize_videodim({"monitors": []})["monitors"] == {}
 assert config.normalize_videodim({"monitors": {"MONA": False}})[
     "monitors"] == {"MONA": {"on": False, "level": None}}
+# THE SILENT FALLBACK (Oct-24 launch-night ruling: the theater's
+# GLOBAL KNOB retired to the file - the word STAYS, the precedence
+# STAYS). The fold answers the chain the engine must keep honest
+# with no UI control left to write the global: the row's own stored
+# level first, the file's [videodim] level second, the default last.
+assert config.normalize_videodim(
+    {"level": 35, "monitors": {"MONA": {"level": 60}}})["level"] == 35
+assert config.normalize_videodim(
+    {"level": 35, "monitors": {"MONA": {"level": 60}}})[
+    "monitors"]["MONA"]["level"] == 60                    # override wins
+assert config.normalize_videodim({"monitors": {"MONA": {}}})[
+    "monitors"]["MONA"]["level"] is None                  # follows the file
+assert config.normalize_videodim({})["level"] == 20        # absent = default
+# the clobber family, pinned out: the row's words may not reach the
+# section's own keys (the default-off root sleeps until the owner
+# wakes it - a row default cannot consent for the theater)
+assert config.normalize_videodim(
+    {"monitors": {"MONA": {"level": 60}}})["on"] is False
+assert config.normalize_videodim(
+    {"on": True, "monitors": {"MONA": {"on": False}}})["on"] is True
+ok("the level fold keeps the Oct-24 chain: row override first, the "
+   "silent file word next, the default last - the knob is gone, the "
+   "precedence is byte-compatible law")
 ok("normalize_videodim: bad on warns and folds, the rails clamp "
    "(idle_sec 1..30 default 15 - the owner's sticky-veil floor and "
    "timer law, Oct 16; level 10..90 default 20), the hole word folds "
@@ -1484,7 +1507,8 @@ assert _oled.TIP_COMP["card"] == (
     "While it plays the MOVIE never wears a veil: the window "
     "reporting the playing rect is exempt from the plain "
     "veils in any window state (a film's sound never lifts "
-    "it)"), _oled.TIP_COMP["card"]
+    "it). Each enrolled panel dims to its own level; there "
+    "is no global knob."), _oled.TIP_COMP["card"]
 assert _oled.TIP_COMP["on"] == (
     "movie theater mode: a PLAYING video gets a dimmed ring "
     "around the video itself once the input has been still for "
