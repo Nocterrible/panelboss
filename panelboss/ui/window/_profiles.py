@@ -387,7 +387,8 @@ class _ProfilesMixin:
         # launches with no pre-wait, and the launched window then
         # gets a fixed fifteen-second arrival grace before the
         # miss is spoken (profiles.apply's open
-        # leg, pinned by profiles_test 6b/6c) - so this button adds no
+        # leg, pinned by profiles_test 6b (manual grace) and 6b-login
+        # (the stored boot patience)) - so this button adds no
         # engine code and no
         # new dialect: it rides the same _profile_apply, which means the
         # say line, the refusal balloon, the no-shows dialog and the apply
