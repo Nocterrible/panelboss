@@ -1350,6 +1350,14 @@ assert config.normalize_videodim(
     {"monitors": {"MONA": {"level": 60}}})["on"] is False
 assert config.normalize_videodim(
     {"on": True, "monitors": {"MONA": {"on": False}}})["on"] is True
+# the 2-row belt (gate f4): LAST row's defaults may not reach the
+# section keys either - the clobber class dies table-wide, not row-wise
+assert config.normalize_videodim(
+    {"on": True, "monitors": {"MONA": {"on": True},
+                              "MONB": {"on": False}}})["on"] is True
+assert config.normalize_videodim(
+    {"level": 33, "monitors": {"MONA": {"level": 60},
+                               "MONB": {}}})["level"] == 33
 ok("the level fold keeps the Oct-24 chain: row override first, the "
    "silent file word next, the default last - the knob is gone, the "
    "precedence is byte-compatible law")

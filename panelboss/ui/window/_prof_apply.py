@@ -1,6 +1,6 @@
 """Profiles tab verbs: mode edits, profile create and
 apply, the noshows dialog, rescue.
-Size law (measured 516, Oct 14 fix-round recount - the claim
+Size law (measured 627, Oct 24 launch-night recount - the claim
 includes its own lines; the mid-apply flag formula and the guarded
 rescue added the last eighteen to the loud-voice 498): the apply
 pipeline is one transaction -

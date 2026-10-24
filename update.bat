@@ -25,8 +25,8 @@ rem update.py's APPLY text): profiles and config ride into the
 rem update folder as .bak before the pull moves the ground under them
 set "bkdir=%LOCALAPPDATA%\PanelBoss\update"
 if not exist "%bkdir%" mkdir "%bkdir%"
-copy /y "%APPDATA%\PanelBoss\profiles.json" "%bkdir%\profiles.json.bak" >nul
-copy /y "%APPDATA%\PanelBoss\config.toml" "%bkdir%\config.toml.bak" >nul
+copy /y "%APPDATA%\PanelBoss\profiles.json" "%bkdir%\profiles.json.bak" >nul 2>nul
+copy /y "%APPDATA%\PanelBoss\config.toml" "%bkdir%\config.toml.bak" >nul 2>nul
 echo store backed up to %bkdir% (profiles.json.bak, config.toml.bak)
 
 echo pulling...

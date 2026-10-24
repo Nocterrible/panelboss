@@ -112,7 +112,20 @@ def load(dir=None):
         got = None
     if isinstance(got, dict):
         data.update(got)
-    for key in ("last", "profiles", "_fossils"):   # never trust a half
+    for key in ("_fossils", "last", "profiles"):   # FOSSILS FIXED
+        #                                             FIRST (gate f1):
+        #                                             a junk _fossils
+        #                                             must be reset
+        #                                             before rotted
+        #                                             tables try to
+        #                                             move INTO it -
+        #                                             setdefault on
+        #                                             junk returns
+        #                                             junk and the
+        #                                             item-assign
+        #                                             TypeErrors the
+        #                                             whole load
+        #                                             down
         if not isinstance(data.get(key), dict):
             if key != "_fossils" and data.get(key) is not None:
                 # a rotted table is kept

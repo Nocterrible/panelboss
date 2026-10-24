@@ -1,7 +1,7 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
 
-SIZE LAW: measured 485 lines (Oct 14 gate finding 1: the claim
+SIZE LAW: measured 606 lines (Oct 24 launch-night recount; first claim
 lied by two at the blob; the byte-count is the ruler and the
 claim includes its own rewrite - recount at every touch,
 the hdr-walk arm took the wake walk off the pump; the loud-voice
@@ -312,6 +312,13 @@ class _ProfilesMixin:
                 border_color=self.skin.border_raised,
                 corner_radius=self.skin.radius)
             self._prof_name.pack(side="left")
+            self._prof_name.bind(
+                "<KeyRelease>",
+                lambda e=None: setattr(self, "_prof_sel_touched",
+                                       True), add="+")
+            # typing a create-name IS touching the opener (gate f3):
+            # the heal will not yank a half-typed name when the desk
+            # lands modes late - the create box outlives the flake
             # THE CAPTURE FREEZE (Oct-16, py-spy proven): this verb walks
             # every window on the box and now runs on a worker with the
             # SAME lock as the apply row - so it registers in _apply_btns

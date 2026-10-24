@@ -140,6 +140,17 @@ assert got2["_fossils"]["login"] == {
 assert got2["_fossils"]["last"] == {
     "why": "dropped rotted last table", "raw": "not-a-table"}
 assert got2["last"] == {} and "login" not in got2
+# the gate f1 combo: JUNK _fossils BESIDE rotted tables - the fix-up
+# order is the whole lesson; a loader that crashes on its own safety
+# net is worse than no net
+with open(p, "w", encoding="utf-8") as fh:
+    fh.write('{"_fossils": "junk", "last": "not-a-table",'
+             ' "profiles": {"rot": {"displays": "not-a-list"}}}')
+got3 = profiles.load(tmp)
+assert isinstance(got3["_fossils"], dict), "the combo crashed the fold"
+assert got3["_fossils"]["rot"]["raw"] == {"displays": "not-a-list"}
+assert got3["_fossils"]["last"]["raw"] == "not-a-table"
+assert got3["profiles"] == {}
 print("fossils OK (rotted entries survive load+save inside _fossils;"
       " login/last drops ride the same door; picker reads profiles only)")
 
