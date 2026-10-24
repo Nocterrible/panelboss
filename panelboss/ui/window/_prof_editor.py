@@ -371,7 +371,11 @@ class _EditorMixin:
             except (TypeError, ValueError):
                 wt = 0
             badges += "  [open it%s]" % (
-                "" if wt == 30 else " in %ds" % wt)
+                "" if not wt else " in %ds" % wt)   # a 0-s wait is the
+            #                                       bare verb (gate f1;
+            #                                       the old ==30 special
+            #                                       case was the former
+            #                                       default's ghost)
             ex = (w.get("exe") or "").split("\\")[-1].lower()
             if ex and ex != (w["proc"] or "").lower():
                 badges += "  [via %s]" % ex[:18]
