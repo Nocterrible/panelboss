@@ -33,7 +33,7 @@ flag (the RDP-injected twin): an injected mouse with real deltas
 would else stamp the clock like a hand. What the injected flag on
 the hook structs was for, these two gates do without the chain.
 
-WHY ONE FILE AND 309 LINES: the prototype block below and the
+WHY ONE FILE AND 365 LINES: the prototype block below and the
 thread loop are ONE read - the x64 slot law that AV'd this
 module's first draft binds both halves, and the pure logic was
 already split at design time (inputtruth.py). Severing them
@@ -43,8 +43,11 @@ exemption, spoken out loud.
 """
 import ctypes
 import ctypes.wintypes as wt
+import logging
 import threading
 import time
+
+log = logging.getLogger("inputtruth")
 
 U32 = ctypes.windll.user32
 K32 = ctypes.windll.kernel32
@@ -234,6 +237,12 @@ class RawEars:
         Oct-21 cross-module disease): display clears the shared
         binding at its own calls, and a plain array converts under
         both its cleared handle and this module's own binding."""
+        if not self._hwnd:
+            return False                   # re-arming while the window
+            #                                is gone: nothing to point
+            #                                the pair at; a live pump's
+            #                                next leg (or re-birth) owns
+            #                                the registration
         arr = (RAWINPUTDEVICE * 2)()
         for row, (page, usage) in zip(arr, ((1, 2), (1, 6))):
             row.usUsagePage = page
@@ -245,6 +254,13 @@ class RawEars:
             return True
         self._fail[0] = ("RegisterRawInputDevices refused: Win32 "
                          "error %d" % K32.GetLastError())
+        if self._alive:
+            # A RE-ARM refusal (gate f2): name it and KEEP the window -
+            # the next away teardown re-arms, and killing a live pump's
+            # hwnd would turn a declined retry into permanent deafness
+            # (dossier A wearing its own hat).
+            log.warning("inputtruth re-arm refused: %s", self._fail[0])
+            return False
         U32.DestroyWindow(self._hwnd)
         self._hwnd = None
         return False

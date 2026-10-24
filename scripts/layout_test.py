@@ -220,12 +220,16 @@ print("restore v3 OK (un-minimize sequence, user state honored, old "
 # parked it. The facts row carries the owner pid (threaded through
 # _proc_info, no new syscall); an own-pid row is skipped whole -
 # neither moved nor placement-repaired. A foreign lost window still
-# comes back (the no-regression twin).
+# comes back (the no-regression twin), and an OWN row that is minimized
+# (the gate's f3: the iconic twin) proves the skip precedes the
+# placement path - this u32 fake owns NO GetWindowPlacement, so a
+# placement read would confess as a crash.
 _own = ctypes.windll.kernel32.GetCurrentProcessId()
 _sink = {"hwnd": 91, "visible": True, "cloaked": False,
          "furniture": False, "iconic": False, "zoomed": False,
          "title": "PanelBossPowerSink", "proc": "pythonw.exe",
          "pid": _own, "rect": (-32000, -32000, 64, 64)}
+_sink_ic = dict(_sink, hwnd=93, iconic=True)
 _foreign = dict(_sink, hwnd=92, pid=_own + 1, title="team.exe",
                 proc="teams.exe", rect=(5000, 0, 800, 600))
 
@@ -249,7 +253,7 @@ class _RescueU32:
 _real_rz = (_rz._toplevel_facts, _rz.monitors, _rz.u32)
 try:
     f = _RescueU32()
-    _rz._toplevel_facts = lambda: [_sink, _foreign]
+    _rz._toplevel_facts = lambda: [_sink, _sink_ic, _foreign]
     _rz.monitors = lambda: MONS
     _rz.u32 = f
     out = _rz.rescue_lost()

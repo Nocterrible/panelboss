@@ -810,9 +810,13 @@ class Display(threading.Thread):
             log.debug("raw lift ears unregister was declined (%s)",
                       k32.GetLastError())
         from . import inputtruth
-        inputtruth.re_register()
         # our remove is process-wide; the sibling ear re-arms or the
-        # desk goes deaf (Oct-23 dossier A)
+        # desk goes deaf (Oct-23 dossier A). A re-arm seam that raises
+        # owns nothing (gate f5): refused is said, never fatal.
+        try:
+            inputtruth.re_register()
+        except Exception:
+            log.debug("pump re-arm seam declined", exc_info=True)
         self._hooked = False
 
     def _raw_probe(self, handle):

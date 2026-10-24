@@ -89,7 +89,8 @@ def rescue_lost():
         if w.get("pid") == k32.GetCurrentProcessId():
             # the rescue never touches our own windows - every one
             # is parked where we put it (Oct-13 broadcast law; the
-            # white-box rescue is the confession)
+            # white-box rescue is the confession). Own minimized
+            # placement-repair is lawfully forfeit with the skip.
             continue
         name = (w["title"] or w["proc"] or "(untitled)").strip()[:48]
         if w["iconic"]:
