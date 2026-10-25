@@ -64,9 +64,17 @@ DDC_NVIDIA_TIP = ("disabled on nvidia drivers while a kernel "
 # segment SAYS why in the menu itself. The suffixed text is the
 # DISPLAY value only - the state key stays DDC_TEXT (the engine's
 # word, the config file, MODE_BY_LABEL's domain), and
-# _sync_away_rows maps display <-> stored word; the segment grows
-# its few pixels on blocked rows alone. Pin as data.
-DDC_BLOCKED_SUFFIX = " - this driver blocks it"
+# _sync_away_rows maps display <-> stored word.
+# SHORTENED (owner ruling, Oct 24 at the desk: "the text on off (DDC
+# fast) - this driver blocks it is too long and makes the button
+# huge, I could see it causing clipping with a longer monitor name or
+# if top right (primary) was relevant"): CTkSegmentedButton sizes each
+# segment to its own text, so the old 24-character verdict widened the
+# whole picker and pushed the row's brightness controls off its own
+# right edge. The verdict stays ON the button - shorter - and the full
+# why lives on the row's tooltip (DDC_NVIDIA_TIP below, bound to the
+# row AND to the segment itself), which is where a why belongs.
+DDC_BLOCKED_SUFFIX = " - blocked"
 DDC_BLOCKED_LABEL = DDC_TEXT + DDC_BLOCKED_SUFFIX
 # one INFO per card build/refresh at the probe call site (the owner
 # question at the desk: 'also app writes anything about it to log?')
@@ -350,7 +358,18 @@ class _AwayMixin:
                                           "DDC/CI door; none answered "
                                           "for this monitor (the "
                                           "disconnect does not)")
-            seg.grid(row=0, column=1, sticky="e")
+            # TWO LINES, ONE GRID (owner ruling, Oct 24: the long
+            # verdict text "makes the button huge" and the row clipped
+            # its own tail): line 1 carries the panel's identity and
+            # the mode picker; line 2 carries the brightness strip -
+            # slider, its percent, the preview button - which used to
+            # fight the picker for the same 500 px and lost (measured:
+            # the slider and the % were gridded past the row's right
+            # edge and simply never appeared). Now the picker owns its
+            # line at the row's right edge and the strip owns the line
+            # below it, so a longer monitor name or a longer verdict
+            # moves NOTHING but its own line's height.
+            seg.grid(row=0, column=1, columnspan=4, sticky="e")
             # the disconnect's paragraph hangs on the picker itself:
             # the label's tip is the row-wide one, and the off
             # choices are where the question forms (same hover path
@@ -400,7 +419,8 @@ class _AwayMixin:
                 pass
             value = ctk.CTkLabel(row, font=self.skin.font(12),
                                  **self.skin.text_style("sub"))
-            value.grid(row=0, column=3, sticky="e", padx=(6, 0))
+            # line 2, right-aligned strip (see the row's grid note above)
+            value.grid(row=1, column=2, sticky="e", padx=(6, 0))
             slider = ctk.CTkSlider(row, from_=1, to=40,
                                    number_of_steps=39, width=150,
                                    command=self._away_level_changed,
@@ -411,13 +431,13 @@ class _AwayMixin:
                 # look live, before any event fires (the knob-lie
                 # family's away-card corpse, owner UAT Oct 22)
                 slider.configure(state="disabled")
-            slider.grid(row=0, column=2, sticky="e")
+            slider.grid(row=1, column=1, sticky="e")
             value.configure(text="%d%%" % self._away_level())
             preview = ctk.CTkButton(row, text=preview_label(), width=84,
                                     command=lambda s=short:
                                     self._away_preview_clicked(s),
                                     **self.skin.secondary())
-            preview.grid(row=0, column=4, sticky="e", padx=(6, 0))
+            preview.grid(row=1, column=3, sticky="e", padx=(6, 0))
             say = ctk.CTkLabel(self._away_row_frame, text="",
                                font=self.skin.font(10),
                                wraplength=350, justify="left", anchor="w",
@@ -744,8 +764,10 @@ class _AwayMixin:
                 r["slider"].grid_forget()
                 r["value"].grid_forget()
             elif dim_row:
-                r["slider"].grid(row=0, column=2, sticky="e")
-                r["value"].grid(row=0, column=3, sticky="e",
+                # line 2 of the row's own grid (the Oct-24 two-line law
+                # in _away_fill_rows): the strip parks under the picker
+                r["slider"].grid(row=1, column=1, sticky="e")
+                r["value"].grid(row=1, column=2, sticky="e",
                                 padx=(6, 0))
             r["value"].configure(text="%d%%" % self._away_level())
             self._away_say(short)

@@ -65,7 +65,7 @@ DEVICE_KEYS = [("auto", "auto"), ("cpu", "CPU"), ("cuda", "CUDA GPU")]
 DEVICE_BY_LABEL = dict((label, key) for key, label in DEVICE_KEYS)
 
 TABS = ("detection", "power plan", "monitor profiles", "oled",
-        "general / keybinds")   # general last (owner UAT, Oct 15), and
+        "general/keybinds")   # general last (owner UAT, Oct 15), and
                         # renamed for the card that moved in (owner
                         # ruling, Oct 24 refresh E: the tab carries
                         # the keybindings); detection

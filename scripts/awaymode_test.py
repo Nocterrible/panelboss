@@ -1059,9 +1059,15 @@ def test_nvidia_vendor_gate():
         "freezes panels resuming over DDC/CI - returns when the "
         "vendor patches. off (disconnect) darkens the same way.")
     # the label verdict (amendment 3, shape endorsed off the desk
-    # shot): the suffix is data, the state key stays the plain word
-    assert DDC_BLOCKED_SUFFIX == " - this driver blocks it"
+    # shot; SHORTENED by the owner at the desk Oct 24 - the old
+    # 24-character verdict widened the picker and pushed the row's
+    # brightness strip off its own right edge; the full why lives on
+    # the row's tooltip, and this constant is the pin that keeps the
+    # button short OR the shortening honest)
+    assert DDC_BLOCKED_SUFFIX == " - blocked"
     assert DDC_BLOCKED_LABEL == DDC_TEXT + DDC_BLOCKED_SUFFIX
+    assert len(DDC_BLOCKED_LABEL) < len(DDC_TEXT) + 24, \
+        "the verdict grew back into the clipping the owner photographed"
 
     # (b) the probe's truth table: a scripted adapter walk behind the
     # same facade seam every suite patch rides (wm.u32 fans out).

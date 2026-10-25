@@ -203,18 +203,24 @@ class _ProfilesMixin:
             #                   scroll_probe, Oct 12)
             clip_siblings(self._prof_body)     # fresh-born widgets are
             clip_siblings(self._prof_pins_body)  # clip-blind until told
-            present(self._body)   # ONE synchronous repaint of the swapped
-            #                   pane: the fresh widgets map here, and
-            #                   presenting them now (not on the next tick)
-            #                   is what keeps the swap a single frame
-            #                   instead of the old/new mix the owner saw.
-            #                   GATE FINDING 3 (Oct 16): the clip pass in
-            #                   build_all is a BUILD-TIME snapshot - the
-            #                   widgets rebuilt HERE were born flag-free
-            #                   and the forced present makes them paint
-            #                   anyway, over the backdrop and the active
-            #                   page if this pane's tab is hidden. Clip
-            #                   the fresh bodies first (idempotent).
+            #                   (GATE FINDING 3, Oct 16: the clip pass
+            #                   in build_all is a BUILD-TIME snapshot -
+            #                   these widgets were born flag-free, and a
+            #                   forced present makes them paint over
+            #                   whatever overlaps them; clip first.)
+            present(self._prof_body)   # ONE synchronous repaint of the
+            #                   swapped bodies: the fresh widgets map
+            #                   here, and presenting them now (not on
+            #                   the next tick) is what keeps the swap a
+            #                   single frame instead of the old/new mix
+            #                   the owner saw.
+            #                   SCOPED (owner ruling, Oct 24): the two
+            #                   bodies are what changed - the body-wide
+            #                   ALLCHILDREN form repainted every other
+            #                   tab's page too (they stay mapped under
+            #                   _body), which is the "redraws all over"
+            #                   the pins ticket named.
+            present(self._prof_pins_body)
 
 
     def _repaint(self, *names):
@@ -264,25 +270,37 @@ class _ProfilesMixin:
                 # - the _restore_section block! - never drift (gate
                 # finding; an after=chain reordered them)
                 before=olds[-1])    # the new buffer enters
-            # teardown SCOPED to this name (gate finding): a fill that
-            # raised mid-repaint stashes an old frame; destroying ALL
-            # stashes here would let the NEXT unrelated repaint kill
-            # that section's visible frame. A stale stash instead waits
-            # quietly until its own section repaints again.
+            # THE OLD GENERATION GOES IN THE SAME CALLBACK (owner
+            # ruling, Oct 24 - "interacting with the pins section
+            # causes visible redraws all over the monitor profiles
+            # page"): pack-new-then-destroy left both frames mapped
+            # and packed for the rest of this callback, and the
+            # layout re-run that produced moved every sibling below
+            # the section. Tk cannot paint inside a callback, so
+            # unpacking here costs nothing and the transient layout
+            # never reaches the glass - the forced present below now
+            # only has to paint the NEW frame, not re-lay the pane.
             for f in self._psec_old.pop(name, []):
+                try:
+                    f.pack_forget()
+                except Exception:
+                    pass            # already unpacked: the point stands
                 f.destroy()
+            # THE COVER IS SCOPED TO THE SECTION (owner ruling, Oct 24,
+            # the same ticket): this used to force a whole-BODY
+            # RedrawWindow (INVALIDATE|ERASE|ALLCHILDREN) - and every
+            # page of this window stays MAPPED under the body, so one
+            # pin click repainted ~1400 widgets across every tab. The
+            # swap only ever changed THIS section: force the paint of
+            # the swapped section alone and the rest of the pane keeps
+            # its pixels.
+            present(self._psec[name])
         self._page_region()         # the swap changed (or kept) the
         #                           pane's height: re-measure the page
         #                           scroll region after EVERY swap -
         #                           coalesced <Configure>s can leave a
         #                           stale region and the owner's dead
         #                           wheel (scroll_probe, Oct 12)
-        present(self._body)         # ONE synchronous repaint of the
-        #                           swapped section: pack-new-then-
-        #                           destroy-old leaves both generations
-        #                           mapped for an instant, and presenting
-        #                           now collapses that instant to a single
-        #                           complete frame
 
 
     def _page_region(self):

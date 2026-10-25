@@ -15,7 +15,7 @@ Rules this file lives by:
   applying one reshapes the whole desk, what guards the desk
   belongs to the power plan (hold overrides, wake behavior, the
   powercfg assistant), and what only configures the app itself
-  (skin, autostart, logs) is meta - it goes in general / keybinds
+  (skin, autostart, logs) is meta - it goes in general/keybinds
 * anything that needs a paragraph carries a "?" (ui.helpbtn); the
   rows themselves stay one line short
 
@@ -52,7 +52,6 @@ from ._scroll import ScrollHost
 from ._widgets import _SleepPrompt
 from ._widgets import _WidgetsMixin
 from ._present import clip_siblings
-from ._present import present
 from ._runtime import _RuntimeMixin
 from ._detection import _DetectionMixin
 from ._away import _AwayMixin
@@ -290,7 +289,7 @@ class SettingsWindow(
         "monitor profiles": ("_sync_restore_switches",
                              "_sync_editor_switches"),
         "power plan": ("_sync_power_switches", "_sync_gaming_switches"),
-        "general / keybinds": ("_sync_general_switches",),
+        "general/keybinds": ("_sync_general_switches",),
         # the oled pane's first table entry (Oct 15, the companion
         # card): the next switch in the house joins for free by
         # riding its pane's entry - this is that law applied
@@ -394,7 +393,7 @@ class SettingsWindow(
         # hold state makes that adjacency load-bearing.
         self._build_power(self.pages["power plan"].inner)
         self._build_profiles(self.pages["monitor profiles"].inner)
-        self._build_general(self.pages["general / keybinds"].inner)
+        self._build_general(self.pages["general/keybinds"].inner)
         self._build_oled(self.pages["oled"].inner)
         # The layer law (owner, Oct 12: "tabbing just reveals them
         # instead of fully redrawing them each time"): every page is
@@ -438,12 +437,15 @@ class SettingsWindow(
         _present.py's header): none of them queues the work the restack
         never queued.
 
-        The cure forces the present: after the raise, one synchronous
-        whole-subtree repaint completes inside this call, before control
-        returns to the loop, so the switch is one complete frame by
-        construction. Pages stay BUILT and MAPPED (no remap: unmapping
-        loses CTk's drawn canvases - measured, the fragments the owner
-        would have seen instead), so only the present is new work."""
+        The cure is the FLAT BACKDROP below (see the atomic-switch note
+        under it) plus one Tk redraw pass at the end of the raise
+        (Oct-24 correction: the Oct-16 note here claimed a forced
+        present was the cure - the code retired it and left the sweep
+        behind; the present is back OUT of this path for good, measured
+        at ~5x Tk's own pass, see the raise site below). Pages stay
+        BUILT and MAPPED either way (no remap: unmapping loses CTk's
+        drawn canvases - measured, the fragments the owner would have
+        seen instead)."""
         page = self.pages[key]
         if key == self._tab and page.winfo_manager() == "place":
             return                     # already the revealed layer: a
@@ -477,15 +479,20 @@ class SettingsWindow(
             for k, b in self.tab_buttons.items():
                 b.configure(**(self.skin.primary() if k == key
                               else self.skin.secondary()))
+            # THE FLAT FRAME IS FORCED (measured, Oct 24: removing this
+            # flush made the switch into detection measure WORSE - 2015
+            # ms inside the call against 1500 ms with it, because the
+            # pending paint then drained in the same call one step later
+            # anyway. Kept: it buys the flat cover NOW, and the switch
+            # pays the same bill either way. What it also does is run
+            # every due after() callback in the window (the 2 s desk
+            # ear, the away poll, the tick) inside the click - so a
+            # switch that lands on a due ear pays that rebuild too; the
+            # named phase costs below are how that is told apart.)
             try:
                 self._backdrop.update()  # flat fill over the body NOW
             except Exception:
                 pass                     # dying window: the switch below
-            # (a real event flush, not RedrawWindow: only update() forces
-            # Tk to paint the flat frame synchronously - measured). The
-            # prep above runs while the flat frame is coming up, so the
-            # flat moment is one or two frames, not the whole rebuild's
-            # budget.
         finally:
             # FINDINGS 1+2 (the gate, Oct 16): an exception between the
             # backdrop raise and the switch used to leave the flat
@@ -502,6 +509,31 @@ class SettingsWindow(
             # its own page and needs no re-raise.
             if self._tab == key:
                 page.tkraise()           # THE SWITCH - restack, instant
+                # AND FINISH THE PAINT IN THIS CALL (owner ruling, Oct
+                # 24: "the UI appears to draw from bottom right to top
+                # left as opposed to appearing fully drawn all at
+                # once"). The restack queues no paint, so the revealed
+                # page repainted itself on later loop turns, widget by
+                # widget, newest-first - the sweep, in reverse creation
+                # order (the pane's newest widgets are its bottom-right
+                # ones). update_idletasks() drains Tk's own redraw queue
+                # to completion HERE, so the switch is over when this
+                # callback returns.
+                # MEASURED, Oct 24 - and this is why it is Tk's pass and
+                # not a forced Win32 present: the RedrawWindow
+                # ERASE+UPDATENOW+ALLCHILDREN form at PAGE tier repainted
+                # the whole subtree explicitly and cost ~1.4 s, where
+                # Tk's own pass costs ~0.2 s. Five times the work for
+                # the same pixels; the paint primitive stays scoped to
+                # the profiles sections, where it pays.
+                try:
+                    self.update_idletasks()
+                except tk.TclError:
+                    pass                 # destroyed mid-switch: the paint
+                    #                      goes with the window. NOT a
+                    #                      `return` (a bare return in a
+                    #                      finally swallows the in-flight
+                    #                      exception the switch raised)
                 page.sync_region()       # belt for the wheel: geometry
                 if key != "detection" and hasattr(self, "preview_label"):
                     # THE OWNER'S LEAVE-RESET (Oct 16): the detection
@@ -739,6 +771,24 @@ class SettingsWindow(
                 v.destroy()
             except Exception:
                 pass                     # gone already: the point stands
+        # AND FINISH WHAT THE VEIL WAS COVERING, IN THIS CALL (owner
+        # ruling, Oct 24: "the boottime veil does not hide all
+        # drawing"). A cover only hides the frames that happen UNDER it;
+        # destroying it exposes the whole client area at once, and Tk
+        # then repainted that area over the next loop turns - widget by
+        # widget, which reads as the UI painting itself after the veil
+        # is gone. Draining Tk's redraw queue here ends the reveal
+        # inside this call: veil -> complete window, no half-drawn
+        # middle. Tk's own pass, NOT a forced Win32 present: measured
+        # Oct 24, the ERASE+ALLCHILDREN form repaints every widget
+        # explicitly (~5x the work) and this is the window's most
+        # exposed moment.
+        try:
+            self.update_idletasks()
+        except tk.TclError:
+            pass                         # destroyed mid-unveil: the
+            #                              window is gone, the point
+            #                              stands
 
     def _build_top(self):
         ctk.CTkLabel(self._top, text="PanelBoss",

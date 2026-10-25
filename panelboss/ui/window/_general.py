@@ -1,6 +1,5 @@
-"""General / Keybinds tab: skin, tray start, updates, deps,
-autostart.
-"""
+"""General/keybinds tab: skin, tray start, updates, deps,
+autostart, and the four key chords. """
 
 from __future__ import annotations
 
@@ -131,45 +130,89 @@ class _GeneralMixin:
     def _build_hotkeys(self, col):
         box = self._card(col, "keybindings",
                          "toggle ctrl/alt/shift, press a key to bind, "
-                         "esc clears the key; nothing is stolen until "
-                         "you give one - a taken combo keeps its "
-                         "predecessor and says so")
+                         "esc or clear unbinds the key; nothing is "
+                         "stolen until you give one - a taken combo "
+                         "keeps its predecessor and says so")
+        # THE CARD'S ONE GRID (owner ruling, Oct 24: the ctrl/alt/shift
+        # toggles "are spaced poorly and draw badly and look ugly,
+        # needs a glowup"). Before this, each verb packed a row of its
+        # own and every row found its own x - the toggles started
+        # wherever the label ended, so nothing lined up down the card.
+        # Now every verb's cells live in ONE grid: the toggles hold
+        # three fixed, uniform slots (ctrl/alt/shift read as columns
+        # down the whole card), and the bind button, the new clear
+        # button and the say line each hold their own fixed slot.
+        # Reading order IS the widget order: label, toggles, bind,
+        # clear, say.
+        grid = ctk.CTkFrame(box, fg_color="transparent")
+        grid.pack(fill="x")
+        grid.grid_columnconfigure(0, weight=1)       # the verb
+        grid.grid_columnconfigure(1, minsize=180)    # ctrl | alt | shift
+        grid.grid_columnconfigure(2, minsize=150)    # bind
+        grid.grid_columnconfigure(3, minsize=80)     # clear (the unbind)
+        grid.grid_columnconfigure(4, minsize=132)    # the say line
         self._hotkey_btns = {}
         self._hotkey_says = {}
         self._hotkey_togs = {}
+        self._hotkey_clears = {}
         from ... import hotkeys
-        for name, label, tip in self._HOTKEY_VERBS:
-            row = self._row(box, label, tip, hint_chars=42)
+        _pad = (0, theme.S_ROW)                      # one rhythm, all rows
+        for r, (name, label, tip) in enumerate(self._HOTKEY_VERBS):
+            lbl = ctk.CTkLabel(grid, text=label, font=self.skin.font(12),
+                               anchor="w", **self.skin.text_style())
+            lbl.grid(row=r, column=0, sticky="w", pady=_pad)
+            lbl.bind("<Enter>",
+                     lambda e=None, t=tip, w=lbl: self.tips._schedule(t, w),
+                     add="+")
+            lbl.bind("<Leave>", lambda e=None: self.tips._hide_soon(),
+                     add="+")
             # the toggles mirror the stored word (byte-compat: a chord
             # bound before this design shows its modifiers checked)
             mods = (hotkeys.bound(name, self.cfg) or [0, None])[0]
-            tframe = ctk.CTkFrame(row, fg_color="transparent")
-            tframe.grid(row=0, column=1, sticky="e")
+            tframe = ctk.CTkFrame(grid, fg_color="transparent")
+            tframe.grid(row=r, column=1, sticky="w", pady=_pad)
             togs = []
-            for tname, tbit in hotkeys.TOGGLES:
+            for i, (tname, tbit) in enumerate(hotkeys.TOGGLES):
+                # uniform cells: the three boxes sit in the SAME three
+                # slots on every row, whatever the words' widths are
+                tframe.grid_columnconfigure(i, minsize=58, uniform="tog")
                 cb = ctk.CTkCheckBox(
                     tframe, text=tname,
                     command=lambda n=name: self._hotkey_toggled(n),
                     font=self.skin.font(12), checkbox_width=16,
                     checkbox_height=16, border_color=self.skin.border_raised,
-                    fg_color=self.skin.accent, hover_color=self.skin.accent,
+                    fg_color=self.skin.accent, hover_color=self.skin.accent_hover,
                     text_color=self.skin.text,
                     text_color_disabled=self.skin.txt3)
-                cb.pack(side="left", padx=(0, theme.S_ROW))
+                cb.grid(row=0, column=i, sticky="w")
                 cb.set(bool(mods & tbit))
                 togs.append((tbit, cb))
             self._hotkey_togs[name] = togs
             btn = ctk.CTkButton(
-                row, text="press a key to bind", height=26, width=170,
+                grid, text="press a key to bind", height=26, width=150,
                 command=lambda n=name: self._hotkey_bind(n),
                 **self.skin.secondary())
-            btn.grid(row=0, column=2, sticky="e")
-            say = ctk.CTkLabel(row, text="", font=self.skin.font(11),
-                               wraplength=120, justify="left", anchor="e",
+            btn.grid(row=r, column=2, sticky="e", pady=_pad)
+            # THE CLEAR VERB (owner ruling, Oct 24: "we also need a
+            # clear keybind button in case a user decides they don't
+            # want something bound after all"): the same road esc
+            # takes - set_bound None, save, one repaint of the row -
+            # behind a visible button, so an unbound row is reachable
+            # without knowing the esc trick. Grayed while the row is
+            # already unbound (gray not lie).
+            clr = ctk.CTkButton(
+                grid, text="clear", height=26, width=76,
+                command=lambda n=name: self._hotkey_clear(n),
+                **self.skin.secondary())
+            clr.grid(row=r, column=3, sticky="e", pady=_pad,
+                     padx=(theme.S_FIELD, 0))
+            say = ctk.CTkLabel(grid, text="", font=self.skin.font(11),
+                               wraplength=132, justify="left", anchor="w",
                                **self.skin.text_style("sub"))
-            say.grid(row=0, column=3, sticky="e",
+            say.grid(row=r, column=4, sticky="w", pady=_pad,
                      padx=(theme.S_FIELD, 0))
             self._hotkey_btns[name] = btn
+            self._hotkey_clears[name] = clr
             self._hotkey_says[name] = say
             self._hotkey_words(name)
         self.after(1000, self._hotkey_poll)
@@ -248,16 +291,43 @@ class _GeneralMixin:
     def _hotkey_words(self, name):
         from ... import hotkeys
         note = hotkeys.note(name)
+        combo = hotkeys.describe(name, self.cfg)
         if note:
             set_text(self._hotkey_says[name], note)     # the dated refusal
-            return
-        combo = hotkeys.describe(name, self.cfg)
-        if hotkeys.live(name):
+        elif hotkeys.live(name):
             set_text(self._hotkey_says[name], "%s - live" % combo)
         elif combo:
-            set_text(self._hotkey_says[name], "%s - answers next beat" % combo)
+            set_text(self._hotkey_says[name],
+                     "%s - answers next beat" % combo)
         else:
             set_text(self._hotkey_says[name], "unbound")
+        # the clear button's own honesty (gray not lie): an unbound row
+        # has nothing to clear, so the verb goes quiet - the row state
+        # decides, never the last click. DIFFED, because this runs on
+        # the poll beat too and every CTk configure redraws a canvas.
+        clr = getattr(self, "_hotkey_clears", {}).get(name)
+        if clr is not None:
+            want = "normal" if combo else "disabled"
+            try:
+                if clr.cget("state") != want:
+                    clr.configure(state=want)
+            except Exception:
+                pass                    # destroyed row: the fill repaints
+
+
+    def _hotkey_clear(self, name):
+        """THE CLEAR VERB (owner ruling, Oct 24): the visible way out of
+        a binding, on the same road esc already took - set_bound None,
+        save, and one repaint of the row (whose 'unbound' word and
+        grayed clear button come back through _hotkey_words). The
+        TOGGLES persist: they are settings now, and clearing a key is
+        no statement about the modifiers."""
+        from ... import hotkeys
+        if getattr(self, "_hk_pending", None) == name:
+            self._hotkey_disarm()      # a pending capture lets go first
+        hotkeys.set_bound(self.cfg, name, None)
+        self._save()
+        self._hotkey_words(name)
 
     def _hotkey_poll(self):
         """The say rows follow the engine (a taken combo answered AFTER

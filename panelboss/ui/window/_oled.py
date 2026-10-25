@@ -606,7 +606,7 @@ class _OledMixin:
 
     # ------------------------------------------------------------------
     # third card: the background dimmer. The keybind row it once carried
-    # (the pause hotkey) moved to the general / keybinds tab's keybindings
+    # (the pause hotkey) moved to the general/keybinds tab's keybindings
     # card -
     # the registry (hotkeys.py) does the RegisterHotKey arm.
     # ------------------------------------------------------------------

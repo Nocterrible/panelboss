@@ -668,7 +668,7 @@ def check():
         # (monotonic is coarse on this box: two puts microseconds apart
         # can share a stamp, and an EQUAL stamp is not "newer" - the
         # state module's time is faked for the put alone)
-        app._tab = "general / keybinds"
+        app._tab = "general/keybinds"
         app._tick_inner()
         assert app._ctkimg is None, \
             "a hidden poll smuggled a fresh bitmap in before the return"

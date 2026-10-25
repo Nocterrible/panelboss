@@ -1405,7 +1405,7 @@ assert "cb.set(bool(mods & tbit))" in build   # toggles seeded from the
 assert "def _hotkey_mods" in UI and "def _hotkey_toggled" in UI
 ok("FocusOut cancels a pending capture; every completion disarms, the "
    "capture logs the keysym and the toggle chord it stored - the four "
-   "verbs on general / keybinds, state never consulted")
+   "verbs on general/keybinds, state never consulted")
 
 
 # THE SEAM DRIVE (refresh E): the card's handler, method-staged on a
