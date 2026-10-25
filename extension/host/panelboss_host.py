@@ -156,20 +156,41 @@ def main():
         msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
     stdin = sys.stdin.buffer if hasattr(sys.stdin, "buffer") else sys.stdin
     stdout = sys.stdout.buffer if hasattr(sys.stdout, "buffer") else sys.stdout
-    while True:
-        msg = _read_frame(stdin)
-        if msg is None:
-            return                      # EOF: the browser closed the pipe
-        op = msg.get("op")
-        if op == "capabilities":
-            _write_frame(stdout, CAPABILITIES)
-        elif op == "veil":
-            _write_frame(stdout, _veil(msg))
-        else:
-            _write_frame(stdout, {"op": "error",
-                                  "why": "unknown op %r" % (op,),
-                                  "capabilities": CAPABILITIES})
+    try:
+        while True:
+            msg = _read_frame(stdin)
+            if msg is None:
+                return                      # EOF: the browser closed the
+            #                                 pipe
+            op = msg.get("op")
+            if op == "capabilities":
+                _write_frame(stdout, CAPABILITIES)
+            elif op == "veil":
+                _write_frame(stdout, _veil(msg))
+            else:
+                _write_frame(stdout, {"op": "error",
+                                      "why": "unknown op %r" % (op,),
+                                      "capabilities": CAPABILITIES})
+    except OSError:
+        # DEAD PIPE mid-reply (Errno 22 on Windows is what a torn pipe
+        # raises on WRITE, not the broken-pipe error the docs imagine -
+        # measured on the owner's desk, Oct 24, when an app relaunch
+        # yanked the connection under the host): the browser IS the
+        # pipe and the browser is gone - slip out silent, the next
+        # message re-spawns us and the veil state rides the disk file
+        # anyway. A dialog from a background relay is a bug even when
+        # the exception is real.
+        return
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # The host NEVER dialogs. The frozen bootloader's "Failed to
+        # execute script" box (Oct 24's Errno 22 wake-up) is the worst
+        # UI this component can produce: a native-messaging relay has
+        # no user to address mid-browser-session, and the browser's
+        # next message re-spawns us clean anyway. Silent exit, every
+        # error, forever - that is the host's whole side of the deal.
+        pass
