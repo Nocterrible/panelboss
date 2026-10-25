@@ -917,7 +917,7 @@ def check():
         # invariant (the virgin defaults are pinned offline in
         # layout_test.py). Written for the next boot (the window
         # cannot minimize its own birth)
-        app._show_tab("general")
+        app._show_tab("general / keybinds")
         app.update_idletasks()
         assert bool(app.min_switch.get()) == bool(
             cfg["ui"]["start_minimized"]), "switch betrays its origin"

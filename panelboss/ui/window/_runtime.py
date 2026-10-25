@@ -35,6 +35,7 @@ class _RuntimeMixin:
             return
         try:
             self._tick_inner()
+            self._hotkey_beat()
             now = time.monotonic()
             if now - getattr(self, "_desk_fp_t", 0.0) >= 2.0:
                 self._desk_fp_t = now
@@ -45,6 +46,14 @@ class _RuntimeMixin:
             self.after(90, self._tick_ui)
         except Exception:
             pass                        # the window was destroyed
+
+
+    def _hotkey_beat(self):
+        """The four-verb hotkey beat: sync re-arms on a changed stored
+        word (the registry's dedicated pump thread does the register and
+        the WM_HOTKEY read - no window, no Tk dispatch)."""
+        from ... import hotkeys
+        hotkeys.sync(self.cfg)
 
 
     # ------------------------------------------------------- desk ear --

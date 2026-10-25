@@ -15,7 +15,7 @@ Rules this file lives by:
   applying one reshapes the whole desk, what guards the desk
   belongs to the power plan (hold overrides, wake behavior, the
   powercfg assistant), and what only configures the app itself
-  (skin, autostart, logs) is meta - it goes in General
+  (skin, autostart, logs) is meta - it goes in general / keybinds
 * anything that needs a paragraph carries a "?" (ui.helpbtn); the
   rows themselves stay one line short
 
@@ -290,7 +290,7 @@ class SettingsWindow(
         "monitor profiles": ("_sync_restore_switches",
                              "_sync_editor_switches"),
         "power plan": ("_sync_power_switches", "_sync_gaming_switches"),
-        "general": ("_sync_general_switches",),
+        "general / keybinds": ("_sync_general_switches",),
         # the oled pane's first table entry (Oct 15, the companion
         # card): the next switch in the house joins for free by
         # riding its pane's entry - this is that law applied
@@ -394,7 +394,7 @@ class SettingsWindow(
         # hold state makes that adjacency load-bearing.
         self._build_power(self.pages["power plan"].inner)
         self._build_profiles(self.pages["monitor profiles"].inner)
-        self._build_general(self.pages["general"].inner)
+        self._build_general(self.pages["general / keybinds"].inner)
         self._build_oled(self.pages["oled"].inner)
         # The layer law (owner, Oct 12: "tabbing just reveals them
         # instead of fully redrawing them each time"): every page is

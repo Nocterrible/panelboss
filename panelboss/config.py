@@ -575,7 +575,8 @@ DEFAULTS = {
                                     # only the video's panel is framed.
     },
     "restore": {
-        "enabled": False,       # the pre-armed lever (General tab): a
+        "enabled": False,       # the pre-armed lever (general / keybinds
+                                # tab): a
                                 # profile the app re-applies by itself
                                 # when it starts
         "profile": "last",      # "last" = the one this desk last used

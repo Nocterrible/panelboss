@@ -183,7 +183,7 @@ app.update()
 # view leaves tk parked inside content that no longer exists - blank
 # on top. The host must clamp; re-pack used to hide this, the layer
 # law made it permanent, so the law is asserted here forever.
-p = app.pages["general"]             # the SHORT page: 272 px of content
+p = app.pages["general / keybinds"]    # the SHORT page: 272 px of content
 c = p._canvas
 _calls = {"sync": 0}
 _orig_sync = type(p).sync_region
@@ -224,10 +224,10 @@ type(p).sync_region = _orig_sync
 app.geometry("920x1080")                 # the live-app size, whatever
 app._size_pair = (920, 1080)             # was recalled (no resize-recall)
 app.update()
-app._show_tab("general")                 # raise the fitted page: the
+app._show_tab("general / keybinds")        # raise the fitted page: the
 app.update(); time.sleep(0.15)           # wheel must land on ITS layer
 app.update()
-gs = app.pages["general"]                # the fitted page
+gs = app.pages["general / keybinds"]       # the fitted page
 gcv = gs._canvas
 _off = gcv.canvasy(0)
 _pt = (gcv.winfo_rootx() + gcv.winfo_width() // 2,

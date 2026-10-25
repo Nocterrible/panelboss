@@ -189,9 +189,12 @@ _u32.SetWindowPos.restype = ctypes.c_int
 _u32.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
                               ctypes.c_int, ctypes.c_int, ctypes.c_int,
                               ctypes.c_int, ctypes.c_uint]
-# (the hotkey pair is NOT pinned here: since the Oct-15 1408 law the
-# verbs belong to the display pump thread - display.py's own block
-# pins them; this module leaves notes, see _request_hotkey)
+# (the hotkey pair is NOT pinned here at all: since the Oct-24
+# delivery-thread fix the registry (hotkeys.py) registers and reads on
+# its own pump thread - the display pump is out of the hotkey business,
+# and the old note-door (_request_hotkey) is gone with it. The pause
+# verb lives below as a bare flag flip; the slot ids belong to the
+# registry alone.)
 _dwm = ctypes.WinDLL("dwmapi", use_last_error=True)
 _dwm.DwmGetWindowAttribute.restype = ctypes.c_long
 _dwm.DwmGetWindowAttribute.argtypes = [ctypes.c_void_p, ctypes.c_uint,
@@ -208,12 +211,11 @@ _k32.CloseHandle.argtypes = [ctypes.c_void_p]
 _WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
                                   ctypes.c_long)
 
-HOTKEY_ID = 0x5042                      # pause's slot id, re-exported for
-                                        # the suites that pin it; the
-                                        # registry (hotkeys.py) owns the
-                                        # four ids now, 0x5042..0x5045
-MOD_NOREPEAT = 0x4000                   # re-export (hotkeys.py's own law)
-ERROR_HOTKEY_ALREADY_REGISTERED = 1409  # re-export (hotkeys.py's own law)
+# (the pause slot's id and the chord constants are NOT re-exported here
+# anymore - the registry (hotkeys.py) owns them all: SLOTS carries the
+# four ids 0x5042..0x5045, MOD_NOREPEAT joins at registration. The
+# Oct-24 dead-code sweep removed the fossils with the suite's blessing:
+# the wire pin reads the registry directly.)
 
 # the desktop's own shell views (Oct-15 UAT: the census kept them, so
 # the dimmer veiled the WALLPAPER and the desk read as "the whole
@@ -224,12 +226,8 @@ DESKTOP_VIEWS = frozenset(("Progman", "WorkerW"))
 
 # the patchable aliases the fakes lean on (the suite owns the desk
 # here; the pins above stay the real verbs). The hotkey VERB moved to
-# hotkeys.py (the registry), which leaves notes on the display pump
-# against its ids - this alias survives only as the pause id's door for
-# anything still reaching the old name.
-def _request_hotkey(op, mods=0, vk=0):
-    from . import display
-    return display.request_hotkey(op, HOTKEY_ID, mods, vk)
+# hotkeys.py (the registry registers and reads on its OWN pump thread -
+# the delivery-thread fix); this module keeps only the pause ACTION.
 _iswindow = _u32.IsWindow
 _getwindow = _u32.GetWindow
 _setwindowpos = _u32.SetWindowPos
@@ -1612,22 +1610,11 @@ def tick(cfg, now):
     if _veils is None:
         _veils = Veils(_census, _sounding, _idle_secs, _paint, _unveil,
                        video=_video_rect)
-    sync_hotkeys(cfg)
     _veils.tick(cfg, now)
-
-
-def sync_hotkeys(cfg):
-    """Delegate the four-verb hotkey arm to the registry (hotkeys.py):
-    the pause word is [dimmer].bound (byte-compat), the three new verbs
-    live under [hotkeys].<name>, absent = unbound."""
-    from . import hotkeys
-    hotkeys.sync(cfg)
 
 
 def teardown():
     global _veils
-    from . import hotkeys
-    hotkeys.teardown()
     if _veils is not None:
         _veils.teardown()
         _veils = None

@@ -1,4 +1,4 @@
-"""General tab: skin, tray start, updates, deps,
+"""General / Keybinds tab: skin, tray start, updates, deps,
 autostart.
 """
 
@@ -105,13 +105,16 @@ class _GeneralMixin:
 
 
     # ------------------------------------------------------ keybindings --
-    # Four verbs, one card (the four-verb wave, Oct 24): the pause
-    # hotkey moved here from the dimmer card. Each verb binds on
-    # keypress, esc clears, and is unbound until the owner gives one.
-    # The capture rides hotkeys.capture (keysym -> the win32 VK), the
-    # arm rides hotkeys.sync on the state loop's beat, and the say row
-    # shows the dated confession - never a silent lie. The registry owns
-    # the RegisterHotKey; this card owns only the words' UI.
+    # Four verbs, one card. THE SHAPE (owner design ruling, Oct 24
+    # refresh E): ctrl/alt/shift are TOGGLES beside the bind button and
+    # the bind accepts a BARE key - the stored chord is toggles+key,
+    # computed at commit, never read from the event's modifier stamp
+    # (that thread-local copy is the root cause the F4 rebuttal named).
+    # Toggle what you mean, press the key; esc clears the KEY and the
+    # toggles persist - they are settings now. The say row shows the
+    # honest combo or the dated confession - never a silent lie. The
+    # registry owns RegisterHotKey and adds MOD_NOREPEAT at
+    # registration; this card owns only the words' UI.
     _HOTKEY_VERBS = (("pause", "pause dimming",
                       "pause the dimmer without touching its settings; "
                       "one press pauses, the next resumes"),
@@ -127,28 +130,67 @@ class _GeneralMixin:
 
     def _build_hotkeys(self, col):
         box = self._card(col, "keybindings",
-                         "bind a combo on keypress, esc clears it; "
-                         "nothing is stolen until you give one - a "
-                         "taken combo keeps its predecessor and says so")
+                         "toggle ctrl/alt/shift, press a key to bind, "
+                         "esc clears the key; nothing is stolen until "
+                         "you give one - a taken combo keeps its "
+                         "predecessor and says so")
         self._hotkey_btns = {}
         self._hotkey_says = {}
+        self._hotkey_togs = {}
         from ... import hotkeys
         for name, label, tip in self._HOTKEY_VERBS:
             row = self._row(box, label, tip, hint_chars=42)
+            # the toggles mirror the stored word (byte-compat: a chord
+            # bound before this design shows its modifiers checked)
+            mods = (hotkeys.bound(name, self.cfg) or [0, None])[0]
+            tframe = ctk.CTkFrame(row, fg_color="transparent")
+            tframe.grid(row=0, column=1, sticky="e")
+            togs = []
+            for tname, tbit in hotkeys.TOGGLES:
+                cb = ctk.CTkCheckBox(
+                    tframe, text=tname,
+                    command=lambda n=name: self._hotkey_toggled(n),
+                    font=self.skin.font(12), checkbox_width=16,
+                    checkbox_height=16, border_color=self.skin.border_raised,
+                    fg_color=self.skin.accent, hover_color=self.skin.accent,
+                    text_color=self.skin.text,
+                    text_color_disabled=self.skin.txt3)
+                cb.pack(side="left", padx=(0, theme.S_ROW))
+                cb.set(bool(mods & tbit))
+                togs.append((tbit, cb))
+            self._hotkey_togs[name] = togs
             btn = ctk.CTkButton(
                 row, text="press a key to bind", height=26, width=170,
                 command=lambda n=name: self._hotkey_bind(n),
                 **self.skin.secondary())
-            btn.grid(row=0, column=1, sticky="e")
+            btn.grid(row=0, column=2, sticky="e")
             say = ctk.CTkLabel(row, text="", font=self.skin.font(11),
                                wraplength=120, justify="left", anchor="e",
                                **self.skin.text_style("sub"))
-            say.grid(row=0, column=2, sticky="e",
+            say.grid(row=0, column=3, sticky="e",
                      padx=(theme.S_FIELD, 0))
             self._hotkey_btns[name] = btn
             self._hotkey_says[name] = say
             self._hotkey_words(name)
         self.after(1000, self._hotkey_poll)
+
+    def _hotkey_mods(self, name):
+        """The row's chord, computed from the toggles - the ONLY place
+        a modifier enters a binding (event.state never gets a vote)."""
+        return sum(bit for bit, cb in self._hotkey_togs[name] if cb.get())
+
+    def _hotkey_toggled(self, name):
+        """A toggle flip re-states the binding when the row holds a
+        key (same key, new chord) - sync re-registers on the next beat
+        through the same road a fresh bind takes. Unbound rows just
+        remember the intent for the next press."""
+        from ... import hotkeys
+        word = hotkeys.bound(name, self.cfg)
+        if word:
+            hotkeys.set_bound(self.cfg, name,
+                              [self._hotkey_mods(name), word[1]])
+            self._save()
+        self._hotkey_words(name)
 
     def _hotkey_bind(self, name):
         if getattr(self, "_hk_pending", None) == name:
@@ -157,7 +199,7 @@ class _GeneralMixin:
         self._hk_pending = name
         self.bind_all("<KeyPress>", self._hotkey_capture)
         self.bind("<FocusOut>", self._hotkey_focus_out)
-        self._hotkey_btns[name].configure(text="press a key now")
+        self._hotkey_btns[name].configure(text="press the key now")
 
     def _hotkey_disarm(self):
         self._hk_pending = None
@@ -178,17 +220,21 @@ class _GeneralMixin:
                             "Shift_R", "Alt_L", "Alt_R",
                             "Super_L", "Super_R"):
             return "break"          # a modifier's own keydown carries
-                                    # state=0; keep waiting for the chord
+                                    # no key - the toggles hold the
+                                    # modifiers now; keep waiting
         self._hotkey_disarm()
         from ... import hotkeys
         if event.keysym == "Escape":
             hotkeys.set_bound(self.cfg, name, None)
+            # the KEY clears; the toggles persist (settings now), and
+            # the word's absence - not their silence - is the unbind
             self._save()
             self._hotkey_words(name)
             return
-        pair, word = hotkeys.capture(event.keysym, event.state)
-        log.info("hotkeys: capture: %s keysym=%r state=%#x -> stored %r",
-                 name, event.keysym, event.state, pair)
+        mods = self._hotkey_mods(name)
+        pair, word = hotkeys.capture(event.keysym, mods)
+        log.info("hotkeys: capture: %s keysym=%r toggled mods=%#x -> "
+                 "stored %r", name, event.keysym, mods, pair)
         if word:
             set_text(self._hotkey_says[name], word)
             return
@@ -201,10 +247,12 @@ class _GeneralMixin:
         note = hotkeys.note(name)
         if note:
             set_text(self._hotkey_says[name], note)     # the dated refusal
-        elif hotkeys.live(name):
-            set_text(self._hotkey_says[name], "live")
-        elif hotkeys.bound(name, self.cfg):
-            set_text(self._hotkey_says[name], "stored - answers next beat")
+            return
+        combo = hotkeys.describe(name, self.cfg)
+        if hotkeys.live(name):
+            set_text(self._hotkey_says[name], "%s - live" % combo)
+        elif combo:
+            set_text(self._hotkey_says[name], "%s - answers next beat" % combo)
         else:
             set_text(self._hotkey_says[name], "unbound")
 

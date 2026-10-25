@@ -65,7 +65,10 @@ DEVICE_KEYS = [("auto", "auto"), ("cpu", "CPU"), ("cuda", "CUDA GPU")]
 DEVICE_BY_LABEL = dict((label, key) for key, label in DEVICE_KEYS)
 
 TABS = ("detection", "power plan", "monitor profiles", "oled",
-        "general")      # general last (owner UAT, Oct 15); detection
+        "general / keybinds")   # general last (owner UAT, Oct 15), and
+                        # renamed for the card that moved in (owner
+                        # ruling, Oct 24 refresh E: the tab carries
+                        # the keybindings); detection
                         # first stays the landing tab (TABS[0]). The
                         # power plan moved up to sit immediately AFTER
                         # detection (owner Oct 21): the hold's 'present'

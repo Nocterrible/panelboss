@@ -21,7 +21,7 @@ Download `PanelBoss-<version>-user.msi` from
 https://github.com/Nocterrible/panelboss/releases. Per-user: no admin, no UAC
 prompt at install, uninstall, or upgrade. The app lands in
 `%LOCALAPPDATA%\Programs\PanelBoss` with a Start Menu entry. Autostart is an
-in-app opt-in (General tab), never silent. Uninstall removes the app's
+in-app opt-in (General / Keybinds tab), never silent. Uninstall removes the app's
 scheduled task, its Run-key entry, and re-lights any display the app left
 disconnected. Settings and logs live in `%APPDATA%\PanelBoss` and survive
 everything around them. First launch has camera detection off: no eye opens
@@ -37,7 +37,7 @@ same settings, same logs. One instance runs at a time; a second launch wakes
 the running app's window and exits, or shows a brief "already running" box
 when nothing answers.
 
-To update an MSI install, use **Update now** on the General tab, or
+To update an MSI install, use **Update now** on the General / Keybinds tab, or
 download and run the newer MSI by hand; settings and logs are untouched
 in both cases.
 
@@ -156,7 +156,7 @@ HDR ask, and where every pinned window belongs. The picker opens on the
 profile matching this desk's hardware identity even when a panel has not
 landed its wanted modes yet, and updates keep a backup of profiles and config
 in %LOCALAPPDATA%\PanelBoss\update, the folder beside the log location named
-on the General tab; create new... copies what the desk is
+on the General / Keybinds tab; create new... copies what the desk is
 doing now. The mode editor offers each panel resolution and refresh menus
 from the driver's own list, its live HDR state, and, where the driver answers
 precisely, a hdr on/off/keep selector. The hdr ask per apply: restore as
@@ -202,7 +202,7 @@ never wears the dim layer, backgrounded included; pause the video and the
 dim layer comes back. Fade
 within (0-60 s) shapes the return; lift fade decides whether a plain veil
 fades or drops the instant you touch the desk. Apps are excluded by exe name;
-the pause hotkey lives on the General tab's keybindings card, not here.
+the pause hotkey lives on the General / Keybinds tab's keybindings card, not here.
 
 Movie theater mode is the Buddy's payoff, consented separately. Once a video
 plays and input sits still for the veil-after wait (1-30 s), a ring of
@@ -223,7 +223,7 @@ like any idle desk. Fade out is the opt-in; the lift is instant by default.
 The card carries open store page, install the helper, the doorway file, the
 host's capability line, and measure now for a one-shot geometry check.
 
-### General
+### General / Keybinds
 
 Skin picks the palette; layout and behavior are identical. Start minimized to
 tray applies next launch - closing the window always hides it to the tray
@@ -237,11 +237,18 @@ Open log folder opens the log folder.
 
 The keybindings card binds four global hotkeys - pause dimming, movie
 theater mode, restore my windows, and the detection consent switch. Each
-binds on keypress (hold a modifier and press the key), clears on esc, and
-is unbound until you give one; a taken combo keeps its predecessor and
-says so. A press runs the same verb as the matching switch or button, so
-pause toggles the dimmer the way the card's checkbox does, theater flips
-the companion switch, restore applies the captured windows layout, and
-detection flips the big consent switch on the Detection tab.
+row carries ctrl/alt/shift toggles beside its bind button: tick the
+modifiers you mean, click bind, press the key - the binding is the
+toggles plus that key, and modifiers physically held during the press
+change nothing (deliberate: a thread's message queue can report Alt or
+Ctrl as down long after your fingers let go, so the card reads only the
+key itself). Esc clears the key; the toggles stay - they are settings.
+A bare letter will not bind (letters are for typing), a plain function
+or media key will. Unbound until you give one; a taken combo keeps its
+predecessor and says so. A press runs the same verb as the matching
+switch or button, so pause toggles the dimmer the way the card's
+checkbox does, theater flips the companion switch, restore applies the
+captured windows layout, and detection flips the big consent switch on
+the Detection tab.
 
 MIT. Plans and known gaps: `AUDIT-PUNCHLIST.md`.
