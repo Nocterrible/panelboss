@@ -24,6 +24,7 @@ from .. import theme
 from ... import profiles
 from ._constants import TIPS, WAIT_CHOICES
 from ._widgets import SkewCombo, set_text
+from ._present import clip_siblings
 from ._scroll import ScrollHost
 
 
@@ -192,6 +193,11 @@ class _EditorMixin:
                                                     padx=(6, 0))
         exf.grid(row=0, column=1, sticky="e")
         self._ed_adv = adv
+        # GATE FINDING 3's class, twice paid for: widgets born after
+        # the build-time clip pass are flag-free, so a fresh row can
+        # paint over whatever overlaps it until told (the same seam
+        # _repaint calls clip_siblings for). Idempotent.
+        clip_siblings(adv)
 
 
     @staticmethod
@@ -300,6 +306,17 @@ class _EditorMixin:
             self._ed_adv_build()
             if self._ed_slot.winfo_manager() != "pack":
                 self._ed_slot.pack(fill="x", before=self._ed_notes)
+                # RE-MEASURE, DON'T REPAINT (measured, Oct 24): the
+                # reveal grows the editor, so the page's scroll region
+                # follows (the wheel must still know the pane). A
+                # scoped present(self._prof_pins_body) was tried HERE
+                # to collapse the pane's own repaint into one pass and
+                # it came back WORSE in the mid-repaint frame - the
+                # ERASE pass tore the column (labels truncated, the
+                # seat rows gone) where the loop's own repaint only
+                # ghosts the moved glyphs. The loop keeps this paint.
+                self._page_region()
+            self._set_menu(self.pin_wait_menu, "%d s" % ed["wait"])
             self._set_menu(self.pin_wait_menu, "%d s" % ed["wait"])
             show = (ed["exe"]
                     or (picked or saved_row or {}).get("exe")
