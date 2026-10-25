@@ -509,31 +509,16 @@ class SettingsWindow(
             # its own page and needs no re-raise.
             if self._tab == key:
                 page.tkraise()           # THE SWITCH - restack, instant
-                # AND FINISH THE PAINT IN THIS CALL (owner ruling, Oct
-                # 24: "the UI appears to draw from bottom right to top
-                # left as opposed to appearing fully drawn all at
-                # once"). The restack queues no paint, so the revealed
-                # page repainted itself on later loop turns, widget by
-                # widget, newest-first - the sweep, in reverse creation
-                # order (the pane's newest widgets are its bottom-right
-                # ones). update_idletasks() drains Tk's own redraw queue
-                # to completion HERE, so the switch is over when this
-                # callback returns.
-                # MEASURED, Oct 24 - and this is why it is Tk's pass and
-                # not a forced Win32 present: the RedrawWindow
-                # ERASE+UPDATENOW+ALLCHILDREN form at PAGE tier repainted
-                # the whole subtree explicitly and cost ~1.4 s, where
-                # Tk's own pass costs ~0.2 s. Five times the work for
-                # the same pixels; the paint primitive stays scoped to
-                # the profiles sections, where it pays.
-                try:
-                    self.update_idletasks()
-                except tk.TclError:
-                    pass                 # destroyed mid-switch: the paint
-                    #                      goes with the window. NOT a
-                    #                      `return` (a bare return in a
-                    #                      finally swallows the in-flight
-                    #                      exception the switch raised)
+                # (A Tk idle pass was tried HERE, Oct 24, to finish the
+                # reveal inside the click: measured 0 ms AND the live
+                # window came back with a flat body after the click -
+                # Tk's repaint of an exposed window arrives as a
+                # WM_PAINT on the EVENT queue, which update_idletasks
+                # does not drain. The reveal paint therefore belongs to
+                # the loop, exactly as this file always said; the
+                # atomicity cure is the flat backdrop below, and the
+                # >1 s cost of the heavy panes is a separate, measured
+                # item - see the commit that names it.)
                 page.sync_region()       # belt for the wheel: geometry
                 if key != "detection" and hasattr(self, "preview_label"):
                     # THE OWNER'S LEAVE-RESET (Oct 16): the detection
@@ -771,24 +756,15 @@ class SettingsWindow(
                 v.destroy()
             except Exception:
                 pass                     # gone already: the point stands
-        # AND FINISH WHAT THE VEIL WAS COVERING, IN THIS CALL (owner
-        # ruling, Oct 24: "the boottime veil does not hide all
-        # drawing"). A cover only hides the frames that happen UNDER it;
-        # destroying it exposes the whole client area at once, and Tk
-        # then repainted that area over the next loop turns - widget by
-        # widget, which reads as the UI painting itself after the veil
-        # is gone. Draining Tk's redraw queue here ends the reveal
-        # inside this call: veil -> complete window, no half-drawn
-        # middle. Tk's own pass, NOT a forced Win32 present: measured
-        # Oct 24, the ERASE+ALLCHILDREN form repaints every widget
-        # explicitly (~5x the work) and this is the window's most
-        # exposed moment.
-        try:
-            self.update_idletasks()
-        except tk.TclError:
-            pass                         # destroyed mid-unveil: the
-            #                              window is gone, the point
-            #                              stands
+        # NOTE (Oct 24, left OPEN on purpose): the reveal that follows a
+        # veil lift is painted by the loop, one WM_PAINT at a time, and
+        # an idle pass drains none of it (measured). Finishing it inside
+        # the lift means a full update() here - an event flush in the
+        # middle of the boot reveal, which is not something to land
+        # unverified at the end of a pass. The owner's "the boottime
+        # veil does not hide all drawing" is therefore DIAGNOSED but
+        # NOT fixed: the drawing he sees is this reveal, and the fix is
+        # the next rung (see the commit body).
 
     def _build_top(self):
         ctk.CTkLabel(self._top, text="PanelBoss",
