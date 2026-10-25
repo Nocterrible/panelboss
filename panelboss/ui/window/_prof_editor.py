@@ -1,19 +1,28 @@
 """Profiles tab detail panes: live windows, the pin
 editor, pins list, status section.
 
-SIZE LAW: measured 419 (Oct 15 LIST-law recount - the two-
-sub-column prose retired with the flow, from the Oct 14 loud-voice
-wave's 440; the status
-label's danger paint landed here; the Oct 13 claim - the checkbox's
-both-branch paint and the knob-lie sync entry, corrected in-commit
-after drifting from ~360 - is superseded by this one).
-These are the pane's five section fills plus the
-row builder - one story (what a section looks like when painted),
-split from the VERBS (_prof_pins.py) that mutate them in place, and
-from the row-flow helper (_PinMixin._pin_cols) the two pin lists
-share. The fills must stay together for _repaint's readers;
-splitting the row builder off would strand _pin_row_text from its
-only caller's view.
+SIZE LAW: measured 566 (Oct 24 part-2 recount: the editor's in-place
+paint - _sync_editor, _notes_show, _editor_notes, _ed_adv_build - from
+419 at the Oct 15 LIST-law recount, which itself superseded the Oct 14
+loud-voice wave's 440; earlier claims are superseded by this one).
+These are the pane's five section fills plus the row builder - one
+story (what a section looks like when painted), split from the VERBS
+(_prof_pins.py) that mutate them in place, and from the row-flow helper
+(_PinMixin._pin_cols) the two pin lists share. The fills must stay
+together for _repaint's readers; splitting the row builder off would
+strand _pin_row_text from its only caller's view.
+AND the in-place paint stays here for the same reason, one turn
+stronger: _sync_editor is the other half of _fill_editor - it must
+configure the SAME furniture the fill lays down, and the pool
+(_notes_show over _ed_note_lbls) exists only to serve it. Splitting
+that into its own module would put "what does an edit repaint?" behind
+an import boundary and force every reader of the fill (and of the owner
+ruling that made a pin edit repaint one row) to hold two files at once
+- a split that costs more than it saves while the pair is one
+mechanism. If this file grows again, the honest seam is now the PIN
+EDITOR as a whole (fill + sync + pool, ~230 lines) into
+_prof_edit_pane.py, leaving the live list, the pins list and the status
+fill behind.
 """
 
 from __future__ import annotations
@@ -317,7 +326,6 @@ class _EditorMixin:
                 # ghosts the moved glyphs. The loop keeps this paint.
                 self._page_region()
             self._set_menu(self.pin_wait_menu, "%d s" % ed["wait"])
-            self._set_menu(self.pin_wait_menu, "%d s" % ed["wait"])
             show = (ed["exe"]
                     or (picked or saved_row or {}).get("exe")
                     or "(no exe captured yet - browse picks one)")
@@ -325,6 +333,10 @@ class _EditorMixin:
                      show if len(show) <= 44 else "..." + show[-41:])
         elif self._ed_slot.winfo_manager() == "pack":
             self._ed_slot.pack_forget()
+            # the SHRINK arm re-measures too (gate-style symmetry): the
+            # region may not stay oversized behind a hidden block, or
+            # the wheel scrolls into space the pane no longer fills
+            self._page_region()
         set_text(self._ed_commit, "update pin" if ed["key"] else "pin it")
         if ed["key"] or ed["pick"]:
             if self._ed_cancel.winfo_manager() != "pack":
