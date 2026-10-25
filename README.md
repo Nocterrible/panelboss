@@ -243,6 +243,8 @@ toggles plus that key, and modifiers physically held during the press
 change nothing (deliberate: a thread's message queue can report Alt or
 Ctrl as down long after your fingers let go, so the card reads only the
 key itself). Esc clears the key; the toggles stay - they are settings.
+A binding stored by a pre-Oct-24 build may show a combo that is not
+what you gave - esc and rebind once.
 A bare letter will not bind (letters are for typing), a plain function
 or media key will. Unbound until you give one; a taken combo keeps its
 predecessor and says so. A press runs the same verb as the matching

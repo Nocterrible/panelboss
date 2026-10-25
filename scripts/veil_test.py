@@ -183,7 +183,9 @@ app.update()
 # view leaves tk parked inside content that no longer exists - blank
 # on top. The host must clamp; re-pack used to hide this, the layer
 # law made it permanent, so the law is asserted here forever.
-p = app.pages["general / keybinds"]    # the SHORT page: 272 px of content
+p = app.pages["general / keybinds"]    # the SHORT page (the keybinds
+                                       # card grew it - the clamp law
+                                       # below stands regardless)
 c = p._canvas
 _calls = {"sync": 0}
 _orig_sync = type(p).sync_region

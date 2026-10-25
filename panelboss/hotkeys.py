@@ -14,9 +14,11 @@ THE THREE ROOT CAUSES (the repeat-failure class, Oct 24, all fixed here):
    123, VK_SNAPSHOT = 0x2C). RegisterHotKey accepts any vk 1..254 and
    "succeeded", but the pressed key never matched, so WM_HOTKEY never
    fired. ``capture`` converts a Tk keysym (the reliable, documented
-   name) to the win32 VK at capture time. The stored word a working
-   muscle-memory already holds keeps its meaning: [mods, vk] with the
-   CORRECT vk now.
+   name) to the win32 VK at capture time. The stored word with a CORRECT vk
+   keeps its meaning: [mods, vk] as always. A word stored by the
+   BROKEN era (vk from the Tk keycode) may name a different key than
+   the one you gave - esc and re-bind once; the card seeds its
+   toggles either way.
 2. THE MODS LIE - DELETED BY DESIGN, NOT MAPPED (the owner's ruling,
    refresh E). The first capture read Tk's event.state to learn the
    chord - but Tk stamps that field from GetKeyState, the key state the
@@ -72,7 +74,9 @@ MOD_SHIFT = 0x4
 MOD_WIN = 0x8
 MOD_NOREPEAT = 0x4000          # autorepeat is not a press
 ERROR_HOTKEY_ALREADY_REGISTERED = 1409
-WM_HOTKEY = 0x0312               # matches display.py's constant
+WM_HOTKEY = 0x0312               # winuser.h (the display-era cross-ref
+#                                 died with that era; this is the
+#                                 message's OWN number)
 
 # the four verbs, in UI order. "section"/"key" name the [section].key
 # that holds the bound word, None for unbound. The ids are distinct and
@@ -339,7 +343,7 @@ _KEYSYM_VK = {
     "Caps_Lock": 0x14, "Num_Lock": 0x90,
     "minus": 0xBD, "equal": 0xBB, "bracketleft": 0xDB,
     "bracketright": 0xDD, "backslash": 0xDC, "semicolon": 0xBA,
-    "apostrophe": 0xDE, "comma": 0xBC, "period": 0x60, "slash": 0xBF,
+    "apostrophe": 0xDE, "comma": 0xBC, "period": 0xBE, "slash": 0xBF,
     "grave": 0xC0,
     "KP_Divide": 0x6F, "KP_Multiply": 0x6A, "KP_Subtract": 0x6D,
     "KP_Add": 0x6B, "KP_Decimal": 0x6E, "KP_Separator": 0x6C,

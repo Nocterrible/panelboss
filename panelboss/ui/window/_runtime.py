@@ -27,6 +27,13 @@ class _RuntimeMixin:
             self.tips.kill()
         except Exception:
             pass
+        try:
+            from ... import hotkeys
+            hotkeys.teardown()        # the orderly half, CALLED (gate
+            #                          f5): release the chords on quit,
+            #                          don't just promise to
+        except Exception:
+            pass
         super().destroy()
 
 

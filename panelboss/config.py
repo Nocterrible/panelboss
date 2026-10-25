@@ -457,9 +457,10 @@ DEFAULTS = {
         "bound": None,            # the [mods, vk] pair the card binds;
                                    # None = unbound by DEFAULT (owner
                                    # law: no stolen chord before
-                                   # consent); the arm in dimmer.py does
-                                   # the RegisterHotKey against the
-                                   # display pump's window
+                                   # consent); hotkeys.py registers it
+                                   # on its OWN pump thread (NULL-hwnd,
+                                   # the Oct-24 wave - not display, not
+                                   # dimmer)
         "input_pump": True,       # trust ONLY the app's raw-input
                                 # pump for every idle rail (the Oct-20 wave;
                                 #   the owner overrode the default-off law for

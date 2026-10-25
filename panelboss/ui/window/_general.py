@@ -187,8 +187,11 @@ class _GeneralMixin:
         from ... import hotkeys
         word = hotkeys.bound(name, self.cfg)
         if word:
+            # a stored WIN bit CARRIES through the restate (no toggle
+            # for it - so no silent theft either: gate f6)
             hotkeys.set_bound(self.cfg, name,
-                              [self._hotkey_mods(name), word[1]])
+                              [self._hotkey_mods(name)
+                               | (word[0] & hotkeys.MOD_WIN), word[1]])
             self._save()
         self._hotkey_words(name)
 

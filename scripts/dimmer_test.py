@@ -1361,7 +1361,12 @@ assert hotkeys.keysym_to_vk("F12") == 0x7B and \
     hotkeys.keysym_to_vk("Print") == 0x2C and \
     hotkeys.keysym_to_vk("a") == 0x41 and \
     hotkeys.keysym_to_vk("P") == 0x50 and \
-    hotkeys.keysym_to_vk("KP_Divide") == 0x6F
+    hotkeys.keysym_to_vk("KP_Divide") == 0x6F and \
+    hotkeys.keysym_to_vk("period") == 0xBE        # gate f1: VK_OEM_
+#                                                  # PERIOD, not
+#                                                  # VK_NUMPAD0 - the
+#                                                  # wrong-VK class dies
+#                                                  # TABLE-COMPLETE
 ok("the toggle design: the key comes from the keysym (root cause 1 stays "
    "dead), the chord comes from the toggles ONLY (root cause 2 deleted "
    "with the stuck-Alt false trail), plain function/media keys bind, "
