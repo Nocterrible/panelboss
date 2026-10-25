@@ -2,7 +2,17 @@
 the flow helper the pin lists share.
 Oct 12 (owner ruling): single pins and unpins update the pins
 section SURGICALLY - one row appended, reconfigured or destroyed -
-and the bulk verb (pin-all) alone earns a section swap."""
+and the bulk verb (pin-all) alone earns a section swap.
+Oct 24 (owner ruling, part 2 - "editing a pinned app still redraws
+half the UI in an extremely ugly way"): the editor's own furniture is
+in place too. Every field save (match / open / wait / browse / select
+/ load / cancel / commit / unpin) configures the widgets whose
+content moved through _sync_editor, and the status line through its
+idempotent fill - no section rebuild anywhere on the edit path. Two
+paths keep a section pass and both are authored refusals or genuine
+multi-row changes: a REFUSED commit (the store said no - the list
+re-derives from the truth), a destroy that could not be done in place
+(the row frame was not handed over), and pin-all (n rows appear)."""
 
 from __future__ import annotations
 
@@ -34,14 +44,15 @@ class _PinMixin:
         """a click in the open-windows list makes it the editor's
         subject; clicking the same one again lets go of it. the pane
         is NOT rebuilt whole - the highlight moves on the existing
-        row buttons and only the editor section repaints"""
+        row buttons and the editor's OWN fields are configured in
+        place (Oct 24 part 2: a pick repaints no section at all)."""
         if self._pin_edit["pick"] == key and self._pin_edit["key"] \
                 is None:
             self._pin_edit["pick"] = None
         else:
             self._pin_edit.update(key=None, pick=key)
         self._restyle_live()
-        self._repaint("editor")
+        self._sync_editor()
 
 
     def _pin_load(self, w):
@@ -51,7 +62,9 @@ class _PinMixin:
         update-pin (the row was not rebuilt), so the CURRENT saved
         row is re-resolved from the store by its (proc, title) key;
         the captured dict is the fallback for a row a re-scan just
-        removed."""
+        removed. In place, like every other save (Oct 24 part 2):
+        the subject change moves the heading word, the fields and the
+        fine print - never the section."""
         prof = (self._prof_data.get("profiles") or {}).get(
             self._prof_sel) or {}
         w = next((r for r in prof.get("wins") or []
@@ -71,17 +84,20 @@ class _PinMixin:
                               open=bool(w.get("open")),
                               wait=wait, exe=w.get("exe") or None)
         self._restyle_live()
-        self._repaint("editor")
+        self._sync_editor()
 
 
     def _pin_remove(self, w, row):
         """UNPIN: destroys the clicked row's OWN frame in place (the
         x's lambda handed it over - Oct 12: no _repaint("pins") per
         click), shows the placeholder back when the section emptied,
-        and tells the status line through the idempotent fill. Only
-        the paths where in-place removal cannot speak the truth (a
-        dead selection, or a row whose section was rebuilt under it)
-        still repaint the pins section."""
+        and tells the status line through the idempotent fill. The
+        editor follows IN PLACE (Oct 24 part 2): its subject may have
+        been the row just forgotten, so the heading, the fields and
+        the fine print are configured, never rebuilt. Only the paths
+        where in-place removal cannot speak the truth (a dead
+        selection, or a row whose section was rebuilt under it) still
+        repaint the pins section."""
         ok, note = profiles.unpin(self._prof_data, self._prof_sel,
                                   w["proc"], w["title"])
         key = (w["proc"], w["title"])
@@ -99,20 +115,25 @@ class _PinMixin:
                 if e is not None and e.winfo_exists():   # honest again
                     e.pack(anchor="w", pady=theme.S_FIELD,
                            padx=theme.S_FIELD)
-        self._repaint(*(("editor", "status") if in_place
-                        else ("pins", "editor", "status")))
+        self._sync_editor()                     # the editor's subject
+        #                                        may be gone now
+        if not in_place:
+            # the row's own frame was not handed over: the list has to
+            # re-derive from the store to be sure nothing ghost-remains
+            self._repaint("pins")
+        self._fill_status()
 
 
     def _pin_match(self, mode):
         self._pin_edit["match"] = mode
-        self._repaint("editor")         # the all-windows warning
+        self._sync_editor()             # the all-windows warning
                                         # hangs off this choice
 
 
     def _pin_open(self):
         self._pin_edit["open"] = bool(self.pin_open_box.get())
-        self._repaint("editor")         # the naive-exe warning and
-                                        # the advanced rows hang off it
+        self._sync_editor()             # the naive-exe warning and
+                                        # the advanced slot hang off it
 
 
     def _pin_wait(self, text):
@@ -121,7 +142,7 @@ class _PinMixin:
         except (TypeError, ValueError):
             pass                      # a menu value we did not
                                       # write: keep the current wait
-        self._repaint("editor")         # the fine print quotes it
+        self._sync_editor()             # the fine print quotes it
 
 
     def _pin_browse(self):
@@ -142,13 +163,13 @@ class _PinMixin:
             got = ""
         if got:
             self._pin_edit["exe"] = got
-            self._repaint("editor")
+            self._sync_editor()
 
 
     def _pin_cancel(self):
         self._pin_edit = _fresh_pin_edit()
         self._restyle_live()
-        self._repaint("editor")
+        self._sync_editor()
 
 
     def _pin_commit(self):
@@ -156,7 +177,7 @@ class _PinMixin:
         key = ed["key"] or ed["pick"]
         if key is None:
             self._prof_msg = "pick one of the open windows first"
-            self._repaint("status")
+            self._fill_status()
             return
         prof = (self._prof_data.get("profiles") or {}).get(
             self._prof_sel)
@@ -164,7 +185,7 @@ class _PinMixin:
             # create-new, or a name the store no longer holds: the
             # pin has nowhere to live - confess, never a happy "pinned:"
             self._prof_msg = "save or pick a profile first"
-            self._repaint("status")
+            self._fill_status()
             return
         live_row = next((w for w in profiles.windows_now()
                          if (w["proc"], w["title"]) == key), None)
@@ -177,7 +198,7 @@ class _PinMixin:
             self._prof_msg = "that window is gone - pin something " \
                              "that exists"
             self._pin_cancel()
-            self._repaint("status")
+            self._fill_status()
             return
         ok, note = profiles.pin(self._prof_data, self._prof_sel, win,
                                 match=ed["match"],
@@ -191,14 +212,24 @@ class _PinMixin:
         if ok:
             # Oct 12 (owner ruling): the landed pin touches ONE row
             # of the pins section, in place - no section swap, no
-            # cover; the editor repaints (its form changed) and the
-            # status fill is now a zero-structure configure.
-            # pin() stores a CLONE, not `win`: upsert the literal
-            # tail entry or the row loses its [open it]/[via] badges.
+            # cover. PART 2 (owner ruling, Oct 24): the editor's own
+            # furniture is configured in place too - a save moves the
+            # heading word, the switch and the fine print, and that is
+            # the whole of it. pin() stores a CLONE, not `win`: upsert
+            # the literal tail entry or the row loses its
+            # [open it]/[via] badges.
             self._pin_row_upsert(prof["wins"][-1], live_row)
-            self._repaint("editor", "status")
+            self._sync_editor()
         else:
-            self._repaint("pins", "editor", "status")
+            # a REFUSED save changed nothing we can diff (the store is
+            # the truth and it said no): the list re-derives from it
+            # and the editor syncs to the reset dict. This is the one
+            # save path that may still sweep a section - and it only
+            # happens when the store refuses, which is the news the
+            # user needs to see.
+            self._sync_editor()
+            self._repaint("pins")
+        self._fill_status()
 
 
     def _pin_row_upsert(self, w, live):
@@ -246,7 +277,7 @@ class _PinMixin:
                 best[p] = w
         if self._prof_data["profiles"].get(self._prof_sel) is None:
             self._prof_msg = "save or pick a profile first"   # dead
-            self._repaint("status")                           # selection
+            self._fill_status()                              # selection
             return
         done = sum(1 for w in best.values()
                    if profiles.pin(self._prof_data, self._prof_sel, w,

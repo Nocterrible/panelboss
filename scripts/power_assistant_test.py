@@ -653,6 +653,38 @@ def check():
         # a second time
         app._prof_pin_all()
         assert prof["wins"], "pin-every-app pinned nothing"
+        # THE SURGICAL LAW (owner ruling, Oct 24 part 2: "editing a
+        # pinned app still redraws half the UI in an extremely ugly
+        # way"). The verbs live in _prof_pins.py, the editor's in-place
+        # paint in _prof_editor.py; the pin is the SHAPE, not the
+        # timings, so a later edit cannot quietly put a section rebuild
+        # back onto a field save. Measured when this landed: every save
+        # path below created and destroyed ZERO widgets, the belt
+        # (_repaint("editor")) still builds 32 and destroys 69.
+        _wd = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "..", "panelboss", "ui", "window")
+        _PINS = _io.open(os.path.join(_wd, "_prof_pins.py"),
+                         encoding="utf8").read()
+        _EDT = _io.open(os.path.join(_wd, "_prof_editor.py"),
+                        encoding="utf8").read()
+        assert "def _sync_editor" in _EDT, "the editor lost its sync"
+        assert "def _notes_show" in _EDT and \
+            "def _editor_notes" in _EDT, \
+            "the fine print lost its reusable pool (a rebuild returns)"
+        assert '_repaint("editor")' not in _PINS, \
+            "a field save rebuilds the editor section again"
+        for _verb in ("_pin_match", "_pin_open", "_pin_wait",
+                      "_pin_browse", "_pin_cancel", "_pin_select",
+                      "_pin_load", "_pin_commit", "_pin_remove"):
+            _body = _PINS[_PINS.index("def %s" % _verb):]
+            _body = _body[:_body.index("\n    def ")]
+            assert "self._sync_editor()" in _body, \
+                _verb + " no longer paints in place"
+        # the survivors are AUTHORED (a refused save, a row that could
+        # not be handed over, the bulk verb): exactly three CALL sites,
+        # never zero, never more.
+        assert _PINS.count('self._repaint("pins"') == 3, \
+            "the irreducible section passes changed count"
         app._noshows_ask([{"proc": "a.exe", "title": "one"}])
         app.update_idletasks()
         kids, stack = [], [app.noshows_dialog]

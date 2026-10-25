@@ -23,7 +23,7 @@ import customtkinter as ctk
 from .. import theme
 from ... import profiles
 from ._constants import TIPS, WAIT_CHOICES
-from ._widgets import SkewCombo
+from ._widgets import SkewCombo, set_text
 from ._scroll import ScrollHost
 
 
@@ -100,28 +100,28 @@ class _EditorMixin:
         """The conditions + fine print for the editor's subject, live
         or remembered. The section carries its own 'editing:' title -
         it is what changes when a seat is clicked, and the title is
-        the proof the click landed."""
+        the proof the click landed.
+
+        THE FURNITURE IS LAID ONCE (owner ruling, Oct 24 part 2:
+        "editing a pinned app still redraws half the UI in an
+        extremely ugly way"). Every field save goes through
+        _sync_editor, which configures the widgets whose content
+        actually moved; nothing below is rebuilt by an edit - only a
+        real subject change (this fill, or a full render) comes here.
+        The advanced half stays LAZY (its absence before the flip is
+        pinned by power_assistant_test) but it is built into its own
+        slot frame, so revealing it costs two rows, never the editor."""
         self._prof_detail = self._prof_pins_body  # _section's parent
         sec = self._section("editor", pady=(theme.S_FIELD, 0))
-        prof = self._prof_data["profiles"].get(self._prof_sel) \
-            or {"wins": []}
-        ed = self._pin_edit
-        ctk.CTkLabel(sec,
-                     text=("editing: %s" % (ed["key"][1] or ed["key"][0])
-                           if ed["key"] else "the editor"),
-                     font=self.skin.font(13, "bold"),
-                     **self.skin.text_style()).pack(anchor="w")
-        live = profiles.windows_now()
-        picked = next((w for w in live
-                       if (w["proc"], w["title"]) == ed["pick"]), None)
-        saved_row = next((w for w in prof["wins"]
-                          if (w["proc"], w["title"]) == ed["key"]),
-                         None) if ed["key"] else None
+        self._ed_sec = sec
+        self._ed_head = ctk.CTkLabel(sec, text="",
+                                     font=self.skin.font(13, "bold"),
+                                     **self.skin.text_style())
+        self._ed_head.pack(anchor="w")
         row = self._row(sec, "window matching", TIPS["profile_match"])
         self.match_menu = SkewCombo(
             row, values=list(profiles.MATCH_MODES), width=150,
             command=self._pin_match, **self.skin.menu_style())
-        self.match_menu.set(ed["match"])
         self.match_menu.grid(row=0, column=1, sticky="e")
         row = self._row(sec, "open it if missing",
                         TIPS["profile_pin_open"])
@@ -135,49 +135,72 @@ class _EditorMixin:
                                           command=self._pin_open,
                                           **self.skin.switch_style())
         self.pin_open_box.grid(row=0, column=1, sticky="e")
-        # knob-from-truth, BOTH branches (the editor checkbox is the
-        # family's ninth member - caught in the same owner pass): the
-        # wish state comes from the editor's dict, and the false arm
-        # must paint, not lean on the fresh-widget default - the
-        # editor rebuilds on every _repaint("editor") swap.
-        if ed["open"]:
-            self.pin_open_box.select()
-        else:
-            self.pin_open_box.deselect()
+        # the advanced half's own SLOT: packed only while the wish
+        # stands (nothing of it exists before the first flip - the
+        # suite's 'advanced rows leak' pin keeps its meaning), built
+        # once by _ed_adv_build, and the only structure a wish flip
+        # ever costs
+        self._ed_slot = ctk.CTkFrame(sec, fg_color="transparent")
+        self._ed_adv = None
+        # the note lines: a POOL of labels, reused (a slot that is not
+        # needed is unmapped, never destroyed). The fine print is the
+        # one variable-length list in this section - it is the only
+        # thing a subject change rewrites.
+        self._ed_notes = ctk.CTkFrame(sec, fg_color="transparent")
+        self._ed_notes.pack(fill="x")
+        self._ed_note_lbls = []
+        self._ed_cbtns = ctk.CTkFrame(sec, fg_color="transparent")
+        self._ed_cbtns.pack(anchor="w", pady=(theme.S_FIELD, 0))
+        self._ed_commit = ctk.CTkButton(self._ed_cbtns, text="pin it",
+                                        width=130,
+                                        command=self._pin_commit,
+                                        **self.skin.primary())
+        self._ed_commit.pack(side="left")
+        self._ed_cancel = ctk.CTkButton(self._ed_cbtns, text="cancel",
+                                        width=80,
+                                        command=self._pin_cancel,
+                                        **self.skin.secondary())
+        self._sync_editor()
 
-        if ed["open"]:
-            # the wish's advanced half: how long patience lasts,
-            # and WHERE the wish knocks. the captured exe is often
-            # the wrong door (store stubs, updater wrappers) and
-            # only the human knows which launcher opens the window
-            row = self._row(sec, "wait up to",
-                            TIPS["profile_pin_wait"])
-            self.pin_wait_menu = SkewCombo(
-                row, values=["%d s" % s for s in WAIT_CHOICES],
-                width=110, command=self._pin_wait,
-                **self.skin.menu_style())
-            self.pin_wait_menu.set("%d s" % ed["wait"])
-            self.pin_wait_menu.grid(row=0, column=1, sticky="e")
-            row = self._row(sec, "launches", TIPS["profile_pin_exe"])
-            exf = ctk.CTkFrame(row, fg_color="transparent")
-            show = (ed["exe"]
-                    or (picked or saved_row or {}).get("exe")
-                    or "(no exe captured yet - browse picks one)")
-            ctk.CTkLabel(exf,
-                         text=show if len(show) <= 44
-                         else "..." + show[-41:],
-                         font=self.skin.font(10),
-                         **self.skin.text_style("sub")).pack(
-                side="left")
-            ctk.CTkButton(exf, text="browse...", width=80,
-                          command=self._pin_browse,
-                          **self.skin.secondary()).pack(side="left",
-                                                        padx=(6, 0))
-            exf.grid(row=0, column=1, sticky="e")
 
-        # the honest fine print, only ever saying something true:
-        # which rect the pin saves, that a process pin drags every
-        # window of that app, and what "open it" really is
+    def _ed_adv_build(self):
+        """The wish's advanced half, built ONCE into its slot: how long
+        patience lasts, and WHERE the wish knocks. The captured exe is
+        often the wrong door (store stubs, updater wrappers) and only
+        the human knows which launcher opens the window. Idempotent -
+        _sync_editor may call it on every flip."""
+        adv = getattr(self, "_ed_adv", None)
+        if adv is not None and adv.winfo_exists():
+            return
+        adv = ctk.CTkFrame(self._ed_slot, fg_color="transparent")
+        adv.pack(fill="x")
+        row = self._row(adv, "wait up to", TIPS["profile_pin_wait"])
+        self.pin_wait_menu = SkewCombo(
+            row, values=["%d s" % s for s in WAIT_CHOICES],
+            width=110, command=self._pin_wait,
+            **self.skin.menu_style())
+        self.pin_wait_menu.grid(row=0, column=1, sticky="e")
+        row = self._row(adv, "launches", TIPS["profile_pin_exe"])
+        exf = ctk.CTkFrame(row, fg_color="transparent")
+        self._ed_exe_lbl = ctk.CTkLabel(exf, text="",
+                                        font=self.skin.font(10),
+                                        **self.skin.text_style("sub"))
+        self._ed_exe_lbl.pack(side="left")
+        ctk.CTkButton(exf, text="browse...", width=80,
+                      command=self._pin_browse,
+                      **self.skin.secondary()).pack(side="left",
+                                                    padx=(6, 0))
+        exf.grid(row=0, column=1, sticky="e")
+        self._ed_adv = adv
+
+
+    @staticmethod
+    def _editor_notes(ed, picked, saved_row, live):
+        """The honest fine print, only ever saying something true:
+        which rect the pin saves, that a process pin drags every
+        window of that app, and what "open it" really is. Pure over
+        what it is handed, so the fill and the in-place sync can
+        never disagree about the words."""
         notes = []
         if picked:
             notes.append("will save: %s %dx%d at %d,%d on %s" % (
@@ -210,23 +233,89 @@ class _EditorMixin:
                          "store apps and stub launchers may start "
                          "nothing, then it waits %d s and reports"
                          % (exe, ed["wait"]))
-        for t in notes:
-            ctk.CTkLabel(sec, text=t,
-                         font=self.skin.font(10), wraplength=460,
-                         justify="left", anchor="w",
-                         **self.skin.text_style("sub")).pack(
-                anchor="w", pady=(theme.S_FIELD, 0))
-        cbtns = ctk.CTkFrame(sec, fg_color="transparent")
-        cbtns.pack(anchor="w", pady=(theme.S_FIELD, 0))
-        ctk.CTkButton(cbtns,
-                      text="update pin" if ed["key"] else "pin it",
-                      width=130, command=self._pin_commit,
-                      **self.skin.primary()).pack(side="left")
+        return notes
+
+
+    def _notes_show(self, lines):
+        """Paint the fine print from the pool: configure what is
+        reused, map what is needed, unmap the tail. Diff-guarded
+        (set_text) because the sync runs on every field save and a
+        no-op configure redraws a CTk canvas whole."""
+        lbls = getattr(self, "_ed_note_lbls", None)
+        if lbls is None:
+            return                      # no editor on this pane
+        while len(lbls) < len(lines):
+            lbls.append(ctk.CTkLabel(
+                self._ed_notes, text="", font=self.skin.font(10),
+                wraplength=460, justify="left", anchor="w",
+                **self.skin.text_style("sub")))
+        for i, lbl in enumerate(lbls):
+            try:
+                if i < len(lines):
+                    set_text(lbl, lines[i])
+                    if lbl.winfo_manager() != "pack":
+                        lbl.pack(anchor="w", pady=(theme.S_FIELD, 0))
+                elif lbl.winfo_manager() == "pack":
+                    lbl.pack_forget()
+            except Exception:
+                pass                    # dying pane: the fill rebuilds
+
+
+    def _sync_editor(self):
+        """THE EDITOR'S IN-PLACE PAINT (owner ruling, Oct 24 part 2: a
+        pin edit repaints its row, not its neighbourhood). Every save
+        path lands here instead of rebuilding the section: the heading
+        word, the match menu, the wish switch, the advanced slot's
+        packedness and its two fields, the commit word, the cancel
+        button's presence, and the fine print - each one configured
+        only when its content actually moved. Cost is a handful of
+        diffs, not 125 ms of CTk construction.
+
+        A missing editor is a MISS, never an error: a fill that has not
+        run yet, or a pane mid-swap, has no furniture to configure and
+        the next render paints the same truth from its own dicts."""
+        sec = getattr(self, "_ed_sec", None)
+        if sec is None or not sec.winfo_exists():
+            return
+        ed = self._pin_edit
+        prof = self._prof_data["profiles"].get(self._prof_sel) \
+            or {"wins": []}
+        live = profiles.windows_now()
+        picked = next((w for w in live
+                       if (w["proc"], w["title"]) == ed["pick"]), None)
+        saved_row = next((w for w in prof["wins"]
+                          if (w["proc"], w["title"]) == ed["key"]),
+                         None) if ed["key"] else None
+        set_text(self._ed_head,
+                 ("editing: %s" % (ed["key"][1] or ed["key"][0])
+                  if ed["key"] else "the editor"))
+        self._set_menu(self.match_menu, ed["match"])
+        # knob-from-truth, BOTH branches (the editor checkbox is the
+        # family's ninth member): the wish state comes from the
+        # editor's dict, and the false arm must paint, not lean on the
+        # widget's build default
+        self.pin_open_box.select() if ed["open"] \
+            else self.pin_open_box.deselect()
+        if ed["open"]:
+            self._ed_adv_build()
+            if self._ed_slot.winfo_manager() != "pack":
+                self._ed_slot.pack(fill="x", before=self._ed_notes)
+            self._set_menu(self.pin_wait_menu, "%d s" % ed["wait"])
+            show = (ed["exe"]
+                    or (picked or saved_row or {}).get("exe")
+                    or "(no exe captured yet - browse picks one)")
+            set_text(self._ed_exe_lbl,
+                     show if len(show) <= 44 else "..." + show[-41:])
+        elif self._ed_slot.winfo_manager() == "pack":
+            self._ed_slot.pack_forget()
+        set_text(self._ed_commit, "update pin" if ed["key"] else "pin it")
         if ed["key"] or ed["pick"]:
-            ctk.CTkButton(cbtns, text="cancel", width=80,
-                          command=self._pin_cancel,
-                          **self.skin.secondary()).pack(side="left",
-                                                        padx=(6, 0))
+            if self._ed_cancel.winfo_manager() != "pack":
+                self._ed_cancel.pack(side="left", padx=(6, 0))
+        elif self._ed_cancel.winfo_manager() == "pack":
+            self._ed_cancel.pack_forget()
+        self._notes_show(self._editor_notes(ed, picked, saved_row, live))
+
 
 
     # ----------------------------------------------------------- repaint --
