@@ -1,17 +1,18 @@
 # PanelBoss
 
-Presence-aware display control for Windows. Offline, per-user, tray-resident.
+Presence-aware display control for Windows. Per-user, tray-resident, no
+telemetry, no accounts.
 
 PanelBoss decides whether anyone sits at the desk and dims, darkens, or locks
 the displays accordingly. OLED-care features keep still pixels from aging
 into the glass. Movie theater mode darkens the desk around a playing video.
-Monitor profiles store and restore a whole desk. Presence runs locally from a
-camera; nothing leaves the machine except the handshake with the optional
-companion browser extension.
-
-## Screenshots
-
-<!-- App art lands before launch. -->
+Monitor profiles store and restore a whole desk. Presence runs locally from
+a camera: your camera frames never leave the machine. Network appears only
+where you ask for it: the updater asks GitHub what the latest release is
+(and can be ignored), `scripts\setup.ps1` fetches the detection model once,
+and the Hello IR option installs its helper package over pip. The optional
+browser extension needs no network at all - native messaging is a local pipe
+the browser spawns; not even its handshake crosses the wire.
 
 ## How to
 
@@ -19,7 +20,10 @@ companion browser extension.
 
 Download `PanelBoss-<version>-user.msi` from
 https://github.com/Nocterrible/panelboss/releases. Per-user: no admin, no UAC
-prompt at install, uninstall, or upgrade. The app lands in
+prompt at install, uninstall, or upgrade. The MSI is unsigned: SmartScreen
+will say "Windows protected your PC" the first time - choose More info ->
+Run. Unsigned is a choice, not a defect: signing keys are a renewing tax;
+the sha256 of every build is on the release page for the paranoid. The app lands in
 `%LOCALAPPDATA%\Programs\PanelBoss` with a Start Menu entry. Autostart is an
 in-app opt-in (General / Keybinds tab), never silent. Uninstall removes the app's
 scheduled task, its Run-key entry, and re-lights any display the app left
@@ -41,15 +45,17 @@ To update an MSI install, use **Update now** on the General / Keybinds tab, or
 download and run the newer MSI by hand; settings and logs are untouched
 in both cases.
 
-### PanelBoss Buddy
+### PanelBoss Companion
 
 A browser extension that reports the playing-video rectangle to the app.
 That is all it does. Store listing (as PanelBoss Companion):
 https://chromewebstore.google.com/detail/panelboss-companion/feolhiokchmpphlhllagimnilceldegk
-The app installs the Buddy's local native-message host: the "install the
-helper" button on the Movie theater card builds it and registers it under
-your user account, no admin. Manual route: `extension\host\install_host.ps1`;
-`extension\README.md` documents the API and the rest. The Buddy is optional;
+The app installs the Companion's local native-message host: the "install the
+helper" button on the Movie theater card registers it under your user
+account, no admin - the MSI ships the host built (the host folder rides
+the bundle); from source the same button builds it first (PyInstaller in
+the venv). Manual route: `extension\host\install_host.ps1`;
+`extension\README.md` documents the API and the rest. The Companion is optional;
 Movie theater mode is the only feature that needs it.
 
 ### Hello IR
@@ -86,8 +92,10 @@ opaque cover, clicked to wake; dim drops the panel to the shared level, 1-40
 percent; off (DDC fast) sends the panel's own DDC/CI power code, so the
 panel itself
 goes dark as if you pressed its button. On NVIDIA drivers this option starts
-disabled - the vendor has a kernel bug here, and the option returns with the
-driver patch; AMD and Intel desks get it on day one. off (disconnect) - the default for
+disabled: resumes from this off have frozen some NVIDIA-driver machines
+(Windows bugcheck 0x133, the DPC watchdog) - a family observed on the same
+driver with this app not running; the option returns once a driver is
+confirmed safe. AMD and Intel desks get it on day one. off (disconnect) - the default for
 rows you never touched - retracts the signal at the adapter, and Windows
 refuses to strand the last active display. An unworded row follows the
 legacy [away] mode key before the default. Lock when away starts ends
@@ -204,7 +212,7 @@ within (0-60 s) shapes the return; lift fade decides whether a plain veil
 fades or drops the instant you touch the desk. Apps are excluded by exe name;
 the pause hotkey lives on the General / Keybinds tab's keybindings card, not here.
 
-Movie theater mode is the Buddy's payoff, consented separately. Once a video
+Movie theater mode is the Companion's payoff, consented separately. Once a video
 plays and input sits still for the veil-after wait (1-30 s), a ring of
 darkness hugs the video itself: the hole is the video's own rect, so the
 page and the browser's chrome wear the darkness with the desk. The window
@@ -253,4 +261,5 @@ checkbox does, theater flips the companion switch, restore applies the
 captured windows layout, and detection flips the big consent switch on
 the Detection tab.
 
-MIT. Plans and known gaps: `AUDIT-PUNCHLIST.md`.
+MIT. The full engineering log - every bug found, root-caused and fixed,
+dated - is `AUDIT-PUNCHLIST.md`. It is messy and honest; that is the point.

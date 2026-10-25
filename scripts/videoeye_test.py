@@ -118,7 +118,7 @@ ok("feature off means the THEATER DOOR is shut: no rect, the switch "
 # 1b. THE UNDATED DOOR (owner, Oct 20): with the theater switch OFF
 #     the eye STILL reads the doorway (the extension pushes on play
 #     no matter what the app's switch says), so live_rect answers the
-#     PLAYER-EXEMPTION call - the buddy's report is a fact, the
+#     PLAYER-EXEMPTION call - the companion's report is a fact, the
 #     switch is only the frame's consent.
 videoeye._STATE.clear()
 door((100, 100, 800, 450), lane="auto", paused=False)
@@ -543,7 +543,7 @@ ok("no live rect means no negative keys: the plain dimmer behaves as "
 # 15. THE STILLNESS CONJUNCT, RESTORED (owner clause 2, Oct 20:
 #     "movie theater respects input timers"). THE HEADLINE PAIR:
 #     motion state (rail unpassed) means no RING - and STILL no
-#     plain veil on the player: the exemption keys on the buddy's
+#     plain veil on the player: the exemption keys on the companion's
 #     report, clock-free, plain law armed notwithstanding. Stillness
 #     past the rail BIRTHS the ring; motion lifts it (fade-off: this
 #     tick); the rail re-arms it. The rect's own going lifts it on
@@ -735,7 +735,7 @@ ok("videodim.monitors MONA on=false: the video panel gets NO frame "
 #     therefore UNPASSES forever: the ring never comes here (until
 #     the clock's trust is adjudicated) - but the movie does NOT go
 #     dark: the player window is exempt from the plain veils by the
-#     buddy's report, clock-independent. That is the clause-2 pair,
+#     companion's report, clock-independent. That is the clause-2 pair,
 #     live-desk edition: no ring AND no veil on the movie. The opt-in
 #     secondary dims with the rest (the ring is the only actor that
 #     would full-field it, and the ring is unborn).
@@ -749,7 +749,7 @@ assert not any(h < 0 for h in f.rec.painted), f.rec.painted
                                      # the rail never passes: NO ring
 assert f.rec.painted == {}, f.rec.painted
 #       (the plain field cannot birth EITHER window here: w1 is the
-#       player - exempt by the buddy's report, clock-free; w2 is the
+#       player - exempt by the companion's report, clock-free; w2 is the
 #       foreground - exempt by the plain law's own first gate. The
 #       always-on desk dims everything ELSE, exactly as configured.)
 f.tick(101, vidle=5, dim_idle=0, level=30)   # second beat, same truth
@@ -1212,7 +1212,7 @@ ok("the away ear's process-wide teardown re-arms the pump: a "
 
 # 19b. the SAME desk with the THEATER OFF: the switch owns the frame
 #      (no negative keys), but the player window STILL never wears the
-#      plain veil - the exemption is the buddy's report, not the
+#      plain veil - the exemption is the companion's report, not the
 #      theater's consent (owner, Oct 20: "which is I think a good
 #      thing"). The desk went still (121 s past the plain 120 rail),
 #      and the unrelated window dims on schedule.
@@ -1527,13 +1527,13 @@ assert _oled.TIP_COMP["on"] == (
     "one config word away: [videodim] hole = 'window'). The "
     "player window stays exempt from the PLAIN veils with or "
     "without this switch; a paused row re-earns them, and the "
-    "app learns the video's place from the buddy extension's "
+    "app learns the video's place from the companion extension's "
     "native host."), _oled.TIP_COMP["on"]
 assert _oled.TIP_DIM["on"] == (
     "an idle desk puts a dark click-through veil over every "
     "window you are not using; the window you touch lights "
     "instantly, and a window the mic just heard keeps its "
-    "brightness for four seconds. The window the buddy reports "
+    "brightness for four seconds. The window the companion reports "
     "as playing a video never wears the veil either - "
     "backgrounded included, always rows included; pause the "
     "video and the dim layer comes back. Elevated windows "

@@ -52,10 +52,20 @@ $HOSTNAME = 'com.nocterrible.panelboss'
 # partial onefile that Test-Path happily reports as present, and the
 # skip-branch then wedges every reinstall on a broken binary the
 # recovery word used to have to be MANUAL about (gate finding 4, Oct 16).
-if ($Rebuild -and (Test-Path $hostExe)) {
+# THE MSI GUARD (final gate, Oct 25): the app's one-click always passes
+# -Rebuild, but a BUNDLED install ships the guarded build as a build
+# FACT and has no venv to rebuild it with - there, -Rebuild is honored
+# as "rebuild IF you can" and the bundled exe registers as-is (the law
+# it serves - a partial exe must not wedge reinstall - needs a build
+# process to produce partials; a shipped binary has none).
+if ($Rebuild -and (Test-Path $hostExe) -and (Test-Path $py)) {
     Remove-Item $hostExe -Force
 }
 if (-not (Test-Path $hostExe)) {
+    if (-not (Test-Path $py)) {
+        Write-Output "no panelboss-host.exe to register and no venv python to build it ($py) - run this script from a source checkout"
+        exit 3
+    }
     Write-Output 'building panelboss-host.exe (PyInstaller onefile)'
     & $py -m PyInstaller --noconfirm --clean --onefile --windowed `
         --name 'panelboss-host' `
@@ -63,6 +73,8 @@ if (-not (Test-Path $hostExe)) {
         --specpath (Join-Path $here 'build') `
         $hostPy
     if ($LASTEXITCODE -ne 0) { Write-Output "host build failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
+} elseif ($Rebuild) {
+    Write-Output "bundled panelboss-host.exe kept (no venv to rebuild here: $py)"
 }
 
 # 2. write the host manifest with the extension's id in allowed_origins

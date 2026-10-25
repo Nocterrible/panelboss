@@ -57,15 +57,32 @@ CAP_TIMEOUT = 2.0          # s: a wedged host answers nothing; kill it
 CAP_TTL = 300.0            # s: the capabilities answer is cached - the
                            # API surface changes when the host is
                            # reinstalled, not between dimmer beats
-NOT_INSTALLED = ("the buddy's helper is not installed - press install "
+NOT_INSTALLED = ("the companion's helper is not installed - press install "
                  "the helper above")
 
 # the installer the card's one-click runs - a module constant so a
 # suite can stand a .ps1 twin in its own temp dir (the seam is the
 # SPAWN: the fake twin runs through the real subprocess call).
-_INSTALL_PS1 = os.path.join(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))), "extension", "host",
-    "install_host.ps1")
+# FROZEN AWARE (MSI gate, Oct 25, blocker 3): a frozen PyInstaller
+# build rewrites __file__ into _internal, so __file__-relative
+# resolution would look INSIDE the bundle's private half - while the
+# build ships the host folder BESIDE the exe (dist\PanelBoss\
+# extension\host\, the same user-visible convention as the models
+# drop, inference.py). Exe-adjacent first when frozen and the folder
+# is there; the repo layout otherwise - so the "install the helper"
+# button finds its installer on BOTH install kinds.
+def _app_root():
+    if getattr(sys, "frozen", False):
+        cand = os.path.dirname(sys.executable)
+        if os.path.isdir(os.path.join(cand, "extension")):
+            return cand
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+_APP_ROOT = _app_root()
+
+_INSTALL_PS1 = os.path.join(_APP_ROOT, "extension", "host",
+                            "install_host.ps1")
 
 _cache = {"until": 0.0, "caps": None}
 
@@ -239,9 +256,7 @@ def install(ext_id=None):
             return False, ("bad extension id - it must be 32 lowercase "
                            "a-p chars (the browser's extensions page)")
     else:
-        ext_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "extension")
+        ext_dir = os.path.join(_APP_ROOT, "extension")
         ext_id = derive_unpacked_id(ext_dir)
         if not ext_id:
             return False, ("could not derive the extension id from the "
@@ -338,8 +353,8 @@ def _caps_line(caps):
     success word IS the fresh host's own reply."""
     opnames = tuple(x for x in ops(caps) if isinstance(x, str))
     fields = tuple(x for x in veil_fields(caps) if isinstance(x, str))
-    line = "buddy API: " + ", ".join(opnames) if opnames else \
-        "buddy API: (no ops)"
+    line = "companion API: " + ", ".join(opnames) if opnames else \
+        "companion API: (no ops)"
     if isinstance(caps.get("auto"), dict):
         line += ", auto on play"
     if fields:

@@ -240,7 +240,7 @@ def live_rect(cfg, now=None):
     """THE PLAYER-EXEMPTION DOOR (owner, Oct 20): the live playing
     rect with the SAME liveness law as video_rect - not paused, big
     enough for min_rect_px, on the desk, fresh by lane - but NOT
-    gated on [videodim].on. The exemption is a property of the buddy
+    gated on [videodim].on. The exemption is a property of the companion
     reporting a playing video, not of the theater switch: a user who
     turned theater mode off still told the eye where their movie is,
     and 'veil never lands on a video' holds either way."""
@@ -338,8 +338,8 @@ def video_rect(cfg, now=None):
         grace ages out a movie mid-roll. A browser that dies mid-play
         without a pause/end leaves the row; under the eye's law its
         window stays plain-veil-exempt until a pause push or an app
-        restart - admitted cost: the buddy's report is the fact, and
-        the buddy is the first to know when the tab goes.
+        restart - admitted cost: the companion's report is the fact, and
+        the companion is the first to know when the tab goes.
 
     Any failure anywhere is None; the dimmer holds it one tick and its
     ramp retracts the veil."""

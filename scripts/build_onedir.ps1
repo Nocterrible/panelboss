@@ -61,5 +61,27 @@ function Invoke-OnedirBuild {
         New-Item $target -ItemType Directory -Force | Out-Null
         Copy-Item (Join-Path $models '*.onnx') $target -Force -ErrorAction SilentlyContinue
     }
+    # THE HOST RIDES THE BUNDLE (final gate, Oct 25, blocker 3): the
+    # card's "install the helper" button runs install_host.ps1 AT
+    # RUNTIME, and the frozen app resolves it BESIDE the exe (nmhost's
+    # _app_root - the same user-visible, exe-adjacent convention as the
+    # models drop above). The exe ships built: the ps1's build is
+    # guarded (Test-Path), so a bundled install needs no venv and no
+    # PyInstaller to register. The build/dist scratch dirs of
+    # extension\host stay home; the tracked panelboss-host.exe (force-
+    # added Oct 25, ~6.5 MB) makes this copy reproducible from a clone.
+    $hsrc = Join-Path $repo 'extension\host'
+    $hdst = Join-Path $repo ('dist\' + $exe + '\extension\host')
+    New-Item $hdst -ItemType Directory -Force | Out-Null
+    foreach ($f in 'install_host.ps1', 'panelboss_host.py', 'webrect.py',
+                   'panelboss-host.exe', 'host-manifest.template.json') {
+        $hs = Join-Path $hsrc $f
+        if (Test-Path $hs) {
+            Copy-Item $hs $hdst -Force
+            Write-Output ('host bundle copy: ' + $hs)
+        } else {
+            Write-Output ('host bundle MISSING (run install_host.ps1 once to build it): ' + $hs)
+        }
+    }
     Write-Output ('onedir ready: ' + (Join-Path $repo ('dist\' + $exe)))
 }

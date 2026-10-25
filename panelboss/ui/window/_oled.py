@@ -90,7 +90,7 @@ TIP_DIM = {
     "on": "an idle desk puts a dark click-through veil over every "
           "window you are not using; the window you touch lights "
           "instantly, and a window the mic just heard keeps its "
-          "brightness for four seconds. The window the buddy reports "
+          "brightness for four seconds. The window the companion reports "
           "as playing a video never wears the veil either - "
           "backgrounded included, always rows included; pause the "
           "video and the dim layer comes back. Elevated windows "
@@ -149,9 +149,9 @@ TIP_COMP = {
           "one config word away: [videodim] hole = 'window'). The "
           "player window stays exempt from the PLAIN veils with or "
           "without this switch; a paused row re-earns them, and the "
-          "app learns the video's place from the buddy extension's "
+          "app learns the video's place from the companion extension's "
           "native host.",
-    "status": "the consent rail, the buddy extension's last push, and "
+    "status": "the consent rail, the companion extension's last push, and "
               "the geometry-test answer, refreshed on the dimmer's "
               "beat. A missing answer reads as words, never a crash.",
     "veil": "measures the video on the clicked tab right now, one "
@@ -166,10 +166,10 @@ TIP_COMP = {
                "browser's 32-char extension id, or derives it from "
                "the extension's path when empty; a bad shape says so "
                "and does not fire the installer.",
-    "store": "opens the buddy's Chrome Web Store listing - any "
+    "store": "opens the companion's Chrome Web Store listing - any "
              "Chromium browser installs it. Add the extension here "
              "first, then 'install the helper' below.",
-    "caps": "what the buddy's API can send, read from the host "
+    "caps": "what the companion's API can send, read from the host "
             "itself; no host installed reads as honest words and the "
             "install row is the answer. Re-checks when you touch the "
             "veil button or the switch.",
@@ -890,7 +890,7 @@ class _OledMixin:
     # ------------------------------------------------------------------
     # fourth card: the video-dim companion (Oct 15; native-messaging
     # reality Oct 16). There is one consent key: [videodim].on. The
-    # geometry arrives from the buddy extension through its local native
+    # geometry arrives from the companion extension through its local native
     # host (extension/), which writes the app's own doorway file - there
     # is no debug port, no flag list, no opt-in rail beyond the one
     # switch. The master switch is a truth switch (the _power idiom:
@@ -1045,7 +1045,7 @@ class _OledMixin:
                                      padx=(theme.S_FIELD, 0),
                                      pady=(theme.S_FIELD, 0))
 
-        # the capability-discovery line: what the buddy's API CAN send,
+        # the capability-discovery line: what the companion's API CAN send,
         # READ from the host (nmhost.capabilities), never assumed. The
         # card asks the host directly - the owner's mandate, and the
         # one place the "what can it do" question is answered on-screen.
@@ -1180,10 +1180,10 @@ class _OledMixin:
             return
         if getattr(self, "_helper_running", False):
             set_text(self.oled_comp_say,
-                     "installing the buddy's helper...")
+                     "installing the companion's helper...")
             return
         set_text(self.oled_comp_say,
-                 "installing the buddy's helper...")
+                 "installing the companion's helper...")
         self.oled_comp_inst_btn.configure(state="disabled")
         self._helper_running = True
 

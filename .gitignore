@@ -15,10 +15,11 @@ build/
 dist/
 *.egg-info
 
-# native-messaging host build (built by extension/host/install_host.ps1)
-extension/host/panelboss-host.exe
+# native-messaging host (the exe is TRACKED since the Oct-25 gate -
+# the guarded build's output ships in the bundle; build/ is scratch)
 extension/host/build/
 extension/host/host-manifest.json
+extension/host/*.bak
 
 # the companion's RSA private half (Oct 16 key pin) - the public half
 # lives in manifest.json, the id in companion_key.txt; losing the

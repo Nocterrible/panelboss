@@ -54,10 +54,16 @@ DDC_TEXT = "off (DDC fast)"        # the word in the file stays "off"
 # that says off:True on an NVIDIA desk still runs the VCP trio - the
 # escape hatch for the bug's survivors and for us; the gate is
 # UI-only, and the vendor's patch re-opens the door by answering the
-# probe (wm.display_vendor_is_nvidia) False.
-DDC_NVIDIA_TIP = ("disabled on nvidia drivers while a kernel "
-                  "DPC-watchdog bug freezes panels resuming over "
-                  "DDC/CI - returns when the vendor patches. off "
+# probe (wm.display_vendor_is_nvidia) False. REWORDED AT THE FINAL GATE
+# (Oct 25): the freeze claim now reads as OBSERVED (bugcheck 0x133, the
+# DPC watchdog, a family seen on the same driver with this app not
+# running - our own notes carry that no-app freeze); the module
+# attribution stays INFERRED, the elevated minidump parse awaits the
+# owner. "the vendor has a kernel bug" stated the inference as fact.
+DDC_NVIDIA_TIP = ("disabled: resumes from this off have frozen some "
+                  "nvidia-driver machines (bugcheck 0x133, the DPC "
+                  "watchdog) - observed without this app running too. "
+                  "returns once a driver is proven safe; off "
                   "(disconnect) darkens the same way.")
 # THE VERDICT RIDES THE LABEL (launch amendment 3, owner at the desk,
 # Oct 23 14:0x, shape endorsed off the live desk shot): a blocked

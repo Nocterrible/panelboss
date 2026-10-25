@@ -1053,11 +1053,14 @@ def test_nvidia_vendor_gate():
     from panelboss.ui.window._away import (
         _AwayMixin, DDC_TEXT, DDC_NVIDIA_TIP, DDC_BLOCKED_SUFFIX,
         DDC_BLOCKED_LABEL)
-    # (a) the block text, verbatim owner words, pinned as data:
+    # (a) the block text, verbatim owner words, pinned as data
+    # (REWORDED at the Oct-25 final gate: observed phrasing, the module
+    # attribution stays inferred - see _away.py's block comment):
     assert DDC_NVIDIA_TIP == (
-        "disabled on nvidia drivers while a kernel DPC-watchdog bug "
-        "freezes panels resuming over DDC/CI - returns when the "
-        "vendor patches. off (disconnect) darkens the same way.")
+        "disabled: resumes from this off have frozen some nvidia-driver "
+        "machines (bugcheck 0x133, the DPC watchdog) - observed without "
+        "this app running too. returns once a driver is proven safe; "
+        "off (disconnect) darkens the same way.")
     # the label verdict (amendment 3, shape endorsed off the desk
     # shot; SHORTENED by the owner at the desk Oct 24 - the old
     # 24-character verdict widened the picker and pushed the row's

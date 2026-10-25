@@ -91,7 +91,7 @@ _real_rect = videoeye.RECT_PATH
 _real_host_json = nmhost.HOST_JSON
 _dark = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"], "no-rect")
 videoeye.RECT_PATH = _dark
-# AND the host registration - the _no_buddy fork (installed vs never)
+# AND the host registration - the _no_companion fork (installed vs never)
 # reads host.json too, and since the owner's install button the REAL
 # one exists on a live desk: the suite must answer its own questions,
 # never the machine's. (Oct-16: the first post-install run caught this
@@ -101,10 +101,10 @@ nmhost.HOST_JSON = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
 try:
     check(companion.bridge_state() is None,
           "no doorway file answers None, never raises")
-    check(companion.say({"videodim": {"on": True}}) == companion.NO_BUDDY,
-          "the say line names the missing buddy as an installation step")
+    check(companion.say({"videodim": {"on": True}}) == companion.NO_COMPANION,
+          "the say line names the missing companion as an installation step")
     check(companion.veil_now({"videodim": {"on": True}})
-          == companion.NO_BUDDY,
+          == companion.NO_COMPANION,
           "the manual one-shot on a dark desk answers the installation "
           "words (absent doorway), never a fault's words")
 
@@ -226,7 +226,7 @@ try:
           and "veil" in caps.get("ops", ()),
           "capabilities() spawns the host and reads the framed reply")
     words = companion.caps_words()
-    check(words.startswith("buddy API: capabilities, veil")
+    check(words.startswith("companion API: capabilities, veil")
           and "rect" in words and "family" in words,
           "caps_words renders the ops list and the veil field names: "
           "%r" % (words,))
@@ -238,7 +238,7 @@ try:
     # TypeError out of a function that promises it never raises.
     check(companion._caps_line({"ops": [1, 2],
                                 "veil": {"fields": ["rect", None]}})
-          == "buddy API: (no ops) - veil sends rect",
+          == "companion API: (no ops) - veil sends rect",
           "junk members inside a well-shaped list answer honest words")
 
     # the wedged-host law: a path that answers nothing must time out
@@ -332,10 +332,10 @@ check(nmhost.derive_unpacked_id("") is None
 # manual route. Exact strings - no substring drift. (Moved by the
 # helper-install wave, companion_test's pin moves with them in the
 # same commit.)
-check(nmhost.NOT_INSTALLED == "the buddy's helper is not installed - "
+check(nmhost.NOT_INSTALLED == "the companion's helper is not installed - "
                               "press install the helper above",
       "NOT_INSTALLED answers the button phrasing (exact)")
-check(companion.NO_BUDDY == "the buddy's helper is not installed - "
+check(companion.NO_COMPANION == "the companion's helper is not installed - "
                             "press install the helper below (or run "
                             "extension\\host\\install_host.ps1)",
       "the say-line words point at the button and keep the ps1 "
@@ -392,7 +392,7 @@ try:
     ok, words = nmhost.install("abcdefghijklmnopabcdefghijklmnop")
     pw = [c for c in _calls if c[1].get("env") is not None]
     check(ok is True, "install answers True on a clean installer run")
-    check(words.startswith("helper installed - buddy API:"),
+    check(words.startswith("helper installed - companion API:"),
           "the success word IS the fresh host's capability line "
           "(the probe is the proof-of-install): %r" % (words,))
     check(len(pw) == 1 and pw[0][0][:5] == ["powershell", "-NoProfile",
@@ -471,6 +471,49 @@ check('op: "measure"' in _bg and '"measure"' in _ct,
       "the popup asks the ONE question: measure is served by content, "
       "relayed by background, shown by popup - there is no second "
       "measure")
+
+# THE HOST FILE ITSELF gets a load-pin (V's leg-7 catch, Oct 25: the
+# file had NO test at all, and the moved webrect import was silently
+# NameError-ing into the belt - the catch-all made the wound invisible
+# and every veil frame lost its OS-side measure). Load the real file,
+# stub 'webrect' in sys.modules (the host imports it BARE, at use time,
+# inside _veil's try), and drive _veil through BOTH lanes.
+import importlib.util as _ilu
+
+_spec = _ilu.spec_from_file_location(
+    "panelboss_host_under_test",
+    os.path.join(_EXT, "host", "panelboss_host.py"))
+_host = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_host)
+_host.RECT_PATH = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
+                               "veil_probe_rect")
+
+
+class _WRect:
+    @staticmethod
+    def webrect(payload):
+        return {"x": 1, "y": 2, "w": 3, "h": 4}
+
+
+sys.modules["webrect"] = _WRect
+_ans = _host._veil({"payload": {"view": [0, 0, 10, 10]}})
+check(_ans.get("ok") is True,
+      "the host writes the doorway when asked (op=veil answers ok)")
+_row = json.loads(open(_host.RECT_PATH, encoding="utf-8").readline())
+check(_row.get("webrect") == {"x": 1, "y": 2, "w": 3, "h": 4},
+      "the import-in-the-try BINDS and runs (leg 7: the deleted "
+      "module-level import NameError'd silently into the except - "
+      "this pin cannot be satisfied by the catch-all)")
+
+sys.modules["webrect"] = None        # a frozen import failure (missing
+                                     # side-car): import raises at use
+_ans = _host._veil({"payload": {"view": [0, 0, 10, 10]}})
+check(_ans.get("ok") is True and "webrect" not in json.loads(
+    open(_host.RECT_PATH, encoding="utf-8").readline()),
+      "the import failure reads as NO MEASURE, not a raise: the write "
+      "still lands, the fold's compat lanes carry the ring, the relay "
+      "still never dialogs (the guard's real promise)")
+del sys.modules["webrect"]
 
 print("COMPANION-PIN OK (%d)" % len(passed) if not fails
       else "COMPANION-PIN FAILED: %s" % fails)

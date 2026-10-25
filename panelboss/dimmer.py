@@ -28,7 +28,7 @@ that panel dims without waiting for idle_sec, but it bows to the
 foreground (its center inside the panel's rect un-dims the panel -
 if the focused app is ON it, you are using it), to the audible
 exemption, and to the player exemption (owner, Oct 24: the window
-holding the buddy's PLAYING report never wears the dim layer -
+holding the companion's PLAYING report never wears the dim layer -
 backgrounded included; paused or dead re-earns it); an
 unattributable focus dims the always rows and
 confesses once per transition. The veil LEVEL defaults to 20% (the
@@ -319,7 +319,7 @@ class Veils:
         valpha = int(vd.get("level", 20)) / 100.0
         # THE TWO DOORS, ONE WALK (clause 1's second answer): the one
         # seam call answers the pair - the live PLAYING rect (the
-        # player exemption's and the frame's door: the buddy's report
+        # player exemption's and the frame's door: the companion's report
         # outranks the theater switch, owner Oct 20 as closed Oct 24:
         # the window holding a PLAYING report is never plain-veiled,
         # in any window state; paused or dead re-earns the veil)
@@ -495,7 +495,7 @@ class Veils:
                 continue     # THE PLAYER EXEMPTION (owner, Oct 20;
             #                 # the shape CLOSED by the Oct-24
             #                 # ruling): the window whose census rect
-            #                 # holds the buddy's PLAYING report
+            #                 # holds the companion's PLAYING report
             #                 # never wears the dim layer -
             #                 # backgrounded included, and the always
             #                 # rows bow to it (this check sits ahead
@@ -619,7 +619,7 @@ class Veils:
         1): the eye's live playing rect AND the reporting window's
         bounds, THEATER-STATE-INDEPENDENT. The exemption - the window
         that is playing the video reporting a rect is NEVER
-        plain-veiled - keys on the BUDDY's report, not on the theater
+        plain-veiled - keys on the COMPANION's report, not on the theater
         switch or the ring: a user who turned theater off still told
         the eye where their movie is. The seam answers videoeye.
         live_pair; an answer that is a plain rect (a legacy seam or
@@ -1482,7 +1482,7 @@ def _video_rect(cfg, now):
     the liveness law (paused lift, min_rect_px, visible-picture) is
     the eye's, pinned in its docstring - but NOT the [videodim].on
     switch: the PLAYER EXEMPTION the seam feeds must answer even
-    with the theater feature off (the buddy's report is the fact,
+    with the theater feature off (the companion's report is the fact,
     the switch is only the frame's consent). The theater's own frame
     path gates the switch (and the stillness conjunct - clause 2) in
     _live_rect, above. THE PAIR (clause 1, Oct 20): (playing rect,

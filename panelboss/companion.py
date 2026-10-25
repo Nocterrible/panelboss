@@ -33,12 +33,12 @@ FAMILIES = ("chrome", "edge", "opera_gx")
 # the owner's Oct 16 catch: a stale row shared its words with a
 # malformed one, and the absent doorway read like a fault, not an
 # installation step. Three reasons, three sentences:
-NO_BUDDY = ("the buddy's helper is not installed - press install the "
+NO_COMPANION = ("the companion's helper is not installed - press install the "
             "helper below (or run extension\\host\\install_host.ps1)")
 JUNK_WORDS = "the companion answered junk"
 
 
-def _no_buddy():
+def _no_companion():
     """The absent-doorway sentence is TWO sentences (gate finding 2,
     Oct 16): helper never installed -> point at the BUTTON; helper
     installed but the browser has never spoken -> the id mismatch
@@ -50,7 +50,7 @@ def _no_buddy():
         return ("the helper is installed but the browser has never "
                 "spoken - if the id on your extensions page differs, "
                 "paste it in the id override and press reinstall")
-    return NO_BUDDY          # the base sentence itself (the blanket
+    return NO_COMPANION          # the base sentence itself (the blanket
                              # rewrite had folded THIS one too, and
                              # the function called itself forever -
                              # RecursionError, caught by the suite
@@ -96,7 +96,7 @@ def door_dir():
 def caps_words(force=False):
     """The capability-discovery line, from asking the host directly
     (nmhost.capabilities): what the API CAN send - the ops, the veil
-    fields, and whether the buddy pushes on its own (the "auto" lane) -
+    fields, and whether the companion pushes on its own (the "auto" lane) -
     or the honest not-installed words when host.json is absent. force
     re-asks (the card's explicit re-check). Never raises."""
     caps = nmhost.capabilities(force=force)
@@ -113,10 +113,10 @@ def _caps_line(caps):
     opnames = tuple(x for x in nmhost.ops(caps) if isinstance(x, str))
     fields = tuple(x for x in nmhost.veil_fields(caps)
                    if isinstance(x, str))
-    line = "buddy API: " + ", ".join(opnames) if opnames else \
-        "buddy API: (no ops)"
+    line = "companion API: " + ", ".join(opnames) if opnames else \
+        "companion API: (no ops)"
     if isinstance(caps.get("auto"), dict):
-        line += ", auto on play"    # the v0.4 lane: the buddy pushes
+        line += ", auto on play"    # the v0.4 lane: the companion pushes
                                      # on its own, no click
     if fields:
         line += " - veil sends " + "/".join(fields)
@@ -162,14 +162,14 @@ def _bridge_words(reason, row):
     words, and the absent doorway reads as an installation step, not a
     fault."""
     if reason == "absent":
-        return _no_buddy()
+        return _no_companion()
     if reason == "junk":
         return JUNK_WORDS
     if reason == "stale":
         return ("the last geometry is hours old - play a video or "
-                "click the buddy")
+                "click the companion")
     if not isinstance(row, dict):
-        return _no_buddy()   # malformed row WITH a doorway: the same
+        return _no_companion()   # malformed row WITH a doorway: the same
                              # honest fork (installed? override box.
                              # absent? button.) - the junk words would
                              # blame the payload for a missing one
@@ -206,14 +206,14 @@ def veil_now(cfg):
     rect, or the reason (absent/junk/stale)."""
     reason, row = _reason(time.monotonic())
     if reason == "absent":
-        return _no_buddy()
+        return _no_companion()
     if reason == "junk":
         return JUNK_WORDS
     if reason == "stale":
         return ("the last geometry is hours old - play a video or "
-                "click the buddy")
+                "click the companion")
     if not isinstance(row, dict):
-        return _no_buddy()   # malformed row WITH a doorway: the same
+        return _no_companion()   # malformed row WITH a doorway: the same
                              # honest fork (installed? override box.
                              # absent? button.) - the junk words would
                              # blame the payload for a missing one

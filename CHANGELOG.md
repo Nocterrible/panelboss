@@ -4,7 +4,7 @@
 
 - Video dim (the dim-around-the-playing-video eye): with [videodim]
   on (default OFF - off means no file reads, nothing), PanelBoss
-  reads the playing video's rect from the buddy extension (extension/)
+  reads the playing video's rect from the companion extension (extension/)
   through its LOCAL NATIVE HOST: one toolbar click measures the first
   <video> with chrome.scripting (a static bundled function, the
   ad-blocker class of call - no eval, no debugger, no banner), hands

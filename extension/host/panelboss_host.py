@@ -38,7 +38,13 @@ import os
 import struct
 import sys
 
-import webrect as _webrect_mod
+# (the final gate, Oct 25, blocker 7: webrect is imported WHERE IT IS
+# USED - _veil's own try - never at module level. A module-level import
+# runs BEFORE main() and before the __main__ guard, so a frozen import
+# failure (a missing side-car, a bad collection) would dialog "Failed
+# to execute script" and break the NEVER-DIALOGS law at parse time.
+# Inside the try, the same failure reads as wr=None: the veil row
+# rides without the OS-side measure, and the relay stays silent.)
 
 
 # the host name the registry and connectNative() both spell - the
@@ -120,6 +126,13 @@ def _veil(msg):
         # belt AND path (gate, Oct 17): webrect answers None on trouble;
         # if it ever raises anyway, the veil write must still happen -
         # the compat lanes in the fold are the ring's fallback lifeboat.
+        # THE IMPORT LIVES HERE (final gate, Oct 25): at module level a
+        # frozen import failure would dialog BEFORE the __main__ guard;
+        # inside this try it reads as wr=None - the write still happens
+        # (V's leg-7 catch: deleting the old line without landing this
+        # one NameError'd the measure into the except and the veil went
+        # on replying ok WITHOUT the OS-side rect - silently).
+        import webrect as _webrect_mod
         wr = _webrect_mod.webrect(payload)
     except Exception:
         wr = None
