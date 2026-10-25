@@ -438,11 +438,13 @@ class SettingsWindow(
         never queued.
 
         The cure is the FLAT BACKDROP below (see the atomic-switch note
-        under it) plus one Tk redraw pass at the end of the raise
-        (Oct-24 correction: the Oct-16 note here claimed a forced
-        present was the cure - the code retired it and left the sweep
-        behind; the present is back OUT of this path for good, measured
-        at ~5x Tk's own pass, see the raise site below). Pages stay
+        under it) - NOTHING at the end of the raise (Oct-24 correction,
+        twice over: the Oct-16 note here claimed a forced
+        present was the cure - the code
+        retired it and left the sweep behind; the present is back OUT of this
+        path for good, measured at ~5x Tk's own pass, see the raise site
+        below - and the follow-up update_idletasks idea died the same
+        night, 0 ms and a flat body). Pages stay
         BUILT and MAPPED either way (no remap: unmapping loses CTk's
         drawn canvases - measured, the fragments the owner would have
         seen instead)."""
