@@ -357,6 +357,10 @@ with open(_twin, "w", encoding="utf-8") as f:
         '@{ path = "' + sys.executable + '" } | ConvertTo-Json | '
         'Set-Content -Path (Join-Path $here "host.json") '
         '-Encoding UTF8\n'
+        '@{ name = "companion_test.twin"; allowed_origins = '
+        '@("chrome-extension://" + $ExtensionId + "/") } | '
+        'ConvertTo-Json | Set-Content '
+        '-Path (Join-Path $here "host-manifest.json") -Encoding UTF8\n'
         "Write-Output ('host installed for origin chrome-extension://"
         "$ExtensionId/')\n")
 _ftwin = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
@@ -376,7 +380,15 @@ def _spy(args, **kw):
 
 
 _real_host_json = nmhost.HOST_JSON
+_real_root = nmhost._APP_ROOT
+_real_reg_read = nmhost._REG_READ
 nmhost._spawn.run = _spy
+# THE REGISTRY READ-BACK SEAM (gate round 2): the twin just writes
+# host-manifest.json beside its host.json - the fake key points the
+# probe at THAT file, so registered_origins runs its real json read
+# on real Set-Content bytes (BOM and all).
+nmhost._REG_READ = lambda: os.path.join(
+    os.environ["PANELBOSS_CONFIG_DIR"], "host-manifest.json")
 nmhost.HOST_JSON = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
                                 "host.json")
 nmhost._cache.update(until=0.0, caps=None)
@@ -392,9 +404,13 @@ try:
     ok, words = nmhost.install("abcdefghijklmnopabcdefghijklmnop")
     pw = [c for c in _calls if c[1].get("env") is not None]
     check(ok is True, "install answers True on a clean installer run")
-    check(words.startswith("helper installed - companion API:"),
-          "the success word IS the fresh host's capability line "
-          "(the probe is the proof-of-install): %r" % (words,))
+    check(words.startswith("helper installed - registered for "
+                           "abcdefghijklmnopabcdefghijklmnop"),
+          "the success word NAMES the registered id (gate round 2: "
+          "the registry read-back carried it): %r" % (words,))
+    check("companion API:" in words,
+          "the fresh host's capability line still rides behind the "
+          "id (the probe is the proof-of-install): %r" % (words,))
     check(len(pw) == 1 and pw[0][0][:5] == ["powershell", "-NoProfile",
                                             "-ExecutionPolicy",
                                             "Bypass", "-File"],
@@ -429,11 +445,106 @@ try:
           and "-ExtensionId bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in words,
           "the failing installer names its step from its OWN line and "
           "keeps the manual route: %r" % (words,))
+
+    # ---- GATE ROUND 2 (Oct 25): THE ID LADDER, three rungs, in a
+    # bundle-shaped tmp world (extension/host/ files, manifest as the
+    # trust gate). The twin echoes whatever id it is handed into the
+    # registered manifest, so each rung's proof-of-install can pass.
+    nmhost._INSTALL_PS1 = _twin
+    _broot = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"], "bundle")
+    os.makedirs(os.path.join(_broot, "extension", "host"))
+    nmhost._APP_ROOT = _broot
+    import logging as _lg
+    _logs = []
+
+    class _Cap(_lg.Handler):
+        def emit(self, r):
+            _logs.append(r.getMessage())
+
+    _lh = _Cap()
+    _lgr = _lg.getLogger("nmhost")
+    _lgr.addHandler(_lh)
+    # the desk default is root=WARNING; an unlevelled logger would
+    # filter the branch line before the handler ever sees it (the
+    # silent-capture class - the pin would pass on an empty list
+    # forever).
+    _lgr.setLevel(_lg.INFO)
+    try:
+        _calls.clear()
+        ok, words = nmhost.install(None)
+        check(ok is True and ("registered for " + nmhost.STORE_ID) in words,
+              "rung three - no manifest -> the store constant, named in "
+              "the success word: %r" % (words,))
+        pw = [c for c in _calls if c[1].get("env") is not None]
+        check(pw and pw[-1][0][-3:] == ["-ExtensionId", nmhost.STORE_ID,
+                                        "-Rebuild"],
+              "the store id reaches the installer")
+        check(any("chosen by store id" in m for m in _logs),
+              "the branch that CHOSE the id is logged (a support read "
+              "sees the registration's reasoning): %r" % (_logs,))
+        check(nmhost.STORE_ID == "feolhiokchmpphlhllagimnilceldegk",
+              "the constant IS the published listing (the repo "
+              "manifest's key-branch id - permanent once shipped)")
+
+        # rung two: WITH a manifest the derivation outranks the
+        # constant - a stranger key derives a stranger id, and THAT
+        # is what registers (a load-unpacked desk is its own truth).
+        with open(os.path.join(_broot, "extension", "manifest.json"),
+                  "w", encoding="utf-8") as mf:
+            mf.write(json.dumps({"key": "A" * 40}))   # valid base64
+        derived = nmhost.derive_unpacked_id(
+            os.path.join(_broot, "extension"))
+        check(derived and derived != nmhost.STORE_ID,
+              "a stranger-keyed manifest derives a stranger id (the "
+              "test world is honest: derivation CAN disagree)")
+        _calls.clear()
+        ok, words = nmhost.install(None)
+        check(ok is True and ("registered for " + derived) in words,
+              "rung two - the on-disk derivation outranks the store "
+              "constant: %r" % (words,))
+        check(any("chosen by unpacked derivation" in m for m in _logs),
+              "the derivation branch logs itself too")
+
+        # rung one: the explicit arg outranks BOTH, even in this tmp
+        # world (where derivation would say otherwise).
+        _calls.clear()
+        ok, words = nmhost.install("p" * 32)
+        check(ok is True and ("registered for " + "p" * 32) in words,
+              "rung one - the explicit id wins over derivation and "
+              "store alike: %r" % (words,))
+
+        # THE REGISTRY IS THE SECOND PROOF - the twin's exe answers
+        # and the manifest names a STRANGER: no victory word.
+        _stranger = os.path.join(os.environ["PANELBOSS_CONFIG_DIR"],
+                                 "stranger-manifest.json")
+        with open(_stranger, "w", encoding="utf-8") as mf:
+            json.dump({"allowed_origins":
+                       ["chrome-extension://%s/" % ("m" * 32)]}, mf)
+        nmhost._REG_READ = lambda: _stranger
+        ok, words = nmhost.install("abcdefghijklmnopabcdefghijklmnop")
+        check(ok is False and ("chrome-extension://%s/" % ("m" * 32))
+              in words and "registered for" not in words,
+              "a stranger in allowed_origins reads as FAILURE naming "
+              "the stranger (the silent-lie class, dead): %r"
+              % (words,))
+
+        # and NO KEY AT ALL: read-back None is also not a victory.
+        nmhost._REG_READ = lambda: None
+        ok, words = nmhost.install("abcdefghijklmnopabcdefghijklmnop")
+        check(ok is False and "be read back" in words
+              and "com.nocterrible.panelboss" in words,
+              "an unreadable registration fails honestly and names "
+              "the key: %r" % (words,))
+    finally:
+        _lgr.removeHandler(_lh)
+        _lgr.setLevel(_lg.NOTSET)
 finally:
     nmhost._spawn.run = _real_run
     nmhost._INSTALL_PS1 = _real_ps1
     nmhost._ask = _real_ask
     nmhost.HOST_JSON = _real_host_json
+    nmhost._APP_ROOT = _real_root
+    nmhost._REG_READ = _real_reg_read
     nmhost._cache.update(until=0.0, caps=None)
 
 # --- v0.4.3 popup readout pins: the toolbar icon opens a live readout,

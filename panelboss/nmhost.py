@@ -39,6 +39,7 @@ card's words live in companion.py; the fold lives in videoeye.py.
 import base64
 import hashlib
 import json
+import logging
 import os
 import re
 import struct
@@ -46,6 +47,8 @@ import sys
 import time
 
 from . import _spawn
+
+log = logging.getLogger("nmhost")
 
 # where install_host.ps1 records the host exe path - the doorway's
 # neighbor, so it dies and lives with the same app-owned folder.
@@ -59,6 +62,56 @@ CAP_TTL = 300.0            # s: the capabilities answer is cached - the
                            # reinstalled, not between dimmer beats
 NOT_INSTALLED = ("the companion's helper is not installed - press install "
                  "the helper above")
+
+# THE STORE ID IS THE FALLBACK TRUTH (gate round 2, Oct 25): once the
+# extension is published, its id is PERMANENT (the manifest's key pins
+# it - feolhiokchmpphlhllagimnilceldegk, the Chrome Web Store listing).
+# A bundled install has no load-path to derive from (the path-hash
+# fallback would hash the INSTALL DIR into allowed_origins - a wrong id
+# the store extension never answers, and the direct-spawn probe could
+# not see the lie). Resolution ladder, install():
+#     explicit arg > on-disk unpacked derivation > STORE_ID.
+STORE_ID = "feolhiokchmpphlhllagimnilceldegk"
+
+# the registration's home key (HKCU - no admin; Chrome/Edge/Opera all
+# read it). The proof-of-install reads the TRUTH here, not just the
+# exe's good mood: a spawned exe answers for any origin.
+NM_REG_PATH = ("Software\\Google\\Chrome\\NativeMessagingHosts\\"
+               "com.nocterrible.panelboss")
+
+
+def _reg_manifest_path():
+    """HKCU's answer: the manifest file the registration points at, or
+    None (absent key / unreadable)."""
+    try:
+        import winreg
+    except ImportError:
+        return None
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, NM_REG_PATH) as k:
+            val, _t = winreg.QueryValueEx(k, "")
+        return str(val) or None
+    except OSError:
+        return None
+
+
+_REG_READ = _reg_manifest_path      # the suite's seam: callable -> path
+
+
+def registered_origins(read=None):
+    """The allowed_origins list of the manifest the REGISTRY points at
+    right now - the browser's own view of who may connect. None when
+    the key, the file, or the json is not there to answer."""
+    path = (read or _REG_READ)()
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            mani = json.load(f)
+    except (OSError, ValueError):
+        return None
+    o = mani.get("allowed_origins") if isinstance(mani, dict) else None
+    return o if isinstance(o, list) else None
 
 # the installer the card's one-click runs - a module constant so a
 # suite can stand a .ps1 twin in its own temp dir (the seam is the
@@ -229,11 +282,14 @@ def install(ext_id=None):
     convenience, not a second installer), then re-probe so the
     caller can answer with the fresh host's own reply.
 
-    Id resolution: `ext_id` when given - and anything that is not the
-    browser's 32-char a-p id refuses BEFORE a single process starts -
-    else derived from the on-disk extension dir (derive_unpacked_id;
-    the load path here is the extension's own home). A dir that cannot
-    be normalized answers a word, never a spawn.
+    Id resolution ladder (gate round 2, Oct 25): explicit arg >
+    unpacked derivation - trusted ONLY when the extension dir carries a
+    manifest.json, the thing that makes it a load path at all (the
+    bundled dir without one is host furniture, and the path branch
+    would hash the INSTALL DIR into allowed_origins, a stranger id the
+    store never answers) > STORE_ID. The chosen branch is LOGGED - a
+    support read shows the registration's reasoning, not just its
+    outcome.
 
     The venv's python must be the installer's `python` (PyInstaller
     6.22.3 lives in the venv): PATH is PREPENDED with
@@ -244,23 +300,40 @@ def install(ext_id=None):
     tell WHICH of build, register, or write refused without opening
     the scratch file.
 
-    Answers (bool, words). True + the fresh host's capabilities line -
-    the PROBE IS THE PROOF-OF-INSTALL (the cache is reset and the
-    fresh host is re-asked; a host that answers nothing reads as a
-    failure, not a victory). False + the refusing step + the manual
-    route (the ps1 path stays the documented one-line-down manual)."""
+    Answers (bool, words). TRUE requires TWO proofs: the direct
+    capabilities ask (the binary lives) AND the registry's manifest
+    carrying the EXACT origin (the registration names the browser's
+    truth - registered_origins(), seam _REG_READ). The success words
+    name the id ("registered for <id>") so the card says WHAT landed,
+    not merely that something did. False + the refusing step + the
+    manual route (the ps1 path stays the documented one-line-down
+    manual)."""
     if ext_id is not None:
         ext_id = str(ext_id).strip()
     if ext_id:
+        branch = "the id entry (explicit override)"
         if not EXT_ID_RE.match(ext_id):
             return False, ("bad extension id - it must be 32 lowercase "
                            "a-p chars (the browser's extensions page)")
     else:
         ext_dir = os.path.join(_APP_ROOT, "extension")
-        ext_id = derive_unpacked_id(ext_dir)
-        if not ext_id:
-            return False, ("could not derive the extension id from the "
-                           "on-disk extension dir")
+        # THE MANIFEST IS THE TRUST GATE (gate round 2): a dir without
+        # manifest.json is not an unpacked extension - it is the
+        # bundle's host furniture - and the path branch of the id law
+        # would hash the INSTALL DIR into allowed_origins. The direct
+        # spawn probe cannot see a stranger id; the registry read
+        # below can, and the store constant is the honest fallback.
+        ext_id = None
+        if os.path.isfile(os.path.join(ext_dir, "manifest.json")):
+            ext_id = derive_unpacked_id(ext_dir)
+        if ext_id:
+            branch = "unpacked derivation from %s" % ext_dir
+        else:
+            ext_id = STORE_ID
+            branch = ("store id (no manifest at %s - the path-hash of "
+                      "that dir would be a stranger id)" % ext_dir)
+    log.info("nmhost: install registering id %s - chosen by %s",
+             ext_id, branch)
     ps1 = _INSTALL_PS1
     if not os.path.exists(ps1):
         return False, "the installer is not here: %s" % ps1
@@ -313,7 +386,29 @@ def install(ext_id=None):
                        "host answers no capabilities - or run "
                        "extension\\host\\install_host.ps1 -ExtensionId "
                        "%s yourself" % ext_id)
-    return True, "helper installed - " + _caps_line(caps)
+    # THE HONEST PROOF (gate round 2, Oct 25): the direct ask spawns
+    # the exe and answers for ANY origin - it proves the binary, not
+    # the registration. The registry's manifest is the browser's own
+    # view: success REQUIRES the exact origin your browser will
+    # present. A store desk with a hashed-in stranger id says FAIL
+    # here, in words - the silent lie this repo exists to prevent.
+    want = "chrome-extension://%s/" % ext_id
+    origins = registered_origins()
+    if origins is None:
+        return False, ("the host answers, but the registration cannot "
+                       "be read back (HKCU\%s) - rerun install the "
+                       "helper or run extension\\host\\install_host.ps1 "
+                       "-ExtensionId %s yourself" % (NM_REG_PATH, ext_id))
+    if want not in origins:
+        return False, ("the host answers, but the manifest allows %s - "
+                       "not %s. The store extension will stay quiet "
+                       "until the id matches; rerun install the helper "
+                       "or run extension\\host\\install_host.ps1 "
+                       "-ExtensionId %s yourself"
+                       % (" or ".join(str(o) for o in origins) or
+                          "nothing", want, ext_id))
+    return True, ("helper installed - registered for %s - %s"
+                  % (ext_id, _caps_line(caps)))
 
 
 def _stdout_tail(out):

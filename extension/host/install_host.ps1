@@ -106,10 +106,13 @@ $appdir = Join-Path $env:APPDATA 'PanelBoss'
 # succeeds in the same breath). CreateDirectory is idempotent and
 # tells the truth about real failures.
 [void][IO.Directory]::CreateDirectory($appdir)
-# utf-8-sig (no BOM) written here so BOTH producers of this file -
-# this script on Windows PowerShell and the app's own writer - are
-# readable by the reader's utf-8-sig; PS7's -Encoding utf8 is already
-# BOM-less, 5.1's is not; sig keeps them identical either way.
+# host.json is written with -Encoding UTF8 and READ with utf-8-sig,
+# so it is readable whichever producer wrote it: Windows PowerShell
+# 5.1's Set-Content -Encoding UTF8 EMITS A BOM (measured: EF BB BF -
+# the suite replays the real signature through the app's own reader),
+# PS7's is BOM-less, and the app's own writer follows its own
+# encoding. The sig read keeps all producers compatible; claiming
+# "no BOM" here once lied about the 5.1 producer (gate round 2).
 @{ path = $hostExe } | ConvertTo-Json | Set-Content `
     -Path (Join-Path $appdir 'host.json') -Encoding UTF8
 

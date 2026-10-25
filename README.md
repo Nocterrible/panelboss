@@ -9,8 +9,14 @@ into the glass. Movie theater mode darkens the desk around a playing video.
 Monitor profiles store and restore a whole desk. Presence runs locally from
 a camera: your camera frames never leave the machine. Network appears only
 where you ask for it: the updater asks GitHub what the latest release is
-(and can be ignored), `scripts\setup.ps1` fetches the detection model once,
-and the Hello IR option installs its helper package over pip. The optional
+when you press Check for updates - no traffic before your click, and press
+it once or never; the button itself then tells you when a newer build
+exists (a startup ping for that notice is a 0.3.7 idea, not a promise).
+`scripts\setup.ps1` fetches the detection model once; the Hello IR option's
+helper rides inside the MSI package (the build collects whircam - an
+installed app never pips), and on a source install the same prompt runs the
+updater's `scripts\setup.ps1 -Optional`, a pip of the one-line
+`requirements-optional.txt`. The optional
 browser extension needs no network at all - native messaging is a local pipe
 the browser spawns; not even its handshake crosses the wire.
 
@@ -163,8 +169,8 @@ identity, their places, the primary, resolution and refresh per panel, the
 HDR ask, and where every pinned window belongs. The picker opens on the
 profile matching this desk's hardware identity even when a panel has not
 landed its wanted modes yet, and updates keep a backup of profiles and config
-in %LOCALAPPDATA%\PanelBoss\update, the folder beside the log location named
-on the General / Keybinds tab; create new... copies what the desk is
+in the update folder under %LOCALAPPDATA%\PanelBoss; create new... copies what
+the desk is
 doing now. The mode editor offers each panel resolution and refresh menus
 from the driver's own list, its live HDR state, and, where the driver answers
 precisely, a hdr on/off/keep selector. The hdr ask per apply: restore as

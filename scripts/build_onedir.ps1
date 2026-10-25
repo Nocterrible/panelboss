@@ -83,5 +83,18 @@ function Invoke-OnedirBuild {
             Write-Output ('host bundle MISSING (run install_host.ps1 once to build it): ' + $hs)
         }
     }
+    # GATE ROUND 2 (Oct 25): the extension's manifest rides too -
+    # <bundle>\extension\manifest.json is what derive_unpacked_id
+    # reads (the key branch), so a desk that loads the BUNDLED
+    # extension unpacked derives the right id instead of falling to
+    # the store constant. Six files, one truth: what the app resolves
+    # is what the repo ships.
+    $ems = Join-Path $repo 'extension\manifest.json'
+    if (Test-Path $ems) {
+        Copy-Item $ems (Join-Path $repo ('dist\' + $exe + '\extension\manifest.json')) -Force
+        Write-Output ('host bundle copy: ' + $ems)
+    } else {
+        Write-Output ('extension manifest MISSING (id derivation dies): ' + $ems)
+    }
     Write-Output ('onedir ready: ' + (Join-Path $repo ('dist\' + $exe)))
 }

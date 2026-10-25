@@ -1,14 +1,16 @@
 """Uninstall cleanup: what the MSI's Remove-phase custom action runs.
 
 MSI wave law 3 (owner, Oct 15; the verb lands Oct 21): the uninstall
-must leave NOTHING of the three things the app can register - the
-power-assistant scheduled task, the Run-key autostart, and the CCD
-stored-disconnect state. The third is why this verb exists at all:
-the boot belt dies with the app, so a retracted display the belt
-would have raised at the next boot stays dark forever once the code
-is gone. Hence the ORDER - restore the CCD first (the app's own
-door, state/_away._restore_offdisc, called standalone, never
-re-derived), then the Run key, then the task.
+must leave NOTHING of the four things the app can register - the
+power-assistant scheduled task, the Run-key autostart, the CCD
+stored-disconnect state, and (gate round 2, Oct 25) the browser's
+native-messaging door: the HKCU host key plus the app's host.json
+pointer. The MSI deletes the host EXE under them; a key and a pointer
+at a deleted path are a door standing over a demolished house. Hence
+the ORDER - restore the CCD first (the app's own door, state/_away.
+_restore_offdisc, called standalone, never re-derived), then the Run
+key, then the NM door, then the task. "Leave the door you opened,
+unlocked; take the door when the house goes" (owner, Oct 25).
 
 Every action answers exactly one honest line and NOTHING raises into
 the caller: the MSI action also carries Return='ignore', but the
@@ -20,10 +22,12 @@ truth and writes nothing - the probe that is safe on a live desk.
 Test seams (scripts/uninstall_test.py): the timeline the fakes build
 is the ORDER the law names; every helper takes (state, dry, lines)
 and touches the world only through startup.disable / power.* /
-_away._restore_offdisc, which the suite replaces wholesale.
+_away._restore_offdisc / winreg.DeleteKey / nmhost.HOST_JSON, which
+the suite replaces or redirects wholesale.
 """
 
 import logging
+import os
 
 log = logging.getLogger("cleanup")
 
@@ -36,6 +40,7 @@ def run(cfg, dry=False):
     lines = []
     _ccd(cfg or {}, dry, lines)
     _run_key(dry, lines)
+    _nm_door(dry, lines)
     _task(dry, lines)
     # the windowed exe has no console: the log file is the frozen
     # world's stdout, so every summary line rides it too (the MSI
@@ -107,8 +112,47 @@ def _run_key(dry, lines):
         lines.append("run key FAILED: %s" % exc)
 
 
+def _nm_door(dry, lines):
+    """Door three (gate round 2, Oct 25): the browser's native-messaging
+    registration and the app-side pointer. The MSI deletes the host exe
+    these point at - a stale key makes Chrome/Edge/Opera spawn a dead
+    path on every extension start; a stale host.json makes the app's
+    own capability reader claim a helper that no longer exists. Both
+    go; absent halves read as absent, one honest line either way."""
+    try:
+        import winreg
+        from . import nmhost
+        stanzas = []
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                nmhost.NM_REG_PATH):
+                key_present = True
+        except OSError:
+            key_present = False
+        for what, present, remove in (
+                ("host key", key_present,
+                 lambda: winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
+                                         nmhost.NM_REG_PATH)),
+                ("host.json", os.path.exists(nmhost.HOST_JSON),
+                 lambda: os.remove(nmhost.HOST_JSON))):
+            if not present:
+                stanzas.append("%s absent" % what)
+            elif dry:
+                stanzas.append("%s: present (would remove)" % what)
+            else:
+                try:
+                    remove()
+                    stanzas.append("%s removed" % what)
+                except OSError as exc:
+                    stanzas.append("%s NOT removed (%s)" % (what, exc))
+        lines.append("native-messaging door: " + "; ".join(stanzas))
+    except Exception as exc:              # never raise into an uninstall
+        log.exception("cleanup: the native-messaging door failed")
+        lines.append("nm door FAILED: %s" % exc)
+
+
 def _task(dry, lines):
-    """Door three: the power assistant's task. task_installed() asks
+    """Door four: the power assistant's task. task_installed() asks
     the TASK STORE (the registry of truth, not a rumor), and the
     delete rides power.uninstall() - the app's own verified path,
     elevation fallback included; if consent is refused the line says

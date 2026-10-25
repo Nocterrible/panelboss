@@ -204,6 +204,23 @@ assert "%bkdir%\\profiles.json.bak" in ub and \
     "%bkdir%\\config.toml.bak" in ub, "the mirror lines left update.bat"
 assert ub.find("config.toml.bak") < ub.find("git pull"), \
     "the mirror must back up BEFORE the pull moves the ground"
+
+# GATE ROUND 2 (Oct 25): the host bundle copy list is SIX files - the
+# five under extension\host plus the extension manifest at
+# dist\<exe>\extension\manifest.json (derive_unpacked_id's key branch;
+# the store-id fallback is rung three, but the bundle must not NEED
+# the fallback). An unlisted file ships as absence - the silent-drop
+# class - so the list is parsed, not admired.
+ob = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "build_onedir.ps1"), encoding="utf-8").read()
+for _f in ("install_host.ps1", "panelboss_host.py", "webrect.py",
+           "panelboss-host.exe", "host-manifest.template.json"):
+    assert "'%s'" % _f in ob, "the host bundle copy lost %s" % _f
+assert "'extension\\manifest.json'" in ob, \
+    "the extension manifest left the bundle copy (id derivation dies)"
+assert ob.index("'extension\\manifest.json'") < ob.index("onedir ready"), \
+    "the manifest copy must precede the build's ready line"
+print("ok - the onedir host bundle carries six files, manifest included")
 bat = update.write_apply(r"C:\u\PanelBoss-0.3.3-user.msi",
                          r"C:\p\PanelBoss.exe", 1234, os.path.join(TMP, "drop"))
 assert bat == os.path.join(old_dir, "apply.bat") and os.path.exists(bat)
