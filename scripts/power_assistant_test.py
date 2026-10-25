@@ -682,9 +682,11 @@ def check():
                 _verb + " no longer paints in place"
         # the survivors are AUTHORED (a refused save, a row that could
         # not be handed over, the bulk verb): exactly three CALL sites,
-        # never zero, never more.
-        assert _PINS.count('self._repaint("pins"') == 3, \
-            "the irreducible section passes changed count"
+        # never zero, never more - the COUNT is shape-agnostic (gate
+        # f1): ANY self._repaint(...) beyond the three authored calls
+        # fails here, whatever sections it names.
+        assert _PINS.count('self._repaint(') == 3, \
+            "the irreducible section passes changed count/shape"
         app._noshows_ask([{"proc": "a.exe", "title": "one"}])
         app.update_idletasks()
         kids, stack = [], [app.noshows_dialog]

@@ -117,6 +117,13 @@ class _PinMixin:
                            padx=theme.S_FIELD)
         self._sync_editor()                     # the editor's subject
         #                                        may be gone now
+        self._restyle_live()                    # and its HIGHLIGHT
+        #                                        must let go with it
+        #                                        (gate f3: the accent
+        #                                        row followed the pin
+        #                                        into death - the
+        #                                        pre-diff era had it
+        #                                        too, fixed forward)
         if not in_place:
             # the row's own frame was not handed over: the list has to
             # re-derive from the store to be sure nothing ghost-remains
