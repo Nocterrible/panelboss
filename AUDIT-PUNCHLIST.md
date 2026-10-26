@@ -2130,3 +2130,20 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
 - Updater last mile (owner live incident): deterministic bat chain - taskkill by pid, WAIT VIA TASKLIST STATUS VOICE (findstr /m /v /b /c:INFO - Windows 26220 findstr honors NO quote-escape form and the CSV substring lied from the memory column; alive/gone both proven against the live process table), synchronous /qn /norestart, relaunch on BOTH rc paths, sha256 verified against the API digest BEFORE msiexec ever runs, receipt with the digest, self-delete. Desk upgraded past the buggy updater silently (guard kept the door and opt-ins - one product, no ghosts).
 - README: plain-language rewrite shipped (2909 -> ~3450 words, voice fixed not length cut), six-bullet feature lead (owner ask), app version de-hardcoded (release page is the version truth), four real captures + the owner NVIDIA-Replay movie-theater gif as the hero; readme_test pins image existence + the two verbatim strings.
 - Banked (0.3.7): changelog dialog on update hits; limited-rank task registration (kills today UAC-at-uninstall entirely); Defender false-positive submission (2147737394 family); WiX download hash pin; updater already verifies sha (moved from bank to done today); Hello IR label wording; five bland-but-true README sentences from the reviewer list.
+
+## Signing parked (owner, Oct 26) - half a mile of plumbing already in place
+
+- Owner call: no domain purchase and no signing fee until real user feedback exists (the first
+  ten strangers vote first). Azure side is already done to the billing boundary: az CLI
+  installed, device-code login OK, resource group panelboss (eastus2), and a Trusted Signing
+  ACCOUNT (Basic, westus2) exists at zero cost - billing starts only when a certificate
+  PROFILE is created. eastus2 is NOT offered for codeSigningAccounts; westus2 is.
+- Resume sequence (zero re-derivation): buy nocterrible.app (Cloudflare keeps DNS + email
+  routing free for the verification mailbox) -> verify the domain on the Trusted Signing
+  account -> create the certificate profile (the publisher mark becomes nocterrible.app) ->
+  download trsign.exe (Azure code-signing CLI) -> -Sign switch in scripts/build_msi.ps1
+  pointing at the profile, graceful no-op without it -> re-publish the signed asset. The
+  updater already verifies sha256 before installing, so a signed artifact slot-in changes
+  no client behavior. README SmartScreen paragraph stays honest either way.
+- az login token expires; the profile step re-auths with the device flow (az login
+  --use-device-code) - one line, two browser clicks.
