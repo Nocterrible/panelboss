@@ -141,6 +141,11 @@ every tab reads it. With the pump off, the app uses Windows' own idle clock as-i
 It takes a relaunch to change, and a deaf pump falls back to the system clock by
 itself. The switch ships on.
 
+![The Detection tab, scrolled to the Timers card; the pump row is the switch at the bottom](docs/screenshots/detection-tab.png)
+
+*The Detection tab, scrolled down to the Timers card. The pump row is the last
+switch, with its question in full.*
+
 The Camera card adds cameras from a picker. An on-duty camera leaves the menu and
 gets a policy row. Labels ride the camera's hardware identity, so a replug cannot
 lose a name. Rescan re-scans and re-tests, and a camera that serves no frame is
@@ -220,6 +225,11 @@ this desk; whole desk, monitors only, or windows only; on logon starts, proved b
 the Run entry's --autostart, or every start. Restore my windows moves pins only
 and asks the drivers nothing.
 
+![The Monitor profiles tab: the profile picker, the per-panel mode editor, and the pinned apps](docs/screenshots/monitor-profiles.png)
+
+*The Monitor profiles tab. The picker and the mode editor are on the left; the
+pin editor and the list of pinned apps are on the right.*
+
 ### OLED
 
 The taskbar hider paints a strip over the bar's fixed pixel row, opted in per
@@ -260,6 +270,11 @@ a ring of darkness hugs the video itself. The hole is the video's own rectangle,
 so the page and the browser's chrome wear the darkness with the desk, and the
 window playing the video never dims.
 
+![Movie theater mode landing on the OLED tab](docs/screenshots/movie-theater.gif)
+
+*Movie theater mode on the OLED tab. In-app capture for now; a real clip replaces
+this file.*
+
 Motion lifts the ring, which re-arms after the same wait; a film's sound never
 lifts it. Pause the video and the ring lifts too, and that window becomes an
 ordinary background window again for the dimmer above.
@@ -278,6 +293,11 @@ full-field veil while the conjunction holds; an unenrolled one dims like any idl
 desk. Fade out is the opt-in, the lift instant by default. The card also carries
 open store page, install the helper, the doorway file, the host's capability line,
 and measure now for a one-shot geometry check.
+
+![The OLED tab: the taskbar hider, the background dimmer, and the Movie theater mode card](docs/screenshots/oled-theater.png)
+
+*The OLED tab. The taskbar hider and panel refresh are on top, the background
+dimmer is bottom left, and Movie theater mode is bottom right.*
 
 ### General / Keybinds
 
@@ -310,6 +330,11 @@ already taken keeps its predecessor and says so. A press runs the same verb as t
 matching switch or button, so pause toggles the dimmer the way the card's checkbox
 does, theater flips the companion switch, restore applies the captured windows
 layout, and detection flips the big consent switch on the Detection tab.
+
+![The General / Keybinds tab: updates, startup, and the four global hotkeys](docs/screenshots/general-keybinds.png)
+
+*The General / Keybinds tab. The app reports its own version on the update row,
+and the four hotkeys are bound with modifier ticks, not key chords.*
 
 ## PanelBoss Companion
 

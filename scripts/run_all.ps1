@@ -69,12 +69,18 @@ $suites = 'startup_test.py', 'hold_test.py', 'motion_test.py',
                                       # CCD-first ordering, ours-only
                                       # task, honest no-op, exit 0 -
                                       # all fakes, app-up compatible
-    'update_test.py'                  # the updater's logic half (Oct 22):
+    'update_test.py',                 # the updater's logic half (Oct 22):
                                       # release json, the version table,
                                       # the honest error line, the msi
                                       # sweep, apply.bat's content, the
                                       # FROZEN branch's spawn shape -
                                       # fake urllib, app-up compatible
+    'readme_test.py'                  # the README's figures (Oct 26):
+                                      # every image path the copy
+                                      # references exists on disk, and the
+                                      # pump label + [videodim] hole word
+                                      # stay verbatim - a reader-facing
+                                      # 404 is a broken manual
 $dir = Join-Path $root "scripts"
 # ledger 16: the log must be attributable - tip stamp at the head,
 # and DIRTY when the tested worktree differs from it (a stamp that
