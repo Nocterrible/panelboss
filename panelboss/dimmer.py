@@ -653,7 +653,11 @@ class Veils:
         # jog.shift's offset): strip and veil chase the same pixels,
         # and the same config dict feeds both FSMs the tick a row
         # toggles (hider.tick runs first in the beat - the swap is
-        # one-beat in BOTH directions, no flash either way). Fed on
+        # one-beat in BOTH directions, no flash either way - beat-
+        # granular: the strip window op rides the hider painter pump
+        # and the veil rides the dimmer painter pump (independent 50
+        # ms drains), so a toggle can gap one pump cycle of brightness.
+        # Cosmetic on toggle; steady state is exact. Fed on
         # the desktop piece's own subtraction: the theater holding a
         # panel means the frame owns that row's darkness too. A dead
         # eyes seam feeds nothing (the _frame_pieces fail-open shape:
@@ -1553,6 +1557,15 @@ def _zpin(win, target_hwnd):
                     return
                 perch = _getwindow(tray, GW_HWNDPREV)
                 if perch == h:
+                    return
+                # Concession twin (reviewer, Oct 25): a foreign topmost
+                # parked directly over the tray is TOLERATED exactly as
+                # _in_slot tolerates it for the theater - its dimming
+                # concedes, and re-sliding every beat against it IS the
+                # 5 Hz z-war the Oct-17 cure exists to kill.  A dead or
+                # unreadable perch raises -> re-pin (failed check law).
+                if perch and (_u32.GetWindowLongW(perch, GWL_EXSTYLE)
+                              & WS_EX_TOPMOST):
                     return
                 if _u32.GetWindowLongW(tray, GWL_EXSTYLE) & WS_EX_TOPMOST:
                     if not _setwindowpos(h, -1, 0, 0, 0, 0, _SWP_ZPIN):

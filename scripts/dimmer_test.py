@@ -1977,10 +1977,20 @@ ok("the taskbar pin, headless: the strip's perch above the tray, band-" \
 # with bars it must see one.
 import ctypes as _ct
 import panelboss.taskbar                          # noqa: E402  poison
+# Honest label (reviewer, Oct 25): this asserts the POST-POISON SHARED
+# state - whichever declarant imported last wins the live object, so a
+# REGRESSED dimmer could still pass it. The SRC check below is the
+# dimmer own tombstone; the eye probe is the behavioral guard (it
+# passes vacuously on a desk with no bars - noted, not papered).
 assert _ct.windll.user32.GetClassNameW.argtypes == [
     _ct.c_void_p, _ct.c_wchar_p, _ct.c_int], \
     "the 2-arg declaration lost the import-order race again - " \
     "every class lookup is a silent TypeError"
+_gcseg = SRC.split("GetClassNameW.argtypes")[1][:120]
+assert ("c_void_p" in _gcseg and "c_wchar_p" in _gcseg
+        and "c_int" in _gcseg), \
+    "dimmer.py OWN declaration grew short again - the shared" \
+    "-object assertion above cannot see it (last-import-wins)"
 assert dimmer._tray_above(BAR_A) or dimmer._tray_above(
     (3840, 2128, 3840, 32)) or dimmer._tray_above((-3840, 2128,
                                                    3840, 32)) \
