@@ -26,7 +26,10 @@ the browser spawns; not even its handshake crosses the wire.
 
 Download `PanelBoss-<version>-user.msi` from
 https://github.com/Nocterrible/panelboss/releases. Per-user: no admin, no UAC
-prompt at install, uninstall, or upgrade. The MSI is unsigned: SmartScreen
+prompt at install, uninstall, or upgrade - with one exception: if the power
+assistant's scheduled task was registered, the uninstall asks once to remove
+it, the same single confirm that registered it. Refusing is safe: the
+uninstall completes, the orphaned task simply does nothing. The MSI is unsigned: SmartScreen
 will say "Windows protected your PC" the first time - choose More info ->
 Run anyway. Unsigned is a choice, not a defect: signing keys are a renewing tax;
 the sha256 of every build is on the release page for the paranoid. On some Windows 11 installs Smart App Control blocks an
