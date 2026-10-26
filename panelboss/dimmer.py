@@ -32,10 +32,18 @@ across a window edge reads as one darkness. It is the theater's own
 piece-kind REUSED (the same Tk toplevel, the same -alpha layering,
 the same paint loop and z-pin law - this family carries no color
 key; the wallpaper shows through the dark by blending). The taskbar
-and every app stay lit by the ordinary z-order (the bar is a normal
-window and the piece sits under all of them), and desktop icons take
-their double-clicks THROUGH the veil (the family's click-through
-bits). The Oct-15 shell-view law STANDS: Progman/WorkerW rows still
+dims too WHEN THE HIDER DOES NOT COVER IT (owner, Oct 25; the
+taskbar law's REVERSAL - the HOLD was on the auto-hide FEATURE): the
+bar's own rect wears a third piece-kind at the same row fill, riding
+the hider strip's OWN perch immediately above the tray (measured the
+same day: UNDER the tray the piece sat perfectly and darkened nothing
+- Win11's dark tray paints near-opaque; the strip's slot above it is
+where the row's darkness lands) - re-pinned every beat, idempotent by
+the direct perch test, click-through so every button stays alive
+under the dim. A strip-covered row
+is dark ALONE (one owner: no veil near a strip, the toggle swaps them
+in the one beat they share). Desktop icons take their double-clicks
+THROUGH the veil (the family's click-through bits). The Oct-15 shell-view law STANDS: Progman/WorkerW rows still
 never wear a veil of their own - the dark lands on a piece of ours at
 the band's bottom. While the theater holds a panel, its ring or
 full-field piece OWNS the darkness and the desktop piece is
@@ -109,9 +117,10 @@ not "taken" - the one word was swallowing 87s and 1400s into a lie
 about a chord that was never actually taken. One press pauses, one
 resumes (toggle, not hold).
 
-SIZE LAW: the file runs ~1720 (the Oct-15 video mode grew it ~100;
+SIZE LAW: the file runs ~1880 (the Oct-15 video mode grew it ~100;
 the Oct-25 desktop veil rode the theater's rails for +40 and the
-wave's own count rides here, honest -
+taskbar reversal of the same day for +150, both piece-kinds sharing
+the qualification, the fill line, and the pump - and the
 the frame is the Veils qualification the docstring above the FSM
 promised, and the mode shares the paint loop, the ramp, and the
 drop table: splitting Veils now would fork the qualification by
@@ -173,6 +182,9 @@ _PIN_WARNED_PLAIN = [False]
 # one flag for the desktop-veil pin's swallow (same branch-confession law):
 # a refused bottom pin is cosmetic, but it must confess ONCE per process.
 _PIN_WARNED_DESK = [False]
+# and its taskbar sibling (the reversal law, Oct-25): a refused slide
+# under the tray keeps the bar bright - cosmetic, confess once.
+_PIN_WARNED_BAR = [False]
 # The taskbar exclusion for theater pieces: primary + per-monitor tray
 # classes; the pieces anchor UNDER the tray occupying their own
 # monitor row so the desk's chrome is never darkened (cappy packet).
@@ -203,7 +215,18 @@ _u32.EnumWindows.argtypes = [ctypes.c_void_p, ctypes.c_long]
 # class of bug that froze this morning's blackout (GetCursorPos),
 # we do not repeat it
 _u32.GetClassNameW.restype = ctypes.c_int
-_u32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
+# the FULL signature, with the buffer count: taskbar.py (and
+# wm/_winapi) declare the same verb 3-arg, and LAST IMPORT WINS on
+# the shared windll object - dimmer's 2-arg declaration lost that
+# race the moment the oled card pulled taskbar in, and every class
+# lookup raised TypeError into a swallow (measured Oct-25: the tray
+# eye walked EMPTY while the taskbar's own eye saw all three bars -
+# the theater's under-tray slides rode the None fallback for weeks
+# unseen, and the taskbar veil's first landing took the bottom slot
+# because of it). The pin law above is not decoration: an UNPINNED
+# or WRONGLY PINNED verb is a silent lie with an import-order lottery.
+_u32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p,
+                               ctypes.c_int]
 _u32.GetWindowRect.restype = ctypes.c_int
 _u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
 _u32.IsWindow.restype = ctypes.c_int        # the z-pin's guard: a dead
@@ -269,6 +292,16 @@ _DESKTOP_KEYS = set()              # synthetic negative hwnds -> bottom
 _HWND_BOTTOM = 1                   # SetWindowPos's bottom anchor (the
 #                                    # pin carries _SWP_ZPIN - 0x213,
 #                                    # the four NOs move nothing else)
+# THE TASKBAR VEIL (owner, Oct 25; the taskbar law's reversal - the
+# HOLD was on the hider's auto-hide FEATURE, never on this): a bare
+# bar dims at its panel's level, a strip-covered bar is dark alone.
+# Third own-family piece-kind, third range: theater small negatives,
+# desktop -1e7, bar -2e7 - keyed like the others so the census can
+# neither dim it nor furniture-judge it, BY KEY, not by widening the
+# class (the double-veil incident's scar tissue is why that clause
+# is the law: the tray row dies at the frameless door, and this
+# piece never asks the door for passage).
+_BAR_KEYS = set()
 
 # the patchable aliases the fakes lean on (the suite owns the desk
 # here; the pins above stay the real verbs). The hotkey VERB moved to
@@ -341,13 +374,17 @@ class Veils:
     reviewer reads the law, not a mystery."""
 
     def __init__(self, windows, audio, idle, paint, unveil,
-                 video=None, monitors=None):
+                 video=None, monitors=None, bars=None):
         self._windows, self._audio, self._idle = windows, audio, idle
         self._paint, self._unveil = paint, unveil
         self._video, self._mons = video, monitors or _monitors
+        self._bar_eyes = bars or _bar_rects
         self._frames = {}      # (panel short, side) -> synthetic key
         self._desk = {}        # panel short -> the desktop veil's
         #                       # synthetic key (bottom layer, -1e7..)
+        self._bar = {}         # panel short -> the taskbar veil's key
+        #                       # (own row piece, -2e7..; the strip's
+        #                       #  absence is what feeds it)
         self._live = {}        # hwnd -> {"rect", "alpha", "die":
         #                           None|t, "mon": panel short,
         #                           "frame": bool (video pieces)}
@@ -605,6 +642,39 @@ class Veils:
                                                       # (fail-open, no veil)
             qualified[self._desk_key(_short)] = (
                 (_m["x"], _m["y"], _m["w"], _m["h"]), _short, None)
+        # THE TASKBAR VEIL (owner, Oct 25; the taskbar law's REVERSAL
+        # - the HOLD was on the hider's auto-hide FEATURE, never on
+        # this): a bare bar dims at its panel's level, a strip-covered
+        # bar is dark ALONE (one owner per row - no veil near a strip,
+        # no strip needed over a veil). The gate reads the SAME truth
+        # the oled card's rows write ([hider].on AND the panel's row -
+        # Strips.tick's law, verbatim), and the rect comes through the
+        # hider's OWN eyes seam (GetWindowRect's whole story plus
+        # jog.shift's offset): strip and veil chase the same pixels,
+        # and the same config dict feeds both FSMs the tick a row
+        # toggles (hider.tick runs first in the beat - the swap is
+        # one-beat in BOTH directions, no flash either way). Fed on
+        # the desktop piece's own subtraction: the theater holding a
+        # panel means the frame owns that row's darkness too. A dead
+        # eyes seam feeds nothing (the _frame_pieces fail-open shape:
+        # a hiccup is no piece this beat, not a dead loop).
+        hc = cfg.get("hider") or {}
+        hrows = hc.get("monitors") or {}
+        strip_rows, bar_geo = set(), {}
+        try:
+            for _short, _rect in self._bar_eyes():
+                bar_geo[str(_short)] = tuple(_rect)
+                if hc.get("on") and hrows.get(str(_short)):
+                    strip_rows.add(str(_short))
+        except Exception:
+            log.warning("dimmer: the bar eyes failed this tick; no "
+                        "taskbar veil is fed (fail-open, hider's own "
+                        "hiccup law)")
+        for _short in dimming - covered:
+            _rect = bar_geo.get(_short)
+            if _rect is None or _short in strip_rows:
+                continue
+            qualified[self._bar_key(_short)] = (_rect, _short, None)
         # the per-panel PLAIN level ([dimmer.levels], the Oct-16 wave
         # absorbing the ADDON entry): a row paints ITS panel at its own
         # percent; an unlisted panel follows the global rail (absent
@@ -617,7 +687,8 @@ class Veils:
             if st is None:
                 self._live[hwnd] = {"rect": rect, "alpha": a,
                                     "die": None, "mon": short,
-                                    "frame": hwnd in frame}
+                                    "frame": hwnd in frame,
+                                    "bar": hwnd in _BAR_KEYS}
                 self._paint(hwnd, rect, a)
             elif st["die"] is not None or st["alpha"] != a:
                 st["die"], st["alpha"] = None, a   # back to full
@@ -627,7 +698,7 @@ class Veils:
                 st["rect"] = rect
                 st["mon"] = short                      # its own panel
                 self._paint(hwnd, rect, a)             # we followed
-            elif st.get("frame"):
+            elif st.get("frame") or st.get("bar"):
                 # THEATER RE-PIN (Oct-16 UAT cure): an unchanged frame
                 # piece still rides the paint queue EVERY tick - a
                 # plain veil survives re-activations pinned to its own
@@ -635,7 +706,12 @@ class Veils:
                 # click on the browser buries it (the UAT bite: the
                 # ring was painted, measured, and invisible). One
                 # SetWindowPos per piece per beat is the honest cost
-                # of the replacement law.
+                # of the replacement law. THE TASKBAR PIECE RIDES THIS
+                # BRANCH TOO (Oct-25 reversal): its slot - immediately
+                # under the tray - is shared with the theater's pieces
+                # and the bar's own re-assertions, so it re-pins every
+                # beat; the idempotent guard in _zpin's bar branch is
+                # what makes the re-pin free (the flicker cure's twin).
                 self._paint(hwnd, rect, a)
         ramp = max(0, min(60, int(d.get("ramp_sec", 8))))   # belt:
         #                                                normalize
@@ -900,6 +976,22 @@ class Veils:
             _DESKTOP_KEYS.add(key)
         return key
 
+    def _bar_key(self, short):
+        """The taskbar veil's key: the third own-family range
+        (-20_000_000..), disjoint from the theater's small negatives
+        and the desktop's -1e7 like both are disjoint from real
+        (positive) hwnds. The census can never dim it or furniture-
+        judge it - the exemption is BY KEY, and the tray's own row
+        dies at the frameless door unchanged (no class widening; the
+        double-veil incident's law). Stable per panel for the process:
+        a hider toggle cycles and a level re-tune both re-ride the
+        SAME key - no rebirth, no re-pin race."""
+        key = self._bar.get(short)
+        if key is None:
+            key = self._bar[short] = -(20_000_000 + len(self._bar) + 1)
+            _BAR_KEYS.add(key)
+        return key
+
     def _fade(self, d, now, videodim=None):
         """The whole field goes soft - or goes bare THIS TICK, per the
         owner's two fade keys (Oct 16). THE FADE OPTION applies HERE
@@ -977,7 +1069,7 @@ def _fact(w, fg, by_short):
             panel = (mx, my, mw, mh)   # the furniture law's ruler (d0)
             break
     buf = ctypes.create_unicode_buffer(256)
-    _u32.GetClassNameW(w, buf)           # a refusal leaves "": no
+    _u32.GetClassNameW(w, buf, 256)      # a refusal leaves "": no
     ex = _u32.GetWindowLongW(w, GWL_EXSTYLE)   # shell view is unnamed
     st = _u32.GetWindowLongW(w, GWL_STYLE)
     # The TRANSIENT-POPUP law (owner UAT, Oct 17: "right click context
@@ -1299,7 +1391,7 @@ def _tray_above(rect):
         def cb(hwnd, _l):
             if _u32.IsWindowVisible(hwnd):
                 buf = ctypes.create_unicode_buffer(256)
-                _u32.GetClassNameW(hwnd, buf)
+                _u32.GetClassNameW(hwnd, buf, 256)
                 if buf.value in _TRAY_CLASSES:
                     r = _RECT()
                     if _u32.GetWindowRect(hwnd, ctypes.byref(r)):
@@ -1419,6 +1511,60 @@ def _zpin(win, target_hwnd):
                     log.warning("dimmer: the desktop veil pin raised or "
                                 "was refused; the bare desktop may sit "
                                 "bright (once per process)")
+            return
+        if target_hwnd in _BAR_KEYS:
+            # THE TASKBAR VEIL (owner, Oct 25; the taskbar law's
+            # reversal): the bar rect dims at the panel's level unless
+            # the strip owns the row. THE SLOT, MEASURED THE SAME DAY:
+            # the first landing rode the theater's slide-under-tray
+            # perch - the piece sat correctly (probe: below
+            # Shell_TrayWnd) and the row did not move (44 -> 42 at
+            # level 30): Win11's dark tray paints NEAR-OPAQUE, and a
+            # veil under it darkens only the wallpaper it floats
+            # over. The ruling's visible law (the row dims at the
+            # panel's level - pixel boxes prove it at two levels)
+            # demands the hider strip's OWN perch: immediately ABOVE
+            # the tray, the same spot the strip covers from, one slot
+            # of darkness instead of full black. Click-through keeps
+            # every button alive under the veil exactly as the
+            # theater rides clicks. Band law first (the Oct-16
+            # measurement): against a TOPMOST tray the piece must
+            # ENTER the band or the ordinary band refuses the perch
+            # forever; anchor the slide on the tray's own
+            # above-neighbour (position-independent - the fix-A
+            # lesson, now inverted: anchor the ABOVE, not the below),
+            # and a tray already at band top takes the piece to band
+            # top (HWND_TOP=0 IS that anchor). No tray (locked
+            # workstation): the bottom slot, the desktop veil's
+            # confessed posture. Idempotent by the direct test - the
+            # tray's PREV already IS the piece, zero calls (the
+            # Oct-17 flicker cure: no re-shove without proof the
+            # perch moved). Re-pinned every beat (Veils' bar branch):
+            # the topmost band is a busy neighbourhood.
+            try:
+                win.update_idletasks()
+                h = (_u32.GetAncestor(win.winfo_id(), GA_ROOT)
+                     or win.winfo_id())
+                tray = _tray_above(getattr(win, "_pb_rect", None)
+                                   or (0, 0, 0, 0))
+                if tray is None:
+                    _setwindowpos(h, _HWND_BOTTOM, 0, 0, 0, 0,
+                                  _SWP_ZPIN)
+                    return
+                perch = _getwindow(tray, GW_HWNDPREV)
+                if perch == h:
+                    return
+                if _u32.GetWindowLongW(tray, GWL_EXSTYLE) & WS_EX_TOPMOST:
+                    if not _setwindowpos(h, -1, 0, 0, 0, 0, _SWP_ZPIN):
+                        raise OSError("SetWindowPos(HWND_TOPMOST) refused")
+                _setwindowpos(h, perch if perch is not None else 0,
+                              0, 0, 0, 0, _SWP_ZPIN)
+            except Exception:
+                if not _PIN_WARNED_BAR[0]:
+                    _PIN_WARNED_BAR[0] = True
+                    log.warning("dimmer: the taskbar veil pin raised or "
+                                "was refused; the bar may sit bright "
+                                "(once per process)")
             return
         if target_hwnd is not None and int(target_hwnd) <= 0:
             # SYNTHETIC ANCHOR (theater pieces) - THE BAND LAW, as
@@ -1619,6 +1765,16 @@ def _monitors():
     physical px the veils paint in."""
     from . import wm
     return wm.monitors()
+
+
+def _bar_rects():
+    """The taskbar-veil geometry seam (the seam the tests replace):
+    the hider's OWN eyes - hider._bars() answers [(short, rect)] from
+    the GetWindowRect walk plus jog.shift's offset, so veil and strip
+    chase the same pixels the moment the jog's ring walks the bar.
+    Not one line re-derived (the packet's law)."""
+    from . import hider
+    return list(hider._bars())
 
 
 _PUMP_ON = None      # [dimmer].input_pump, latched on the first beat

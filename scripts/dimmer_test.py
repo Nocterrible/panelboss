@@ -91,14 +91,17 @@ class World:
     below pass their rows. VIDEO is the eye seam, default absent
     like the shipped no-theater desk."""
 
-    def __init__(self, wins, audio=(), idle=999.0, mons=(), video=None):
+    def __init__(self, wins, audio=(), idle=999.0, mons=(), video=None,
+                 bars=()):
         self.wins, self.audio, self.idle = list(wins), set(audio), idle
         self.mons = list(mons)
+        self.bars = list(bars)
         self.rec = Rec()
         self.v = dimmer.Veils(lambda: self.wins, lambda: set(self.audio),
                               lambda: self.idle, self.rec.paint,
                               self.rec.unveil, video,
-                              lambda: list(self.mons))
+                              lambda: list(self.mons),
+                              lambda: list(self.bars))
 
     def tick(self, c, now):
         self.v.tick(c, now)
@@ -1640,10 +1643,10 @@ class Eye:
         return self.rect
 
 
-def tape_world(mons, wins=(), video=None):
+def tape_world(mons, wins=(), video=None, bars=()):
     """A world whose ledgers are ONE ordered tape: (kind, key, rect,
     alpha). The handover law reads the ORDER, not the dicts."""
-    ww = World(list(wins), mons=mons, video=video)
+    ww = World(list(wins), mons=mons, video=video, bars=bars)
     tp = []
     ww.v._paint = lambda h, r, a: tp.append(("paint", h, r, a))
     ww.v._unveil = lambda h: tp.append(("gone", h, None, 0.0))
@@ -1799,5 +1802,191 @@ finally:
      dimmer._in_slot) = _saved
 ok("the band law, headless: desktop -> HWND_BOTTOM with _SWP_ZPIN and "
    "no tray consult; theater stays topmost; the ranges never cross")
+
+# =====================================================================
+# THE TASKBAR VEIL (owner, Oct 25; the taskbar law's REVERSAL - the
+# HOLD was on the hider's auto-hide feature, never on this): a bare
+# bar dims at the panel's level; a strip-covered bar is dark ALONE.
+# Fake bar-eyes drive the gate - no real desk read, no Tk booted; the
+# gate is the SAME config truth the Strips FSM obeys (Strips.tick's
+# h.get("on") + rows.get(short), mirrored, not re-derived).
+
+BAR_A = (0, 2128, 3840, 32)       # the bar row, physical px
+BAR_KEY = -(20_000_000 + 1)       # the first bar key of a fresh Veils
+
+
+def hcfg(c, on, rows):
+    c["hider"] = {"on": on, "monitors": dict(rows)}
+    return c
+
+
+W = World([w(1)], mons=[dict(DESK_A)], bars=[("AOC2790", BAR_A)])
+W.tick(cfg(level=30, monitors={"AOC2790": True}), 100)
+assert W.rec.painted[BAR_KEY] == ((0, 2128, 3840, 32), 0.3), W.rec.painted
+assert BAR_KEY in dimmer._BAR_KEYS
+ok("a bare bar gets its piece: the bar's OWN rect, the panel's level, "
+   "a registered key (the no-[hider] desk is the default-off law's "
+   "bare world - the bar dims there too)")
+
+W = World([w(1)], mons=[dict(DESK_A)], bars=[("AOC2790", BAR_A)])
+W.tick(cfg(level=30, levels={"AOC2790": 55},
+           monitors={"AOC2790": True}), 100)
+assert W.rec.painted[1] == ((10, 10, 800, 600), 0.55) \
+    and W.rec.painted[DESK_KEY][1] == 0.55 \
+    and W.rec.painted[BAR_KEY][1] == 0.55, W.rec.painted
+ok("the seam trio is ONE fill line: window veil, desktop piece, and "
+   "bar piece take the same 0.55 from the same dict line")
+
+W = World([w(1)], mons=[dict(DESK_A)], bars=[("AOC2790", BAR_A)])
+W.tick(hcfg(cfg(level=30, monitors={"AOC2790": True}), True,
+            {"AOC2790": True}), 100)
+assert W.rec.painted.get(BAR_KEY) is None \
+    and W.rec.painted.get(DESK_KEY) is not None, W.rec.painted
+ok("hider ON: the row's strip owns it ALONE - no veil near it (the "
+   "desktop piece still darkens everything the strip does not cover)")
+
+W = World([w(1)], mons=[dict(DESK_A)], bars=[("AOC2790", BAR_A)])
+W.tick(hcfg(cfg(level=30, monitors={"AOC2790": True}), False,
+            {"AOC2790": True}), 100)
+assert W.rec.painted.get(BAR_KEY) is not None, \
+    "a checked row WITHOUT the switch paints no strip - the bar does " \
+    "not stay bright by a dead checkbox (Strips.tick reads the master " \
+    "first; the veil gate reads it the same way)"
+
+# the toggle hands over in ONE beat, both directions, no ramp, no
+# bright gap (the strip lands on the hider half of the same beat -
+# hider.tick runs first in the hook, _boot.py:183->187).
+W, tp = tape_world([DESK_A], bars=[("AOC2790", BAR_A)])
+W.tick(cfg(level=30, monitors={"AOC2790": True}), 100)
+assert ("paint", BAR_KEY, BAR_A, 0.3) in tp
+tp.clear()
+W.tick(hcfg(cfg(level=30, monitors={"AOC2790": True}), True,
+            {"AOC2790": True}), 101)
+assert ("gone", BAR_KEY) in [(a, b) for a, b, _r, _c in tp] \
+    and not [t for t in tp if t[0] == "paint" and t[1] == BAR_KEY], \
+    "the piece dies the tick the strip arms - disqualified ON A " \
+    "DIMMING PANEL drops THIS tick (the fade belongs to the idle edge " \
+    "alone): the row's darkness changes owner, never blinks"
+tp.clear()
+W.tick(cfg(level=30, monitors={"AOC2790": True}), 102)
+assert ("paint", BAR_KEY, BAR_A, 0.3) in tp \
+    and W.v._bar["AOC2790"] == BAR_KEY, \
+    "the strip's withdrawal re-rides the SAME key - no rebirth"
+
+# re-pin EVERY beat (the shared slot's price, theater-style):
+tp.clear()
+W.tick(cfg(level=30, monitors={"AOC2790": True}), 103)
+W.tick(cfg(level=30, monitors={"AOC2790": True}), 104)
+assert [t for t in tp if t[0] == "paint" and t[1] == BAR_KEY] == \
+    [("paint", BAR_KEY, BAR_A, 0.3)] * 2, \
+    "an unchanged bar piece rides the paint queue every tick (the " \
+    "theater's UAT cure: a pinned-then-abandoned piece gets buried); " \
+    "the desktop piece does NOT (bottom band is uncontested)"
+ok("the toggle's one-beat swap, both ways, on a stable key - and the " \
+   "bar piece re-pins every beat like the theater's own")
+
+# the census door: the tray ROW dies at the EXISTING frameless door -
+# the exemption is by key, the class was not widened.
+tray_row = {"hwnd": 779, "pid": 0, "exe": "explorer.exe",
+            "cls": "Shell_TrayWnd", "monitor": "AOC2790",
+            "rect": BAR_A, "cloaked": False, "iconic": False,
+            "fg": False, "tool": False, "panel_cov": 0.006,
+            "frameless": True, "elevated": False}
+assert dimmer._veil_rows([tray_row]) == [], \
+    "the double-veil incident's law honored: the tray row still dies " \
+    "at the frameless door (the bar's darkness rides a keyed piece, " \
+    "never a widened class)"
+assert all(k <= -20_000_000 for k in dimmer._BAR_KEYS), \
+    "the bar range is disjoint from theater (small negatives), " \
+    "desktop (-1e7), and every real (positive) hwnd"
+ok("census: the piece can never appear in its own dimmed set - by key")
+
+# the band law, headless: the piece rides the STRIP'S perch (measured
+# first-hand: under the near-opaque dark tray a veil darkens nothing -
+# 44 -> 42 at level 30, the pixels that filed the deviation). Above
+# the tray it is: band-enter first against a topmost bar (the Oct-16
+# law), anchored on the tray's own above-neighbour (the fix-A lesson
+# inverted), band top when the tray IS band top (HWND_TOP=0), bottom
+# posture when trayless, and ZERO calls once seated.
+_saved_b = (dimmer._setwindowpos, dimmer._tray_above, dimmer._getwindow,
+            dimmer._u32.GetWindowLongW)
+_swp_b = []
+
+
+class _Win2:
+    def update_idletasks(self):
+        pass
+
+    def winfo_id(self):
+        return 0x5252
+
+    _pb_rect = BAR_A
+
+
+try:
+    dimmer._setwindowpos = lambda *a: _swp_b.append(a) or 1
+    dimmer._getwindow = lambda h, gw: None        # tray is band top
+    dimmer._tray_above = lambda rect: None
+    dimmer._zpin(_Win2(), BAR_KEY)
+    assert _swp_b == [(0x5252, 1, 0, 0, 0, 0, dimmer._SWP_ZPIN)], \
+        "no tray to perch over: the bottom slot, confessed posture"
+    _swp_b.clear()
+    dimmer._tray_above = lambda rect: 0x77000
+    dimmer._u32.GetWindowLongW = lambda h, i: 0
+    dimmer._zpin(_Win2(), BAR_KEY)
+    assert _swp_b == [(0x5252, 0, 0, 0, 0, 0, dimmer._SWP_ZPIN)], \
+        "a non-topmost tray at band top (the owner's-choice desk): " \
+        "band top is the perch - HWND_TOP=0, no band hop"
+    _swp_b.clear()
+    dimmer._getwindow = lambda h, gw: 0x88000     # something lives
+    #                                             # above the tray
+    dimmer._zpin(_Win2(), BAR_KEY)
+    assert _swp_b == [(0x5252, 0x88000, 0, 0, 0, 0, dimmer._SWP_ZPIN)], \
+        "seated at the tray's own above-neighbour - position-" \
+        "independent anchor, the fix-A lesson inverted"
+    _swp_b.clear()
+    dimmer._u32.GetWindowLongW = (lambda h, i: 0x8
+                                  if h == 0x77000 and i == -20 else 0)
+    dimmer._zpin(_Win2(), BAR_KEY)
+    assert _swp_b == [(0x5252, -1, 0, 0, 0, 0, dimmer._SWP_ZPIN),
+                      (0x5252, 0x88000, 0, 0, 0, 0, dimmer._SWP_ZPIN)], \
+        "a topmost bar (this desk, measured): BAND FIRST, then the " \
+        "slide - the Oct-16 law the theater lives by, shared"
+    _swp_b.clear()
+    dimmer._getwindow = lambda h, gw: 0x5252      # our piece IS the
+    #                                             # tray's above-neighbour
+    dimmer._zpin(_Win2(), BAR_KEY)
+    assert _swp_b == [], "already seated: ZERO calls (the flicker cure)"
+    assert dimmer._PIN_WARNED_BAR[0] is False
+finally:
+    (dimmer._setwindowpos, dimmer._tray_above, dimmer._getwindow,
+     dimmer._u32.GetWindowLongW) = _saved_b
+ok("the taskbar pin, headless: the strip's perch above the tray, band-" \
+   "aware, position-anchored, idempotent once seated")
+
+# THE CLASS LOOKUP'S PIN, MEASURED THE SAME DAY (Oct 25): taskbar.py
+# and wm/_winapi declare GetClassNameW with its TRUE three arguments;
+# dimmer declared two, and on the shared windll object LAST IMPORT
+# WINS - the oled card's taskbar import poisoned every dimmer class
+# lookup into the swallows (measured: TypeError 'takes 3 arguments
+# (2 given)' on every walked window; the tray eye walked empty; the
+# theater's under-tray slides rode the None fallback unseen). The
+# fix pins the full signature and passes the buffer count at both
+# call sites. This pin asserts the declaration AND drives the real
+# eye with taskbar resident FIRST (the poisoning order): on a desk
+# with bars it must see one.
+import ctypes as _ct
+import panelboss.taskbar                          # noqa: E402  poison
+assert _ct.windll.user32.GetClassNameW.argtypes == [
+    _ct.c_void_p, _ct.c_wchar_p, _ct.c_int], \
+    "the 2-arg declaration lost the import-order race again - " \
+    "every class lookup is a silent TypeError"
+assert dimmer._tray_above(BAR_A) or dimmer._tray_above(
+    (3840, 2128, 3840, 32)) or dimmer._tray_above((-3840, 2128,
+                                                   3840, 32)) \
+    or not dimmer._bar_rects(), \
+    "the eye walked empty over a desk that HAS bars (the poison order)"
+ok("the class lookup carries its full signature: the tray eye survives "
+   "the taskbar import (the last-import-wins landmine, pinned)")
 
 print("\nDIMMER TESTS OK (%d)" % len(OK))

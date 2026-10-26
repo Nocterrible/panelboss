@@ -408,11 +408,13 @@ MON = [{"short": "MONA", "x": 0, "y": 0, "w": 1000, "h": 800},
 
 
 class Rec:
-    """The theater-era recorder, desktop-veil-aware (Oct 25): pieces
-    in the -10_000_000 range are the DESKTOP VEILS (dimmer's new
-    bottom layer) and ride the .desk ledger, NOT .painted - the ring
-    geometry pins predate the feature and must keep their exact
-    sets; the suppression pins below read the desk ledger."""
+    """The theater-era recorder, own-family-aware (Oct 25): pieces in
+    the -10_000_000 range and below are dimmer's OWN keyed veils -
+    desktop (-1e7) and taskbar (-2e7) - and ride the .desk ledger, NOT
+    .painted - the ring geometry pins predate the features and must
+    keep their exact sets; the suppression pins below read the ledger.
+    (The frame's world passes an empty bar-eyes seam, so .desk here
+    sees desktop pieces only - the bucket is the family, not one kind.)"""
 
     def __init__(self):
         self.painted = {}
@@ -480,7 +482,13 @@ class Frame:
             else (RECT[0], WRECT[0]),      # the bare-rect lane and
             #                               # the clause-1 pair, on
             #                               # the same one seam
-            monitors=lambda: MON)
+            monitors=lambda: MON,
+            bars=lambda: [])          # the fake desk owns no taskbar
+            #                            # (the -2e7 piece kind belongs
+            #                            # to dimmer_test's world; a
+            #                            # real _bars() read here would
+            #                            # make the theater pins machine-
+            #                            # dependent)
 
     def tick(self, now, level=30, dim_on=True, vidle=0, von=True,
              dim_idle=120, hole=None, always=None):
