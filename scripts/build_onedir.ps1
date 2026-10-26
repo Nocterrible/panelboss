@@ -28,7 +28,34 @@ function Invoke-OnedirBuild {
     # needed by the build itself.)
     $env:Path = ($env:Path -split ';' |
         Where-Object { $_ -notmatch 'Adoptium|Oracle|[Jj]re' }) -join ';'
+    # OWNER ICON + TRUTHFUL VERSION (Oct 25): the taskbar button took
+    # the Windows 'no icon' tile and Properties showed blank because
+    # the spec carried neither. The version rides the app's own
+    # __version__ so the exe can never lie about the package.
+    $ver = (& $py -c 'import panelboss;print(panelboss.__version__)').Trim()
+    $vl = (($ver.Split('.') -join ',') + ',0')  # 0,3,6,0 quad form
+    $vi = Join-Path $repo 'build\versioninfo.txt'
+    New-Item (Split-Path $vi) -ItemType Directory -Force | Out-Null
+    @"
+VSVersionInfo(
+  ffi=FixedFileInfo(filevers=($vl), 
+    prodvers=($vl), mask=0x3f, flags=0x0,
+    OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+      StringStruct('CompanyName', 'Nocterrible'),
+      StringStruct('FileDescription', 'PanelBoss - presence-aware display control'),
+      StringStruct('FileVersion', '$ver'),
+      StringStruct('InternalName', 'PanelBoss'),
+      StringStruct('OriginalFilename', 'PanelBoss.exe'),
+      StringStruct('ProductName', 'PanelBoss'),
+      StringStruct('ProductVersion', '$ver')])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])])
+"@
+    | Set-Content -Path $vi -Encoding UTF8
     & $py -m PyInstaller --noconfirm --clean --windowed --name $exe `
+        --icon (Join-Path $repo 'assets\panelboss.ico') `
+        --version-file $vi `
         --distpath (Join-Path $repo 'dist') `
         --workpath (Join-Path $repo 'build') `
         --collect-all customtkinter `

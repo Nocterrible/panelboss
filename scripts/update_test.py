@@ -222,6 +222,10 @@ assert ob.index("'extension\\manifest.json'") < ob.index("onedir ready"), \
     "the manifest copy must precede the build's ready line"
 # DOSSIER G, CLOSED IN THE PACKAGER (Oct 25): the tray art must
 # ride the bundle or the public build paints the interim circle
+assert "--icon" in ob and "'assets\\panelboss.ico'" in ob, \
+    "the exe lost its PB icon (the taskbar shows the no-icon tile)"
+assert '--version-file' in ob, \
+    "the exe lost its version resource (Properties would lie blank)"
 assert "'assets\\tray_master.png'" in ob, \
     "the tray art left the bundle - the public icon is the fallback"
 assert ob.index("'assets\\tray_master.png'") < ob.index("onedir ready"), \
