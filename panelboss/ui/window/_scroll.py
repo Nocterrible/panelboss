@@ -262,7 +262,7 @@ class ScrollHost(tk.Frame):
             # re-DRESSED as its own trough (the no-dead-trough law is
             # untouched - nothing is visible), so the viewport width is
             # a constant and a content height change can never re-lay
-            # the page. Cost: the 10 px rail is reserved on pages that
+            # the page. Cost: the bar slot (measured 14 px) is reserved on pages that
             # do not scroll (they never showed a bar, so nothing is
             # lost from the glass).
             if overflow:

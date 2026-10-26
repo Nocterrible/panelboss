@@ -28,6 +28,10 @@ import time
 
 log = logging.getLogger("ui")
 
+# By-design residency (reviewer, Oct 25): owners are added on watch and
+# never removed - one shell per process is the app's own law, so the
+# tax is one entry; a test process making many shells pays a per-
+# redraw list walk, not a leak of OS handles.
 _WATCH = []
 _WRAPPED = [False]
 _HOPS = 24                       # page depth: a page frame is <= 6 deep

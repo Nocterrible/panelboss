@@ -21,7 +21,7 @@ Rules this file lives by:
 
 Skins come from theme.py; nothing here hardcodes a color.
 
-SIZE LAW: grandfathered, measured 1191 (Oct 25, after the page-still
+SIZE LAW: grandfathered, measured 1116 (Oct 25), after the page-still
 seam: the switch, the backdrop and the still verbs are ONE story -
 how a tab becomes visible - so the stills land here; the cameras
 themselves live in _pageprint/_gdiraw and the "which page moved?"
@@ -444,7 +444,8 @@ class SettingsWindow(
         # rather than a Frame because it is the cheapest plain-tk widget
         # that can show an image; with image="" it IS the old flat fill.
         self._backdrop = tk.Label(self._body, bg=self.skin.bg, bd=0,
-                                  highlightthickness=0, image="")
+                                  highlightthickness=0, padx=0, pady=0,
+                                  image="")
         self._backdrop.place(in_=self._body, x=0, y=0,
                              relwidth=1, relheight=1)
         # WS_CLIPSIBLINGS on every window in the house: without it the
@@ -521,7 +522,13 @@ class SettingsWindow(
         never been left, or it changed while hidden - the backdrop goes
         back to its flat fill and the old progressive paint runs, which
         is exactly the pre-fix behaviour. The kill switch (PB_UI_
-        NOSNAPSHOT=1) forces that path for every switch."""
+        NOSNAPSHOT=1) forces that path for every switch. KNOWN RACE, named
+        not papered (reviewer, Oct 25): dirty is judged before this
+        call stack returns and the same switch's backdrop update
+        drains due after() callbacks - a desk-ear/plan-poll repaint
+        landing there stamps dirty AFTER the mount, so the leave-
+        moment still shows one reveal cycle (self-correcting: the
+        page paints over it, the next switch refuses the still)."""
         img = None
         try:
             if not self._snap_off:

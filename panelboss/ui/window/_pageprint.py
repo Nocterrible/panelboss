@@ -14,6 +14,9 @@ THE ONE CAMERA IS THE GLASS. `screen_bitmap` takes the screen at the
 page's rect in 15 ms, which is truthful at exactly one moment - the page
 is on the glass, settled, and being LEFT - so that is when the cache is
 built, and `rect_is_ours` refuses the grab when the point is not ours.
+MEMORY: one still per page, replaced never appended; at the owner's
+3798x2019 that is ~30 MB/still (Tk internal ~4 B/px), capped at 25 MP
+in screen_bitmap - a bigger panel takes the sweep back instead.
 
 The offscreen camera was TRIED AND FALSIFIED: PrintWindow renders a
 Tk/CTk page INCOMPLETELY - its 2,677-frame film shows whole card rows
@@ -37,6 +40,9 @@ def screen_bitmap(x, y, w, h):
     all, in ~15 ms. Only correct while that rect IS visible - the caller
     owns that guard (see rect_is_ours)."""
     if not OK or w < 8 or h < 8:
+        return None
+    if w * h > 25_000_000:
+        # the MEMORY cap; refusal lands on the pre-fix paint path
         return None
     return blit_to_image(w, h, lambda mdc, sdc: gdi32.BitBlt(
         mdc, 0, 0, w, h, sdc, int(x), int(y), SRCCOPY))
