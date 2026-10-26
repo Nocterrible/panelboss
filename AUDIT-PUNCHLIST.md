@@ -2147,3 +2147,26 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   no client behavior. README SmartScreen paragraph stays honest either way.
 - az login token expires; the profile step re-auths with the device flow (az login
   --use-device-code) - one line, two browser clicks.
+
+## Identity scrub, round two: the real name walks out of the history
+
+- Owner spotted the leak the first scrub missed: commits carried
+  Tyler <tyler.crawford@incora.com> - work identity, GitHub
+  attributed every commit to tcrawford02. filter-repo --mailmap (first
+  attempt lost to git-svn syntax + a BOM - the right shape is
+  Wanted Old on one plain-UTF8 line) rewrote all 550+ commits and the
+  annotated tag to Nocterrible <338924280+Nocterrible@users.noreply.github.com>;
+  contributor graph flipped same minute. filter-repo ate the origin
+  remote AGAIN (documented behavior, one line to restore) - second
+  offense, same bail-out.
+- The MSI end finished it: Manufacturer Nocterrible -> the ARP Vendor
+  field on a stranger machine reads the brand, not the boss. Desk
+  upgraded through the same-version replace path; the upgrade guard
+  passed its first production exercise (door survived, zero ghosts,
+  app back pid 44468).
+- Final artifact: 59cf05b29c319af6ee30c59709e6be1f551b747c47f85079344448c50ee1a5e8
+  (Nocterrible-manufacturer, gauntlet clean @ 70f2a5c, tag b77e3cb,
+  notes sha line synced). Pre-rewrite commits GC-lazy on GitHub as
+  always; support-ticket words unchanged.
+- Repo-local git identity pinned to the brand: new commits cannot
+  re-leak from this box.
