@@ -44,7 +44,7 @@
     <Icon Id="panelboss.ico" SourceFile="$(var.Icon)\panelboss.ico"/>
     <Property Id="ARPPRODUCTICON" Value="panelboss.ico"/>
     <Property Id="ARPCOMMENTS"
-              Value="Per-user install. Uninstall cleans the power task, the Run key, and every display this app left disconnected."/>
+              Value="Per-user install. Uninstall cleans the power task (when registered), the Run key, the browser companion door, and every display this app left disconnected."/>
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicRtf)"/>
     <UIRef Id="WixUI_Minimal"/>
 
