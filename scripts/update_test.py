@@ -224,6 +224,14 @@ assert ob.index("'extension\\manifest.json'") < ob.index("onedir ready"), \
 # ride the bundle or the public build paints the interim circle
 assert "--icon" in ob and "'assets\\panelboss.ico'" in ob, \
     "the exe lost its PB icon (the taskbar shows the no-icon tile)"
+# the UpgradeCode family's one flag that makes a same-version
+# reinstall REPLACE instead of coexist (three ghost installs,
+# Oct 25, proved the hard way)
+wx = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                    os.pardir, "packaging", "msi",
+                    "panelboss.wxs"), encoding="utf-8").read()
+assert "AllowSameVersionUpgrades" in wx, \
+    "same-version reinstalls land BESIDE the old copy without it"
 assert '--version-file' in ob, \
     "the exe lost its version resource (Properties would lie blank)"
 assert "'assets\\tray_master.png'" in ob, \

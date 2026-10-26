@@ -33,7 +33,13 @@
              InstallScope="perUser" InstallPrivileges="limited"
              Description="PanelBoss - presence-aware display control (per-user)"
              Comments="per-user install, no elevation (MSI wave laws)"/>
-    <MajorUpgrade DowngradeErrorMessage="A newer PanelBoss is already installed."/>
+    <!-- SAME-VERSION UPGRADES ON (Oct 25): without the flag a
+     same-version reinstall lands BESIDE the old product (three
+     ghost PanelBosses proved it the hard way); with it, the old
+     product code retires cleanly. The in-app updater always
+     version-bumps, so this only ever helps re-ships. -->
+    <MajorUpgrade AllowSameVersionUpgrades=
+      DowngradeErrorMessage="A newer PanelBoss is already installed."/>
     <MediaTemplate EmbedCab="yes"/>
 
     <Icon Id="panelboss.ico" SourceFile="$(var.Icon)\panelboss.ico"/>
