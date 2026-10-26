@@ -2026,3 +2026,29 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
 - The onedir never copied assets/tray_master.png into the bundle, so every MSI since the art landed (cc9317b, Oct 19) painted the interim-circle fallback while the source tree showed the real art. The double-instance sightings were both styles side by side; the working right-click menu proved it was a live process in fallback, not a dead ghost. Pin added: update_test asserts the art copy precedes the ready line.
 - SAME-VERSION TRAP (release-ops law): msiexec /i of an identical ProductVersion repairs EXISTING components but never adopts NEW ones - the art file silently refused to land until an uninstall/reinstall. The updater must therefore never re-ship a version-bumped-equal artifact with new files; a version bump (0.3.6 -> 0.3.7) makes new components arrive by major upgrade. Noted for the updater docs.
 - v0.3.6 re-tagged at c9747d9; L sha256 99d1bf45235b1b4f415ac2357dfdd4011e52ad7cae5f693d73c9357443678341; gauntlet ALL GREEN (complete) stamped at this tip (runall-L.log); asset swapped (server digest verified); desk reinstalled clean (uninstall purge -> install, one wedged broker survived); boot logs tray icon ready with NO absence warning. Store extension 0.4.5 APPROVED and live on the owner browser - theater confirmed working organically on the fixed relay.
+
+## Refreshes M and N - the packaging-trinity night (icon, version, ghosts)
+
+- M stamped the exe (assets/panelboss.ico + versionfile generated from
+  __version__) but the first ceremony ran the msi build through a
+  PowerShell here-string whose closer needed column zero AND the
+  pipeline on its line - the parse error silently kept the STALE L
+  artifact and only an identical-hash too-rude-to-believe caught it.
+  Ceremony script now aborts when the msi predates the run.
+- N fixed the WiX law the same-version traps taught: MajorUpgrade
+  gained AllowSameVersionUpgrades (the first cut dropped the =yes value;
+  candle was the first reader - update_test now well-formedness-parses
+  the wxs). Three ghost PanelBoss registrations (K, L, M product codes
+  coexisting under one name+version) purged with rc=0 x3; the desk
+  install is now a CLEAN stranger-style first install: exe reports
+  FileVersion 0.3.6, tray art rides _internal, one product in the
+  class store, app live (PID 55664), door points into the bundle.
+- v0.3.6 re-tagged at the stamped tip; N sha256
+  0ff0e67e51f31b994e1954300cbc1f32187bdb6e48c24d51fd1dd10fd722cb97;
+  asset swapped (server digest verified); gauntlet ALL GREEN
+  (complete) at this tip; update_test pins: icon flag, version flag,
+  wxs well-formed, AllowSameVersionUpgrades, art copy order.
+- Release-ops law extracted: version-equal re-ships REQUIRE the same-
+  version-upgrade flag or they coexist and haunt; the public updater
+  (version-bumped) was never exposed to this - the bug class lived
+  and died inside tonight.
