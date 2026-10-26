@@ -1,8 +1,23 @@
 # PanelBoss
 
-PanelBoss watches whether someone is sitting at the desk. When nobody is there,
-it dims, darkens, or locks the screens. When you sit back down, it gets out of
-the way.
+PanelBoss keeps a Windows desk running itself when nobody is at it, and gets
+out of the way when somebody is. What it does, one line each:
+
+- **Presence.** A local camera decides whether you are at the desk. The frames
+  never leave the machine.
+- **Screen control.** An unwatched panel dims, blacks out, or drops its signal,
+  chosen per monitor, and everything comes back when you return.
+- **OLED care.** The taskbar and the background darken while you are away, a
+  periodic pixel wash spreads static wear, and fake input from macro pads and
+  KVMs is ignored.
+- **Movie theater.** With the free browser extension, darkness hugs the playing
+  video: the page, the browser chrome, and the rest of the desk go dark while
+  the film keeps its light.
+- **Game rates.** A fullscreen game gets the refresh rate you set for that
+  panel, VRR pin-max included.
+- **Desk memory.** Window positions come back after any wake, and a whole desk
+  setup - monitors, modes, pinned window seats - saves as a profile keyed to
+  the hardware, restorable at logon.
 
 It runs under your own Windows account and lives in the tray. There is no account
 to create and no telemetry. Presence is judged from a local camera, and those
