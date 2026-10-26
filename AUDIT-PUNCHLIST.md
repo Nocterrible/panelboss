@@ -2052,3 +2052,48 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   version-upgrade flag or they coexist and haunt; the public updater
   (version-bumped) was never exposed to this - the bug class lived
   and died inside tonight.
+
+## Gate round 3 answered: the uninstall plumbing was dead and didn't know it
+
+- The final gate's round-3 BLOCK was right twice: the 0x133 paragraph
+  hid the escape hatch, and the uninstall promise had NO receipt -
+  worse, no receipt was possible: the PanelBossCleanup custom action
+  never executed on any uninstall EVER (the deferred shape failed to
+  launch, error 1721, Return=ignore swallowed it). The doors only
+  looked clean in dev because cleanup ran by hand or through
+  uninstall_test's fakes.
+- FIX (40f3e53, coder): immediate + FileKey shape (compiled Type 82,
+  no in-script bit at all); the act now PROVEN runs at uninstall -
+  /l*v shows start/end Return value 1, the four cleanup lines hit the
+  USER log, all four doors die. The deferred-era rows were also
+  NoImpersonate-laden (0x462 per the Microsoft table read: 0x400
+  in-script, 0x40 source-file bits; the reviewer's 0x40 theory was
+  itself corrected by the coder's doc probe - the bit argument
+  dissolved once the launch failure was the real cause).
+- GUARD (0f917c7): the working act would ALSO fire in an upgrade's
+  remove phase and EAT the user's opt-ins (Run key, door, task) mid-
+  update. Condition is now REMOVE AND NOT WIX_UPGRADE_DETECTED AND
+  NOT WIX_DOWNGRADE_DETECTED AND NOT UPGRADINGPRODUCTCODE - the last
+  clause measured necessary (the WiX pair is invisible to the nested
+  removal transaction; A-cycle at 23:21 proved it by getting eaten).
+  Receipts: upgrade-through A-dbl-prime (both phases log 'Skipping
+  action', opt-ins survive, one product), pure /x B-cycle (doors
+  gone, four lines). Transition truth: upgrading FROM any pre-guard
+  build sweeps the opt-ins once - only hits tonight's lineage; public
+  users start guarded.
+- The reviewer's closing LOW (ARP comment repeating the unhedged
+  promise) is hedged in the same family: 'the power task (when
+  registered), ..., the browser companion door' (84596e4).
+- README round-3 fixes (582e16a): SmartScreen button is 'Run anyway';
+  Smart App Control one-liner (some Win11 setups block unsigned MSIs
+  with no More-info route); whircam bundled-vs-pip reconciled (the
+  hiddenimport makes the bundled claim true); 0x133 escape hatch
+  stated; task-door hedged. The anti-sanitization pump line stands
+  verbatim.
+- OWNER-DESK NOTES from the verification night: the Run key was
+  wiped once by a mis-typed Remove-Item (re-created empty; other
+  logon-start apps need their own re-tick); Windows Defender PUA
+  quarantining flagged the fresh unsigned exes twice mid-verification
+  (false-positive family, ThreatID 2147737394 / 2147731849) -
+  relevant to the public SmartScreen story, banked post-launch to
+  consider a Microsoft false-positive submission.
