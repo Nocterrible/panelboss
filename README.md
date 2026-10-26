@@ -28,12 +28,16 @@ Download `PanelBoss-<version>-user.msi` from
 https://github.com/Nocterrible/panelboss/releases. Per-user: no admin, no UAC
 prompt at install, uninstall, or upgrade. The MSI is unsigned: SmartScreen
 will say "Windows protected your PC" the first time - choose More info ->
-Run. Unsigned is a choice, not a defect: signing keys are a renewing tax;
-the sha256 of every build is on the release page for the paranoid. The app lands in
+Run anyway. Unsigned is a choice, not a defect: signing keys are a renewing tax;
+the sha256 of every build is on the release page for the paranoid. On some Windows 11 installs Smart App Control blocks an
+unsigned MSI outright (there is no More-info route) - disabling Smart App
+Control or using a signed build is the way. The app lands in
 `%LOCALAPPDATA%\Programs\PanelBoss` with a Start Menu entry. Autostart is an
-in-app opt-in (General / Keybinds tab), never silent. Uninstall removes the app's
-scheduled task, its Run-key entry, and re-lights any display the app left
-disconnected. Settings and logs live in `%APPDATA%\PanelBoss` and survive
+in-app opt-in (General / Keybinds tab), never silent. Uninstall runs the app's
+own cleanup verb as the uninstalling user: it removes the app's scheduled
+task, its Run-key entry, and the companion's browser door (the HKCU
+registration and its host.json pointer), and re-lights any display the app
+left disconnected. Settings and logs live in `%APPDATA%\PanelBoss` and survive
 everything around them. First launch has camera detection off: no eye opens
 until you turn it on, and turning it on offers a setup that opens every
 camera once and lets you label, hide, or put on duty up to four.
@@ -70,7 +74,9 @@ Hello IR puts the Windows Hello infrared sensor - the camera that unlocks the
 machine - on presence duty. Hello cameras hide from normal enumeration, so
 the app reads them through `whircam`, an optional MIT package. Pick "hello IR
 camera (optional - pick to install whircam)" in the Detection tab's camera
-menu: the app installs the bridge, relaunches, and the sensor is on duty. It
+menu - the bridge rides inside the installed app (the MSI bundles it; the
+pip of `requirements-optional.txt` is the source-tree install path, never
+the installed app's) - and the sensor is on duty. It
 keeps serving frames while Windows Hello stays armed, and the seat can be
 labelled and removed like any other camera.
 
@@ -101,7 +107,10 @@ goes dark as if you pressed its button. On NVIDIA drivers this option starts
 disabled: resumes from this off have frozen some NVIDIA-driver machines
 (Windows bugcheck 0x133, the DPC watchdog) - a family observed on the same
 driver with this app not running; the option returns once a driver is
-confirmed safe. AMD and Intel desks get it on day one. off (disconnect) - the default for
+confirmed safe. AMD and Intel desks get it on day one. A config that
+already chose off (DDC fast) is honored end to end - the block only
+gates new picks, and the pick goes by choosing another mode on the row.
+off (disconnect) - the default for
 rows you never touched - retracts the signal at the adapter, and Windows
 refuses to strand the last active display. An unworded row follows the
 legacy [away] mode key before the default. Lock when away starts ends
