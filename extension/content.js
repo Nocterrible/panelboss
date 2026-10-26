@@ -87,12 +87,18 @@ function push(paused) {
   if (wire === lastSent) return;
   lastSent = wire;
   try {
-    chrome.runtime.sendMessage({ op: "veil", payload: row });
+    // ACK-AWARE (dossier H): the commit happens BEFORE the send, and
+    // the CALLBACK form is the refusal detector - the background acks
+    // DELIVERY (the veil push to the host landed), so lastError (a
+    // dead/absent background) or a not-ok ack un-sends the row. The
+    // try/catch still covers the sync throw (gate finding 3): a
+    // transient death is not a sticky clip - the next event of any
+    // kind re-offers the row.
+    chrome.runtime.sendMessage({ op: "veil", payload: row },
+      (res) => {
+        if (chrome.runtime.lastError || !res || !res.ok) lastSent = "";
+      });
   } catch (e) {
-    // a dead background is not the page's problem - BUT the dedupe
-    // must not let a transient SW death become a sticky clip (gate
-    // finding 3): the refused row is un-sent, so the next event of
-    // any kind re-offers it.
     lastSent = "";
   }
 }
@@ -108,6 +114,19 @@ function wire() {
       v.addEventListener("play", () => push(false));
       v.addEventListener("pause", () => push(true));
       v.addEventListener("ended", () => push(true));
+      // PLAYING-ONLY HEARTBEAT (dossier H): timeupdate fires ~4/s,
+      // and ONLY while the clock advances (a paused video goes quiet
+      // - no clock is written, no pump). Throttled to one push(false)
+      // per ~5s on the SAME wire()/dedupe path - a steady frame is a
+      // no-op string compare, a moved row is a genuine re-offer the
+      // pause/ended lanes never see.
+      let lastBeat = 0;
+      v.addEventListener("timeupdate", () => {
+        const now = Date.now();
+        if (now - lastBeat < 5000) return;
+        lastBeat = now;
+        push(false);
+      });
     }
   }
   // the player may replace its <video> on navigation (YouTube SPA) -

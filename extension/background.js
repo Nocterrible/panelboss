@@ -160,8 +160,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (!msg || !sender || !sender.tab) return;
   if (msg.op === "veil" && msg.payload) {
-    push(msg.payload, sender.tab.windowId, "auto", null);
-    sendResponse({ ok: true });
+    // ACK DELIVERY, NOT RECEIPT (dossier H): the content script's
+    // dedupe commits the row BEFORE the send, so an ack of mere
+    // receipt would pin lastSent behind a veil that never reached
+    // the host. Await the push and answer with ITS truth; return
+    // true keeps the channel open for that async sendResponse.
+    push(msg.payload, sender.tab.windowId, "auto", null)
+      .then((ok) => sendResponse({ ok: ok === true }));
+    return true;
   }
   return false;                    // synchronous ack, no keep-alive
 });

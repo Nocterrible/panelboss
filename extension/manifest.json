@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PanelBoss Companion",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Frames the playing video for PanelBoss Movie theater mode: the desk dims around it as the video plays. Local host, no network.",
   "permissions": [
     "nativeMessaging"
