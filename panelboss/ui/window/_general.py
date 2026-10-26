@@ -511,6 +511,7 @@ class _GeneralMixin:
 
         def go():
             msi = None
+            digest = "unverified"
             status, version = update.check()  # self-catching: never
             #                                 # raises - only download
             #                                 # can, and its failure
@@ -521,27 +522,43 @@ class _GeneralMixin:
                             or (status == "error"
                                 and update.is_newer(rel["version"],
                                                     update.__version__))):
-                    msi = update.download(rel["url"])
-            except Exception:
+                    # THE DIGEST LAW (owner live incident, Oct 26):
+                    # fetch AND verify against the published
+                    # assets[].digest before a handoff exists; an
+                    # absent or mismatched digest refuses the update
+                    # with the download kept for the retry, the app
+                    # untouched and tray-full.
+                    msi, digest = update.fetch_and_verify(rel)
+            except Exception as exc:
                 log.exception("the msi update round trip died")
+                if msi is None and isinstance(exc, ValueError):
+                    status, version = "digest", str(exc)
             try:
                 self.after(0, lambda: self._msi_done(status, version,
-                                                     msi))
+                                                     msi, digest))
             except (tk.TclError, RuntimeError):
                 log.exception("msi update lost the marshal")
         threading.Thread(target=go, daemon=True).start()
 
 
-    def _msi_done(self, status, version, msi):
+    def _msi_done(self, status, version, msi, digest="unverified"):
         """The UI-thread half of the handoff: the row reports what the
-        round trip meant, and a fetched msi gets its script and its
-        spawn here. The spawn is the update.bat line's twin and the
-        package's SECOND registered console opt-out - startup_test's
-        ledger counts both, gaming_test's ban accepts both, and the
-        third bare spawn still fails the build."""
+        round trip meant, and a VERIFIED msi gets its script and its
+        spawn here. The spawn is the package's detached console-verb:
+        DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP (0x208) - the bat
+        outlives the app's own funeral (it is the one that kills it,
+        deterministically, since the Oct 26 live incident), and with
+        no console it speaks only into the update.log receipt. The
+        SOURCE path's zero-flag spawn stays the ledger's one console
+        window; startup_test counts both shapes."""
         self._update_flight = False
         if msi is None:
-            if status == "behind":           # the download died; the
+            if status == "digest":            # the bytes refused the
+                self.update_status.configure(     # digest: honest
+                    text=version)             # sentence, tray full,
+                                              # download kept (the
+                                              # line itself says so)
+            elif status == "behind":          # the download died; the
                 self.update_status.configure(     # app stays up honest
                     text="download failed - try again")
             else:
@@ -554,11 +571,11 @@ class _GeneralMixin:
         exe = os.path.join(os.path.dirname(sys.executable),
                            "PanelBoss.exe")
         bat = update.write_apply(msi, exe, os.getpid(),
-                                 os.path.dirname(msi))
+                                 os.path.dirname(msi), digest=digest)
         try:
             subprocess.Popen(["cmd.exe", "/c", bat],
                              cwd=os.path.dirname(bat),
-                             creationflags=0)   # CONSOLE: deliberate
+                             creationflags=0x208)  # DETACHED|NEW_GROUP
         except Exception:
             log.exception("the msi handoff refused to start; the "
                           "app stays up")

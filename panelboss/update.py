@@ -9,15 +9,26 @@ file of one page).
 
 Split from the window because the window suite cannot fake a
 network and this half must be faked to be tested (update_test).
+
+TEST SEAM (live acceptance and the suite): PB_UPDATE_ASSET_URL,
+when set, replaces the release's asset URL for the fetch (file://
+or a plain local path both work); PB_UPDATE_ASSET_SHA256 overrides
+the expected digest - 'self' means the target file's own bytes (the
+verification and receipt path run complete over a locally built
+msi). Empty/unset = the real GitHub API, no seam.
 """
 from __future__ import annotations
 
 import glob
+import hashlib
 import json
 import logging
 import os
+import pathlib
 import shutil
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from . import __version__
@@ -61,8 +72,15 @@ def latest_release():
     if not version or asset is None or not asset.get(
             "browser_download_url"):
         raise ValueError("release answers no version + -user.msi")
+    # THE DIGEST (owner live incident, Oct 26): GitHub publishes
+    # assets[].digest as 'sha256:<hex>' on every release asset; the
+    # updater must carry it through the stored release so the
+    # download can be checked against it BEFORE msiexec is touched.
+    # Absent (old API cache, odd proxy) stays '' - fetch_and_verify
+    # decides what an absent digest means (it refuses).
     return {"version": version, "url": str(asset["browser_download_url"]),
-            "asset": str(asset["name"])}
+            "asset": str(asset["name"]),
+            "digest": str(asset.get("digest") or "")}
 
 
 def is_newer(a, b):
@@ -143,69 +161,166 @@ def download(url, dest_dir=None):
     return path
 
 
+def sha256_of(path):
+    """Streaming sha256 (hex) of a file - the msi is tens of MB, the
+    hash must not slurp it into RAM."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _seam(url, digest):
+    """The documented test seam: PB_UPDATE_ASSET_URL replaces the
+    fetch target (a plain path is accepted, file:// URLs too);
+    PB_UPDATE_ASSET_SHA256 overrides the expected digest, 'self'
+    meaning the target's own bytes (so the verify+receipt machinery
+    runs complete over a locally built msi)."""
+    raw = (os.environ.get("PB_UPDATE_ASSET_URL") or "").strip()
+    if not raw:
+        return url, digest, False
+    if "://" in raw:
+        url = raw
+    else:
+        url = pathlib.Path(os.path.abspath(raw)).as_uri()
+    exp = (os.environ.get("PB_UPDATE_ASSET_SHA256") or "").strip()
+    if exp.lower() == "self":
+        p = raw if "://" not in raw else urllib.request.url2pathname(
+            urllib.parse.urlparse(raw).path)
+        digest = "sha256:" + sha256_of(p)
+    elif exp:
+        digest = exp
+    return url, digest, True
+
+
+def fetch_and_verify(rel, dest_dir=None):
+    """The download AND the digest law, one door: the bytes land and
+    are checked against the release's published digest BEFORE any
+    handoff exists. Raises ValueError with the honest sentence when
+    the release answers no digest or the bytes disagree - the
+    download STAYS on disk (the retry must not re-pay the wire).
+    Returns (path, hex) - the hex rides the bat's receipt line."""
+    url, digest, _seam_hit = _seam(rel["url"], rel.get("digest") or "")
+    path = download(url, dest_dir)
+    got = sha256_of(path)
+    want = digest.split(":")[-1].strip().lower()
+    if not want:
+        raise ValueError("the release answers no sha256 digest - "
+                         "unverified bytes are not installed "
+                         "(download kept for the next try)")
+    if got != want:
+        raise ValueError("the download's sha256 is %s, the release "
+                         "published %s - mismatch, refusing (download "
+                         "kept for the next try)" % (got, want))
+    return path, got
+
+
 APPLY = """@echo off
-rem PanelBoss update handoff: one-shot by design - it waits for the
-rem app to die, installs the msi quietly (the /l*v receipt says how
-rem it went), reopens the app EXACTLY the way update.bat does (start
-rem "PanelBoss" <exe> - no login stamp on a relaunch: that flag is
-rem the Run entry's alone, never the updater's), and deletes itself.
+rem PanelBoss update handoff - the deterministic last mile (owner live
+rem incident, Oct 26: the cooperative-quit design let msiexec run while
+rem the old app was still alive; the new copy hit the one-instance law,
+rem quit, and the old copy then died to the file replacement: zero
+rem PanelBoss). This bat is now the one killer: taskkill OWN pid, wait
+rem the process table for real, install synchronously, relaunch on
+rem BOTH rc paths (a failed install must never leave the desk
+rem tray-less - the old files survived their own rollback), receipt,
+rem self-delete. It rides DETACHED (0x208): there is no console here,
+rem so no blocking prompt anywhere - the words land in the update.log
+rem receipt, and the failure branch that once waited for a keystroke
+rem now relaunches like everything else.
 setlocal
 set tries=0
+set "probe=%TEMP%\panelboss-upwait.tmp"
+taskkill /F /PID {pid} >nul 2>nul
 :wait
-tasklist /fi "PID eq {pid}" 2>nul | find "{pid}" >nul
+rem NO PIPES, ANYWHERE (measured Oct 26, twice): a tasklist-then-find
+rem pipeline froze its FIRST lap under DETACHED (find waits for a
+rem write-end that survives in an inherited handle), and even a rem
+rem line mentioning that pipe kills this interpreter (cmd parses
+rem redirections BEFORE it discards the line). The probe therefore
+rem lands in a FILE and findstr answers from disk: an exit code
+rem nobody can wed. NO VERTICAL-BAR CHARACTERS BELOW THIS LINE.
+tasklist /fi "PID eq {pid}" /fo csv /nh >"%probe%" 2>nul
+findstr /m /c:"{pid}" "%probe%" >nul
 if errorlevel 1 goto install
 set /a tries+=1
-if %tries% geq 15 (
-    echo the app would not close - installing anyway; if the
-    echo files were busy the receipt in update.log will say so
+if %tries% geq 30 (
+    echo the app would not die - installing anyway; if the files
+    echo were busy the receipt in update.log will say how it went
     goto install
 )
-rem ~2 s per lap (update.bat's own ping idiom: timeout's stdin
-rem dependence dies under redirected handles, ping's never does)
-ping -n 3 127.0.0.1 >nul
+rem ~1 s per lap (the bat's own ping idiom: timeout's stdin
+rem dependence dies under redirected handles AND under DETACHED,
+rem ping's never does; 500 ms is below its resolution)
+ping -n 2 127.0.0.1 >nul
 goto wait
 :install
-rem THE STORE FIRST (owner law, Oct-24 launch night): the two files
-rem the settings window writes ride into "%bkdir%" as .bak BEFORE
-rem anything installs over the package (label-first placement: both
-rem goto paths above must pass the backup, and the backup must pass
-rem before msiexec - the receipts' own folder carries them)
+del "%probe%" >nul 2>nul
+rem THE STORE FIRST (owner law, Oct-24 launch night): both handoff
+rem paths back the store up before anything installs - label-first
+rem placement, BEFORE msiexec, every goto route passes the copies.
 set "bkdir=%LOCALAPPDATA%\\PanelBoss\\update"
 if not exist "%bkdir%" mkdir "%bkdir%"
 copy /y "%APPDATA%\\PanelBoss\\profiles.json" "%bkdir%\\profiles.json.bak" >nul 2>nul
 copy /y "%APPDATA%\\PanelBoss\\config.toml" "%bkdir%\\config.toml.bak" >nul 2>nul
 echo store backed up to %bkdir% (profiles.json.bak, config.toml.bak)
-msiexec /i "{msi}" /qn /l*v "{log}"
-if errorlevel 1 (
-    echo the install FAILED - read the receipt:
-    echo   {log}
-    pause
-    goto done
-)
-start "PanelBoss" "{exe}"
-:done
+if not exist "%APPDATA%\\PanelBoss\\logs" mkdir "%APPDATA%\\PanelBoss\\logs"
+rem SYNCHRONOUS install: called directly (not via start) msiexec /qn
+rem blocks until the package is placed; /norestart - the updater may
+rem never commandeer the owner's reboot policy.
+msiexec /i "{msi}" /qn /norestart /l*v "{log}"
+set rc=%errorlevel%
+rem THE RECEIPT: rc + the digest the bytes were verified against,
+rem appended to the app's own log (msiexec owns the /l*v file; the
+rem handoff speaks here, with a timestamp - the order is the proof).
+>>"{rclog}" echo [%date% %time%] update handoff: install rc=%rc% verified sha256={digest} msi="{msi}"
+start "" "{exe}"
 del "%~f0"
 """
 
 
-def apply_text(msi, exe, pid, log_path):
+def apply_text(msi, exe, pid, log_path, digest="unverified",
+               rclog=None):
     """The handoff script's body (write_apply stamps it to disk; the
-    split exists so update_test can pin the content - waits-on-pid,
-    the /qn /l*v pair, the bat-shaped relaunch, the self-delete -
-    without touching the disk or running cmd)."""
-    return APPLY.format(pid=pid, msi=msi, exe=exe, log=log_path)
+    split exists so update_test can pin the content - the taskkill,
+    the waits-on-pid loop, the /qn /norestart synchronous install,
+    the UNCONDITIONAL relaunch (both rc paths), the receipt with the
+    verified digest, the self-delete - without touching disk or
+    running cmd)."""
+    return APPLY.format(pid=pid, msi=msi, exe=exe, log=log_path,
+                        digest=digest,
+                        rclog=rclog or os.path.join(
+                            os.environ.get("APPDATA") or "",
+                            "PanelBoss", "logs", "update.log"))
 
 
-def write_apply(msi, exe, pid, dest_dir):
-    """Stamp the handoff beside the msi (update\\apply.bat - a
-    self-known name; the script knows its own path only through
-    %~f0, which is how it commits suicide). Returns the script's
-    path - the caller spawns it exactly like the git path: cmd.exe
-    /c, creationflags zero, the package's second
-    declared console opt-out - startup_test's ledger
-    counts it beside the git path's."""
-    path = os.path.join(dest_dir, "apply.bat")
+def write_apply(msi, exe, pid, dest_dir, digest="unverified"):
+    """Stamp the handoff beside the msi (update\\apply-<pid>.bat - the
+    victim's OWN number is the name: the fixed apply.bat let an old
+    wedged handoff read a fresh one's body off stale offsets, eat the
+    relaunch line, and del "%~f0" the alive bat out from under its
+    cmd (measured Oct 26, the acceptance run: two bats, one name, one
+    silent death with no receipt). A per-pid name cannot collide -
+    one app, one pid, one bat. The script knows its own path only
+    through %~f0, which is how it commits suicide). Stale apply-*.bat
+    older than half an hour are swept here (a handoff lives minutes;
+    age is the safe proxy for 'no cmd is reading it'). Returns the
+    script's path - the caller spawns it detached: cmd.exe /c with
+    DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP (0x208), the dying
+    app's funeral must not take the bat down, and the bat has no
+    console to speak into (startup_test's ledger counts it beside the
+    git path's zero-flag spawn - one console window each kind)."""
+    for stale in glob.glob(os.path.join(dest_dir, "apply-*.bat")):
+        try:
+            if time.time() - os.path.getmtime(stale) > 1800:
+                os.remove(stale)
+        except OSError:
+            log.debug("a stale handoff script is busy and stays",
+                      exc_info=True)
+    path = os.path.join(dest_dir, "apply-%d.bat" % pid)
     with open(path, "w", encoding="mbcs") as fh:   # the OEM codepage
         fh.write(apply_text(msi, exe, pid,
-                            os.path.join(dest_dir, "update.log")))
+                            os.path.join(dest_dir, "update.log"),
+                            digest=digest))
     return path
