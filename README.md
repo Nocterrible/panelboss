@@ -35,7 +35,8 @@ Control or using a signed build is the way. The app lands in
 `%LOCALAPPDATA%\Programs\PanelBoss` with a Start Menu entry. Autostart is an
 in-app opt-in (General / Keybinds tab), never silent. Uninstall runs the app's
 own cleanup verb as the uninstalling user: it removes the app's scheduled
-task, its Run-key entry, and the companion's browser door (the HKCU
+task (when registered), its Run-key entry, and the companion's browser
+door (the HKCU
 registration and its host.json pointer), and re-lights any display the app
 left disconnected. Settings and logs live in `%APPDATA%\PanelBoss` and survive
 everything around them. First launch has camera detection off: no eye opens

@@ -112,21 +112,23 @@
     </Component>
 
     <!-- law 3's uninstall half. WHY EXECUTE="immediate" (gate round 3,
-         Oct 25): the deferred shape was OBSERVED to betray
-         Impersonate="yes" on this WiX build (v3.14 rtm) - the compiled
-         CustomAction table row for this act carried type 1122 = 0x462,
-         which INCLUDES the 0x400 NO-IMPERSONATION bit (checked via the
-         WindowsInstaller COM, not inferred). The doors it was sent to
-         sweep sat untouched - PROVEN BEHAVIOR: a cold msiexec /x left
-         the NM door and host.json in place and no cleanup line in the
-         user's log. A Directory + bare relative command (the old
-         shape's other half) was additionally measured to fail its
-         LAUNCH in the gate-night attempts (/L*v: error 1721,
-         swallowed by Return=ignore) - attribution contaminated by
-         Defender PUA quarantines of the fresh unsigned exe racing
-         those same minutes, so treat relative-command resolution as
-         UNTESTED rather than trusted; FileKey removes the question by
-         naming the absolute file. Two traps, one fix:
+         Oct 25, bit naming corrected at the reviewer's pass): the old
+         deferred shape compiled to type 1122 = 0x462 (read from the
+         WindowsInstaller COM, not inferred): base 98 - exe,
+         Directory-sourced, command line in Target - plus 0x400, the
+         IN-SCRIPT bit (msidbCustomActionTypeInScript): the act was
+         deferred, period. NoImpersonate is 0x800 and was NOT set, so
+         Impersonate="yes" was honored in the bits; the earlier
+         "0x400 NO-IMPERSONATION" naming was a confusion. What the
+         receipts actually prove: the act NEVER LAUNCHED - the /L*v
+         shows error 1721 (the Directory + bare relative command has
+         no proven resolution at the service's end; Defender PUA
+         quarantines of the fresh unsigned exe raced those minutes, so
+         relative-command resolution stays UNTESTED rather than
+         trusted), Return=ignore swallowed it, no cleanup line landed
+         in the user's or SYSTEM's log, and the systemprofile tree was
+         never created. The doors survived because the act never
+         spoke. Two traps, one fix:
          Execute="immediate" runs the act in the CLIENT process -
          msiexec runs in the uninstalling user's token, so HKCU, the
          user's own task, and the user's own LOCALAPPDATA are the
@@ -146,7 +148,17 @@
          verb is cwd-independent by construction. The same
          InstallExecuteSequence position is kept - after
          InstallInitialize, before RemoveFiles: the exe is still on
-         disk to speak its cleanup. Return=ignore is the second belt
+         disk to speak its cleanup. The condition excludes the old
+         product's remove phase of a major or same-version upgrade:
+         WIX_UPGRADE_DETECTED / WIX_DOWNGRADE_DETECTED cover the
+         installing side, and UPGRADINGPRODUCTCODE (MSI's own
+         property, set in the removed product's session) is the one
+         that actually quiets the act during RemoveExistingProducts -
+         measured: with the WiX clauses alone the guarded act still
+         fired its sweep mid-upgrade. An upgrade must not eat the
+         user's opt-ins - the Run key, the browser
+         door, and the task belong to the installed app, not to the
+         retiring product code. Return=ignore is the second belt
          (the verb already exits 0): a locked exe or an AE-mandated
          reboot may not fail the uninstall; the cleanup re-runs fine
          after the reboot. -->
@@ -155,7 +167,7 @@
                   ExeCommand="cleanup"
                   Execute="immediate" Impersonate="yes" Return="ignore"/>
     <InstallExecuteSequence>
-      <Custom Action="PanelBossCleanup" After="InstallInitialize">REMOVE</Custom>
+      <Custom Action="PanelBossCleanup" After="InstallInitialize">REMOVE AND NOT WIX_UPGRADE_DETECTED AND NOT WIX_DOWNGRADE_DETECTED AND NOT UPGRADINGPRODUCTCODE</Custom>
     </InstallExecuteSequence>
 
     <Feature Id="App" Title="PanelBoss" Level="1" Absent="disallow"
