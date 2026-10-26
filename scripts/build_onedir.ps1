@@ -122,20 +122,25 @@ VSVersionInfo(
     } else {
         Write-Output ('extension manifest MISSING (id derivation dies): ' + $ems)
     }
-    # TRAY ART (dossier G's true ending, Oct 25): the onedir shipped
-    # WITHOUT assets\tray_master.png, so the public build painted the
-    # interim circle while the source tree showed the owner art - the
-    # 'old icon reverted' was the fallback confessing, not a ghost.
-    # tray.py's belt path looks beside the module: _internal\panelboss\
-    # assets\tray_master.png.
-    $tas = Join-Path $repo 'assets\tray_master.png'
+    # LOOSE ART, both files (dossier G's law; the window half landed
+    # Oct 26): the onedir ships tray_master.png AND panelboss.ico into
+    # _internal\panelboss\assets. The tray reads its art beside the
+    # module; _icon.py's frozen candidate reads the .ico there - the
+    # embedded exe resource only styles the FILE on disk, while the
+    # taskbar/titlebar tile comes from WM_SETICON at runtime (Tk has
+    # no idea the exe carries an icon). The public build's blue tile
+    # was this file never shipping loose - a wiring miss, not an art
+    # miss. Same honest MISSING line per file.
     $tad = Join-Path $repo ('dist\' + $exe + '\_internal\panelboss\assets')
-    if (Test-Path $tas) {
-        New-Item $tad -ItemType Directory -Force | Out-Null
-        Copy-Item $tas $tad -Force
-        Write-Output ('tray art bundle copy: ' + $tas)
-    } else {
-        Write-Output ('tray art MISSING (the interim circle paints): ' + $tas)
+    foreach ($a in 'assets\tray_master.png', 'assets\panelboss.ico') {
+        $tas = Join-Path $repo $a
+        if (Test-Path $tas) {
+            New-Item $tad -ItemType Directory -Force | Out-Null
+            Copy-Item $tas $tad -Force
+            Write-Output ('loose art bundle copy: ' + $tas)
+        } else {
+            Write-Output ('loose art MISSING (the fallback paints): ' + $tas)
+        }
     }
     Write-Output ('onedir ready: ' + (Join-Path $repo ('dist\' + $exe)))
 }

@@ -21,9 +21,15 @@ titlebar to brand and ride Tk's own default-icon rule untouched.
 
 Fail-open with words: a missing .ico logs its absence ONCE (an app is
 not a poster - no art, no crash) and the stock feather keeps its
-place. Frozen builds (the MSI wave) get the file from the same
-repo-relative path until the bootloader names the real seam; an
-exe-dir candidate lands WITH that wave, when its layout is decided.
+place. THE FROZEN SEAM, landed (Oct 26): build_onedir copies the
+loose assets\panelboss.ico into _internal\panelboss\assets beside the
+tray master, and the third candidate below reads it. Until that copy
+shipped, every installed build logged 'not found' and the taskbar
+wore the generic blue tile - the exe's embedded resource only styles
+the FILE on disk; WM_SETICON needs the loose file at runtime. And
+-default alone was not enough either: it brands the CLASS, invisible
+to cross-process readers - the per-window call below is what the
+taskbar actually sees.
 """
 import logging
 import os
@@ -43,6 +49,14 @@ _CANDIDATES = (
                                                 # beside this module
                                                 # (belt; the frozen
                                                 # seam is the MSI's)
+    ("..", "..", "assets", "panelboss.ico"),    # frozen build (MSI):
+                                                # _internal\panelboss\
+                                                # ui\window up twice is
+                                                # _internal\panelboss -
+                                                # where build_onedir
+                                                # copies the loose art
+                                                # beside the tray
+                                                # master (Oct 26)
 )
 
 _BRAND = None                 # the path the toplevel patch brands
@@ -85,6 +99,16 @@ class _IconMixin:
                 # path would raise "should be image name" (measured);
                 # iconbitmap is the Windows call the format is made for.
                 self.iconbitmap(default=path)
+                # THE TASKBAR NEEDS THE WINDOW, NOT THE CLASS (measured
+                # Oct 26): -default lands on the window CLASS, and
+                # cross-process readers (explorer's taskbar, my probe)
+                # see WM_GETICON 0 and GetClassLongPtr 0 for a foreign
+                # window's class icons. The per-window call sends the
+                # real WM_SETICON on the root: the tile chain resolves.
+                # Same path, so Tk loads the same .ico; the -default
+                # above still sets the veto flag and brands future
+                # toplevels (the class patch covers CTkToplevels).
+                self.tk.call("wm", "iconbitmap", self._w, path)
                 # the marker: Tk's query form for the app-default is
                 # Tcl-version moody (a bare query answers '' even when
                 # the default IS set - measured Oct 19), so the boot
