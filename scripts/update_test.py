@@ -241,8 +241,34 @@ assert "'assets\\tray_master.png'" in ob, \
     "the tray art left the bundle - the public icon is the fallback"
 assert ob.index("'assets\\tray_master.png'") < ob.index("onedir ready"), \
     "the art copy must precede the build's ready line"
+# THE LOOSE .ICO (Oct 26): the exe's EMBEDDED icon styles only the
+# file on disk; the taskbar tile is WM_SETICON, and Tk reads it from
+# the loose .ico - an installed build without it logs 'not found' and
+# paints the generic blue tile. Pinned as the two-file loop it is
+# (the --icon flag line names the same path for the exe resource;
+# the copy loop is a distinct string) plus the reader's frozen seam.
+assert "'assets\\tray_master.png', 'assets\\panelboss.ico'" in ob, \
+    "the loose-art copy is no longer the two-file loop " \
+    "(no loose .ico = the blue tile returns)"
+assert ob.index("'assets\\panelboss.ico'") < ob.index("onedir ready"), \
+    "the .ico copy must precede the build's ready line"
+_ic = open(os.path.join(os.path.dirname(os.path.dirname(
+               os.path.abspath(__file__))),
+               "panelboss", "ui", "window", "_icon.py"),
+           encoding="utf-8").read()
+assert "iconbitmap(default=path)" in _ic, \
+    "the window lost its WM_SETICON call (the blue tile returns)"
+assert '"wm", "iconbitmap", self._w' in _ic, \
+    "the per-window WM_SETICON went class-only again - the taskbar " \
+    "reads the window, not the class (measured: WM_GETICON 0x0)"
+assert '("..", "..", "assets", "panelboss.ico")' in _ic, \
+    "the reader lost its frozen seam - the shipped .ico would go unread"
+assert "assets/panelboss.ico not found - the stock " in _ic \
+    and "icon will do" in _ic, \
+    "the once-warning line is gone (a silent icon miss is the old disease)"
 print("ok - the onedir host bundle carries six files, manifest "
-      "included, and the tray art rides _internal")
+      "included, and the tray art AND the loose .ico ride _internal; "
+      "_icon.py keeps the WM_SETICON call, the frozen seam, the words")
 bat = update.write_apply(r"C:\u\PanelBoss-0.3.3-user.msi",
                          r"C:\p\PanelBoss.exe", 1234, os.path.join(TMP, "drop"))
 assert bat == os.path.join(old_dir, "apply.bat") and os.path.exists(bat)
