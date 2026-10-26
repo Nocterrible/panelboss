@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PanelBoss - presence-aware displays for Windows</title>
+<meta name="description" content="Offline presence detection, per-monitor OLED care, and movie-theater dimming for multi-monitor Windows. Per-user MSI, no admin, no telemetry.">
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 0; background: #0c0e11; color: #d6d9de;
+    font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 56px 24px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; color: #f2f4f7; letter-spacing: .5px; }
+  .sub { color: #9aa2ad; margin: 0 0 28px; }
+  .cta { display: inline-block; margin: 0 12px 12px 0; padding: 12px 22px;
+         border-radius: 8px; text-decoration: none; font-weight: 600; }
+  a.cta-main { background: #2ea04c; color: #fff; }
+  a.cta-main:hover { background: #37b356; }
+  a.cta-plain { color: #9ecbff; border: 1px solid #2d333b; }
+  a.cta-plain:hover { border-color: #444c56; }
+  ul { padding-left: 20px; }
+  li { margin: 0 0 10px; }
+  li b { color: #e8ebef; font-weight: 600; }
+  figure { margin: 36px 0; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid #23272e; border-radius: 10px; }
+  figcaption { color: #7d8590; font-size: .85rem; margin-top: 8px; }
+  .fine { color: #7d8590; font-size: .85rem; margin-top: 40px; border-top: 1px solid #1f2328; padding-top: 16px; }
+  .fine a { color: #9aa2ad; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PanelBoss</h1>
+  <p class="sub">Keeps a Windows desk running itself when nobody is at it, and gets out of the way when somebody is.</p>
+
+  <p>
+    <a class="cta cta-main" href="https://github.com/Nocterrible/panelboss/releases/latest/download/PanelBoss-0.3.6-user.msi">Download PanelBoss 0.3.6 (MSI)</a>
+    <a class="cta cta-plain" href="https://github.com/Nocterrible/panelboss">Source &amp; issues</a>
+    <a class="cta cta-plain" href="https://chromewebstore.google.com/detail/panelboss-companion/feolhiokchmpphlhllagimnilceldegk">Companion extension</a>
+  </p>
+
+  <ul>
+    <li><b>Presence from a local camera.</b> Frames never leave the machine. No account, no cloud, works fully offline; detection stays off until you switch it on.</li>
+    <li><b>Per-monitor away modes.</b> Dim, blackout, signal disconnect, or the panel's own DDC/CI power code, with a 10-second preview and honest words when a write is refused.</li>
+    <li><b>OLED care.</b> The taskbar and background darken with the rest of the desk, a periodic pixel wash spreads static wear, and macro-pad and KVM fake input can't keep the desk bright.</li>
+    <li><b>Movie theater.</b> The optional Companion extension makes the darkness hug the playing video — it sends window geometry only, never page content. The browser chrome and the rest of the desk go dark; the film keeps its light.</li>
+    <li><b>Game rates.</b> A fullscreen game gets the refresh rate you set for that panel, VRR pin-max included.</li>
+    <li><b>Desk memory.</b> Window positions come back after any wake, and whole monitor setups save as profiles keyed to the hardware.</li>
+  </ul>
+
+  <figure>
+    <img src="docs/screenshots/movie-theater.gif" alt="Movie theater mode: darkness hugs a playing video, the rest of the desk dims">
+    <figcaption>Movie theater mode. The extension sends geometry only; everything else is the app's own business.</figcaption>
+  </figure>
+
+  <p class="fine">
+    MIT licensed. Per-user MSI: no admin, no UAC. Unsigned by choice until users justify the bill - the sha256 of every build
+    is on the release page, and the built-in updater checks the download against it before installing. Nothing phones home;
+    the only network request the app can ever make is the one behind the <em>Check for updates</em> button.<br>
+    NVIDIA note: the DDC/CI power-off mode starts grayed because resumes from it have frozen <em>some</em> NVIDIA-driver
+    machines (0x133) - seen without PanelBoss running too. AMD and Intel get it on day one.
+  </p>
+</div>
+</body>
+</html>
