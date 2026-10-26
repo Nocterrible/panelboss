@@ -21,10 +21,12 @@ Rules this file lives by:
 
 Skins come from theme.py; nothing here hardcodes a color.
 
-SIZE LAW: grandfathered, measured 770 (Oct 13, after the per-veil
-hold, the heartbeat re-lease, the _unveil leak-reset, the
-consent-gated boot scan, and the SWITCH_SYNC repaint seam the
-knob-lie family's second corpse cost) -
+SIZE LAW: grandfathered, measured 1191 (Oct 25, after the page-still
+seam: the switch, the backdrop and the still verbs are ONE story -
+how a tab becomes visible - so the stills land here; the cameras
+themselves live in _pageprint/_gdiraw and the "which page moved?"
+seat in _pagedirty, which is why this file grew by ~90 lines and not
+by 250. The previous measure was 770, Oct 13) -
 window lifecycle, size recall, and
 the reveal-veil machinery are one story (how the window appears and
 remembers itself); the scroll hosts already live in _scroll.py and the
@@ -52,6 +54,8 @@ from ._scroll import ScrollHost
 from ._widgets import _SleepPrompt
 from ._widgets import _WidgetsMixin
 from ._present import clip_siblings
+from . import _pageprint
+from ._pagedirty import owner_page, stamp, watch
 from ._runtime import _RuntimeMixin
 from ._detection import _DetectionMixin
 from ._away import _AwayMixin
@@ -69,6 +73,14 @@ from ._gaming import _GamingMixin
 from ._general import _GeneralMixin
 
 log = logging.getLogger("ui")
+
+
+def _photo(img, master):
+    """A Tk image of a still - the one place PIL meets Tk here. The
+    caller holds the reference (the image dies with it)."""
+    from PIL import ImageTk
+    return ImageTk.PhotoImage(img, master=master)
+
 
 class SettingsWindow(
     _WidgetsMixin,
@@ -106,6 +118,20 @@ class SettingsWindow(
         # _show_first (veil included), never from a build sweep
         self.withdraw()
         self._manual_open_done = False
+        # ---- the tab-switch stills (owner ruling, Oct 25) ------------
+        # POLICY IS DEFAULT-ON - this is the fix the owner bought, not
+        # an experiment. The escape hatch is the INVERTED one:
+        # PB_UI_NOSNAPSHOT=1 turns every switch back into the old
+        # progressive paint (the pre-fix behaviour, byte for byte), for
+        # a desk that finds a still wrong where a sweep is merely ugly.
+        # FALLBACK LAW: no still - missing, dirty, wrong size, kill
+        # switch, PrintWindow refusal, any exception - means the flat
+        # backdrop and the old paint path. A still is never invented,
+        # never scaled, never kept past one content change.
+        self._snap_off = bool(os.environ.get("PB_UI_NOSNAPSHOT"))
+        self._snap = {}                 # key -> {img, size, dirty, t, ...}
+        self._snap_pages = {}           # id(page frame) -> key
+        watch(self)                     # the "which page moved?" seat
         self.cfg = cfg
         self.monitor = monitor
         self.ui_events = ui_events
@@ -402,12 +428,23 @@ class SettingsWindow(
         # relwidth/relheight track body resizes for free.
         for p in self.pages.values():
             p.place(in_=self._body, x=0, y=0, relwidth=1, relheight=1)
+        # the still index (id() -> tab key) and the stills themselves:
+        # a rebuild is a new set of page frames, so both are fresh here
+        self._snap_pages = {id(h): k for k, h in self.pages.items()}
+        self._snap = {}
         # the FLAT BACKDROP (see _show_tab's atomic-switch note): a plain
         # page-background frame that always sits directly UNDER the active
         # page, so the incoming page's not-yet-repainted regions show the
         # page's own background - never the outgoing page's text. Plain
         # tk (nothing to theme, nothing to draw): one rectangle fill.
-        self._backdrop = tk.Frame(self._body, bg=self.skin.bg)
+        # AND IT IS THE STILL'S SEAT (owner ruling, Oct 25): the same
+        # frame carries the incoming page's own pixels when a still is
+        # available (see _snap_show), which turns the progressive paint
+        # into a repaint of identical pixels - the sweep, gone. A Label
+        # rather than a Frame because it is the cheapest plain-tk widget
+        # that can show an image; with image="" it IS the old flat fill.
+        self._backdrop = tk.Label(self._body, bg=self.skin.bg, bd=0,
+                                  highlightthickness=0, image="")
         self._backdrop.place(in_=self._body, x=0, y=0,
                              relwidth=1, relheight=1)
         # WS_CLIPSIBLINGS on every window in the house: without it the
@@ -421,6 +458,81 @@ class SettingsWindow(
                                        # the guard (rebuild_for_skin
                                        # lands here too)
 
+
+    # ------------------------------------------------ page stills --
+    # (the tab-switch cure; see _pageprint's header for the measurements)
+    def _page_drawn(self, widget):
+        """A CTk widget redrew: whose page was it on? The answer drops
+        that page's still (it is stale from this instant). A widget on
+        no page (the title bar, the idle clock, a dialog) marks nothing,
+        so house furniture cannot invalidate the whole cache."""
+        pages = getattr(self, "_snap_pages", None)
+        sn = getattr(self, "_snap", None)
+        if not pages or sn is None:
+            return
+        key = owner_page(widget, pages)
+        if key is not None:
+            stamp(sn, key)
+
+    def _still(self, key):
+        """the page's trusted still, or None: right size, not dirty"""
+        st = (getattr(self, "_snap", None) or {}).get(key)
+        if not st or st.get("img") is None or st.get("dirty"):
+            return None
+        page = self.pages.get(key)
+        if page is None or st.get("size") != (page.winfo_width(),
+                                              page.winfo_height()):
+            return None             # reshaped since: a scaled still would
+            #                         be a misaligned lie, not a still
+        return st["img"]
+
+    def _snap_take(self, key):
+        """THE CHEAP CAMERA, at the only honest moment: the page is on
+        the glass, settled and being left. 15 ms, and never when the
+        app is not the foreground window (then the rect shows whatever
+        is on top of us), never under a veil (that rectangle is the
+        veil), never mid-paint (the dirty stamp says so)."""
+        if self._snap_off or not key or key not in self.pages:
+            return
+        try:
+            if self._veil_lbl is not None:
+                return
+            st = self._snap.get(key) or {}
+            if time.monotonic() - st.get("t_dirty", 0.0) < 0.25:
+                return              # too fresh: could be mid-sweep
+            page = self.pages[key]
+            if page.winfo_manager() != "place" or not page.winfo_viewable():
+                return              # not the page on screen: no truth here
+            if not _pageprint.rect_is_ours(page):
+                return              # the glass there is somebody else's
+            w, h = page.winfo_width(), page.winfo_height()
+            img = _pageprint.screen_bitmap(page.winfo_rootx(),
+                                           page.winfo_rooty(), w, h)
+            if img is None:
+                return
+            self._snap[key] = {"img": _photo(img, self), "size": (w, h),
+                               "dirty": False, "t_dirty": 0.0}
+        except Exception:
+            log.debug("page still: take failed", exc_info=True)
+
+    def _snap_show(self, key):
+        """Put the incoming page's still in the backdrop (or clear it).
+        A trusted still costs microseconds; with none - the page has
+        never been left, or it changed while hidden - the backdrop goes
+        back to its flat fill and the old progressive paint runs, which
+        is exactly the pre-fix behaviour. The kill switch (PB_UI_
+        NOSNAPSHOT=1) forces that path for every switch."""
+        img = None
+        try:
+            if not self._snap_off:
+                img = self._still(key)
+            self._backdrop.configure(image=img if img is not None else "")
+        except Exception:
+            log.debug("page still: show failed", exc_info=True)
+            try:
+                self._backdrop.configure(image="")
+            except Exception:
+                pass
 
     def _show_tab(self, key):
         """The ONE-AT-A-TIME switch (re-cut Oct 16, owner: "tabbing
@@ -454,6 +566,12 @@ class SettingsWindow(
             # click on the lit tab must not re-dress anything (build_all
             # nulls _tab first, so a fresh build never trips this)
         self.tips.kill()                 # a tooltip anchored to a row
+        if self._tab and self._tab != key:
+            # THE CHEAP CAMERA'S ONE HONEST MOMENT: the page being left
+            # is on the glass, settled, and it is about to be hidden.
+            # ~15 ms, guarded (see _snap_take) - and if it declines, the
+            # next visit simply renders that page fresh instead.
+            self._snap_take(self._tab)
         self._tab = key                  # would float over the new page
         # ---- THE ATOMIC SWITCH (Oct 16, the owner's coexistence shot)
         # Measured on this toolkit (see _present.py's header): a
@@ -475,6 +593,13 @@ class SettingsWindow(
         # a z-order that makes two-generation bleed-through
         # unrepresentable.
         self._backdrop.tkraise()
+        # THE STILL GOES IN BEFORE THE PAGE IS RAISED (owner ruling, Oct
+        # 25): it is the incoming page's own pixels, so the reveal's
+        # ~300 progressive window paints land on an identical picture and
+        # nothing is seen to paint live. Declines (dirty, wrong size,
+        # kill switch, any refusal) leave the flat fill and the old
+        # sweep - the fallback is the pre-fix behaviour, never a blank.
+        self._snap_show(key)
         try:            # findings 1+2: the whole switch under one finally
             self._repaint_switches(pane=key)  # knob-lie belt (pane arm)
             self._sync_slider_wheels()
