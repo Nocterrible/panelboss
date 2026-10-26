@@ -16,13 +16,16 @@ it never gets to type. The belt is BOTH halves -
                         allocates its OWN conhost/WT window, it is
                         born hidden)
 
-The declared exceptions to the door are the updater, ONE PER INSTALL
-KIND: update.bat (source) and the frozen copy's apply.bat handoff
-BOTH RUN IN THEIR OWN VISIBLE CONSOLE (the window is the progress UI
-and it carries the relaunch); each call site passes an explicit
-creationflags=0 with a "# CONSOLE: deliberate" marker, and
-scripts/startup_test.py + scripts/gaming_test.py fail the build if
-any other bare subprocess/os.system verb appears in the package.
+The declared exceptions to the door are the two updater handoffs,
+one per install KIND, and they differ since the Oct-26 last-mile
+fix: update.bat (source) still runs in its OWN VISIBLE CONSOLE -
+that call site passes creationflags=0 with a "# CONSOLE: deliberate"
+marker - while the frozen copy's apply.bat rides DETACHED (0x208):
+no console exists for it, and the update.log receipt is its only
+voice (an owned-console handoff must never block waiting on a
+keystroke nobody is watching). scripts/startup_test.py and
+scripts/gaming_test.py fail the build if any other bare
+subprocess/os.system verb appears in the package.
 """
 import subprocess
 import sys

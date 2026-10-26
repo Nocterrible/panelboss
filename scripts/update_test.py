@@ -226,11 +226,13 @@ text = update.apply_text(r"C:\u\PanelBoss-0.3.3-user.msi",
                          digest="ab" * 32,
                          rclog=r"C:\a\PanelBoss\logs\update.log")
 assert 'taskkill /F /PID 1234' in text, "the bat is the one killer"
-assert 'tasklist /fi "PID eq 1234"' in text, "waits on the dying pid"
-assert 'findstr /m /c:"1234"' in text and "|" not in text, \
-    "the wait is a FILE probe and the bat carries ZERO pipe characters " \
-    "(measured twice Oct 26: under DETACHED a pipe wedges find forever, " \
-    "and even a rem line mentioning one kills the interpreter)"
+assert 'tasklist /fi "PID eq 1234" /fo table /nh' in text, "waits on the dying pid (status-table shape)"
+assert 'findstr /m /v /b /c:"INFO" "%probe%" >nul' in text and "|" not in text, \
+    "the wait is a FILE probe on the tasklist STATUS answer (ANY line " \
+    "= alive, silence = gone - the CSV-substring form lied from the " \
+    "memory column and no quote-escape form survives on 26220 " \
+    "findstr, measured); ZERO pipe characters still holds (a detached " \
+    "pipe wedges find forever)"
 assert "if %tries% geq 30" in text and "ping -n 2" in text, \
     "bounded wait (~1 s ping laps, the handle-safe idiom)"
 assert '/qn' in text and '/l*v' in text and '/norestart' in text, \

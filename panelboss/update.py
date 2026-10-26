@@ -208,11 +208,11 @@ def fetch_and_verify(rel, dest_dir=None):
     if not want:
         raise ValueError("the release answers no sha256 digest - "
                          "unverified bytes are not installed "
-                         "(download kept for the next try)")
+                         "(download kept for the record)")
     if got != want:
         raise ValueError("the download's sha256 is %s, the release "
                          "published %s - mismatch, refusing (download "
-                         "kept for the next try)" % (got, want))
+                         "kept for the record)" % (got, want))
     return path, got
 
 
@@ -240,14 +240,18 @@ rem write-end that survives in an inherited handle), and even a rem
 rem line mentioning that pipe kills this interpreter (cmd parses
 rem redirections BEFORE it discards the line). The probe therefore
 rem lands in a FILE and findstr answers from disk: an exit code
-rem nobody can wed. NO VERTICAL-BAR CHARACTERS BELOW THIS LINE.
-tasklist /fi "PID eq {pid}" /fo csv /nh >"%probe%" 2>nul
-findstr /m /c:"{pid}" "%probe%" >nul
+rem nobody can wed. The probe asks tasklist itself (filtered to
+rem OUR pid: ANY LINE = alive, only the INFO line = gone) - on
+rem Windows 26220 no quote-escape form of a CSV-token pattern
+rem matches at all (measured), and a bare substring can lie from
+rem the memory column. NO VERTICAL-BAR CHARACTERS BELOW THIS LINE.
+tasklist /fi "PID eq {pid}" /fo table /nh >"%probe%" 2>nul
+findstr /m /v /b /c:"INFO" "%probe%" >nul
 if errorlevel 1 goto install
 set /a tries+=1
 if %tries% geq 30 (
-    echo the app would not die - installing anyway; if the files
-    echo were busy the receipt in update.log will say how it went
+    >>"{rclog}" echo [%date% %time%] waited 30 laps, the pid is
+    echo   still listed - installing anyway (rc will tell)
     goto install
 )
 rem ~1 s per lap (the bat's own ping idiom: timeout's stdin
