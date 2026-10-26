@@ -2117,5 +2117,9 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   install' where the installed app bundles it - gate note); (d) WiX
   download hash pin in build_msi (build-time supply chain); (e) updater:
   verify the downloaded msi against the published sha256 before running.
+- 0.3.7 BANK addition (owner, Oct 26): Check for updates should show a
+  changelog dialog when a newer release exists - the release body text, fetched
+  with the tag, in a small window with the usual Update now / later buttons.
+
 - Post-flip: run_all's window sections need the app down - the CI-style
   stamp discipline applies to every future tag; keep it.
