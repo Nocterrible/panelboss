@@ -31,8 +31,8 @@ on your own PC, with no server in the middle.
 ## Install
 
 Download `PanelBoss-<version>-user.msi` from
-https://github.com/Nocterrible/panelboss/releases and run it. The current build is
-0.3.6. The MSI is the normal way in.
+https://github.com/Nocterrible/panelboss/releases and run it. The MSI is the
+normal way in; the page always carries the newest build.
 
 It is per-user: no admin and no UAC prompt at install, upgrade, or uninstall. One
 thing does ask, a scheduled task, and Uninstall below explains it.
