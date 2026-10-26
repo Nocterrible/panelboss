@@ -12,7 +12,8 @@ __pycache__/
 
 # build artifacts
 build/
-dist/
+dist/*
+!dist/panelboss-companion-*.zip
 *.egg-info
 
 # native-messaging host (the exe is TRACKED since the Oct-25 gate -
@@ -20,6 +21,8 @@ dist/
 extension/host/build/
 extension/host/host-manifest.json
 extension/host/*.bak
+extension/host/*.new
+extension/host/dist/
 
 # the companion's RSA private half (Oct 16 key pin) - the public half
 # lives in manifest.json, the id in companion_key.txt; losing the

@@ -732,11 +732,13 @@ try:
     _door_a = _door_lines()
     _mt_a = os.path.getmtime(_host.RECT_PATH)
     _reps = _session({"op": "veil", "payload": _row_a()})
-    check(_reps[0].get("ok") is True and _door_lines() == _door_a,
-          "dossier H session: the identical row A re-answers ok and "
-          "the doorway still carries it - the host rewrites (the A/A "
-          "dedupe is the app's, never the host's)")
     time.sleep(0.11)                        # outlast the fs tick
+    check(_reps[0].get("ok") is True and _door_lines() == _door_a
+          and os.path.getmtime(_host.RECT_PATH) > _mt_a,
+          "dossier H session: the identical row A re-answers ok, the "
+          "doorway still carries it and its mtime MOVED - the host "
+          "rewrites EVERY frame (the A/A dedupe is the app's, never "
+          "the host's)")
     _reps = _session({"op": "veil", "payload": _row_a(paused=True)})
     check(_reps[0].get("ok") is True
           and _door_lines() == [json.dumps({**_row_a(paused=True),

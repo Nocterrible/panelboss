@@ -53,8 +53,10 @@ $HOSTNAME = 'com.nocterrible.panelboss'
 # dist dir beside it (extension\host\dist), and only a SUCCESSFUL
 # build is copied over the registered one. A build that dies leaves
 # the old exe untouched (gate finding 4's wedge, dead at the root:
-# there is no missing-exe window and no partial at the registered
-# path), and an in-use copy lands a .new beside it - never a
+# there is no missing-exe window and no BUILD-time partial at the
+# registered path (a mid-Copy-Item crash is the residual, recovered
+# by the always-full -Rebuild the one-click takes), and an in-use
+# copy lands a .new beside it - never a
 # vanishing target.
 # THE MSI GUARD (final gate, Oct 25): the app's one-click always passes
 # -Rebuild, but a BUNDLED install ships the guarded build as a build
