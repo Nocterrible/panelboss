@@ -51,8 +51,7 @@ VSVersionInfo(
       StringStruct('ProductName', 'PanelBoss'),
       StringStruct('ProductVersion', '$ver')])]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])])
-"@
-    | Set-Content -Path $vi -Encoding UTF8
+"@ | Set-Content -Path $vi -Encoding UTF8
     & $py -m PyInstaller --noconfirm --clean --windowed --name $exe `
         --icon (Join-Path $repo 'assets\panelboss.ico') `
         --version-file $vi `
