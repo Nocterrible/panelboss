@@ -44,9 +44,15 @@ def _pinned_check(current=None):
 update.check = _pinned_check
 
 
-def release(tag, names=("PanelBoss-0.3.3-user.msi", "src.zip")):
+import hashlib                                  # the digest lane
+GOOD = "sha256:" + hashlib.sha256(b"MSIDATA").hexdigest()
+
+
+def release(tag, names=("PanelBoss-0.3.3-user.msi", "src.zip"),
+            digest=GOOD):
     return {"tag_name": tag,
             "assets": [{"name": n,
+                        "digest": digest,
                         "browser_download_url":
                             ASSET_URL if n.endswith("-user.msi")
                             else "https://example.test/" + n}
@@ -119,7 +125,8 @@ from panelboss.ui.window._general import _GeneralMixin           # noqa: E402
 use(route(release("v0.3.3")))
 rel = update.latest_release()
 assert rel == {"version": "0.3.3", "url": ASSET_URL,
-               "asset": "PanelBoss-0.3.3-user.msi"}, rel
+               "asset": "PanelBoss-0.3.3-user.msi",
+               "digest": GOOD}, rel
 url, timeout = CALLS[-1]
 assert url == API and timeout == 5, CALLS[-1]        # the 5 s promise
 use(route(release("0.3.3")))
@@ -169,15 +176,76 @@ assert os.path.exists(keeper), "only *.msi answers to the sweep"
 assert open(path, "rb").read() == b"MSIDATA"
 print("ok - download: one-file-cheap, named for the asset")
 
+# ---- 4b) fetch_and_verify: the digest law, and the documented seam
+#          (the live acceptance runs exactly this path)
+_dirv = os.path.join(TMP, "digest")
+os.makedirs(_dirv)
+use(route(release("v0.3.3")))
+_p, _got = update.fetch_and_verify({"url": ASSET_URL, "digest": GOOD},
+                                   _dirv)
+assert _got == GOOD.split(":")[1] and os.path.exists(_p), "good rides"
+try:
+    update.fetch_and_verify({"url": ASSET_URL,
+                             "digest": "sha256:" + "0" * 64}, _dirv)
+    raise AssertionError("a mismatched digest must refuse")
+except ValueError as _e:
+    assert "mismatch" in str(_e) and os.path.exists(_p), \
+        "the refused download must stay for the retry"
+try:
+    update.fetch_and_verify({"url": ASSET_URL, "digest": ""}, _dirv)
+    raise AssertionError("an absent digest must refuse")
+except ValueError as _e:
+    assert "no sha256 digest" in str(_e), _e
+# the seam: PB_UPDATE_ASSET_URL replaces the target, SHA256='self'
+# makes the target's own bytes the truth - the verify+record machinery
+# runs complete over a locally built msi (the acceptance rig).
+_seamed = os.path.join(TMP, "seam-target-user.msi")
+open(_seamed, "wb").write(b"SEAMBYTES")
+use(route(release("v0.3.3"), msi_body=b"SEAMBYTES"))
+os.environ["PB_UPDATE_ASSET_URL"] = _seamed
+os.environ["PB_UPDATE_ASSET_SHA256"] = "self"
+_p2, _got2 = update.fetch_and_verify({"url": API,
+                                      "digest": "sha256:" + "f" * 64},
+                                     _dirv)
+assert _got2 == hashlib.sha256(b"SEAMBYTES").hexdigest(), _got2
+assert os.path.basename(_p2) == "seam-target-user.msi", _p2
+del os.environ["PB_UPDATE_ASSET_URL"], os.environ["PB_UPDATE_ASSET_SHA256"]
+print("ok - digest law: good rides, bad/absent refuse with words, the "
+      "seam runs the full path over a local msi")
+
 # ---- 6) the apply.bat content pins (the bat the frozen copy earns) -
+# THE DETERMINISTIC LAST MILE (owner live incident, Oct 26): taskkill
+# own pid, bounded tasklist wait, SYNCHRONOUS /qn /norestart install,
+# UNCONDITIONAL relaunch on both rc paths (the old failure branch
+# paused forever and skipped the relaunch), a receipt line carrying
+# the rc AND the verified digest into the app's own update.log, then
+# self-delete. Every clause is pinned; the ordering is pinned too
+# (relaunch after rc capture = both branches; no pause, no :done).
 text = update.apply_text(r"C:\u\PanelBoss-0.3.3-user.msi",
-                         r"C:\p\PanelBoss.exe", 1234, r"C:\u\update.log")
+                         r"C:\p\PanelBoss.exe", 1234, r"C:\u\msi.log",
+                         digest="ab" * 32,
+                         rclog=r"C:\a\PanelBoss\logs\update.log")
+assert 'taskkill /F /PID 1234' in text, "the bat is the one killer"
 assert 'tasklist /fi "PID eq 1234"' in text, "waits on the dying pid"
-assert "if %tries% geq 15" in text and "ping -n 3" in text, \
-    "2 s cadence, 30 s cap - the bat's OWN ping idiom"
-assert '/qn' in text and '/l*v' in text, "silent install, receipt stays"
-launch = ('start "PanelBoss" "C:\\p\\PanelBoss.exe"')
-assert launch in text, "relaunch mirrors update.bat's line"
+assert 'findstr /m /c:"1234"' in text and "|" not in text, \
+    "the wait is a FILE probe and the bat carries ZERO pipe characters " \
+    "(measured twice Oct 26: under DETACHED a pipe wedges find forever, " \
+    "and even a rem line mentioning one kills the interpreter)"
+assert "if %tries% geq 30" in text and "ping -n 2" in text, \
+    "bounded wait (~1 s ping laps, the handle-safe idiom)"
+assert '/qn' in text and '/l*v' in text and '/norestart' in text, \
+    "silent synchronous install, receipt stays, no reboot ambush"
+assert 'set rc=%errorlevel%' in text, "the rc is captured at once"
+launch = ('start "" "C:\\p\\PanelBoss.exe"')
+assert launch in text and "pause" not in text and ":done" not in text, \
+    "relaunch UNCONDITIONAL after the rc capture (both branches) - " \
+    "a detached bat has no console to answer a pause"
+assert text.find("set rc=%errorlevel%") < text.find(launch) \
+    < text.find('del "%~f0"'), \
+    "the order IS the fix: receipt-capture, relaunch, suicide"
+assert ('>>"C:\\a\\PanelBoss\\logs\\update.log"') in text \
+    and "install rc=%rc% verified sha256=" + "ab" * 32 in text, \
+    "the receipt names the rc and the digest into the APP's log"
 assert "--autostart" not in text, \
     "update.bat:48 carries no stamp (a relaunch is not a login) - \
 mirrored: none here either"
@@ -271,14 +339,18 @@ print("ok - the onedir host bundle carries six files, manifest "
       "_icon.py keeps the WM_SETICON call, the frozen seam, the words")
 bat = update.write_apply(r"C:\u\PanelBoss-0.3.3-user.msi",
                          r"C:\p\PanelBoss.exe", 1234, os.path.join(TMP, "drop"))
-assert bat == os.path.join(old_dir, "apply.bat") and os.path.exists(bat)
-print("ok - apply.bat: waits-on-pid, /qn /l*v, unstamped relaunch, "
+assert bat == os.path.join(old_dir, "apply-1234.bat") \
+    and os.path.exists(bat), "the handoff name carries the victim pid"
+print("ok - apply.bat: taskkill-by-pid, bounded wait, /qn /norestart, "
+      "receipt with the verified digest, UNCONDITIONAL relaunch, "
       "self-delete; the store (.bak pair) rides first, mirrored in "
       "update.bat before the pull")
 
 # ---- 7) the FROZEN branch, simulated: fake sys.frozen + a LOCALAPPDATA
 #         pointing into TMP; the spawn must be cmd.exe /c +
-#         creationflags=0 (the ledger's second registered console line)
+#         creationflags 0x208 (the detached handoff - the ledger's
+#         second registered console line became the ledger's one
+#         DETACHED line, Oct 26)
 class InlineThread:
     def __init__(self, target=None, **kw):
         self._t = target
@@ -303,15 +375,23 @@ try:
     assert popped, "the frozen click spawned nothing"
     (args, kwargs), = popped
     bat_path = os.path.join(os.environ["LOCALAPPDATA"], "PanelBoss",
-                            "update", "apply.bat")
+                            "update", "apply-%d.bat" % os.getpid())
     assert args == (["cmd.exe", "/c", bat_path], ), args
-    assert kwargs.get("creationflags") == 0, "the declared console opt-out"
+    assert kwargs.get("creationflags") == 0x208, \
+        "DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP: the bat outlives " \
+        "the app it taskkills (Oct 26 live-incident fix)"
     assert kwargs.get("cwd") == os.path.dirname(bat_path)
     assert w.saved == 1, "the debounced save keeps its promise first"
     assert ("quit", True) in w.events, "then the quit event, source-style"
     msi = os.path.join(os.environ["LOCALAPPDATA"], "PanelBoss",
                        "update", "PanelBoss-0.3.3-user.msi")
     assert os.path.exists(msi), "the msi landed in the update dir"
+    # the bat ITSELF carries the verified digest into the receipt
+    with open(bat_path, encoding="mbcs") as fh:
+        _bt = fh.read()
+    assert "verified sha256=" + GOOD.split(":")[1] in _bt \
+        and "logs\\update.log" in _bt, \
+        "the handoff receipt lost the digest or the app's log path"
     # and the 'current' click: no download, no quit, the row says so
     popped.clear()
     use(route(release("v0.3.2")))
@@ -327,6 +407,26 @@ try:
     w3._msi_handoff()
     w3._check_updates()
     assert not popped and not w3.events, "one flight at a time"
+    # THE DIGEST LANE (handler view): a mismatched published digest
+    # refuses WITHOUT a spawn and WITHOUT the quit event - the app
+    # stays tray-full, the row says why, the download stays on disk.
+    popped.clear()
+    use(route(release("v0.3.3", digest="sha256:" + "0" * 64)))
+    w4 = stub_win()
+    w4._msi_handoff()
+    assert not popped and not w4.events, "a refused digest spawns nothing"
+    assert "mismatch" in w4.update_status.text \
+        and "refusing" in w4.update_status.text, w4.update_status.text
+    assert os.path.exists(msi), "the refused download is KEPT (retry " \
+        "must not re-pay the wire)"
+    # and the absent digest: same refusal, its own honest sentence
+    popped.clear()
+    use(route(release("v0.3.3", digest=None)))
+    w5 = stub_win()
+    w5._msi_handoff()
+    assert not popped and not w5.events, "a silent release stays unsent"
+    assert "no sha256 digest" in w5.update_status.text, \
+        w5.update_status.text
 finally:
     urllib.request.urlopen = REAL_OPEN
     G.subprocess.Popen = real_popen
@@ -336,6 +436,7 @@ finally:
         os.environ["LOCALAPPDATA"] = real_lad
     G.threading = __import__("threading")
 shutil.rmtree(TMP, ignore_errors=True)
-print("ok - frozen branch: cmd.exe /c + creationflags=0, save, quit;"
-      " current stays; one flight")
+print("ok - frozen branch: cmd.exe /c + creationflags=0x208 (detached),"
+      " save, quit; digest refusals spawn nothing; current stays; one "
+      "flight")
 print("UPDATE TESTS OK")
