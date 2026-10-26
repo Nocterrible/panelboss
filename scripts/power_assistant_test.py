@@ -687,6 +687,65 @@ def check():
         # fails here, whatever sections it names.
         assert _PINS.count('self._repaint(') == 3, \
             "the irreducible section passes changed count/shape"
+        # THE CONSTANT RAIL (Oct 25, owner-accepted). WHY THIS SHAPE: a
+        # ScrollHost whose bar packs/forgets changes the canvas width by
+        # 14 px, and pack re-lays EVERY fill="x" widget on the page - each
+        # one a CTk widget whose <Configure> binding redraws its own
+        # canvas. Measured on one pin edit before/after: 666/308
+        # Configure events, 359/194 canvas redraws, a 4547/1921 ms frozen
+        # turn. The crime is a LAYOUT change, invisible to a static
+        # assertion, so the pin is the shape: the bar keeps its slot
+        # (no pack_forget anywhere in the file) and hiding is a DRESS.
+        _SCR = _io.open(os.path.join(_wd, "_scroll.py"),
+                        encoding="utf8").read()
+        assert "def _rail" in _SCR, "the bar's dress is gone"
+        assert "pack_forget" not in _SCR, \
+            "the rail's slot is no longer constant - the width cascade is back"
+        assert "_rail(hidden=" in _SCR and 'configure(style=' in _SCR, \
+            "the rail is no longer a dress, it is a pack change"
+        for _k, _host in app.pages.items():
+            assert _host._sb.winfo_manager() == "pack", \
+                "the rail lost its slot on %s" % _k
+        # THE PAGE STILLS (Oct 25, DEFAULT-ON - the fix the owner bought,
+        # so the escape hatch is the INVERTED one: PB_UI_NOSNAPSHOT=1).
+        # The offscreen camera is BANNED BY MEASUREMENT: PrintWindow
+        # renders Tk/CTk pages with whole card rows arriving as unpainted
+        # white blocks (the film shows it), so a still from that path is
+        # an artifact, not a cover. The still has exactly one source, the
+        # glass at the switch-away moment, and one guard.
+        _SH = _io.open(os.path.join(_wd, "_shell.py"), encoding="utf8").read()
+        _PP = _io.open(os.path.join(_wd, "_pageprint.py"),
+                       encoding="utf8").read()
+        _RAW = _io.open(os.path.join(_wd, "_gdiraw.py"),
+                        encoding="utf8").read()
+        assert 'environ.get("PB_UI_NOSNAPSHOT")' in _SH, \
+            "the still path lost its kill switch"
+        for _verb in ("_snap_take", "_snap_show", "_still", "_page_drawn"):
+            assert ("def %s" % _verb) in _SH, _verb + " is gone"
+        assert "def screen_bitmap" in _PP and "def rect_is_ours" in _PP, \
+            "the still's camera or its whose-pixels guard is gone"
+        assert "PrintWindow" not in _RAW and "window_bitmap" not in _PP, \
+            ("the falsified offscreen camera is back: it renders Tk/CTk "
+             "pages with unpainted white blocks (measured) - re-adding it "
+             "means re-adding the binding AND owning that finding")
+        # the kill switch, LIVE: with it set, not one camera call may
+        # happen and the backdrop must stay the flat fill
+        from panelboss.ui.window import _pageprint as _PPS
+        _seen, _real_sb = [], _PPS.screen_bitmap
+        _PPS.screen_bitmap = lambda *a, **k: _seen.append(1)
+        try:
+            app._snap_off = True
+            app._snap = {}
+            app._show_tab("monitor profiles")
+            app._show_tab("oled")
+            app.update_idletasks()
+            app._show_tab("monitor profiles")
+            assert not _seen, "the kill switch let a camera through"
+            assert not app._backdrop.cget("image"), \
+                "the kill switch left a still in the backdrop"
+        finally:
+            _PPS.screen_bitmap = _real_sb
+            app._snap_off = False
         app._noshows_ask([{"proc": "a.exe", "title": "one"}])
         app.update_idletasks()
         kids, stack = [], [app.noshows_dialog]
