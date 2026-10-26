@@ -2171,6 +2171,20 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
 - Repo-local git identity pinned to the brand: new commits cannot
   re-leak from this box.
 
+## Promotion posture (owner call, Oct 26): answer threads, don't broadcast
+
+- Cross-post sweep rejected on the merits: r/htpc has a no-new-projects
+  rule, r/OLED is small, the rest are weak fits. The strategy is instead
+  replying to the recurring "how do I protect my OLED from burn-in"
+  threads on r/OLED_Gaming as an option — highest-intent traffic, evergreen
+  (those threads rank for years), and a reply that reads as an answer
+  out-ranks a launch post that sinks to page two.
+- Reply shape agreed: answer first (what it does for *their* panel), link
+  last (the release page, never the raw .msi — the sha256 and license
+  preempt the two skeptical questions). Monitoring = one Reddit saved-search
+  on burn-in/image-retention in r/OLED_Gaming, weekly glance.
+- Future-me: do not re-propose broadcast posts; this lane is the lane.
+
 ## Launch-day addenda: metrics, the store homepage, commit hygiene
 
 - **GitHub metrics (owner ask)**: traffic API queried — day-bucketed
