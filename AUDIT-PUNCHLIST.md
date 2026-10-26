@@ -2097,3 +2097,25 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   (false-positive family, ThreatID 2147737394 / 2147731849) -
   relevant to the public SmartScreen story, banked post-launch to
   consider a Microsoft false-positive submission.
+
+## RELEASE verdict in - and the gate's RISK line, answered the same hour
+
+- Gate round 6: RELEASE, no blockers. Its RISK (task-registered uninstall:
+  UAC surprise or silent orphan) was tested within the hour on this desk:
+  a highest-privilege task cannot be deleted by a Medium token via
+  schtasks OR the Schedule.Service COM (both Access denied, measured) -
+  the elevation fallback prompts (owner clicked once at 23:52; the 129 s
+  wait was the desk being away, bounded by the 90 s timeout) and the
+  uninstall completes WITHOUT it either way. README + release notes
+  hedges shipped post-signature (artifact bytes stay exactly the
+  gate-signed 49da507...).
+- 0.3.7 BANK: (a) register the power-assistant task at LIMITED rank so
+  it self-deletes without elevation (the report may lose the -all depth;
+  owner call); (b) Microsoft Defender false-positive submission for the
+  PyInstaller family (ThreatID 2147737394/2147731849 flagged our exes
+  twice tonight); (c) Hello IR menu label wording (says 'pick to
+  install' where the installed app bundles it - gate note); (d) WiX
+  download hash pin in build_msi (build-time supply chain); (e) updater:
+  verify the downloaded msi against the published sha256 before running.
+- Post-flip: run_all's window sections need the app down - the CI-style
+  stamp discipline applies to every future tag; keep it.
