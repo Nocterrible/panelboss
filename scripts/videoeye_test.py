@@ -408,17 +408,33 @@ MON = [{"short": "MONA", "x": 0, "y": 0, "w": 1000, "h": 800},
 
 
 class Rec:
+    """The theater-era recorder, desktop-veil-aware (Oct 25): pieces
+    in the -10_000_000 range are the DESKTOP VEILS (dimmer's new
+    bottom layer) and ride the .desk ledger, NOT .painted - the ring
+    geometry pins predate the feature and must keep their exact
+    sets; the suppression pins below read the desk ledger."""
+
     def __init__(self):
         self.painted = {}
         self.gone = []
         self.calls = []      # every paint ever queued (the re-pin pin
                              # counts beats, the dict only holds states)
+        self.desk = {}       # -1e7 keys -> (rect, alpha), alive states
+        self.desk_gone = []  # and the ticks they died (the precedence
+        #                    # drop lands here, not in .gone)
 
     def paint(self, hwnd, rect, alpha):
+        if isinstance(hwnd, int) and hwnd <= -10_000_000:
+            self.desk[hwnd] = (rect, alpha)
+            return
         self.painted[hwnd] = (rect, alpha)
         self.calls.append((hwnd, rect, alpha))
 
     def unveil(self, hwnd):
+        if isinstance(hwnd, int) and hwnd <= -10_000_000:
+            self.desk.pop(hwnd, None)
+            self.desk_gone.append(hwnd)
+            return
         self.painted.pop(hwnd, None)
         self.gone.append(hwnd)
 
@@ -706,6 +722,12 @@ assert 1 not in f.rec.painted            # MONB is covered too: the
 #                                        # under its full-field piece
 ok("videodim.monitors MONB: EXACTLY one full-field piece at its rect, "
    "alpha 0.5 (per-row level), while MONA keeps its four border pieces")
+assert f.rec.desk == {} and f.rec.desk_gone == [], \
+    "NEITHER covered panel wears a desktop piece (Oct-25 precedence): " \
+    "the theater's darkness on a held panel is the frame alone - the " \
+    "desktop veil is set subtraction (dimming - covered), not a veto"
+ok("theater holds, no stacking: the desktop ledger stays empty while "
+   "both panels wear frame pieces")
 
 f = Frame([w(1), w(2, rect=(3000, 10, 800, 600))], idle=999.0,
           vmons={"MONA": {"on": False}})

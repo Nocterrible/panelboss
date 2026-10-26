@@ -83,14 +83,22 @@ def cfg(on=True, monitors=None, apps=None, idle_sec=120, ramp_sec=8,
 
 class World:
     """One FSM with fake eyes: the window list, the audio set, and
-    the idle clock are all mine to move between ticks."""
+    the idle clock are all mine to move between ticks. MONS is the
+    panel-row seam (the desktop veil's feed): the default EMPTY list
+    fail-opens the desktop block for every pre-Oct-25 pin (a panel
+    with no desk row skips, no veil, no raise - the skeleton's own
+    failure path, now the suite's standing shape); the desktop pins
+    below pass their rows. VIDEO is the eye seam, default absent
+    like the shipped no-theater desk."""
 
-    def __init__(self, wins, audio=(), idle=999.0):
+    def __init__(self, wins, audio=(), idle=999.0, mons=(), video=None):
         self.wins, self.audio, self.idle = list(wins), set(audio), idle
+        self.mons = list(mons)
         self.rec = Rec()
         self.v = dimmer.Veils(lambda: self.wins, lambda: set(self.audio),
                               lambda: self.idle, self.rec.paint,
-                              self.rec.unveil)
+                              self.rec.unveil, video,
+                              lambda: list(self.mons))
 
     def tick(self, c, now):
         self.v.tick(c, now)
@@ -1607,4 +1615,189 @@ ok("the idle seam is the gate: source pins both branches, sentinels "
    "timers card, beside the idle rails it steers (Oct-24), the "
    "dimmer card carrying no ghost, the relaunch and fallback caveats "
    "riding the tip")
+# =====================================================================
+# THE DESKTOP VEIL (owner, Oct 25): the bare desktop dims with its
+# panel's windows - one bottom-layer full-rect piece per dimming panel
+# at the panel's EXACT [dimmer] row level, the theater's piece-kind
+# reused. Pinned through the same fake seams as the whole suite: no
+# Tk, no real desk, the -1e7 key family entirely synthetic.
+
+DESK_A = {"short": "AOC2790", "x": 0, "y": 0, "w": 2560, "h": 1440}
+DESK_B = {"short": "IOC912B", "x": 2560, "y": 0, "w": 1920, "h": 1080}
+DESK_KEY = -(10_000_000 + 1)     # the first key any fresh Veils mints
+#                                 (the _desk counter is per-FSM; the
+#                                 module registry only grows)
+
+
+class Eye:
+    """The mutable theater seam, bare-rect lane (the clause-1 pair is
+    the eye suite's story, not this one's)."""
+
+    def __init__(self):
+        self.rect = None
+
+    def __call__(self, cfg, now):
+        return self.rect
+
+
+def tape_world(mons, wins=(), video=None):
+    """A world whose ledgers are ONE ordered tape: (kind, key, rect,
+    alpha). The handover law reads the ORDER, not the dicts."""
+    ww = World(list(wins), mons=mons, video=video)
+    tp = []
+    ww.v._paint = lambda h, r, a: tp.append(("paint", h, r, a))
+    ww.v._unveil = lambda h: tp.append(("gone", h, None, 0.0))
+    return ww, tp
+
+
+# (i) the feed: the opted+dimming panel gets its piece - full panel
+#     rect, the panel's OWN level, key registered.
+W = World([w(1)], mons=[dict(DESK_A), dict(DESK_B)])
+W.tick(cfg(level=30, monitors={"AOC2790": True, "IOC912B": False}), 100)
+assert W.rec.painted[DESK_KEY] == ((0, 0, 2560, 1440), 0.3), W.rec.painted
+assert DESK_KEY in dimmer._DESKTOP_KEYS, "the key is the placement seam"
+assert all(v[0] != (2560, 0, 1920, 1080) for v in W.rec.painted.values()), \
+    "the UNOPTED panel earns no desktop piece: the opt-in law holds"
+ok("the desktop piece: full rect, own level, registered key, opt-in only")
+assert W.rec.painted[1] == ((10, 10, 800, 600), 0.3) \
+    and W.rec.painted[DESK_KEY][1] == W.rec.painted[1][1], \
+    "the window veil and the desktop piece take the SAME fill in the " \
+    "same loop - the seam across a window edge is one darkness"
+ok("the seam law by construction: one alpha fill serves both halves")
+
+# levels row: EXACTLY the panel's own percent, no global drift.
+W = World([w(1)], mons=[dict(DESK_A)])
+W.tick(cfg(level=30, levels={"AOC2790": 55},
+           monitors={"AOC2790": True}), 100)
+assert W.rec.painted[DESK_KEY] == ((0, 0, 2560, 1440), 0.55) \
+    and W.rec.painted[1] == ((10, 10, 800, 600), 0.55), W.rec.painted
+ok("the [dimmer.levels] row drives the desktop EXACTLY as it drives "
+   "the window veils of that panel")
+
+# fail-open: a panel with no desk row skips silently - the shape that
+# keeps every pre-Oct-25 pin byte-identical.
+W = World([w(1)])
+W.tick(cfg(level=30), 100)
+assert W.rec.painted == {1: ((10, 10, 800, 600), 0.3)}, \
+    "no monitors seam rows: no piece, no raise, no extra paint"
+ok("no desk row: the desktop veil fails open, silently")
+
+# (ii) the handover, BOTH directions, one tape, no flash.
+eye = Eye()
+W, tp = tape_world([DESK_A, DESK_B],
+                   wins=[w(2, monitor="IOC912B",
+                           rect=(2660, 100, 800, 500))], video=eye)
+W.tick(cfg(level=30, monitors={"AOC2790": True, "IOC912B": False}), 100)
+assert tp == [("paint", DESK_KEY, (0, 0, 2560, 1440), 0.3)], tp
+tp.clear()
+
+
+def vdc(now_cfg):
+    now_cfg["videodim"] = {"on": True, "min_rect_px": 1, "grace_s": 3,
+                           "idle_sec": 0, "level": 30, "fade": False,
+                           "monitors": {"AOC2790": True}}
+    return now_cfg
+
+
+eye.rect = (2660, 100, 800, 500)          # the video takes IOC's panel;
+W.tick(vdc(cfg(level=30,                  # AOC opts its full field
+               monitors={"AOC2790": True, "IOC912B": False}), ), 101)
+full = W.v._frames[("AOC2790", "full")]
+kinds = [(a, b) for a, b, _r, _c in tp]
+assert ("paint", full) in kinds and ("gone", DESK_KEY) in kinds, tp
+assert kinds.index(("paint", full)) < kinds.index(("gone", DESK_KEY)), \
+    "BIRTH BEFORE DEATH in one drain: the swap overlaps (two same-dark " \
+    "full-rects for microseconds), it never opens a bright gap"
+fullpaint = [t for t in tp if t[1] == full]
+assert fullpaint == [("paint", full, (0, 0, 2560, 1440), 0.3)], \
+    ("tp wrong", tp, \
+     "ONE darkness throughout: the theater's full-field piece lands at " \
+     "the SAME rect and the SAME 0.3 the desktop piece wore (the IOC " \
+     "border pieces are the ring's own story, not the swap's)")
+tp.clear()
+eye.rect = None                            # the movie lifts
+W.tick(vdc(cfg(level=30,
+               monitors={"AOC2790": True, "IOC912B": False})), 102)
+assert tp[0] == ("paint", DESK_KEY, (0, 0, 2560, 1440), 0.3), tp
+assert ("gone", full) in [(a, b) for a, b, _r, _c in tp], tp
+assert W.v._desk["AOC2790"] == DESK_KEY, \
+    "the RESUMED piece carries the SAME key - the registry is stable " \
+    "per panel for the process: no rebirth, no re-pin race"
+ok("theater handover BOTH ways: same-tick swaps, one darkness, no " \
+   "recreation of the desktop key")
+
+# (iii) level re-tune WITHOUT recreation (the family's
+# configure-color path: same key, new alpha, zero unveil between).
+W, tp = tape_world([DESK_A])
+W.tick(cfg(level=30, monitors={"AOC2790": True}), 100)
+tp.clear()
+W.tick(cfg(level=60, monitors={"AOC2790": True}), 101)
+assert tp == [("paint", DESK_KEY, (0, 0, 2560, 1440), 0.6)], tp
+ok("a re-tune re-paints the SAME veil - configure-color, not rebuild")
+
+# (iv) the census law: the piece never dims itself, never gets
+# furniture-judged, and is invisible to its own dimmed set BY KEY.
+own = w(777, pid=os.getpid(), cls="TkTopLevel", tool=True,
+        rect=(0, 0, 2560, 1440))
+W = World([own], mons=[dict(DESK_A)])
+W.tick(cfg(level=30, monitors={"AOC2790": True}), 100)
+assert 777 not in W.rec.painted, \
+    "the veil's own census row (own pid, tool bit - the shape the real " \
+    "Tk toplevel answers with) eats the self-veil skip: never itself"
+assert all(r["hwnd"] > 0 for r in W.wins), \
+    "the census speaks positive real hwnds; the piece is keyed negative " \
+    "- excluded by construction, the theater's free ride, now the " \
+    "desktop's"
+furniture = {"hwnd": 778, "pid": 0, "exe": "", "cls": "TkTopLevel",
+             "monitor": "AOC2790", "rect": (0, 0, 2560, 1440),
+             "cloaked": False, "iconic": False, "fg": False,
+             "tool": True, "panel_cov": 1.0, "frameless": False,
+             "elevated": False}
+assert dimmer._veil_rows([furniture]) == [], \
+    "the REAL furniture door refuses a full-panel toolwindow row - the " \
+    "piece can never be painted twice through the census (d0 law)"
+ok("own census: the piece eats its own skip, the key law excludes it, " \
+   "and _veil_rows refuses it paint as furniture")
+
+# (v) the band law, headless: a desktop key pins to HWND_BOTTOM with
+# the four-NO flags and NOTHING ELSE - no tray consult (the taskbar's
+# z-slots stay as the hider left them, the ON-HOLD law), and a
+# theater key never borrows the bottom.
+_saved = (dimmer._setwindowpos, dimmer._tray_above, dimmer._in_slot)
+_swp, _tray_peek = [], []
+
+
+class _Win:
+    def update_idletasks(self):
+        pass
+
+    def winfo_id(self):
+        return 0x4242
+
+    _pb_rect = (0, 0, 2560, 1440)
+
+
+try:
+    dimmer._setwindowpos = lambda *a: _swp.append(a) or 1
+    dimmer._tray_above = lambda rect: _tray_peek.append(1) or None
+    dimmer._in_slot = lambda h, t: False
+    dimmer._zpin(_Win(), DESK_KEY)
+    assert _swp == [(0x4242, 1, 0, 0, 0, 0, dimmer._SWP_ZPIN)], _swp
+    assert not _tray_peek, \
+        "the bottom pin never consults the tray: the desktop piece " \
+        "cannot start a z-war with the taskbar (dimming law ON HOLD)"
+    assert dimmer._PIN_WARNED_DESK[0] is False, \
+        "the pin landed; no confession owed"
+    _swp.clear()
+    dimmer._zpin(_Win(), -1)                 # a theater piece: TOP band
+    assert _swp and _swp[0][1] == -1, _swp
+    assert all(c[1] != 1 for c in _swp), \
+        "the two piece-kinds never borrow each other's band"
+    assert -1 not in dimmer._DESKTOP_KEYS
+finally:
+    (dimmer._setwindowpos, dimmer._tray_above,
+     dimmer._in_slot) = _saved
+ok("the band law, headless: desktop -> HWND_BOTTOM with _SWP_ZPIN and "
+   "no tray consult; theater stays topmost; the ranges never cross")
+
 print("\nDIMMER TESTS OK (%d)" % len(OK))

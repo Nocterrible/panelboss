@@ -207,7 +207,9 @@ schedule - run wash now lights opted-in panels white for ten seconds, once.
 
 The dimmer card arms background dimming, opted in per monitor. After dim
 after (0 to 60 seconds of stillness) every background window wears a veil
-at veil level, 10-90 percent, with per-panel overrides. The foreground and
+at veil level, 10-90 percent, with per-panel overrides. The dim layer
+covers the whole background: the bare desktop dims with its panel's
+windows at that panel's own level. The foreground and
 anything making sound keep their light; menus, tooltips, and transient popups
 never dim; administrator windows stay bright unless PanelBoss runs elevated,
 which is not recommended. Always dims a panel without the idle wait - that

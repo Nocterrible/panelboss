@@ -23,6 +23,26 @@ that blinks off is a screensaver. The card's idle rail also reaches
 ZERO (Oct-15 UAT, the ramp's floor law). The card's pause switch and
 the bound hotkey pause the same way: a fade, not a blink, and the
 field comes back the tick the pause lifts.
+
+THE DESK TOPPINGS (owner, Oct 25): the bare desktop dims WITH its
+panel's windows. One full-panel piece per dimming panel rides the
+band's BOTTOM (HWND_BOTTOM - measured above Progman, below every
+ordinary window) at the panel's EXACT [dimmer] row level, so the seam
+across a window edge reads as one darkness. It is the theater's own
+piece-kind REUSED (the same Tk toplevel, the same -alpha layering,
+the same paint loop and z-pin law - this family carries no color
+key; the wallpaper shows through the dark by blending). The taskbar
+and every app stay lit by the ordinary z-order (the bar is a normal
+window and the piece sits under all of them), and desktop icons take
+their double-clicks THROUGH the veil (the family's click-through
+bits). The Oct-15 shell-view law STANDS: Progman/WorkerW rows still
+never wear a veil of their own - the dark lands on a piece of ours at
+the band's bottom. While the theater holds a panel, its ring or
+full-field piece OWNS the darkness and the desktop piece is
+suppressed (dimming - covered: no stacking); the swap is same-tick in
+both directions (birth queues before the drop in one pump drain) and
+the piece RESUMES the tick the frame lifts, at the panel's row level,
+under the same key - no recreation, no flash.
 An [dimmer.always] row is a SUB-MODE of the opt-in, not a bypass:
 that panel dims without waiting for idle_sec, but it bows to the
 foreground (its center inside the panel's rect un-dims the panel -
@@ -89,7 +109,9 @@ not "taken" - the one word was swallowing 87s and 1400s into a lie
 about a chord that was never actually taken. One press pauses, one
 resumes (toggle, not hold).
 
-SIZE LAW: the file runs ~900 (the Oct-15 video mode grew it ~100 -
+SIZE LAW: the file runs ~1720 (the Oct-15 video mode grew it ~100;
+the Oct-25 desktop veil rode the theater's rails for +40 and the
+wave's own count rides here, honest -
 the frame is the Veils qualification the docstring above the FSM
 promised, and the mode shares the paint loop, the ramp, and the
 drop table: splitting Veils now would fork the qualification by
@@ -148,6 +170,9 @@ _SWP_ZPIN = 0x213   # NOSIZE | NOMOVE | NOACTIVATE | NOOWNERZORDER: a
 # window race must never re-silence the theater branch's confession.
 _PIN_WARNED = [False]
 _PIN_WARNED_PLAIN = [False]
+# one flag for the desktop-veil pin's swallow (same branch-confession law):
+# a refused bottom pin is cosmetic, but it must confess ONCE per process.
+_PIN_WARNED_DESK = [False]
 # The taskbar exclusion for theater pieces: primary + per-monitor tray
 # classes; the pieces anchor UNDER the tray occupying their own
 # monitor row so the desk's chrome is never darkened (cappy packet).
@@ -223,6 +248,27 @@ _WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
 # rule, so it filters in the census stratum - never in the Veils FSM,
 # whose job is qualification by config.
 DESKTOP_VIEWS = frozenset(("Progman", "WorkerW"))
+
+# THE DESKTOP VEIL (owner, Oct 25): the bare desktop dims with its
+# panel's windows. It is ONE bottom-layer full-rect piece per dimming
+# panel - the theater's full-field machinery REUSED (same Tk toplevel,
+# same -alpha layering - the family carries no color key; the
+# wallpaper shows through the dark by blending - same paint loop),
+# but PLACED AT
+# HWND_BOTTOM instead of the topmost/tray band. Measured on this desk
+# (pb_deskveil_bottom3.log): HWND_BOTTOM slots the veil immediately
+# ABOVE Progman (the wallpaper host anchors the very bottom) and below
+# every ordinary window - the owner's "above the wallpaper, below every
+# normal window", no parenting into the shell views (the Oct-15
+# incident's class). The registry below is the placement seam AND the
+# census identity: a bottom veil is a full-panel toolwindow (the
+# furniture law's exact shape), so _veil_rows refuses it paint by
+# geometry alone - _DESKTOP_KEYS makes the same fact explicit and
+# lets _zpin tell a desktop key from a theater key.
+_DESKTOP_KEYS = set()              # synthetic negative hwnds -> bottom
+_HWND_BOTTOM = 1                   # SetWindowPos's bottom anchor (the
+#                                    # pin carries _SWP_ZPIN - 0x213,
+#                                    # the four NOs move nothing else)
 
 # the patchable aliases the fakes lean on (the suite owns the desk
 # here; the pins above stay the real verbs). The hotkey VERB moved to
@@ -300,6 +346,8 @@ class Veils:
         self._paint, self._unveil = paint, unveil
         self._video, self._mons = video, monitors or _monitors
         self._frames = {}      # (panel short, side) -> synthetic key
+        self._desk = {}        # panel short -> the desktop veil's
+        #                       # synthetic key (bottom layer, -1e7..)
         self._live = {}        # hwnd -> {"rect", "alpha", "die":
         #                           None|t, "mon": panel short,
         #                           "frame": bool (video pieces)}
@@ -538,6 +586,25 @@ class Veils:
             #                           # re-clip), and each piece
             #                           # carries its OWN alpha (the
             #                           # Oct-16 per-panel wave)
+        # THE DESKTOP VEIL (owner, Oct 25): one bottom-layer full-rect
+        # piece per dimming panel NOT held by the theater - covered
+        # panels already darken via the frame (the same dark idea; no
+        # double-dark), and the desktop yields its pixels while the
+        # theater holds the panel then RESUMES on lift (the drop/rebirth
+        # below is the same-tick swap, no flash). The alpha slot stays
+        # None like the frame pieces; the paint loop below fills it from
+        # the PANEL'S OWN [dimmer.levels] row, so the desktop's darkness
+        # EXACTLY matches the panel's window veils (the seam law).
+        for _short in dimming - covered:
+            try:
+                _m = next(m for m in self._mons()
+                          if str(m["short"]) == _short)
+            except Exception:                         # a dead mons seam, or
+                continue                              # a panel with no desk
+                                                      # row: skip this panel
+                                                      # (fail-open, no veil)
+            qualified[self._desk_key(_short)] = (
+                (_m["x"], _m["y"], _m["w"], _m["h"]), _short, None)
         # the per-panel PLAIN level ([dimmer.levels], the Oct-16 wave
         # absorbing the ADDON entry): a row paints ITS panel at its own
         # percent; an unlisted panel follows the global rail (absent
@@ -817,6 +884,20 @@ class Veils:
         key = self._frames.get((short, side))
         if key is None:
             key = self._frames[(short, side)] = -(len(self._frames) + 1)
+        return key
+
+    def _desk_key(self, short):
+        """The desktop veil's synthetic key: like the theater's _fkey
+        but in a DISJOINT negative range (-10_000_000..) so the painter's
+        _zpin can tell a bottom-layer desktop veil from a topmost theater
+        piece, and registered in the module's _DESKTOP_KEYS (both the
+        placement seam and the census identity the law names). Stable per
+        panel for the process - a level re-tune re-paints the SAME key,
+        never a new veil."""
+        key = self._desk.get(short)
+        if key is None:
+            key = self._desk[short] = -(10_000_000 + len(self._desk) + 1)
+            _DESKTOP_KEYS.add(key)
         return key
 
     def _fade(self, d, now, videodim=None):
@@ -1317,6 +1398,28 @@ def _zpin(win, target_hwnd):
     vanished this tick) costs one cosmetic beat and the next paint
     follows the window anyway."""
     try:
+        if target_hwnd in _DESKTOP_KEYS:
+            # THE DESKTOP VEIL (owner, Oct 25): a bottom-layer full-rect
+            # piece for the bare desktop. Unlike a theater piece (topmost
+            # band) or a plain veil (pinned above its owner), it anchors
+            # at HWND_BOTTOM - measured (pb_deskveil_bottom3.log) to slot
+            # immediately ABOVE Progman (the wallpaper host holds the
+            # very bottom) and below every ordinary window. No band
+            # match, no tray slide: the desktop belongs at the bottom,
+            # and ordinary windows naturally rise above it. The
+            # click-through bits ride _clickthrough as with every veil.
+            try:
+                win.update_idletasks()
+                h = (_u32.GetAncestor(win.winfo_id(), GA_ROOT)
+                     or win.winfo_id())
+                _setwindowpos(h, _HWND_BOTTOM, 0, 0, 0, 0, _SWP_ZPIN)
+            except Exception:
+                if not _PIN_WARNED_DESK[0]:
+                    _PIN_WARNED_DESK[0] = True
+                    log.warning("dimmer: the desktop veil pin raised or "
+                                "was refused; the bare desktop may sit "
+                                "bright (once per process)")
+            return
         if target_hwnd is not None and int(target_hwnd) <= 0:
             # SYNTHETIC ANCHOR (theater pieces) - THE BAND LAW, as
             # measured on the owner's desk (Oct-16 cappy): a background
