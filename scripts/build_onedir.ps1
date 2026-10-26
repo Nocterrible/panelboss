@@ -96,5 +96,20 @@ function Invoke-OnedirBuild {
     } else {
         Write-Output ('extension manifest MISSING (id derivation dies): ' + $ems)
     }
+    # TRAY ART (dossier G's true ending, Oct 25): the onedir shipped
+    # WITHOUT assets\tray_master.png, so the public build painted the
+    # interim circle while the source tree showed the owner art - the
+    # 'old icon reverted' was the fallback confessing, not a ghost.
+    # tray.py's belt path looks beside the module: _internal\panelboss\
+    # assets\tray_master.png.
+    $tas = Join-Path $repo 'assets\tray_master.png'
+    $tad = Join-Path $repo ('dist\' + $exe + '\_internal\panelboss\assets')
+    if (Test-Path $tas) {
+        New-Item $tad -ItemType Directory -Force | Out-Null
+        Copy-Item $tas $tad -Force
+        Write-Output ('tray art bundle copy: ' + $tas)
+    } else {
+        Write-Output ('tray art MISSING (the interim circle paints): ' + $tas)
+    }
     Write-Output ('onedir ready: ' + (Join-Path $repo ('dist\' + $exe)))
 }

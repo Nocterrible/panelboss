@@ -220,7 +220,14 @@ assert "'extension\\manifest.json'" in ob, \
     "the extension manifest left the bundle copy (id derivation dies)"
 assert ob.index("'extension\\manifest.json'") < ob.index("onedir ready"), \
     "the manifest copy must precede the build's ready line"
-print("ok - the onedir host bundle carries six files, manifest included")
+# DOSSIER G, CLOSED IN THE PACKAGER (Oct 25): the tray art must
+# ride the bundle or the public build paints the interim circle
+assert "'assets\\tray_master.png'" in ob, \
+    "the tray art left the bundle - the public icon is the fallback"
+assert ob.index("'assets\\tray_master.png'") < ob.index("onedir ready"), \
+    "the art copy must precede the build's ready line"
+print("ok - the onedir host bundle carries six files, manifest "
+      "included, and the tray art rides _internal")
 bat = update.write_apply(r"C:\u\PanelBoss-0.3.3-user.msi",
                          r"C:\p\PanelBoss.exe", 1234, os.path.join(TMP, "drop"))
 assert bat == os.path.join(old_dir, "apply.bat") and os.path.exists(bat)
