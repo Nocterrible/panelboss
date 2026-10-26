@@ -2123,3 +2123,10 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
 
 - Post-flip: run_all's window sections need the app down - the CI-style
   stamp discipline applies to every future tag; keep it.
+
+## Day two close: final artifact, README voice, updater last mile
+
+- Final v0.3.6 build sha256 11951af6f0b838e08233c1e05a856d48c4af36ab26428d60fc796620ef1381bd (icon-exe, updater fix, loose art + ico, README lead). Tag at 6e5e927 lineage, gauntlet (clean) stamped at the tip; asset swapped, release re-titled plain (no fanfare), body rewritten in the README voice.
+- Updater last mile (owner live incident): deterministic bat chain - taskkill by pid, WAIT VIA TASKLIST STATUS VOICE (findstr /m /v /b /c:INFO - Windows 26220 findstr honors NO quote-escape form and the CSV substring lied from the memory column; alive/gone both proven against the live process table), synchronous /qn /norestart, relaunch on BOTH rc paths, sha256 verified against the API digest BEFORE msiexec ever runs, receipt with the digest, self-delete. Desk upgraded past the buggy updater silently (guard kept the door and opt-ins - one product, no ghosts).
+- README: plain-language rewrite shipped (2909 -> ~3450 words, voice fixed not length cut), six-bullet feature lead (owner ask), app version de-hardcoded (release page is the version truth), four real captures + the owner NVIDIA-Replay movie-theater gif as the hero; readme_test pins image existence + the two verbatim strings.
+- Banked (0.3.7): changelog dialog on update hits; limited-rank task registration (kills today UAC-at-uninstall entirely); Defender false-positive submission (2147737394 family); WiX download hash pin; updater already verifies sha (moved from bank to done today); Hello IR label wording; five bland-but-true README sentences from the reviewer list.
