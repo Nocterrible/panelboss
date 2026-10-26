@@ -111,22 +111,49 @@
                      Name="startmenu" Type="integer" Value="1" KeyPath="yes"/>
     </Component>
 
-    <!-- law 3's uninstall half. THE DIRECTORY ATTRIBUTE IS THE POINT:
-         a deferred CA made of ExeCommand alone never sees [INSTALLDIR]
-         (properties do not expand in the deferred context - the
-         classic trap); a Directory-sourced CA resolves its path from
-         the execute script at deferred time, so the bare relative
-         command just runs. deferred + Impersonate=yes: the act runs
-         in the USER context (HKCU, the user's own task, the user's
-         own LOCALAPPDATA) - an elevated CA would look at the wrong
-         hive. Sequenced after InstallInitialize, so before
-         RemoveFiles: the exe is still on disk to speak its cleanup.
-         Return=ignore is the second belt (the verb already exits 0):
-         a locked exe or an AE-mandated reboot may not fail the
-         uninstall; the cleanup re-runs fine after the reboot. -->
-    <CustomAction Id="PanelBossCleanup" Directory="INSTALLDIR"
-                  ExeCommand="PanelBoss.exe cleanup"
-                  Execute="deferred" Impersonate="yes" Return="ignore"/>
+    <!-- law 3's uninstall half. WHY EXECUTE="immediate" (gate round 3,
+         Oct 25): the deferred shape was OBSERVED to betray
+         Impersonate="yes" on this WiX build (v3.14 rtm) - the compiled
+         CustomAction table row for this act carried type 1122 = 0x462,
+         which INCLUDES the 0x400 NO-IMPERSONATION bit (checked via the
+         WindowsInstaller COM, not inferred). The doors it was sent to
+         sweep sat untouched - PROVEN BEHAVIOR: a cold msiexec /x left
+         the NM door and host.json in place and no cleanup line in the
+         user's log. A Directory + bare relative command (the old
+         shape's other half) was additionally measured to fail its
+         LAUNCH in the gate-night attempts (/L*v: error 1721,
+         swallowed by Return=ignore) - attribution contaminated by
+         Defender PUA quarantines of the fresh unsigned exe racing
+         those same minutes, so treat relative-command resolution as
+         UNTESTED rather than trusted; FileKey removes the question by
+         naming the absolute file. Two traps, one fix:
+         Execute="immediate" runs the act in the CLIENT process -
+         msiexec runs in the uninstalling user's token, so HKCU, the
+         user's own task, and the user's own LOCALAPPDATA are the
+         right hive, and the act writes where the user can see it.
+         PROVEN on the desk (/L*v clean, four cleanup lines in the
+         user's log at the uninstall minute, the HKCU door gone, the
+         systemprofile tree never created).
+         The classic property-expansion trap that
+         forced deferred CAs ([INSTALLDIR] not expanding) applies to
+         the DEFERRED context only: immediate sees properties and
+         expands them in place. The command is now the FileKey form
+         (the act names the harvested PanelBoss.exe component file
+         directly - the same file identity the working
+         LaunchApplication act above points at; the installer expands
+         it to the absolute quoted path, so a user path with spaces
+         survives and no cwd resolution is involved), and the cleanup
+         verb is cwd-independent by construction. The same
+         InstallExecuteSequence position is kept - after
+         InstallInitialize, before RemoveFiles: the exe is still on
+         disk to speak its cleanup. Return=ignore is the second belt
+         (the verb already exits 0): a locked exe or an AE-mandated
+         reboot may not fail the uninstall; the cleanup re-runs fine
+         after the reboot. -->
+    <CustomAction Id="PanelBossCleanup"
+                  FileKey="filAEEF82E925FC1F1406CA08D75C4068DC"
+                  ExeCommand="cleanup"
+                  Execute="immediate" Impersonate="yes" Return="ignore"/>
     <InstallExecuteSequence>
       <Custom Action="PanelBossCleanup" After="InstallInitialize">REMOVE</Custom>
     </InstallExecuteSequence>
