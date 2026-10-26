@@ -2170,3 +2170,30 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   always; support-ticket words unchanged.
 - Repo-local git identity pinned to the brand: new commits cannot
   re-leak from this box.
+
+## Launch-day addenda: metrics, the store homepage, commit hygiene
+
+- **GitHub metrics (owner ask)**: traffic API queried — day-bucketed
+  with lag (buckets stopped Oct 25), reads near-zero today; asset
+  download_count is the install proxy (updates in slow batches), the
+  store dashboard (20 extension installs) the only live instrument.
+  Referrer list will show reddit.com when the buckets catch up —
+  recheck tomorrow. Suggested (0.3.7 bank): opt-in, off-by-default
+  "count me once" on the manual update-check press = installed-version
+  telemetry with zero phone-home.
+- **Extension homepage / Google ownership (owner ask)**: GitHub Pages
+  enabled on the master root (`.nojekyll` so files serve byte-exact);
+  Google's `google2b098b91bff9d21f.html` token committed, serving 200.
+  A 67-line hand-rolled `index.html` landing (no frameworks, no CDNs,
+  dark; theater gif from the repo itself) now fronts the root.
+  Reviewer SHIP-WITH-FIXES: "sends one rectangle" overclaimed — the
+  veil row carries ~10 geometry/meta fields (rect, dpr, paused,
+  scroll, view, origin, webrect, bounds, family, lane, ts) — reworded
+  in bullet and caption to "geometry only, never page content"; the
+  10s preview figure verified against the selftest code. Store website
+  field: `https://nocterrible.github.io/panelboss/` -> VERIFY.
+- **Commit hygiene**: launch-day commits carry no author-email trailer
+  (noreply default), no "Co-Authored-By: Claude" — AI-assisted
+  development is disclosed in the ledger, not smuggled into the public
+  history. (An Auto-claude-commit hook lives in .git/hooks; it would
+  have signed the commits had we committed via that flow.)
