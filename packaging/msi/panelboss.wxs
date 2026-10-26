@@ -27,7 +27,7 @@
        owner's git config user.name: "Tyler". -->
   <Product Id="*" Name="PanelBoss" Language="1033"
            Version="$(var.Version)"
-           Manufacturer="Tyler"
+           Manufacturer="Nocterrible"
            UpgradeCode="{2B6EC257-4870-49BB-AD89-58B577292C37}">
     <Package InstallerVersion="200" Compressed="yes"
              InstallScope="perUser" InstallPrivileges="limited"
