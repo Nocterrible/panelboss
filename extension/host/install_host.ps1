@@ -48,31 +48,49 @@ $py = Join-Path $repo '.venv\Scripts\python.exe'
 $HOSTNAME = 'com.nocterrible.panelboss'
 
 # 1. build the host exe (single file, no window, tiny - stdlib only).
-# -Rebuild deletes the exe first: a process killed mid-write leaves a
-# partial onefile that Test-Path happily reports as present, and the
-# skip-branch then wedges every reinstall on a broken binary the
-# recovery word used to have to be MANUAL about (gate finding 4, Oct 16).
+# BUILD-THEN-SWAP (dossier H): the registered exe is NEVER removed
+# before the build - PyInstaller writes its fresh onefile into the
+# dist dir beside it (extension\host\dist), and only a SUCCESSFUL
+# build is copied over the registered one. A build that dies leaves
+# the old exe untouched (gate finding 4's wedge, dead at the root:
+# there is no missing-exe window and no partial at the registered
+# path), and an in-use copy lands a .new beside it - never a
+# vanishing target.
 # THE MSI GUARD (final gate, Oct 25): the app's one-click always passes
 # -Rebuild, but a BUNDLED install ships the guarded build as a build
 # FACT and has no venv to rebuild it with - there, -Rebuild is honored
-# as "rebuild IF you can" and the bundled exe registers as-is (the law
-# it serves - a partial exe must not wedge reinstall - needs a build
-# process to produce partials; a shipped binary has none).
-if ($Rebuild -and (Test-Path $hostExe) -and (Test-Path $py)) {
-    Remove-Item $hostExe -Force
+# as "rebuild IF you can" and the bundled exe registers as-is (a
+# shipped binary has no build process to swap it; nothing to wedge).
+if (-not (Test-Path $hostExe) -and -not (Test-Path $py)) {
+    Write-Output "no panelboss-host.exe to register and no venv python to build it ($py) - run this script from a source checkout"
+    exit 3
 }
-if (-not (Test-Path $hostExe)) {
-    if (-not (Test-Path $py)) {
-        Write-Output "no panelboss-host.exe to register and no venv python to build it ($py) - run this script from a source checkout"
-        exit 3
-    }
+if (($Rebuild -or -not (Test-Path $hostExe)) -and (Test-Path $py)) {
     Write-Output 'building panelboss-host.exe (PyInstaller onefile)'
+    $buildDist = Join-Path $here 'dist'
     & $py -m PyInstaller --noconfirm --clean --onefile --windowed `
         --name 'panelboss-host' `
-        --distpath $here --workpath (Join-Path $here 'build') `
+        --distpath $buildDist --workpath (Join-Path $here 'build') `
         --specpath (Join-Path $here 'build') `
         $hostPy
     if ($LASTEXITCODE -ne 0) { Write-Output "host build failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
+    $built = Join-Path $buildDist 'panelboss-host.exe'
+    if ($Rebuild -and (Test-Path $hostExe)) {
+        # THE SWAP: only now does the registered exe change. The
+        # browser keeps a LIVE host process holding the image - an
+        # in-use target must not be deleted to make the copy work.
+        try {
+            Copy-Item $built $hostExe -Force
+        } catch {
+            Copy-Item $built "$hostExe.new" -Force
+            Write-Output "THE BROWSER STILL HOLDS panelboss-host.exe (in use) - the fresh build waits as panelboss-host.exe.new: RETRY THE INSTALL AFTER CLOSING THE BROWSER"
+            exit 4
+        }
+    } else {
+        # nothing registered yet (first install): the fresh build IS
+        # the exe - move it into place.
+        Move-Item $built $hostExe -Force
+    }
 } elseif ($Rebuild) {
     Write-Output "bundled panelboss-host.exe kept (no venv to rebuild here: $py)"
 }
