@@ -2192,6 +2192,12 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   in bullet and caption to "geometry only, never page content"; the
   10s preview figure verified against the selftest code. Store website
   field: `https://nocterrible.github.io/panelboss/` -> VERIFY.
+  FIRST ATTEMPT FAILED "file not found" — the store field carried a
+  trailing space (the panel's own `.../ /` echo gave it away; the
+  space entered the fetch path as %20 -> 404). Clean re-paste ->
+  OWNERSHIP AUTO VERIFIED (green). Lesson for the record: Google's
+  "not found" can mean "you asked for the wrong URL", check the
+  panel's echo before doubting the server.
 - **Commit hygiene**: launch-day commits carry no author-email trailer
   (noreply default), no "Co-Authored-By: Claude" — AI-assisted
   development is disclosed in the ledger, not smuggled into the public
