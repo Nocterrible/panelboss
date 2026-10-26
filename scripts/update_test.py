@@ -232,6 +232,9 @@ wx = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                     "panelboss.wxs"), encoding="utf-8").read()
 assert "AllowSameVersionUpgrades" in wx, \
     "same-version reinstalls land BESIDE the old copy without it"
+import xml.etree.ElementTree as _ET
+_ET.fromstring(wx)  # candle's parser is stricter, but a well-
+                   # formedness gate stops whole classes of typo
 assert '--version-file' in ob, \
     "the exe lost its version resource (Properties would lie blank)"
 assert "'assets\\tray_master.png'" in ob, \

@@ -38,8 +38,7 @@
      ghost PanelBosses proved it the hard way); with it, the old
      product code retires cleanly. The in-app updater always
      version-bumps, so this only ever helps re-ships. -->
-    <MajorUpgrade AllowSameVersionUpgrades=
-      DowngradeErrorMessage="A newer PanelBoss is already installed."/>
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer PanelBoss is already installed."/>
     <MediaTemplate EmbedCab="yes"/>
 
     <Icon Id="panelboss.ico" SourceFile="$(var.Icon)\panelboss.ico"/>
