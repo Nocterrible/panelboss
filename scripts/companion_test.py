@@ -12,6 +12,7 @@ Run: .venv\\Scripts\\python.exe scripts\\companion_test.py
 """
 import json
 import os
+import struct
 import sys
 import tempfile
 import time
@@ -583,6 +584,25 @@ check('op: "measure"' in _bg and '"measure"' in _ct,
       "relayed by background, shown by popup - there is no second "
       "measure")
 
+# --- dossier H source pins: the ack-aware dedupe, the delivery ack,
+# and the playing-only heartbeat live in the extension's own files -
+# pin their seams verbatim so a regression can never read as a 200.
+check('lastError || !res || !res.ok' in _ct
+      and 'chrome.runtime.sendMessage({ op: "veil"' in _ct,
+      "content.js carries the ack-aware dedupe: the callback form "
+      "rolls lastSent back on lastError / a missing / a not-ok ack")
+check('timeupdate' in _ct and 'push(false)' in _ct
+      and 'setInterval' not in _ct,
+      "content.js rides the timeupdate heartbeat (playing-only, the "
+      "same push(false) dedupe path) and writes NO setInterval")
+_vb = _bg[_bg.index('msg.op === "veil"'):]   # the AUTOMATIC branch,
+                                             # not the popup's "veil_"
+check('sendResponse({ ok: ok === true })' in _vb and 'return true;'
+      in _vb,
+      "background.js acks DELIVERY, not receipt: the veil branch "
+      "awaits the push, answers with its truth, and returns true to "
+      "hold the channel open for the async sendResponse")
+
 # THE HOST FILE ITSELF gets a load-pin (V's leg-7 catch, Oct 25: the
 # file had NO test at all, and the moved webrect import was silently
 # NameError-ing into the belt - the catch-all made the wound invisible
@@ -625,6 +645,110 @@ check(_ans.get("ok") is True and "webrect" not in json.loads(
       "still lands, the fold's compat lanes carry the ring, the relay "
       "still never dialogs (the guard's real promise)")
 del sys.modules["webrect"]
+
+# --- dossier H host-side session pin: drive the REAL host module's
+# own main() (the harness above loaded it) through in-memory framed
+# pipes: capabilities -> veil(row A) -> veil(identical A) ->
+# veil(A-with-paused-true). Per frame the reply reads ok; the doorway
+# carries the row after each; and the mtime MOVES for the paused row.
+# The identical A must land too: the dedupe lives in the extension's
+# lastSent, never in the host - the host rewrites, every frame.
+import io as _io
+import msvcrt as _msvcrt
+sys.modules["webrect"] = _WRect        # the stub the load-pin used
+_real_stdin, _real_stdout = sys.stdin, sys.stdout
+_real_setmode = _msvcrt.setmode
+_msvcrt.setmode = lambda *a: None      # in-memory pipes have no real fd
+
+
+def _frame(obj):
+    data = json.dumps(obj).encode("utf-8")
+    return struct.pack("@I", len(data)) + data
+
+
+class _Pipe:
+    """main()'s stdin/stdout as in-memory binary (it wants .buffer,
+    and the win32 branch wants a fileno() for msvcrt.setmode)."""
+
+    def __init__(self, data):
+        self.buffer = data
+
+    def fileno(self):
+        return -1
+
+
+def _row_a(paused=False, ts=1):
+    return {"rect": {"left": 0, "top": 0, "width": 800, "height": 450},
+            "dpr": 1.0, "paused": paused, "scroll": [0, 0],
+            "view": [1920, 1080], "lane": "auto", "origin": [0, 0],
+            "bounds": {"left": 0, "top": 0, "width": 1920,
+                       "height": 1080},
+            "family": "chrome", "ts": ts}
+
+
+def _session(*msgs):
+    """One framed session through the host's real main(); the replies,
+    read back with the host's own frame reader."""
+    old_in, old_out = sys.stdin, sys.stdout
+    sys.stdin = _Pipe(_io.BytesIO(b"".join(_frame(m) for m in msgs)))
+    sys.stdout = _Pipe(_io.BytesIO())
+    try:
+        _host.main()
+        data = sys.stdout.buffer.getvalue()
+    finally:
+        sys.stdin, sys.stdout = old_in, old_out
+    out = _io.BytesIO(data)
+    reps = []
+    while True:
+        rep = _host._read_frame(out)
+        if rep is None:
+            break
+        reps.append(rep)
+    return reps
+
+
+def _door_lines():
+    with open(_host.RECT_PATH, encoding="utf-8") as f:
+        return f.readlines()
+
+
+_W = {"x": 1, "y": 2, "w": 3, "h": 4}       # the stub's answer
+try:
+    _reps = _session({"op": "capabilities"})
+    check(len(_reps) == 1 and _reps[0].get("op") == "capabilities"
+          and _reps[0].get("protocol") == "panelboss-v1"
+          and "veil" in _reps[0].get("ops", ()),
+          "dossier H session: the capabilities frame round-trips the "
+          "open wire's self-description through the host's main()")
+    _reps = _session({"op": "veil", "payload": _row_a()})
+    check(len(_reps) == 1 and _reps[0].get("ok") is True
+          and _reps[0].get("path") == _host.RECT_PATH,
+          "dossier H session: veil(row A) answers ok and names the "
+          "doorway it wrote")
+    check(_door_lines() == [json.dumps({**_row_a(), "webrect": _W})
+                            + "\n"],
+          "dossier H session: the doorway carries A after the veil - "
+          "ONE line, the payload folded with the OS-side measure")
+    _door_a = _door_lines()
+    _mt_a = os.path.getmtime(_host.RECT_PATH)
+    _reps = _session({"op": "veil", "payload": _row_a()})
+    check(_reps[0].get("ok") is True and _door_lines() == _door_a,
+          "dossier H session: the identical row A re-answers ok and "
+          "the doorway still carries it - the host rewrites (the A/A "
+          "dedupe is the app's, never the host's)")
+    time.sleep(0.11)                        # outlast the fs tick
+    _reps = _session({"op": "veil", "payload": _row_a(paused=True)})
+    check(_reps[0].get("ok") is True
+          and _door_lines() == [json.dumps({**_row_a(paused=True),
+                                           "webrect": _W}) + "\n"]
+          and os.path.getmtime(_host.RECT_PATH) > _mt_a,
+          "dossier H session: A-with-paused-true answers ok, the "
+          "doorway carries the paused row, and its mtime MOVED (a "
+          "rewrite the app-side reader can see)")
+finally:
+    sys.stdin, sys.stdout = _real_stdin, _real_stdout
+    _msvcrt.setmode = _real_setmode
+    del sys.modules["webrect"]
 
 print("COMPANION-PIN OK (%d)" % len(passed) if not fails
       else "COMPANION-PIN FAILED: %s" % fails)
