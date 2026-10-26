@@ -20,6 +20,15 @@ whoever else was holding it (the page host), and Tk never re-fires
 crossed a border. The dispatcher resolves the host under the pointer
 per event, innermost scrollable first, so nested hosts, swaps and
 withdraws all take the hit without re-entry.
+
+Oct 25 (owner-accepted, the pin-edit storm): THE CONSTANT RAIL - the
+bar keeps its slot for the life of the host and only its DRESS says
+whether there is anything to scroll. Reason: the old pack/forget flip
+changed the canvas width by 14 px, and pack re-laid every fill="x"
+widget on the page, each a CTk widget whose <Configure> binding redraws
+its own canvas (measured on one pin edit: 666 -> 308 Configure events,
+359 -> 194 canvas redraws, a 4547 -> 1921 ms frozen turn). A layout
+change here is therefore the one thing this file must never do.
 """
 
 from __future__ import annotations
@@ -241,12 +250,29 @@ class ScrollHost(tk.Frame):
             # share decides it, so the three can never disagree (the
             # region-vs-viewport law, _scroll_up's header).
             overflow = len(reg) == 4 and reg[3] > self._canvas.winfo_height()
+            # THE CONSTANT RAIL (owner ruling, Oct 25 - measured: the
+            # pack/forget flip changed the canvas width by 14 px, and
+            # that width change re-laid EVERY fill="x" widget on the
+            # page, each of which is a CTk widget whose <Configure>
+            # binding redraws its own canvas - ~300 Python redraws per
+            # flip, the "pin edit redraws like crazy" storm: 666
+            # Configure events / 4547 ms frozen turn before, 308 / 2047
+            # after, same click). The bar therefore KEEPS ITS SLOT for
+            # the life of the host: when the region fits it is only
+            # re-DRESSED as its own trough (the no-dead-trough law is
+            # untouched - nothing is visible), so the viewport width is
+            # a constant and a content height change can never re-lay
+            # the page. Cost: the 10 px rail is reserved on pages that
+            # do not scroll (they never showed a bar, so nothing is
+            # lost from the glass).
             if overflow:
                 if not self._sb.winfo_manager():
                     self._sb.pack(side="right", fill="y")
+                self._rail(hidden=False)
             else:
-                if self._sb.winfo_manager():
-                    self._sb.pack_forget()
+                if not self._sb.winfo_manager():
+                    self._sb.pack(side="right", fill="y")
+                self._rail(hidden=True)
             # clamp a stranded view (Oct 12, owner's "blank space at
             # the top"): rows that leave (collapsed tiles, retracting
             # update lines) SHRINK the region, and tk never re-clamps
@@ -268,6 +294,40 @@ class ScrollHost(tk.Frame):
                 self._canvas.yview_moveto(1.0)
         except tk.TclError:      # canvas gone mid-teardown: nothing to
             pass                 # measure, nothing to confess
+
+    def _rail(self, hidden):
+        """THE RAIL'S DRESS (the constant-gutter law above): the bar is
+        always packed, so only its COLOURS say whether it is a rail or a
+        dead trough. `hidden` paints trough, thumb, arrows and borders in
+        the surface the host sits on - the Oct 15 no-dead-trough law,
+        kept: nothing visible when there is nothing to scroll. Two style
+        names are configured ONCE per interpreter (the trough's surface
+        names them, the same rule scrollbar_style already uses), so the
+        dress is a configure, never a pack/forget - a layout change here
+        is exactly the storm this exists to prevent."""
+        try:
+            name = str(self._sb.cget("style"))
+            if getattr(self, "_rail_style", None) is None:
+                surface = str(self.cget("bg"))
+                self._bar_style = name
+                self._rail_style = name + "_RAIL"
+                st = ttk.Style(self._sb)
+                st.configure(self._rail_style, troughcolor=surface,
+                             background=surface, bordercolor=surface,
+                             arrowcolor=surface, lightcolor=surface,
+                             darkcolor=surface, relief="flat",
+                             borderwidth=0, focuscolor=surface)
+                try:
+                    st.map(self._rail_style,
+                           background=[("active", surface),
+                                       ("pressed", surface)])
+                except Exception:
+                    pass          # foreign theme: the configure stands
+            want = self._rail_style if hidden else self._bar_style
+            if str(self._sb.cget("style")) != want:
+                self._sb.configure(style=want)
+        except tk.TclError:      # dying host: a miss, never a raise
+            pass
 
     def sync_region(self):
         """re-measure after a widget swap: pack/destroy coalesce their
