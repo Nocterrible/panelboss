@@ -32,7 +32,11 @@ on your own PC, with no server in the middle.
 
 Download `PanelBoss-<version>-user.msi` from
 https://github.com/Nocterrible/panelboss/releases and run it. The MSI is the
-normal way in; the page always carries the newest build.
+normal way in; the page always carries the newest build. Movie theater mode
+also wants the optional Companion extension - free on the Chrome Web Store,
+https://chromewebstore.google.com/detail/panelboss-companion/feolhiokchmpphlhllagimnilceldegk
+- it works in Chrome, Edge, Opera, Brave, and the other Chromium browsers.
+Every other feature runs with the MSI alone.
 
 It is per-user: no admin and no UAC prompt at install, upgrade, or uninstall. One
 thing does ask, a scheduled task, and Uninstall below explains it.
