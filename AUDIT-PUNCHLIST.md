@@ -2292,3 +2292,19 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
 - BANKED for later: stills should carry the detection BOX drawn on
   the frame (owner idea, two-line add); _force_on wakes could earn a
   distinct row style if fake-vs-real turns out to matter.
+
+## Desk deploy 0.3.6+ (Oct 27): unofficial build ahead of the public artifact
+
+- Built from master (head 02496a2: blackout honesty + wake log/frames):
+  dist\PanelBoss-0.3.6-user.msi sha256
+  697b8871105b39812c85203de22594f0c5091113c1e6e6a48f57a65dcf320391
+  - ARTIFACT LINEAGE: differs from the public 59cf05b2... file; the
+  public release page still serves 59cf... until 0.3.7 replaces it.
+  Installed over the running app (rc 0), relaunched pid 83388, clean
+  boot (hotkeys registered, takeover lines normal, exe file version
+  0.3.6 content-02496a2).
+- Full gauntlet ran WITH the app down (the real thing, not DEGRADED):
+  ALL GREEN (complete), rc 0, deploy-0.3.6plus-113825.log.
+- Owner field-testing the wake log + wake frames before we call it
+  an update; blanket-on-chair is the designated test rig (score band
+  0.45-0.58). 0.3.7 tag decision waits for his verdict.
