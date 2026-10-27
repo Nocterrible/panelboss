@@ -5,7 +5,12 @@ SIZE LAW: measured 472 (Oct 13) - the camera card, its picker, the
 scan worker and the diagnostic sweep are one story (how the pane
 learns what the desk holds and says so honestly); the sweep's probe
 phase is the next seam to cut out (one pure function over
-cfg/found) if this grows again.
+cfg/found) if this grows again. Oct 27 refresh: the wake viewer grew
+it - the button, the five-row text strip and its diff-guarded refresh
+rode in here (the log is the card's own story), and the picture
+dialog went to its own file the way every house dialog does
+(_wakesnap.py, the SetupWindow pattern); the sweep's probe phase is
+still the next seam to cut.
 """
 
 from __future__ import annotations
@@ -13,11 +18,13 @@ from __future__ import annotations
 import concurrent.futures as cf
 import logging
 import threading
+import time
 
 import cv2
 import customtkinter as ctk
 from PIL import Image
 
+from ... import wakesnap
 from .. import theme
 from ._camedit import ADD_LABEL, duty_roster
 from ._identity import diag_suffix, display_names, hidden_indices, \
@@ -150,6 +157,28 @@ class _CameraMixin:
         self.preview_info.pack(anchor="w", padx=theme.S_SECTION,
                                pady=(0, theme.S_ROW))
         self._fit_wrap(card, self.preview_info)
+        # the wake viewer (first field bug, Oct 26: the counters said
+        # "it woke", none could say WHAT the eye saw). The strip is
+        # text-only - the who-woke-it log costs no privacy and is
+        # always on; the button opens the ring's pictures, the opt-in
+        # tier, in a dialog that is born on click and dies on close.
+        self.wake_btn = ctk.CTkButton(card, text="what woke the screens",
+                                      width=160,
+                                      command=self._wakesnap_open,
+                                      **self.skin.secondary())
+        self.wake_btn.pack(anchor="w", padx=theme.S_SECTION,
+                           pady=(theme.S_ROW, 0))
+        strip = ctk.CTkFrame(card, fg_color="transparent")
+        strip.pack(anchor="w", fill="x", padx=theme.S_SECTION,
+                   pady=(theme.S_ROW, 0))
+        self._wake_rows = []
+        for _ in range(5):
+            lbl = ctk.CTkLabel(strip, text="", font=self.skin.font(10),
+                               anchor="w", **self.skin.text_style("sub"))
+            lbl.pack(anchor="w")
+            self._wake_rows.append(lbl)
+        self._wake_rows[0].configure(text="no wakes yet")
+        self._wake_strip_lines = ("no wakes yet", "", "", "", "")
 
 
     def _mode_changed(self, key):
@@ -229,6 +258,60 @@ class _CameraMixin:
     def _live_changed(self):
         on = bool(self.live_switch.get())
         self.monitor.events.put(("preview", 1.5 if on else 0))
+
+
+    # ------------------------------------------------------------ wake log --
+    def _wakesnap_open(self):
+        """Raise-if-open (the _rescan_setup idiom - the packet named
+        _away.py, but the house dialog truth is the SetupWindow class:
+        the pane already raises rather than stacks). The dialog
+        decodes its pictures on open and dies on close: the wake
+        viewer never taxes the pane's paint budget while it sleeps."""
+        win = getattr(self, "_wakesnap_win", None)
+        if win is not None:
+            try:
+                if win.winfo_exists():
+                    win.lift()
+                    return
+            except Exception:
+                pass                           # the widget is a ghost
+        from ._wakesnap import WakeSnapDialog
+        self._wakesnap_win = WakeSnapDialog(self)
+
+
+    def _wake_snap_toggled(self, on):
+        # cfg-write-is-applying (the away card's law): the merged dict
+        # is the state machine's own camera_cfg, and the ring reads
+        # its switch through set_enabled at the same moment; the
+        # toml rides the window's debounced save - no new writer
+        self.cfg["camera"]["wake_snap"] = bool(on)
+        wakesnap.set_enabled(bool(on))
+        self._save()
+
+
+    def _wake_strip_refresh(self):
+        """The always-on text log on the card, riding the preview tick
+        (_runtime._tick_inner - no timer of its own): five label
+        texts, re-touched only when the words actually moved (the
+        configure-churn class the scroll host's Oct-25 note is the
+        house witness for). Newest first, five rows is the whole
+        history; the empty state is one gray line."""
+        lines = []
+        for e in wakesnap.frames()[:len(self._wake_rows)]:
+            score = "-" if e["score"] is None else "%.2f" % e["score"]
+            lines.append("%s  %s  %s" % (
+                time.strftime("%H:%M:%S", time.localtime(e["ts"])),
+                e["cam"], score))
+        if not lines:
+            lines = ["no wakes yet"]
+        while len(lines) < len(self._wake_rows):
+            lines.append("")
+        lines = tuple(lines)
+        if lines == self._wake_strip_lines:
+            return
+        self._wake_strip_lines = lines
+        for lbl, text in zip(self._wake_rows, lines):
+            lbl.configure(text=text)
 
 
     # --------------------------------------------------------------- cameras --

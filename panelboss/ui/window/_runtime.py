@@ -148,6 +148,10 @@ class _RuntimeMixin:
             self._shown_ts = None
             self._preview_placeholder()
         self._update_status(now, slot)
+        self._wake_strip_refresh()         # the wake log rides this
+        #                              same tick (no new timer): five
+        #                              cheap label texts, diff-guarded
+        #                              inside the refresh
         if bool(self.live_switch.get()) and self.state() == "normal":
             self._lease_ticks += 1
             if self._lease_ticks % 6 == 0:      # ~0.5 s heartbeats for
