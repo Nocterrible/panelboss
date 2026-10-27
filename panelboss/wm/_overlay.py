@@ -48,9 +48,22 @@ _thread = None
 def _start_root():
     """The private interpreter, once per process: a withdrawn root and
     a pump that outlives every window it made."""
-    global _root, _thread
+    global _root, _thread, _q
     if _root is not None:
-        return
+        if _thread is not None and not _thread.is_alive():
+            # RESURRECTION (the silent-blackout fix): _root is set
+            # BEFORE the thread body finishes running, so a dead
+            # interpreter left a live-looking _root behind and every
+            # later show was a permanent silent no-op. The thread IS
+            # the mainloop - dead thread, dead pump, dead widget
+            # parent: reset to the fresh-start shape (empty cover
+            # map, empty queue) and fall through to the rebuild below.
+            _root = None
+            _windows.clear()
+            _q = queue.Queue()
+            log.info("away: overlay interpreter rebuilt after death")
+        else:
+            return
     import tkinter as tk
 
     def run():
@@ -151,8 +164,12 @@ def _pump():
                 _show(*args)
             elif action == "hide":
                 _hide(args[0])
-        except Exception:
-            log.debug("overlay pump item failed", exc_info=True)
+        except Exception as item_exc:
+            # THE SWALLOW GOES LOUD (the silent-blackout fix): a
+            # failed pump item is the wound itself - the cover was
+            # promised and never painted. INFO-floor logs must see it.
+            log.warning("away: overlay %s for %s failed: %r",
+                        action, args[0], item_exc, exc_info=True)
     if _root is not None:
         _root.after(_PUMP_MS, _pump)
 
