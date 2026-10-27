@@ -465,6 +465,13 @@ class _AwayMixin:
                             "asked at %s)", gdi, say,
                             time.strftime("%Y-%m-%d %H:%M:%S",
                                           time.localtime(saved["at"])))
+        covers = len(_overlay.shown())            # the covers COUNTED
+        #                                   from the live cover map,
+        #                                   not from row words (the
+        #                                   silent-blackout fix,
+        #                                   reviewer catch): words
+        #                                   can lie, a window that
+        #                                   exists cannot.
         _overlay.hide_all()                       # every cover first:
         #                                   paint dies before the panel
         #                                   underneath changes state
@@ -477,11 +484,6 @@ class _AwayMixin:
         #                                   with the spell (no-op if
         #                                   the spell never covered)
         display.arm_input_lift(False)
-        # the covers COUNTED before the ledger clears (the silent-
-        # blackout fix): a lift that tore down N black overlays says N -
-        # the row words below wear the refusal suffix, so this is the
-        # painted-and-worn class only.
-        covers = sum(1 for s in status.values() if s == "blackout")
         self.away_status = {}
         self._away_bright = {}
         self._away_hdr = []
