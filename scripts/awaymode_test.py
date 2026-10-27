@@ -132,17 +132,38 @@ class FakeBright:
 
 
 class FakeOverlay:
-    def __init__(self, calls=None):
+    """The wm._overlay module fake. PAINT TRACKING (silent-blackout
+    fix, Oct 26): shown() mirrors the real module's honest state word
+    so the engine's paint receipt is testable at both honest edges.
+    `raises` plays a show() whose interpreter call itself blows up;
+    `paints=False` plays the pump-swallowed class - the cover was
+    enqueued and never worn, so shown() keeps answering no."""
+
+    def __init__(self, calls=None, raises=False, paints=True):
         self.calls = calls if calls is not None else []
+        self.raises = raises
+        self.paints = paints
+        self.worn = {}                     # gdi (lower) -> the rect
 
     def show(self, gdi, rect, on_click=None):
         self.calls.append(("show", gdi, tuple(rect)))
+        if self.raises:
+            raise RuntimeError("the overlay interpreter is dead")
+        if self.paints:
+            self.worn[str(gdi).lower()] = tuple(rect)
 
     def hide(self, gdi):
         self.calls.append(("hide", gdi))
+        self.worn.pop(str(gdi).lower(), None)
 
     def hide_all(self):
         self.calls.append(("hide_all",))
+        self.worn = {}
+
+    def shown(self, gdi=None):
+        if gdi is None:
+            return sorted(self.worn)
+        return str(gdi).lower() in self.worn
 
 
 class FakeSDC:
@@ -315,6 +336,14 @@ def make_monitor(tmp, away, bright=None, hdrs=None, sdc=None,
     led.keep(wm, "hdr_set", hdr_set)
     led.keep(wm, "_bright", bright)          # late imports re-read these
     led.keep(wm, "_overlay", overlay)        # attrs every call
+    from panelboss.state import _away as _away_mod
+    led.keep(_away_mod, "_bus_sleep", lambda s: None)   # the belt law
+    #                              extends the paint receipt (Oct 26):
+    #                              the blackout's 0.3 s wait rides the
+    #                              seam too, no real CI seconds - a
+    #                              test that counts waits re-keeps the
+    #                              seam with its own recorder, as the
+    #                              belt's stagger tests already do
     led.keep(display, "turn_off", lambda: led.calls.append(("turn_off",)))
     led.keep(display, "wake", lambda *a, **k: led.calls.append(("wake",)))
     led.keep(display, "arm_input_lift",
@@ -648,6 +677,100 @@ def test_refusal_degrades():
         print("ok - a refusing panel degrades to blackout, confessed")
     finally:
         m._ledger.undo()
+
+
+def test_blackout_paint_receipt():
+    """THE PAINT RECEIPT (the silent-blackout fix, Oct 26): the
+    blackout leg promises dark only on shown()'s answer. A show()
+    that RAISES (the call itself dies) and a show() that enqueues
+    onto a pump that never wears the cover (the dead interpreter -
+    _start_root's rebuild answers it at the next ask) both land as
+    "blackout (paint refused)": warned at the point of failure, and
+    OUTSIDE _row_went_dark's exact whitelist - an unpainted row must
+    never yank the session. The receipt's wait rides the _bus_sleep
+    seam (a counted wait proves the pump was asked, not the wall
+    clock); the spell line counts the painted rows and the lifted
+    line counts the covers, so success and failure stop printing
+    identical zeros."""
+    import panelboss.state._away as away_mod
+    from panelboss.state._away import _row_went_dark
+    tmp = tempfile.mkdtemp(prefix="pb_away_paint")
+    rec = Recorder()
+    slog = logging.getLogger("state")
+    was = slog.level
+    slog.setLevel(logging.INFO)           # root sits at WARNING here
+    slog.addHandler(rec)
+    try:
+        # (a) the RAISING cover: warned with the exception, refused
+        #     word, the raise never escapes the spell
+        m = make_monitor(tmp, {"mode": "dim",
+                               "monitors": {"AAA": {"blackout": True}}})
+        try:
+            m._ledger.keep(wm, "_overlay",
+                           FakeOverlay(m._ledger.calls, raises=True))
+            m._screens_off(1.0)
+            assert m.away_status["AAA"] == "blackout (paint refused)", \
+                m.away_status
+            assert any("raised" in l for l in rec.lines), rec.lines
+            assert not _row_went_dark("blackout (paint refused)"), \
+                "an unpainted row must not yank the session"
+            m._away_lift()
+            lifted = [l for l in rec.lines if l.startswith("away: lifted")]
+            assert "0 overlay cover(s)" in lifted[-1], lifted
+        finally:
+            m._ledger.undo()
+
+        # (b) the SILENT refusal: enqueued, never worn - the wait
+        #     counted ON the seam proves the receipt asked the pump
+        m2 = make_monitor(tmp, {"mode": "dim",
+                                "monitors": {"AAA": {"blackout": True}}})
+        try:
+            sleeps = []
+            m2._ledger.keep(away_mod, "_bus_sleep",
+                            lambda s: sleeps.append(s))
+            m2._ledger.keep(wm, "_overlay",
+                            FakeOverlay(m2._ledger.calls, paints=False))
+            m2._screens_off(1.0)
+            assert m2.away_status["AAA"] == "blackout (paint refused)", \
+                m2.away_status
+            assert sleeps == [0.3], sleeps
+            assert any("never painted" in l for l in rec.lines), rec.lines
+            line = [l for l in rec.lines if l.startswith("away: dark")]
+            assert "0 rows blackout-painted, 1 rows blackout-degraded" \
+                in line[-1], line
+        finally:
+            m2._ledger.undo()
+
+        # (c) the worn cover: the plain word, the painted count,
+        #     and the lift counts the cover it hid
+        m3 = make_monitor(tmp, {"mode": "dim",
+                                "monitors": {"AAA": {"blackout": True}}})
+        try:
+            m3._screens_off(1.0)
+            assert m3.away_status["AAA"] == "blackout", m3.away_status
+            line = [l for l in rec.lines if l.startswith("away: dark")]
+            assert "1 rows blackout-painted" in line[-1], line
+            m3._away_lift()
+            lifted = [l for l in rec.lines if l.startswith("away: lifted")]
+            assert "1 overlay cover(s)" in lifted[-1], lifted
+        finally:
+            m3._ledger.undo()
+
+        # (d) the gray word: a never-reached row configured DIM says
+        #     the fallback in its own line (pinned in source; the
+        #     widget halves ride window_boot_test's live card)
+        ui = open(os.path.join(os.path.dirname(os.path.dirname(
+                      os.path.abspath(__file__))),
+                  "panelboss", "ui", "window", "_away.py"),
+                  encoding="utf8").read()
+        assert '"blackout overlay here"' in ui and 'mode == "dim"' in ui, \
+            "the dim-fallback word exists and is mode-gated"
+        print("ok - blackout earns its word by receipt: raise and "
+              "silent-refusal both say paint refused, the worn cover "
+              "says blackout, and the counts name the covers")
+    finally:
+        slog.removeHandler(rec)
+        slog.setLevel(was)
 
 
 def test_preview_adopt_law():
@@ -1837,7 +1960,8 @@ def test_static_ban():
     for w in ("off refused - blackout instead (rc 0x57)",
               "offdisc refused (no-drop rc 0x0 (wrong victim; restored) "
               "- blackout instead)",
-              "blackout (send refused after 3 tries)", "gone",
+              "blackout (send refused after 3 tries)",
+              "blackout (paint refused)", "gone",
               "off (some future word)", "dim (a future shade)"):
         assert not _row_went_dark(w), w
     pwr = open(os.path.join(root, "panelboss", "state", "_power.py"),
@@ -2137,6 +2261,7 @@ def main():
     test_legacy_global_off_fallback()
     test_remote_desk_exempt()
     test_refusal_degrades()
+    test_blackout_paint_receipt()
     test_unverified_trust()
     test_vcp_retry_law()
     test_off_submode()

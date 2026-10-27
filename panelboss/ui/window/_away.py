@@ -359,11 +359,22 @@ class _AwayMixin:
                 # test rides the PRE-SWAP offer (gate round, Oct 23):
                 # a gated row carries the value under its suffix,
                 # and a swap must never fake a never-reached
-                # confession under the gray.
+                # confession under the gray. NOT REACHED ==
+                # bright.reachable(gdi) False (the only reason off_choice
+                # hides DDC_TEXT), and since the silent-blackout fix
+                # the dim half of the truth rides here too: the engine's
+                # dim leg refuses the bus and degrades the row to the
+                # overlay - the row says it while still configured dim,
+                # the NVIDIA row's voice (the verdict is DATA).
                 self._away_says[short] = ("the power-code off needs a "
                                           "DDC/CI door; none answered "
                                           "for this monitor (the "
-                                          "disconnect does not)")
+                                          "disconnect does not)"
+                                          + (" - your driver answers "
+                                             "no DDC/CI - dim silently "
+                                             "falls back to the "
+                                             "blackout overlay here"
+                                             if mode == "dim" else ""))
             # TWO LINES, ONE GRID (owner ruling, Oct 24: the long
             # verdict text "makes the button huge" and the row clipped
             # its own tail): line 1 carries the panel's identity and

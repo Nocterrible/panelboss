@@ -183,9 +183,12 @@ class _AwayMixin:
             display.jail_cursor(jail)
         display.arm_input_lift(True)
         log.info("away: dark spell, %d monitors (%d HDR off, %d VCP-off "
-                 "asked, %d disconnected, %d rows blackout-degraded)",
+                 "asked, %d disconnected, %d rows blackout-painted, "
+                 "%d rows blackout-degraded)",
                  len(self.away_status), len(self._away_hdr),
                  len(self._away_off), len(self._away_disc),
+                 sum(1 for s in self.away_status.values()
+                     if s == "blackout"),
                  sum(1 for s in self.away_status.values()
                      if s.startswith("blackout (") or
                      s.startswith("off refused") or
@@ -336,7 +339,29 @@ class _AwayMixin:
             rec["status"] = "off (disconnected)"
             return rec
         if mode == "blackout":
-            _overlay.show(m["gdi"], rect)
+            # THE PAINT RECEIPT (the silent-blackout fix, Oct 26): a
+            # promise requires a receipt - the REFUSAL law, made
+            # concrete for the cover. The pump gets one honest tick
+            # to wear the cover (the seam's law: no real seconds in
+            # CI), then shown() is the truth: a cover that never
+            # answers says "blackout (paint refused)", which sits
+            # OUTSIDE _row_went_dark's whitelist - a row that never
+            # painted must not yank the session, and the summary
+            # counts it degraded, not painted.
+            try:
+                _overlay.show(m["gdi"], rect)
+                _bus_sleep(0.3)
+                painted = bool(_overlay.shown(m["gdi"]))
+            except Exception as show_exc:
+                log.warning("away: the blackout cover on %s raised %r",
+                            m["gdi"], show_exc, exc_info=True)
+                painted = False
+            if not painted:
+                log.warning("away: the blackout on %s never painted - "
+                            "the cover never answered (a dead pump "
+                            "rebuilds on its next show)", m["gdi"])
+                rec["status"] = "blackout (paint refused)"
+                return rec
             rec["status"] = "blackout"
             return rec
         if mode != "dim":
@@ -452,13 +477,18 @@ class _AwayMixin:
         #                                   with the spell (no-op if
         #                                   the spell never covered)
         display.arm_input_lift(False)
+        # the covers COUNTED before the ledger clears (the silent-
+        # blackout fix): a lift that tore down N black overlays says N -
+        # the row words below wear the refusal suffix, so this is the
+        # painted-and-worn class only.
+        covers = sum(1 for s in status.values() if s == "blackout")
         self.away_status = {}
         self._away_bright = {}
         self._away_hdr = []
         log.info("away: lifted (%d brightness hand-back(s), %d HDR "
                  "panel(s), %d power hand-back(s), %d disconnect "
-                 "hand-back(s))", len(bright), len(hdr), len(off),
-                 len(disc))
+                 "hand-back(s), %d overlay cover(s))", len(bright),
+                 len(hdr), len(off), len(disc), covers)
         self._away_off = {}
         self._away_disc = {}
         return status
