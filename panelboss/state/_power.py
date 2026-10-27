@@ -7,6 +7,7 @@ import math
 
 from .. import config
 from .. import display
+from .. import wakesnap
 
 log = logging.getLogger("state")
 
@@ -126,6 +127,14 @@ class _PowerMixin:
         #                                    card: gray law from live cfg
 
     def _wake(self, now, score):
+        wakesnap.wake(score)          # the who-woke-it log (panelboss/
+                                      # wakesnap): every wake writes a
+                                      # row, falsy score = the input
+                                      # branch. No suppression wrapper
+                                      # here on purpose (the test bans
+                                      # it): the ring is plain dict
+                                      # ops; a raise belongs in the
+                                      # wake's own log
         if score is None:
             # input wake: the mouse spoke, no camera verdict exists -
             # printing 0.00 here read like "the cameras saw nobody" for

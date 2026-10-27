@@ -125,6 +125,10 @@ DEFAULTS = {
         # 15 s}. The scan re-probes when this set CHANGES vs its own;
         # an absent key reads {} like bindings did - no migration
         "diag": {},
+        # keep the last five waking frames in memory for the "what woke
+        # the screens" viewer (panelboss/wakesnap.py). Never written to
+        # disk; the whole log dies on a restart.
+        "wake_snap": False,
     },
     "inference": {
         "model": "yolo11n",

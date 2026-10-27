@@ -25,6 +25,8 @@ import logging
 import math
 import time
 
+from .. import wakesnap
+
 log = logging.getLogger("state")
 
 # the dark-eye notice (owner Oct 21, amendment included): the camera
@@ -262,8 +264,37 @@ class _CamsMixin:
             present = present and self.faces.known(frame)
         self.framebox.put(frame, boxes, scores)        # the debug view sees
                                                        # the same truth
+        if present:
+            # the wake-frames log (panelboss/wakesnap): the text row
+            # is the always half (the owner's amendment, Oct 27: the
+            # who-woke-it log costs nothing); the picture rides only
+            # under [camera] wake_snap, gated inside remember itself.
+            # The verdict's OWN frame, the verdict's OWN moment.
+            wakesnap.remember(frame, score, self._wake_cam_label())
         log.info("frame: present=%s score=%.2f", present, score)
         return present, score
+
+    def _wake_cam_label(self):
+        """The caption the wake log wears for the eye that just voted:
+        the owner's label first (bindings and the synthetic "idx:N"
+        key - the same identity table display_names reads, resolved
+        from the cfg side; the UI's join needs the PnP scan this layer
+        does not hold), the bare index when no name claims it (the
+        honest fallback the packet named: "index %s"). The eye rides
+        _vote_index, recorded by _note_vote at this very grab."""
+        idx = getattr(self, "_vote_index", None)
+        labels = self.camera_cfg.get("labels") or {}
+        for inst, bound in (self.camera_cfg.get("bindings") or {}).items():
+            try:
+                hit = int(bound) == idx
+            except (TypeError, ValueError):
+                continue                      # hand-edited toml is input
+            if hit:
+                text = str(labels.get(str(inst)) or "").strip()
+                if text:
+                    return text
+        text = str(labels.get("idx:%s" % idx) or "").strip()
+        return text or ("index %s" % idx)
 
     def _mode(self):
         if self.state == "off":

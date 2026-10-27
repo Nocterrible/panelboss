@@ -12,6 +12,7 @@ from .. import dimmer
 from .. import hider
 from .. import jog
 from .. import videoeye
+from .. import wakesnap
 from ._preview import FrameBox
 
 log = logging.getLogger("state")
@@ -35,6 +36,9 @@ class _BootMixin:
         self.cfg = config
         self.timers = config["timers"]
         self.camera_cfg = config["camera"]
+        wakesnap.set_enabled(bool(self.camera_cfg.get("wake_snap")))
+        # the ring's switch, from the file's own answer (the UI's
+        # checkbox owns it from here; the text log ignores it)
         self.guards = config["guards"]
         self.recovery = config["recovery"]
         self.inference_cfg = config["inference"]
