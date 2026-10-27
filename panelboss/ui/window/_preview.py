@@ -271,6 +271,14 @@ class _CameraMixin:
         if win is not None:
             try:
                 if win.winfo_exists():
+                    win.deiconify()      # the gate's catch: closed in
+                    #                    # the SAME event-loop turn, a
+                    #                    # withdrawn-but-alive window
+                    #                    # passes winfo_exists and a
+                    #                    # bare lift() raises the
+                    #                    # invisible - the click that
+                    #                    # looks dead right before
+                    #                    # after(0, destroy) lands.
                     win.lift()
                     return
             except Exception:

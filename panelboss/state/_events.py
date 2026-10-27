@@ -7,7 +7,7 @@ import math
 import queue
 import time
 
-from .. import display
+from .. import display, wakesnap
 
 log = logging.getLogger("state")
 
@@ -113,6 +113,14 @@ class _EventsMixin:
             self._post_hold_rows()           # the desk is lit: re-dress
             return                           # the power rows
         if self.state == "off" and value == 1.0:
+            wakesnap.wake(0.0)               # a wake is a wake (the
+            #                                # gate's catch): a power-
+            #                                # button wake with no row
+            #                                # made "no wakes yet" a
+            #                                # quiet lie - and 0.0 is
+            #                                # the falsy-score input
+            #                                # arm, which also drops
+            #                                # any stale pending frame
             self._post_hold_rows()           # a self-woken screen must
             #                                not keep stale-on segments:
             #                                the gray law re-reads live

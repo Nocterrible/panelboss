@@ -264,12 +264,15 @@ class _CamsMixin:
             present = present and self.faces.known(frame)
         self.framebox.put(frame, boxes, scores)        # the debug view sees
                                                        # the same truth
-        if present:
+        if present and self.state == "off":
             # the wake-frames log (panelboss/wakesnap): the text row
             # is the always half (the owner's amendment, Oct 27: the
             # who-woke-it log costs nothing); the picture rides only
             # under [camera] wake_snap, gated inside remember itself.
             # The verdict's OWN frame, the verdict's OWN moment.
+            # PHASE-GATED (reviewer gate): a camera wake can only
+            # fire from off, so encoding while the desk is LIT buys
+            # a JPEG that every next falsy wake will drop anyway.
             wakesnap.remember(frame, score, self._wake_cam_label())
         log.info("frame: present=%s score=%.2f", present, score)
         return present, score
