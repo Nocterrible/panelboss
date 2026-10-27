@@ -2217,3 +2217,50 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   development is disclosed in the ledger, not smuggled into the public
   history. (An Auto-claude-commit hook lives in .git/hooks; it would
   have signed the commits had we committed via that flow.)
+
+## First field bug (owner's desk): the silent blackout
+
+- SYMPTOM (evening, post-launch): away cycles no longer darkened panels;
+  degraded with process uptime; every lift line printed 0/0/0/0.
+- ARCHITECT'S FIRST TWO THEORIES WERE WRONG AND OWNER KILLED BOTH:
+  (a) VRR refuse-residue - refuted by owner's driver fact (DDC writes
+  dead machine-wide, fresh-process probe NO_DOOR x3 confirms);
+  (b) driver-capability promise gap - refuted by history (blackout is
+  the painted overlay, never DDC; earlier same-driver cycles worked).
+  Lesson: the uptime pattern the OWNER stated was the correct
+  hypothesis from minute one; theories from me cost two round-trips.
+- BROKEN INSTRUMENT: the lifted-line hand-back counters never counted
+  the blackout leg (they read three ledgers blackout doesn't write) -
+  success, failure and fallback all printed zeros. Retracted as
+  evidence mid-investigation; fixed (covers now counted from the live
+  cover map before hide_all).
+- ROOT CAUSE (cappy): the blackout leg = overlay pump items only.
+  (1) pump per-item failure logged at DEBUG under the INFO floor -
+  structurally invisible; (2) _root set before thread body finished:
+  a dead interpreter left a live-looking handle, early-return made
+  every later show a permanent silent no-op (no resurrection);
+  (3) first-show had no paint receipt. Live capture corroborates the
+  intermittent shape: 38 s into a watched spell, mid panel covered,
+  left+right top windows were CHROME - per-monitor drift, not total
+  death. Pump-alive py-spy refutes permanent thread death in the
+  current process; the next failure will name itself (WARNING line).
+- FIX (3 commits, pushed): 82a2df4 loud confessor + resurrection;
+  8b91b40 paint receipt ("blackout (paint refused)" - excluded from
+  the lock whitelist, included in degraded), honest overlay-cover
+  counter, blackout-painted in the spell line, UI gray word: dim on
+  DDC-dead drivers says it falls back to the overlay; 2f143f7
+  reviewer-gate fixes (confessor cannot NameError on malformed item;
+  single spawner under _start_lock; counters from truth not words).
+  Reviewer SHIP-WITH-FIXES, all findings folded or banked.
+  awaymode_test.py 63->64 ok; V PASS; suite green.
+- BANKED from the gate: (a) fallback legs (off-refused->blackout etc.)
+  carry no receipt - a dead pump makes the fallback lie about the
+  fallback too (confessed words, panel can stay lit) - needs its own
+  receipt law; (b) mid-spell interpreter death unobserved until next
+  engage; consider re-verify per present_recheck while a spell is
+  active (D7 shape); (c) preview click freezes settings window 300 ms
+  on blackout rows (inside existing envelope, recorded).
+- OWNER INTERIM: offdisc=true on the three away rows - driver-
+  independent SetDisplayConfig path, round-trip-proven, boot belt
+  re-hangs-up. Deploy the patched build when owner green-lights the
+  app restart on a live desk.
