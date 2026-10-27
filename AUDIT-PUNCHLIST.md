@@ -2264,3 +2264,31 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   independent SetDisplayConfig path, round-trip-proven, boot belt
   re-hangs-up. Deploy the patched build when owner green-lights the
   app restart on a live desk.
+
+## Wake-frames feature (owner ask, blanket-on-a-chair origin story)
+
+- ROOT of the false wakes, owner-discovered: a blanket on the chair
+  personifies itself to yolo11n at the 0.45-0.58 score band (the wake
+  log lines were the fingerprint - all barely over the floor).
+- MEGATHREAD DRAFT CORRECTED before posting: shipped model is
+  yolo11n.onnx (10.2 MB person detector at models\yolo11n.onnx,
+  config [inference]), NOT the draft's SCRFD/2.6MB face claim;
+  the 3ms/62ms timings were stale architect quotes - bench or
+  round loosely before publishing numbers. (Three factual errors
+  would have gone public in one comment; the repo caught all three.)
+- FEATURE (3 commits 3693884/14ec6a7/1414a8e, pushed): always-kept
+  in-memory wake log (time, camera, confidence; input wakes render
+  "input -"), opt-in JPEG stills of the waking frame behind
+  [camera] wake_snap=false ("what woke the screens" dialog below
+  the live preview, last 5, newest first, nothing to disk, dead on
+  restart). V PASS + Reviewer SHIP-WITH-FIXES: threading VERIFIED
+  (no torn pending), the 0.05 floor claim VERIFIED at config.py:633
+  (camera wakes can never falsy-score -> never mislabel), static
+  bans verified string-by-string. Gate fixes folded: phase-gated
+  encode (no JPEGs while the desk is LIT), power-button wake gets a
+  row (no quiet "no wakes yet"), same-turn dialog reopen deiconifies
+  before lift. _force_on deliberately NOT rowed (no-op broadcasts
+  would log fake wakes).
+- BANKED for later: stills should carry the detection BOX drawn on
+  the frame (owner idea, two-line add); _force_on wakes could earn a
+  distinct row style if fake-vs-real turns out to matter.
