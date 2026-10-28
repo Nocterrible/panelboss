@@ -74,7 +74,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="panelboss")
     parser.add_argument("command", nargs="?", default="run",
                         choices=["run", "cameras", "preview", "config",
-                                "enroll", "faces", "cleanup"])
+                                "monitors", "enroll", "faces", "cleanup"])
     parser.add_argument("--off-test", action="store_true",
                         help="prove the monitor round trip; always the last "
                              "check before trusting the power control")
@@ -162,6 +162,19 @@ def main(argv=None):
 
     if args.command == "config":
         print(cfg["_path"])
+        return 0
+    if args.command == "monitors":
+        # the RDP desk probe (owner, Oct 28): the layout engine keys
+        # profiles on the short token below, so this prints exactly
+        # what a profile would bind to - run before and after an RDP
+        # reconnect and diff the tokens. virtual=True rows have no
+        # EDID and their token stability is the question this answers.
+        from . import wm
+        for m in wm.monitors():
+            print("key=%s virtual=%s id=%r %dx%d@%d,%d%s"
+                  % (m["short"], m["virtual"], m["id"],
+                     m["w"], m["h"], m["x"], m["y"],
+                     " PRIMARY" if m.get("primary") else ""))
         return 0
     if args.command == "cleanup":
         # the MSI's uninstall verb (law 3): the lines ARE the report,
