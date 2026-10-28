@@ -1,9 +1,10 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
 
-SIZE LAW: measured 654 lines (Oct 28 identity-lane recount: the desk-
-reappears opt-in row took 48 off the 606 Oct 24 launch-night recount;
-first claim lied by two at the blob; the byte-count is the ruler and the
+SIZE LAW: measured 628 lines (Oct 28 identity-lane recount: the desk-
+reappears opt-in row TOOK 25 ON (git numstat: +27/-2) to the 603 the
+blob now carries; the first recount claimed 654 and lied by 26 - the
+byte-count is the ruler and the
 claim includes its own rewrite - recount at every touch,
 the hdr-walk arm took the wake walk off the pump; the loud-voice
 412 (same day) moved the status label to the gaze; the Oct-12 +36
