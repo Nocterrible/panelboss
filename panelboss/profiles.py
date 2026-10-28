@@ -275,6 +275,12 @@ def capture():
                          "gdi": m["gdi"], "on": True,
                          "primary": m["primary"], "x": m["x"],
                          "y": m["y"], "w": m["w"], "h": m["h"],
+                         # the recovery-lane stamp (the RDP lesson,
+                         # Oct 28): the id tail is the primary, the
+                         # geometry is what re-finds it when Windows
+                         # re-mints the tails
+                         "geom": "%dx%d@%d,%d" % (m["w"], m["h"],
+                                                  m["x"], m["y"]),
                          "rate": m["rate"], "bits": m["bits"],
                          "hdr_cap": caps.get(m["gdi"]),
                          "hdr_state": states.get(m["gdi"])})
@@ -380,6 +386,11 @@ def set_display_mode(data, name, monitor_id, w, h, rate, dir=None):
         note = "%s unreachable: %s saved UNVERIFIED" % (
             row.get("short") or monitor_id, want)
     row["w"], row["h"], row["rate"] = w, h, rate
+    # the edited row keeps its recovery-lane stamp truthful (and an
+    # old profile picks one up here without any migration pass: the
+    # upgrade-on-touch IS the design)
+    row["geom"] = "%dx%d@%d,%d" % (w, h, int(row.get("x") or 0),
+                                   int(row.get("y") or 0))
     save(data, dir)
     log.info("profile '%s': %s -> %s%s", name,
              row.get("short") or monitor_id, want,
@@ -822,6 +833,102 @@ def hdr_away_restore(off):
                 log.info("hdr return: %s refused: %s", target, say)
     except Exception:
         log.debug("hdr restore failed", exc_info=True)
+
+
+# ------------------------------------------------------------- identity --
+# THE TWO IDENTITY LANES (measured on the owner's live RDP desk,
+# Oct 28): every RDP virtual row carries the same short token but a
+# DISTINCT DeviceID instance tail (\\0005, \\0011) - and the tails
+# SURVIVED the cable swap, the primary re-assignment and a full
+# reconnect, while the geometry moved with the physical rewiring.
+# So the tail is the PRIMARY identity lane (ids) and geometry is the
+# RECOVERY lane (geometry), tried only when the ids lane came back
+# incomplete: a connection-shape change demonstrably re-mints the
+# tails wholesale, and the panels' places are then the one thing
+# still telling them apart. The one honest ambiguity lives inside
+# the recovery lane: identical panels (two rows, same size, same
+# line) cannot be told apart by geometry alone, so the pairing is
+# FIRST-OCCURRENCE order of the two lists sorted by x -
+# deterministic, and said out loud in the log. Whether the x order
+# ever answers WRONG where a human would pair them the other way is
+# the open question, carded here; the tail lane usually prevents
+# the fallback from being needed at all. Old profiles without the
+# "geom" stamp simply never take the recovery lane (ids only, one
+# debug word at the miss) - no migration pass, every save/edit
+# upgrades the rows by touching them.
+
+
+def _live_sig(m):
+    """The geometry signature of a LIVE monitor row: the exact
+    spelling capture() saves into a profile's "geom"."""
+    return "%dx%d@%d,%d" % (int(m["w"]), int(m["h"]),
+                            int(m["x"]), int(m["y"]))
+
+
+def bind_profile(prof_displays, live_monitors, name=""):
+    """Which live monitor IS which saved row, and by which lane:
+    returns (binding {saved_id: live monitor row} or None, lane) with
+    lane one of "ids" | "geometry" | "none".
+
+    "ids": every saved id answers a live m["id"] exactly - today's
+    behavior, unchanged, and NO re-stamp and no log for it.
+    "geometry": the ids lane came back incomplete, so the recovery
+    lane runs: the multiset of live geometry signatures EQUALS the
+    saved multiset, every saved row carries its own "geom", and the
+    counts match exactly. The rows are then RE-STAMPED in place
+    (id/short -> the live row's), so every downstream id consumer -
+    desk_mismatch, apply's by_id, the hdr plans - reads the moved
+    tails as the profile's own truth; the caller persists the
+    re-stamped profile once through save(), the module's existing
+    writer, and refreshes its fp (target_fp is the only fingerprint
+    door). Duplicate signatures pair by first-occurrence of the
+    x-sorted lists and the positional word lands in the log.
+    "none": anything less - a partial geometry set (the half-
+    restored RDP desk) or mismatched counts leaves the profile
+    alone; one debug names what did not line up, and the desktop
+    waits for the next event."""
+    live_ids = {m["id"]: m for m in live_monitors}
+    binding = {}
+    for d in prof_displays:
+        m = live_ids.get(d.get("id"))
+        if m is None:
+            break
+        binding[d["id"]] = m
+    else:
+        return binding, "ids"            # every saved id answered
+    # the ids lane is incomplete: the recovery lane, or nothing
+    saved = list(prof_displays)
+    if not saved or any(not isinstance(d.get("geom"), str)
+                        or not d.get("geom") for d in saved):
+        log.debug("profile %r: geometry lane unavailable (rows carry "
+                  "no saved geom - an old profile)", name)
+        return None, "none"
+    want = sorted(d["geom"] for d in saved)
+    have = sorted(_live_sig(m) for m in live_monitors)
+    if want != have:
+        log.debug("profile %r: geometry lane refused (saved %s, live "
+                  "%s)", name, ", ".join(want) or "nothing",
+                  ", ".join(have) or "nothing")
+        return None, "none"
+    queue = {}
+    for m in sorted(live_monitors, key=lambda m: (int(m["x"]),
+                                                  int(m["y"]))):
+        queue.setdefault(_live_sig(m), []).append(m)
+    positional = any(len(rows) > 1 for rows in queue.values())
+    binding = {}
+    for d in sorted(saved, key=lambda d: (int(d.get("x") or 0),
+                                          int(d.get("y") or 0))):
+        m = queue[d["geom"]].pop(0)
+        binding[d["id"]] = m             # keyed by the OLD saved id,
+        #                               read before the re-stamp below
+        d["id"], d["short"] = m["id"], m["short"]
+    log.info("profile %r rebound by geometry: slot numbers moved",
+             name)
+    if positional:
+        log.info("profile %r: the geometry pairing was positional "
+                 "(identical rows matched by x order - geometry "
+                 "alone cannot tell twin panels apart)", name)
+    return binding, "geometry"
 
 
 # ------------------------------------------------------------- apply ---
