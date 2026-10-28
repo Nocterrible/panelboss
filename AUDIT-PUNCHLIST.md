@@ -2332,3 +2332,37 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   pass because the files resolve, but deleting the relic worktree
   (banked tidy item!) could break future builds silently. Check that
   path BEFORE the delete.
+
+## Identity lanes + reshape hook (owner's RDP experiment, same night)
+
+- MEASURED (4 dumps via PanelBoss.exe monitors, living-room RDP):
+  virtual rows share short token Remote_Monitor; instance TAILS
+  (\0005/\0011) survived cable swap, primary reassignment AND
+  reconnect; GEOMETRY moved under the cable swap (primary defected
+  too). Owner's connector-slot theory beat the architect's
+  geometry-first draft on live evidence - tails primary, geometry
+  recovery lane ONLY (trigger: connection-shape churn, the one
+  observed tail-mover). Open question carded: dual-identical-4K
+  tail distinctness (cable-swap class experiment, geometry lane is
+  the insurance either way).
+- SHIPPED (5 commits, gate SHIP-WITH-FIXES): bind_profile lanes
+  ids|geometry|none (geometry = multiset equality, re-stamp + one
+  INFO word, partial desks wait; x-sorted positional tiebreak for
+  twin signatures, deterministic + logged); auto-apply per-profile
+  opt-in (default off): the EXISTING displaychange + session_unlock
+  arms ask auto profiles, WINDOWS LEG ONLY (monitor settings never
+  auto-changed - UI sub-label + static ban pinned); busy-flag +
+  worker thread (storm coalescing drops-not-queues, trailing rerun
+  banked if field reports strand desks); upgrade-on-touch for old
+  profiles (no migration). Gate's 3 named gaps all closed same
+  night: _row's tip arg optional (2-arg call renders), target_fp is
+  byte-identical format to wm.fingerprint (picker sees re-stamped
+  profiles), and the header's 654 was fiction - measured 628,
+  corrected with the arithmetic.
+- RELEASE 0.3.7 (next morning): version bump, README portable
+  paragraph + hook sentence, notes in the plain voice (blackout
+  honesty, wake log, portable zip, RDP-safe pins), full gauntlet
+  complete-stamp BEFORE tag, dual assets (MSI + portable zip) with
+  sha256s, desk upgrades through the real version path. Final-gate
+  dispatch: architect recommends the receipt chain instead (every
+  commit gate-passed; gauntlet independent); owner's call.
