@@ -2015,10 +2015,11 @@ def get_log_level(level=None):
     # the law out loud.
     for name in ("pystray",):
         logging.getLogger(name).propagate = True
-    portable.replay()                 # the store probe ran at import,
-                                      # before this handler could hear
-                                      # it; the fallback word speaks
-                                      # now, once, into the log
+    # NOTE (gate fix, finding 4): the portable fallback word is NOT
+    # replayed here - the boot banner must stay first (it is the death
+    # dossier's anchor line); panelboss.portable.replay() is called by
+    # cli right after that banner, so the warning still speaks once,
+    # into the log, second.
     return root
 
 

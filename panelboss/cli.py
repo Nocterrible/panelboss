@@ -129,6 +129,10 @@ def main(argv=None):
         __version__, os.getpid(), _here,                    # reciting 0.1.0
         time.strftime("%H:%M", time.localtime(_src))        # newest .py
         if _src else "UNKNOWN (tree unreadable)")           # now
+    from . import portable as _portable
+    _portable.replay()                  # the fallback word, second (gate
+    #                                   # fix 4): the banner is the first
+    #                                   # line of the dossier, always
     # every normal departure signs the log (silent-death dossier, Oct 15,
     # now covering the exit too): "cli: panelboss exit pid=" is the last
     # word of a clean stop, and its ABSENCE is the death marker. An
@@ -171,9 +175,9 @@ def main(argv=None):
         # EDID and their token stability is the question this answers.
         from . import wm
         for m in wm.monitors():
-            print("key=%s virtual=%s id=%r %dx%d@%d,%d%s"
+            print("key=%s virtual=%s id=%r %dx%d@%d,%d adapter=%r%s"
                   % (m["short"], m["virtual"], m["id"],
-                     m["w"], m["h"], m["x"], m["y"],
+                     m["w"], m["h"], m["x"], m["y"], m["adapter_id"],
                      " PRIMARY" if m.get("primary") else ""))
         return 0
     if args.command == "cleanup":

@@ -100,6 +100,10 @@ def test_update_ban():
         assert verb not in win, "%s snuck into the guarded window" % verb
     assert "webbrowser.open" in win and "RELEASE_PAGE" in win, "the branch must webbrowser the page"
     assert '"portable updates: close the app, "' in src and '"replace the folder"' in src, "the note is gone"
+    from panelboss import update as _u
+    assert _u.RELEASE_PAGE == \
+        "https://github.com/Nocterrible/panelboss/releases/latest", \
+        "the comment promises a literal pin; this is it"
     print("ok - the portable branch stands before _msi_handoff; no APPLY verb lives in the guarded window; the note states the ritual")
 
 

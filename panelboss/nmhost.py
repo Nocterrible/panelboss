@@ -273,7 +273,22 @@ def host_path():
         with open(HOST_JSON, encoding="utf-8-sig") as f:
             p = json.load(f).get("path")
     except (OSError, ValueError, AttributeError):
-        return None
+        # gate fix (finding 2): the ps1 escape hatch writes ONLY the
+        # APPDATA copy and installs no twin - a portable user who
+        # took that route would read "not installed" through a
+        # working door, contradicting the classifier row. Fall back
+        # to the APPDATA host.json once, portable only (installed
+        # stores already ARE APPDATA; HOST_JSON read it first there).
+        if portable.is_portable():
+            try:
+                with open(os.path.join(os.environ.get("APPDATA", ""),
+                                       "PanelBoss", "host.json"),
+                          encoding="utf-8-sig") as f:
+                    p = json.load(f).get("path")
+            except (OSError, ValueError, AttributeError):
+                return None
+        else:
+            return None
     if not isinstance(p, str) or not os.path.exists(p):
         return None
     return p

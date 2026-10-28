@@ -114,7 +114,10 @@ def is_portable():
 def replay():
     """config.get_log_level calls this after mounting its handler: a
     fallback decided at import time (before any handler could receive
-    it) speaks ONCE into the log file. Idempotent."""
+    it) speaks ONCE into the log file. One word per DECISION: a
+    migrate_once re-run against a still-unwritable folder re-arms the
+    buffer on purpose - a retry that failed twice gets the word
+    twice; a healthy process gets it never."""
     global _pending
     if _pending is None:
         return
