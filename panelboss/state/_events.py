@@ -5,6 +5,7 @@ state.py lines 828-1034."""
 import logging
 import math
 import queue
+import threading
 import time
 
 from .. import display, wakesnap
@@ -51,6 +52,11 @@ class _EventsMixin:
                         self.ui_events.put(("hdr_sync", None))
                     except Exception:
                         log.debug("hdr_sync post failed", exc_info=True)
+                # the desk MOVED: the auto arm gets its one ask
+                # against a freshly enumerated desk (the DELTA 3
+                # hook; a mid-dark or mid-spell desk keeps its own
+                # layout story - see _auto_profiles)
+                self._auto_profiles()
                 continue
             if event == "away_lift":
                 # a low-level hook (or an overlay click) says real
@@ -66,9 +72,17 @@ class _EventsMixin:
                 # itself posts the wake. A stock (unpainted) dark needs
                 # nothing here - unlocking IS input, and the idle gate
                 # hands that one back to the old path untouched.
-                if getattr(self, "away_status", None):
+                was_spell = bool(getattr(self, "away_status", None))
+                if was_spell:
                     log.info("away: lifted on session unlock")
                     self._wake(now, 0.0)
+                if not was_spell:
+                    # an unlock the blackout spell does NOT own: the
+                    # auto arm asks once (a spell-lifted unlock skips
+                    # - _wake just ran the wake-side _restore_layout,
+                    # and the spell's layout story stays un-interleaved
+                    # per the DELTA 3 guard)
+                    self._auto_profiles()
                 continue
             # unknown events: logged once per name, never silently
             # dropped - the silent-ignorance class this fleet died on
@@ -495,6 +509,39 @@ class _EventsMixin:
                 log.info("detection mode switched to %s", value)
             else:
                 log.warning("unknown ui event %r (dropped)", event)
+
+    def _auto_profiles(self):
+        """The auto arm's one ask (the desk-reappears hook, Oct 28):
+        every profile whose "auto" is on is invited to move its
+        windows back onto the freshly enumerated desk - but ONLY
+        while the desk is the engine's to reshape. THE GUARD: an
+        away state (a dark desk, a lit-but-painted spell) is its
+        OWN layout story - the wake's _restore_layout carries the
+        windows through that transition, and the displaychange
+        that lights the panels arrives milliseconds BEFORE the
+        lift, not after. Interleaving the two would move windows
+        under a paint that is about to come off. A pass already
+        walking absorbs the storm (an RDP reconnect posts the ear
+        several times in one second; two applies would contend the
+        same windows), and the absorption is a MISS the next event
+        re-asks - never a wedge."""
+        if self.state == "off" or getattr(self, "away_status", None):
+            return
+        if getattr(self, "_auto_pass_busy", False):
+            log.debug("auto pass already walking; this event rides it")
+            return
+
+        def work():
+            try:
+                from .. import profiles, wm
+                profiles.auto_pass(profiles.load(), wm.monitors())
+            except Exception:
+                log.exception("auto pass failed; the desk is on its own")
+            finally:
+                self._auto_pass_busy = False
+        self._auto_pass_busy = True
+        threading.Thread(target=work, daemon=True,
+                         name="auto-pass").start()
 
     def _rebuild_detector(self):
         """Re-open whatever the CURRENT mode wants: motion rebuilds the

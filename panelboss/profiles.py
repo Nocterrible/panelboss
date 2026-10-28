@@ -1165,6 +1165,7 @@ def apply(data, name, best_effort=False, scope="full", login=False,
     # dialog - only apps that truly stayed away are reported, and
     # only until the user once declined to fix them.
     no_shows = []
+    placed = 0                # rides the info dict for the auto hook
     if wins_scope and (matched or best_done):
         # THE PRESENT SET INCLUDES THE MINIMIZED (owner ruling,
         # Oct 24 launch day): the seat walk answers iconic windows
@@ -1172,7 +1173,7 @@ def apply(data, name, best_effort=False, scope="full", login=False,
         # matter its show state (the wake snapshot and the picker
         # keep wanted's screens-out law; only THIS walk re-asks it).
         live = wm.list_windows(include_minimized=True)
-        taken, placed, silent = set(), 0, 0
+        taken, silent = set(), 0
         moved_procs, troubles = set(), []
         if login:
             waited_for = launch_delay(data)
@@ -1287,7 +1288,8 @@ def apply(data, name, best_effort=False, scope="full", login=False,
     save(data, dir)
     info = {"no_shows": [{"proc": s.get("proc", ""),
                           "title": s.get("title", "")}
-                         for s in no_shows]}
+                         for s in no_shows],
+            "placed": placed}
     if login:
         info["login"] = {"took": took,
                          "delay_next": launch_delay(data)}
@@ -1295,3 +1297,45 @@ def apply(data, name, best_effort=False, scope="full", login=False,
         "applied: %s" % (" + ".join(d["short"] for d in
                                 prof["displays"] if d.get("on", True))), \
         info
+
+
+# ------------------------------------------------------------ auto pass --
+def auto_pass(data, mons, dir=None):
+    """The desk-reappeared arm (opt-in per profile: the "auto" bool
+    beside the profile's other flags): against a FRESHLY enumerated
+    monitor list, every profile whose auto is on gets its WINDOW
+    LEG ONLY back - the scope="windows" verb, the same one the
+    "restore my windows" button rides - and nothing else. Monitor
+    settings (mode, rate, hdr) are never auto-commanded: an
+    unattended reshuffle gambles a panel's sync for a convenience,
+    and the desk the owner just plugged in may be mid-landfall.
+    A geometry-lane bind re-stamps the rows (the tails moved; the
+    fp is the rows' own fingerprint, so it refreshes with them)
+    and is persisted ONCE through this module's existing save.
+    The announcement law speaks per applied profile:
+    'profile %r applied by %s: %d windows moved', the lane named;
+    a refused desk is one info line, never a dialog (nobody may be
+    watching). Returns the pass's log lines - [] when the desk
+    moved and no auto profile answers it."""
+    out = []
+    for name in sorted((data.get("profiles") or {})):
+        prof = data["profiles"][name]
+        if not prof.get("auto"):
+            continue
+        binding, lane = bind_profile(prof.get("displays") or [], mons,
+                                     name)
+        if lane == "none":
+            continue                     # bind_profile debugged it
+        if lane == "geometry":
+            prof["fp"] = target_fp(prof["displays"])
+            save(data, dir)              # the re-stamp, persisted
+        ok, say, info = apply(data, name, scope="windows", dir=dir)
+        if ok:
+            line = ("profile %r applied by %s: %d windows moved"
+                    % (name, lane, info.get("placed", 0)))
+        else:
+            line = "profile %r auto-apply (%s) refused: %s" % (
+                name, lane, say)
+        log.info(line)
+        out.append(line)
+    return out
