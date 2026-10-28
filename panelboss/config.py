@@ -1,6 +1,8 @@
 """Config handling.
 
-Reads %APPDATA%\\PanelBoss\\config.toml, writing stock defaults
+Reads config.toml from the store root (%APPDATA%\\PanelBoss, or the
+exe's own folder when portable.ini flags a portable install - see
+portable.py), writing stock defaults
 first if it has never been created. Unknown keys are tolerated (forward
 compatible); missing keys are backfilled from stock defaults so the state
 machine never has to None-check.
@@ -25,19 +27,26 @@ try:
 except ImportError:
     import tomli as tomllib  # type: ignore
 
+from . import portable
+
 log = logging.getLogger("config")
 
 APP_NAME = "PanelBoss"
 
-# the base directory; the environment variable wins so portable installs
-# can redirect it next to the repo
-appdata = os.environ.get("APPDATA")
-if appdata:
-    CONFIG_DIR = Path(appdata) / APP_NAME
-else:
-    CONFIG_DIR = Path.home() / ".config" / APP_NAME
 
-CONFIG_DIR = os.environ.get("PANELBOSS_CONFIG_DIR") or str(CONFIG_DIR)
+def _store_dir():
+    """Where config.toml, logs and host.json live: the portable
+    module's decided root (portable.ini beside the exe -> the exe's
+    folder, unwritable flag -> APPDATA with the buffered word), and
+    the PANELBOSS_CONFIG_DIR env seam still wins - the dev and test
+    redirect it has always honored. CONFIG_DIR is this door's answer
+    frozen at import; every site that assembles the store root
+    (migrate_once's target, inference's model root, LOG_DIR below)
+    calls through it instead of re-deriving APPDATA by hand."""
+    return os.environ.get("PANELBOSS_CONFIG_DIR") or str(portable.root())
+
+
+CONFIG_DIR = _store_dir()
 
 LOG_DIR = os.environ.get("PANELBOSS_LOG_DIR") or str(Path(CONFIG_DIR) / "logs")
 
@@ -2006,6 +2015,10 @@ def get_log_level(level=None):
     # the law out loud.
     for name in ("pystray",):
         logging.getLogger(name).propagate = True
+    portable.replay()                 # the store probe ran at import,
+                                      # before this handler could hear
+                                      # it; the fallback word speaks
+                                      # now, once, into the log
     return root
 
 
@@ -2025,7 +2038,11 @@ def migrate_once():
         return
     old_dir = os.path.join(appdata, "ICU-PresenceDetector")
     if os.path.isdir(old_dir):
-        new_dir = str(Path(appdata) / APP_NAME)
+        new_dir = str(portable.evaluate(appdata)[0])   # the portable
+                                      # hand-rebuilt APPDATA twin: on
+                                      # a flagged folder the settings
+                                      # migrate INTO the exe's own
+                                      # directory
         if not os.path.exists(os.path.join(new_dir, "config.toml")):
             try:
                 shutil.copytree(old_dir, new_dir, copy_function=shutil.copy2,

@@ -19,6 +19,8 @@ import time
 import urllib.error
 import urllib.request
 
+from . import portable
+
 log = logging.getLogger("inference")
 
 # Mirror list; the first entry is the one verified at build time.
@@ -33,7 +35,15 @@ def _default_models_root():
     into the bundle, which the user can neither see nor edit, so the
     frozen exe looks for a models/ folder BESIDE the exe first -
     exactly where a release zip puts it - and only then falls back to
-    the repo layout (download-once still fills whichever wins)."""
+    the repo layout (download-once still fills whichever wins).
+    PORTABLE (the flag decided by portable.py) answers the store
+    root's models dir UNCONDITIONALLY - the flag's promise outranks
+    the folder's current contents, and the store root IS the exe's
+    directory when frozen, so a flagged build lands on the byte it
+    would have found anyway; without the flag every branch below is
+    the historic shape."""
+    if portable.is_portable():
+        return os.path.join(str(portable.root()), "models")
     if getattr(sys, "frozen", False):
         cand = os.path.join(os.path.dirname(sys.executable), "models")
         if os.path.isdir(cand):
