@@ -2308,3 +2308,27 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
 - Owner field-testing the wake log + wake frames before we call it
   an update; blanket-on-chair is the designated test rig (score band
   0.45-0.58). 0.3.7 tag decision waits for his verdict.
+
+## First portable artifact (Oct 28)
+
+- dist\PanelBoss-Portable.zip sha256
+  0dfd0cc5ce9accbda690fcc00d39526c1074128327b17656ca9d1525a3b3d343
+  (folder PanelBoss-Portable-0.3.6; portable.ini + README.txt + the
+  10.2 MB yolo11n.onnx ride in the zip - model OUTSIDE _internal,
+  user-droppable; the offline claim survives locked-network test by
+  construction). Zip is 117 MB (onedir + opencv + onnxruntime).
+- SMOKE on this box: exe ran `monitors` one-shot from the folder;
+  logs\ and models\ were created BESIDE the exe (portable mode live);
+  store root correct; Roaming\PanelBoss untouched (pre-existing desk
+  file only).
+- GATE (SHIP-WITH-FIXES) cleared before push: host makedirs its own
+  rect doorway (theater survives store relocation BY DESIGN - host
+  line 148); five fixes folded in 05af53e (ps1 escape hatch fallback,
+  warning after banner, per-decision re-arm documented, literal page
+  URL pin, adapter bus-root in the dump).
+- BUILD HAZARD NOTED: PyInstaller resolved cv2's DLLs THROUGH
+  F:\Projects\ICU-PresenceDetector\.venv (this repo's venv copied
+  from the relic project - cv2 config carries the old path). Builds
+  pass because the files resolve, but deleting the relic worktree
+  (banked tidy item!) could break future builds silently. Check that
+  path BEFORE the delete.
