@@ -1,8 +1,9 @@
 """Monitor-profiles tab skeleton: picker, section repaints,
 and the per-desk monitor fills.
 
-SIZE LAW: measured 606 lines (Oct 24 launch-night recount; first claim
-lied by two at the blob; the byte-count is the ruler and the
+SIZE LAW: measured 654 lines (Oct 28 identity-lane recount: the desk-
+reappears opt-in row took 48 off the 606 Oct 24 launch-night recount;
+first claim lied by two at the blob; the byte-count is the ruler and the
 claim includes its own rewrite - recount at every touch,
 the hdr-walk arm took the wake walk off the pump; the loud-voice
 412 (same day) moved the status label to the gaze; the Oct-12 +36
@@ -391,6 +392,30 @@ class _ProfilesMixin:
                        HDR_ASK_LABELS.get(prof.get("hdr", "snap"),
                                           HDR_ASK_LABELS["snap"]))
         self.hdr_menu.grid(row=0, column=1, sticky="e")
+        # THE DESK-REAPPEARS OPT-IN (the identity-lane wave, Oct 28):
+        # a lone boolean is a SWITCH (the family law the pin-open wish
+        # states), the sub-label is the honest scope (the hook moves
+        # WINDOWS back and never commands the monitors unattended -
+        # the promise DELTA 3's static ban pins in source), and the
+        # knob is painted from the store BOTH ways (the editor's
+        # knob-from-truth law: never lean on the widget's build
+        # default). Persistence rides _prof_auto, the hdr ask's
+        # sibling on the same save path as the profile's other flags.
+        row = self._row(opts, "apply when this desk reappears")
+        self.prof_auto_box = ctk.CTkSwitch(row, text="",
+                                           command=self._prof_auto,
+                                           **self.skin.switch_style())
+        self.prof_auto_box.grid(row=0, column=1, sticky="e")
+        self.prof_auto_box.select() if prof.get("auto") \
+            else self.prof_auto_box.deselect()
+        ctk.CTkLabel(opts,
+                     text="moves windows back when a matching monitor "
+                          "setup is detected - monitor settings are "
+                          "never auto-changed",
+                     font=self.skin.font(10), wraplength=460,
+                     justify="left", anchor="w",
+                     **self.skin.text_style("sub")).pack(
+            anchor="w", pady=(0, theme.S_ROW))
         btns = ctk.CTkFrame(self._prof_detail, fg_color="transparent")
         btns.pack(anchor="w", pady=(theme.S_FIELD, 0))
         btn_last = ctk.CTkButton(btns, text="apply profile", width=130,

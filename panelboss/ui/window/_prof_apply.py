@@ -1,8 +1,7 @@
 """Profiles tab verbs: mode edits, profile create and
 apply, the noshows dialog, rescue.
-Size law (measured 627, Oct 24 launch-night recount - the claim
-includes its own lines; the mid-apply flag formula and the guarded
-rescue added the last eighteen to the loud-voice 498): the apply
+Size law (measured 637, Oct 28 identity-lane recount: the _prof_auto
+verb took 10 off the 627 launch-night count - the apply
 pipeline is one transaction -
 snapshot, layout plan, dialog, rescue - whose halves argue over
 shared state; split cost paid per read beats the split itself here.
@@ -618,6 +617,17 @@ class _ModeMixin:
             # the audit's last silent sibling joins the loud club
             # (loud-voice wave): a color ask that never reached the
             # disk must not be believed by the menu that just moved
+            self._mode_fail("the profile could not be written to disk")
+
+
+    def _prof_auto(self, on):
+        """The desk-reappears opt-in (the identity-lane wave, Oct 28):
+        the flag rides the profile's own record and the SAME save
+        path the hdr ask uses - and a word that never reached the
+        disk is not believed by the switch that just moved (the
+        loud-voice law, verbatim from _prof_hdr)."""
+        self._prof_data["profiles"][self._prof_sel]["auto"] = bool(on)
+        if not profiles.save(self._prof_data):
             self._mode_fail("the profile could not be written to disk")
 
 
