@@ -20,7 +20,7 @@ import threading
 import tkinter as tk
 import customtkinter as ctk
 
-from ... import companion, dimmer, hider, jog, wm, nmhost
+from ... import companion, dimmer, hider, jog, portable, wm, nmhost
 from ...config import (DIMMER_IDLE_CEIL, DIMMER_IDLE_DEFAULT,
                        DIMMER_IDLE_FLOOR, DIMMER_LEVEL_CEIL,
                        DIMMER_LEVEL_DEFAULT, DIMMER_LEVEL_FLOOR,
@@ -173,6 +173,15 @@ TIP_COMP = {
             "itself; no host installed reads as honest words and the "
             "install row is the answer. Re-checks when you touch the "
             "veil button or the switch.",
+    "bridge": "the portable install's door to the theater: the SAME "
+              "registration the installed copy gets from the "
+              "installer - HKCU writes only, no admin, nothing "
+              "outside this user. The button shows while nothing "
+              "answers; a bridge registered for a DIFFERENT "
+              "PanelBoss install is named instead and not re-pointed "
+              "(the shared key fits one door, and stealing it would "
+              "blind the other install's theater), and a bridge "
+              "registered HERE leaves the card quiet.",
     "delay": "veil after: how long the input must be still before a "
              "PLAYING video gets its ring - the same number re-arms "
              "it after a lift. The clock is the app's input pump (by "
@@ -1055,8 +1064,85 @@ class _OledMixin:
             justify="left", anchor="w", **self.skin.text_style("sub"))
         self.oled_comp_caps.grid(row=0, column=1, columnspan=2,
                                  sticky="e")
+        # THE PORTABLE BRIDGE DOOR (delta 5, Oct 28): a zip-only user
+        # gets the registration without a command line (HKCU writes
+        # only, no admin). Rendered ONLY when portable: an installed
+        # user owns the MSI's door and never sees this row. The paint
+        # is the three-state classifier's (absent -> the button
+        # stands, other -> the gray key-law word, here -> a quiet
+        # normal card), re-asked on the dimmer beat exactly like the
+        # install label's own rhythm.
+        self.oled_comp_bridge_note = None
+        if portable.is_portable():
+            row = self._row(box, "theater bridge", TIP_COMP["bridge"],
+                            hint_chars=42)
+            self.oled_comp_bridge_btn = ctk.CTkButton(
+                row, text="register theater bridge", height=26,
+                width=170, command=self._comp_bridge_register,
+                **self.skin.secondary())
+            self.oled_comp_bridge_btn.grid(row=0, column=1, sticky="e",
+                                          padx=(theme.S_FIELD, 0))
+            self.oled_comp_bridge_note = ctk.CTkLabel(
+                row, text="", font=self.skin.font(11), wraplength=300,
+                justify="left", anchor="e",
+                **self.skin.text_style("sub"))
+            self.oled_comp_bridge_note.grid(row=0, column=2, sticky="e",
+                                            padx=(theme.S_FIELD, 0))
+            self._comp_bridge_door()
         self._comp_words()
         self._helper_install_words()
+
+    BRIDGE_OTHER_NOTE = ("the theater bridge is registered for a "
+                         "different PanelBoss install - the door fits "
+                         "one key.")
+
+    def _comp_bridge_door(self, refused=None):
+        """The portable row's one paint, on the _helper_install_words
+        rhythm (the beat re-asks; a click lands the verdict). The
+        three states, one door each: ABSENT -> the button stands (and
+        a carried refusal word rides the note in the danger color -
+        never a silent no-click); OTHER -> no button, the gray
+        key-law word (a portable re-register would blind the MSI's
+        theater, so the honest move is to EXPLAIN, not promise);
+        HERE -> button gone, note clear, the quiet normal card.
+        Never raises: a dead root or a junk registry answer leaves
+        the row waiting for the next beat."""
+        note = getattr(self, "oled_comp_bridge_note", None)
+        if note is None:
+            return
+        try:
+            state, _target = nmhost.bridge_door()
+        except Exception:
+            state = nmhost.BRIDGE_ABSENT
+        if refused and state == nmhost.BRIDGE_ABSENT:
+            self._comp_bridge_fail = str(refused)
+        elif state != nmhost.BRIDGE_ABSENT:
+            self._comp_bridge_fail = None        # the state moved: the
+                                                 # old refusal is stale
+        fail = getattr(self, "_comp_bridge_fail", "")
+        try:
+            if state == nmhost.BRIDGE_ABSENT:
+                self.oled_comp_bridge_btn.grid()
+                note.configure(text=("the bridge refused: %s" % fail
+                                     if fail else ""),
+                               text_color=self.skin.danger)
+            else:
+                self.oled_comp_bridge_btn.grid_forget()
+                note.configure(text=(self.BRIDGE_OTHER_NOTE
+                                     if state == nmhost.BRIDGE_OTHER
+                                     else ""),
+                               text_color=self.skin.subtext)
+        except (tk.TclError, RuntimeError):
+            pass            # the paint superseded; the next beat owns it
+
+    def _comp_bridge_register(self):
+        """The door's one click rides the app's EXISTING registration
+        path - the worker above (_helper_install -> nmhost.install):
+        build, register, host.json in one gesture, the same entry the
+        installed copy and the CLI drive. The failure word lands red
+        on the door's own note through that worker's done() hook."""
+        self._comp_bridge_fail = None
+        self._helper_install()
 
     def _helper_install_words(self):
         """The doorway row's button reads "install the helper" until
@@ -1086,6 +1172,11 @@ class _OledMixin:
             return
         set_text(self.oled_comp_say, companion.say(self.cfg))
         self._helper_install_words()
+        self._comp_bridge_door()      # the portable row re-asks its
+                                      # three states on the same beat
+                                      # (installed since the last
+                                      # paint retires the button mid-
+                                      # session, no rebuild needed)
         if getattr(self, "oled_comp_caps", None) is not None:
             set_text(self.oled_comp_caps, companion.caps_words(force=force))
 
@@ -1208,6 +1299,11 @@ class _OledMixin:
                                                        # the probe IS the
                                                        # proof-of-install
                     set_text(self.oled_comp_say, words)
+                    # the portable bridge row hears the SAME verdict:
+                    # success re-classifies (the button vanishes into
+                    # the registered state), failure wears the honest
+                    # step word in the danger color (delta 5).
+                    self._comp_bridge_door(None if ok else words)
                     # RESULT on the say line: success = the fresh
                     # capability words; failure = the honest step word
                     # + the manual ps1 route (nmhost.install's words

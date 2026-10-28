@@ -1,16 +1,20 @@
 """Portable mode, offline: the store root at every branch (no flag -> the
 historic path byte-equal; flag beside a simulated frozen exe -> that folder;
-unwritable -> the fallback naming BOTH paths), and the routed sites (the env
-seam still winning, the model root riding the door). No Tk/registry. Run
-from repo root:  python scripts/portable_test.py
+unwritable -> the fallback naming BOTH paths), the routed sites (the env
+seam still winning, the model root riding the door), the update honesty
+(APPLY verbs unreachable behind the portable branch - source-ban school),
+and the theater-bridge door classifier (absent/other/here, pure). No Tk/
+registry. Run from repo root:  python scripts/portable_test.py
 """
-import logging, os, subprocess, sys, tempfile; from pathlib import Path
+import json, logging, os, subprocess, sys, tempfile; from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from panelboss import config, inference, portable  # noqa: E402
+from panelboss import config, inference, nmhost, portable; from panelboss.ui.window._oled import _OledMixin  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
 os.environ.pop("PANELBOSS_CONFIG_DIR", None); os.environ.pop("PANELBOSS_LOG_DIR", None)   # suite owns its env
+src_of = lambda rel: open(os.path.join(REPO, rel), encoding="utf-8").read()
 
 
 class Recorder(logging.Handler):
@@ -84,8 +88,60 @@ def test_readonly_falls_back_loud():
     print("ok - an unwritable flagged folder falls back to APPDATA with one warning naming both paths (the app lives)")
 
 
+def window(src, start, end): return src[src.index(start):src.index(end, src.index(start))]
+
+
+def test_update_ban():
+    src = src_of(os.path.join("panelboss", "ui", "window", "_general.py"))
+    win = window(src, "def _update_now", "def _check_updates")
+    assert win.index("portable.is_portable()") < win.index("_msi_handoff"), \
+        "the APPLY route walked in front of the guard - reachable again"
+    for verb in ("write_apply", "fetch_and_verify", "msiexec"):
+        assert verb not in win, "%s snuck into the guarded window" % verb
+    assert "webbrowser.open" in win and "RELEASE_PAGE" in win, "the branch must webbrowser the page"
+    assert '"portable updates: close the app, "' in src and '"replace the folder"' in src, "the note is gone"
+    print("ok - the portable branch stands before _msi_handoff; no APPLY verb lives in the guarded window; the note states the ritual")
+
+
+def test_bridge_classifier():
+    d = tempfile.mkdtemp(prefix="pb_bridge_")
+    here = os.path.join(d, "extension", "host", "panelboss-host.exe")
+    other = os.path.join(d, "msi", "panelboss-host.exe")
+    mani = os.path.join(d, "host-manifest.json")
+    assert nmhost.classify_bridge(None, here) == ("absent", None)
+    assert nmhost.classify_bridge(mani, here) == ("absent", None)   # vanished
+    open(mani, "w").write("{not json")
+    assert nmhost.classify_bridge(mani, here) == ("absent", None)   # junk
+    for path, want in ((other, "other"), (other.upper(), "other"), (here, "here"), (here.upper(), "here")):
+        open(mani, "w", encoding="utf-8").write(json.dumps({"path": path}))
+        got = nmhost.classify_bridge(mani, here)
+        assert got[0] == want and (want != "other" or got[1] == path), (path, got)
+    was = nmhost._REG_READ                  # the call site rides the
+    was_exe = nmhost._BUNDLED_HOST_EXE      # suite's own registry seam
+    try:
+        nmhost._REG_READ = lambda: mani
+        nmhost._BUNDLED_HOST_EXE = here
+        assert nmhost.bridge_door()[0] == "here"
+        nmhost._REG_READ = lambda: None
+        assert nmhost.bridge_door()[0] == "absent"
+    finally:
+        nmhost._REG_READ = was
+        nmhost._BUNDLED_HOST_EXE = was_exe
+    win = window(src_of(os.path.join("panelboss", "nmhost.py")), "def classify_bridge", "def bridge_door")
+    assert ".install" not in win and "install(" not in win, \
+        "the classifier reached for the installer - it may only report"
+    assert _OledMixin.BRIDGE_OTHER_NOTE == \
+        ("the theater bridge is registered for a different PanelBoss "
+         "install - the door fits one key."), _OledMixin.BRIDGE_OTHER_NOTE
+    oled = src_of(os.path.join("panelboss", "ui", "window", "_oled.py"))
+    assert 'text="register theater bridge"' in oled, "the label is gone"
+    assert "if portable.is_portable():" in oled, "the row lost its gate"
+    assert "the bridge refused: %s" in oled, "the refusal word is gone"
+    print("ok - the door classifier is pure and case-insensitive; the DIFFERENT-PATH branch carries no register call; the button label and its portable gate stand in source")
+
+
 if __name__ == "__main__":
-    for t in (test_historic, test_flagged_layout, test_readonly_falls_back_loud):
+    for t in (test_historic, test_flagged_layout, test_readonly_falls_back_loud, test_update_ban, test_bridge_classifier):
         t()
     subprocess.check_call([sys.executable, os.path.join(HERE, "config_writer_test.py")], stdout=subprocess.DEVNULL)
     print("ok - the config writer invariants ride unchanged under the door")

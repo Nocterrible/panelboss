@@ -42,6 +42,11 @@ log = logging.getLogger("update")
 # elevation, so msiexec /qn installs it in peace).
 RELEASE_API = ("https://api.github.com/repos/"
                "Nocterrible/panelboss/releases/latest")
+# the HUMAN twin of the API door (portable honesty, Oct 28): the
+# download page a portable install's button opens - derived from the
+# API constant by swapping the API host and dropping /repos, so a
+# repo move edits one line (and the test pins the literal result)
+RELEASE_PAGE = RELEASE_API.replace("api.github.com/repos/", "github.com/")
 ASSET_ENDS = "-user.msi"
 TIMEOUT = 5          # the API answer is a few kB; the UI waits on it
 DL_TIMEOUT = 60      # the msi is tens of MB: stall, do not crawl

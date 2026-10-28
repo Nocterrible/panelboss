@@ -14,7 +14,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from ... import config, update
+from ... import config, portable, update
 from .. import deps, theme
 from ._constants import TIPS
 from ._widgets import SkewCombo, set_text
@@ -74,6 +74,21 @@ class _GeneralMixin:
             **self.skin.secondary())
         self.update_button.grid(row=0, column=3, sticky="e",
                                 padx=(theme.S_ROW, 0))
+        # THE PORTABLE HONESTY (delta 3, Oct 28): a portable app that
+        # msiexec's would plant a SHADOW INSTALL - the exact thing the
+        # zip exists to avoid - so the install verb retires to the
+        # download page and the note states the ritual. check now
+        # stays fully functional: it is the one network request and
+        # it just reads the API.
+        if portable.is_portable():
+            self.update_button.configure(text="open the download page",
+                                         width=170)
+            ctk.CTkLabel(row, text="portable updates: close the app, "
+                                   "replace the folder",
+                         font=self.skin.font(11),
+                         **self.skin.text_style("sub")).grid(
+                row=1, column=2, columnspan=2, sticky="e",
+                pady=(2, 0))
         # design 3: the row states the version it is running (so a
         # user can see what they have, not only whether an answer
         # came); _update_status_line repaints the very same widget.
@@ -426,7 +441,14 @@ class _GeneralMixin:
         waiting on an optional package. On a FROZEN install this is
         the msi handoff below instead (and extra belongs to the bat:
         the installed app's optional bridges come inside the next
-        release's package, not a pip run)."""
+        release's package, not a pip run). On a PORTABLE install the
+        first branch below answers instead (the Oct 28 honesty): the
+        door is the release page, a shadow install is the exact thing
+        the zip exists to avoid, and the sub-label beside the button
+        states the folder-replace ritual."""
+        if portable.is_portable():
+            self._open_release_page()
+            return
         if getattr(sys, "frozen", False):
             self._msi_handoff()
             return
@@ -451,6 +473,15 @@ class _GeneralMixin:
             return
         self.monitor.events.put(("quit", True))
 
+
+    def _open_release_page(self):
+        """The portable install verb: the OS default browser takes
+        the release page (the webbrowser idiom, _comp_store's twin -
+        no installer hand, no shadow install). The page carries the
+        portable zip; the ritual is close the app, replace the
+        folder, and the sub-label beside the button already says so."""
+        import webbrowser
+        webbrowser.open(update.RELEASE_PAGE)
 
     def _check_updates(self):
         """"check now": the answer is a sentence in the row, and the

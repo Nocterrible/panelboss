@@ -46,14 +46,16 @@ import struct
 import sys
 import time
 
-from . import _spawn
+from . import _spawn, portable
 
 log = logging.getLogger("nmhost")
 
 # where install_host.ps1 records the host exe path - the doorway's
 # neighbor, so it dies and lives with the same app-owned folder.
-HOST_JSON = os.path.join(os.environ.get("APPDATA", ""), "PanelBoss",
-                         "host.json")
+# Routed through the portable door (str(portable.root()) is APPDATA's
+# PanelBoss twin without the flag - byte-equal, and the flagged
+# store gets its own host.json beside its own config).
+HOST_JSON = os.path.join(str(portable.root()), "host.json")
 
 CAP_TIMEOUT = 2.0          # s: a wedged host answers nothing; kill it
                            # and report not-installed rather than stall
@@ -136,6 +138,51 @@ _APP_ROOT = _app_root()
 
 _INSTALL_PS1 = os.path.join(_APP_ROOT, "extension", "host",
                             "install_host.ps1")
+
+# the door-fit-one-key probe (portable card, Oct 28 wave): the host
+# exe THIS install would register - exactly what install_host.ps1's
+# own line writes beside itself, resolved through the exe-adjacent
+# _app_root convention above
+_BUNDLED_HOST_EXE = os.path.join(_APP_ROOT, "extension", "host",
+                                 "panelboss-host.exe")
+
+BRIDGE_ABSENT = "absent"     # nothing answers: the register door is open
+BRIDGE_OTHER = "other"       # a DIFFERENT install owns the shared key
+BRIDGE_HERE = "here"         # this install owns it: quiet, it works
+
+
+def classify_bridge(manifest_path, this_host_exe):
+    """Pure three-state classifier of the native-messaging door: takes
+    the registry's answer (a manifest path or None - the CALL SITE
+    reads HKCU through the _REG_READ seam, so unit tests inject) and
+    this install's own host exe path; reads the manifest json from
+    disk and compares case-insensitively. Returns (state, target):
+    the target is the registered host path the OTHER word names.
+    Missing key, vanished json, unreadable json and an empty path
+    field all answer ABSENT - a loud re-registration beats guessing.
+    It never reaches for the installer: this classifier can only
+    report, the door's treatment is the caller's."""
+    if not manifest_path:
+        return BRIDGE_ABSENT, None
+    try:
+        with open(manifest_path, encoding="utf-8-sig") as f:
+            mani = json.load(f)
+    except (OSError, ValueError):
+        return BRIDGE_ABSENT, None
+    p = mani.get("path") if isinstance(mani, dict) else None
+    if not isinstance(p, str) or not p:
+        return BRIDGE_ABSENT, None
+    if os.path.normcase(os.path.abspath(p)) == \
+            os.path.normcase(os.path.abspath(this_host_exe)):
+        return BRIDGE_HERE, p
+    return BRIDGE_OTHER, p
+
+
+def bridge_door(read=None):
+    """The call-site door the portable card asks: HKCU answers through
+    the suite's own _REG_READ seam (same fake companion_test drives),
+    the pure classifier decides against this bundle's host exe."""
+    return classify_bridge((read or _REG_READ)(), _BUNDLED_HOST_EXE)
 
 _cache = {"until": 0.0, "caps": None}
 
@@ -407,6 +454,20 @@ def install(ext_id=None):
                        "-ExtensionId %s yourself"
                        % (" or ".join(str(o) for o in origins) or
                           "nothing", want, ext_id))
+    if portable.is_portable():
+        # THE STORE TWIN (portable card wave, Oct 28): the ps1 stamps
+        # its host.json beside the APPDATA neighbor (the dev and MSI
+        # layout); the flagged store reads beside ITS OWN config, so
+        # the app writes its twin after its own installer registered.
+        # Without it the portable capability line would read "not
+        # installed" through a working door - the exact lie.
+        try:
+            with open(HOST_JSON, "w", encoding="utf-8") as f:
+                json.dump({"path": _BUNDLED_HOST_EXE}, f)
+        except OSError:
+            log.warning("nmhost: the store's host.json twin could not "
+                        "land - the card reads the doorway by the ps1's"
+                        " copy only")
     return True, ("helper installed - registered for %s - %s"
                   % (ext_id, _caps_line(caps)))
 
