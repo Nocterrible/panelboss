@@ -1,7 +1,6 @@
 """The identity lanes: bind_profile's ids match, the geometry recovery
 (tails moved, stamp re-lands), the none verdicts, the auto opt-in's
-store and pass legs, the static ban. Fake rows shaped like
-wm.monitors() output; the real desk is never touched."""
+store and pass legs, and the static ban. Real desk never touched."""
 import logging
 import os
 import sys
@@ -22,8 +21,7 @@ class _Cap(logging.Filter):
 
 
 lg = logging.getLogger("profiles")
-lg.addFilter(_Cap())
-lg.setLevel(logging.DEBUG)
+lg.addFilter(_Cap()); lg.setLevel(logging.DEBUG)
 clear = lambda: _recs.clear()
 infos = lambda: [m for lv, m in _recs if lv == logging.INFO]
 debugs = lambda: [m for lv, m in _recs if lv <= logging.DEBUG]
@@ -37,19 +35,21 @@ def live(tail, x, w=3840, h=2160, y=0):
 
 
 def saved(tail, x, geom=True, w=3840, h=2160, y=0):
+    # geom=False is the old profile shape: no geom key at all
     d = dict(live(tail, x, w, h, y), on=True)
     if geom:
         d["geom"] = "%dx%d@%d,%d" % (w, h, x, y)
     return d
-# (a) exact ids: binding answers, NOTHING restamps, no log line.
+
+# (a) exact ids: the today-lane - binding answers, NOTHING restamps,
+# no log. (b) tails moved (the measured RDP class): geometry binds,
+# rows re-stamp, the INFO word ONCE.
 rows = [saved("0005", 0), saved("0011", 3840)]
 clear()
 b, lane = profiles.bind_profile(rows, [live("0005", 0),
                                        live("0011", 3840)], "desk")
 assert lane == "ids" and sorted(b) == sorted(d["id"] for d in rows)
 assert rows[0]["id"].endswith("0005") and not _recs, (rows[0], _recs)
-# (b) tails moved (the measured RDP class): the geometry lane binds,
-# rows re-stamp to the live tails, the INFO word lands ONCE.
 rows = [saved("0005", 0), saved("0011", 3840)]
 mons = [live("0011", 0), live("0013", 3840)]
 clear()
@@ -60,10 +60,9 @@ assert sorted(b) == ["MONITOR\\REMOTE_Monitor\\0005",
                      "MONITOR\\REMOTE_Monitor\\0011"], b
 assert sum("rebound by geometry" in m for m in infos()) == 1, infos()
 assert not any("positional" in m for m in infos()), infos()
-# (c) the half-restored desk (2 of 3 live): none, no action, no
-# spam - one debug names the miss. (d) same count, different layout
-# (rewired AND rearranged): none too - ids moved, else the ids lane
-# would answer.
+# (c) half-restored desk (2 of 3 live): none, no action, no spam -
+# one debug names the miss. (d) same count, other layout: none too
+# (its ids moved, else the ids lane would answer).
 clear()
 b, lane = profiles.bind_profile(
     [saved("0005", 0), saved("0011", 3840),
@@ -75,8 +74,8 @@ b, lane = profiles.bind_profile(
     [saved("0005", 0), saved("0011", 3840, w=1920, h=1080)],
     [live("0007", 0), live("0009", 3840, w=2560, h=1440)], "desk")
 assert b is None and lane == "none" and not infos() and len(debugs()) == 1
-# (e) an old profile (no geom stamp): ids lane only - it binds when
-# the ids answer, and at the miss one debug word, never a raise.
+# (e) old profile (no geom stamp): ids lane only - it binds when the
+# ids answer, at the miss one debug word, never a raise.
 rows = [saved("0005", 0, geom=False)]
 clear()
 assert profiles.bind_profile(rows, [live("0005", 0)], "desk")[0] is not None
@@ -93,11 +92,9 @@ assert lane == "geometry"
 assert b["MONITOR\\REMOTE_Monitor\\0005"]["id"] == \
     "MONITOR\\REMOTE_Monitor\\0009", b
 assert sum("positional" in m for m in infos()) == 1, infos()
-
-# (g) the auto flag round-trips through the EXISTING save path, and
-# one auto_pass drive covers the delta-3 leg: tails moved -> the
-# geometry lane re-stamps and PERSISTS (id and fp on disk follow),
-# the window leg runs, the announcement names lane and count.
+# (g) auto flag round-trips the EXISTING save path; one auto_pass
+# drive: tails moved -> geometry re-stamps and PERSISTS (id and fp
+# on disk follow), the announcement names lane and count.
 tmp = tempfile.mkdtemp()
 data = {"last": {}, "profiles": {"desk": {
     "fp": "F", "match": "process", "hdr": "leave alone", "auto": True,
@@ -128,10 +125,9 @@ disk = profiles.load(tmp)["profiles"]["desk"]
 assert disk["displays"][0]["id"] == "MONITOR\\REMOTE_Monitor\\0009", disk
 assert disk["fp"] == profiles.target_fp(disk["displays"]), \
     "the re-stamp persisted with a stale fingerprint"
-
 # (h) static ban (the awaymode_test window idiom): the auto hook's
-# source owns no monitor-setting VERB, and windows-only is the scope
-# it calls - the row's UI promise, pinned in source.
+# source owns no monitor-setting VERB - the row's UI promise,
+# pinned in source.
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 body = open(os.path.join(root, "panelboss", "profiles.py"),
             encoding="utf8").read()
