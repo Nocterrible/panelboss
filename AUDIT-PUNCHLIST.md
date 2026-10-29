@@ -2383,3 +2383,12 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
 - FINAL GATE: not dispatched (owner-gate; architect recommendation
   accepted by shipping this note - the gate-pass chain + complete
   gauntlet is the authority record).
+
+## Companion 0.4.6 LIVE in the store (Oct 29, same day): the heartbeat
+ships. Publication receipted: README hedge retired same-day; CWS item
+updated via Add-new-version flow; invisible-replacement law applies
+(key-pin: same ID feolhiok..., existing host registration untouched,
+manual-install copies adopt the store version silently). The frozen
+restored-tab class now lifts in ONE beat (<=10 s) instead of the
+two-beat app-side grace; goodbye-on-hide closes the Oct 26 sleeping-
+GX class for good.
