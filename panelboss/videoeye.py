@@ -19,7 +19,14 @@ since Oct 20 the eye still reads the doorway every beat (the player
 exemption does not wait for the switch). Fail-open is the root
 law: a missing file, a junk row, a stale row all read as "no rect this
 tick" and the dimmer's ramp retracts the veil (a vanished rect is a
-stopped video, not an event worth a dark veil).
+stopped video, not an event worth a dark veil). HOW STALENESS WORKS
+(Oct 29, boot-resurrection): a row's age is the doorway file's
+wall-clock age (wall - mtime) read against the machine's uptime (the
+monotonic now, which RESETS at boot); a row at least as old as the
+uptime PREDATES THIS BOOT - its computed age went negative when now
+reset, and the old max(0.0, ...) clamp folded the lie to zero so the
+corpse read YOUNG after every boot - so it reads None (dead), never
+young.
 
 THE FOLD (content space -> physical desktop px): the page answers
 getBoundingClientRect (viewport CSS px) and devicePixelRatio. Since
@@ -48,6 +55,11 @@ import time
 
 log = logging.getLogger("videoeye")
 _u32 = ctypes.windll.user32          # the virtual-desktop query only
+
+# THE BOOT LAW's confession cadence (Oct 29, boot-resurrection): ONE
+# word per 60 s, the module's own monotonic last-said stamp.
+_EXPIRED_LOG_EVERY = 60.0
+_last_expired_log = None
 
 
 def door_path(env=None):
@@ -93,14 +105,26 @@ def _four(v):
 
 
 def _read(now, wall):
-    """The extension's manual trigger, read as a content-space row. One
-    doorway, one stat, one line of json. Missing/broken/empty all read
-    None - a manual trigger may not cost the eye a beat. The mtime is
-    the click's wall stamp, converted to the monotonic clock (now -
-    age) so every row ages on one ruler."""
+    """The doorway row, read as a content-space row - the auto lane's
+    push and the manual trigger ride this SAME seam. One doorway, one
+    stat, one line of json. Missing/broken/empty all read None - a
+    trigger may not cost the eye a beat. The mtime is the push's wall
+    stamp, converted to the monotonic clock (now - age) so every row
+    ages on one ruler - THE BOOT LAW (Oct 29, above): age >= uptime
+    means the row predates this boot, and it reads None."""
     try:
         mtime = os.path.getmtime(RECT_PATH)
     except OSError:
+        return None
+    age_wall = wall - mtime
+    if age_wall >= now:   # older than the machine's uptime: predates
+        # this boot - DEAD, no arithmetic favors it.
+        global _last_expired_log
+        if (_last_expired_log is None
+                or now - _last_expired_log >= _EXPIRED_LOG_EVERY):
+            _last_expired_log = now
+            log.info("veil expired: the row predates this boot"
+                     " (file age %.0f s, uptime %.0f s)", age_wall, now)
         return None
     try:
         with open(RECT_PATH, encoding="utf-8") as f:
@@ -124,7 +148,10 @@ def _read(now, wall):
                "bounds": row.get("bounds"),
                "origin": _origin(row),
                "webrect": _four(row.get("webrect")),
-               "ts": now - max(0.0, wall - mtime), "src": "companion"}
+               # clamp GONE (the Oct 29 boot-resurrection bug): the
+               # negative case was rejected above by the boot law -
+               # the old max() was the lie that read corpses young.
+               "ts": now - age_wall, "src": "companion"}
     except (ValueError, KeyError, TypeError):
         return None
     return out

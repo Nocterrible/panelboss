@@ -10,10 +10,14 @@ later opens stay pixel-instant (the DWM-surface reopen, owner-chosen).
 The window runs against a fake monitor; cameras are stubbed out. The
 switch half of this file was re-cut the same day to layer-raise law
 (owner: "tabbing just reveals them"): pages ride the body as mapped
-layers and the checks assert the stack, not a cover."""
+layers and the checks assert the stack, not a cover. The Oct-29 tail
+adds the doorway's BOOT LAW (the boot-resurrection cure): the row that
+predates this boot reads dead, with one confession per minute."""
+import logging
 import os
 import queue
 import sys
+import tempfile
 import time
 import tkinter as tk
 
@@ -22,6 +26,7 @@ os.environ.setdefault("PANELBOSS_CONFIG_DIR", os.path.join(
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from panelboss import config                        # noqa: E402
+from panelboss import videoeye                      # noqa: E402
 from panelboss.ui.window import _shell              # noqa: E402
 from panelboss.ui.window import _runtime            # noqa: E402
 from panelboss.ui.window import _scroll             # noqa: E402
@@ -314,6 +319,86 @@ try:
 finally:
     app._unveil()
     _shell.time, _runtime.time = _real_times
+
+# ------------------------------------------------------------- BOOT LAW
+# (Oct 29, the boot-resurrection cure) the doorway's staleness law:
+# a row at least as old as the machine's uptime predates THIS BOOT -
+# the monotonic now resets at boot, so its computed age went negative,
+# the old max(0.0, ...) clamp folded the lie to zero, and the corpse
+# read YOUNG after every boot. The row reads dead instead, with ONE
+# confession per minute. Every seam is a fake: the door is a temp
+# file (the videoeye_test os.utime idiom), the clocks are the ARGS
+# _read takes - no real seconds, no app file touched.
+_DOOR_DIR = tempfile.mkdtemp(prefix="pb-veil-bootlaw-")
+_DOOR = os.path.join(_DOOR_DIR, "rect")
+_REAL_DOOR = videoeye.RECT_PATH
+videoeye.RECT_PATH = _DOOR
+_W = 946000000.0                      # the fake wall epoch the stamps
+                                      # ride; age math is exact in
+                                      # float64 (integers < 2**53)
+
+
+def _door_with_age(age):
+    with open(_DOOR, "w", encoding="utf-8") as f:
+        f.write('{"rect": {"left": 0, "top": 0, "width": 8,'
+                ' "height": 8}}\n')
+    os.utime(_DOOR, (_W - age, _W - age))
+
+
+_words = []
+
+
+class _Confess(logging.Handler):
+    def emit(self, record):
+        _words.append(record.getMessage())
+
+
+_cap = _Confess()
+videoeye.log.addHandler(_cap)
+_saved_level = videoeye.log.level
+videoeye.log.setLevel(logging.INFO)
+try:
+    videoeye._last_expired_log = None
+
+    # (a) the corpse: 1200 s of file age on a 600 s-old machine.
+    _door_with_age(1200.0)
+    check(videoeye._read(600.0, _W) is None,
+          "a row older than the uptime predates this boot: None, "
+          "never young (the Oct 29 boot-resurrection cure)")
+    check(len(_words) == 1 and "veil expired" in _words[0]
+          and "predates this boot" in _words[0],
+          "the corpse gets exactly one confession (log.info, one line)")
+
+    # (b) the post-boot row: 5 s of age, returned with honest age.
+    _door_with_age(5.0)
+    _row = videoeye._read(600.0, _W)
+    check(_row is not None and abs(_row["ts"] - (600.0 - 5.0)) < 0.5,
+          "a row written after this boot lives: ts = uptime - file age "
+          "(the clamp that faked corpses young is gone)")
+
+    # (c) the boundary: age == uptime is STILL dead (>= law).
+    _door_with_age(600.0)
+    check(videoeye._read(600.0, _W) is None,
+          "a row exactly as old as the uptime predates this boot too "
+          "(>= boundary: the boot law takes no favors)")
+
+    # (d) the confession is a heartbeat, not a sermon: at most one
+    # line per minute, the uptime the driver passes as the clock.
+    _words.clear()
+    videoeye._last_expired_log = None
+    _door_with_age(1200.0)
+    videoeye._read(600.0, _W)                   # the first word, at
+    videoeye._read(659.0, _W)                   # 60 s of uptime...
+    check(len(_words) == 1,
+          "two reads inside a minute confess ONCE (no sermon)")
+    videoeye._read(661.0, _W)                   # ...past 60 they owe
+    check(len(_words) == 2,                     # a fresh minute
+          "a minute later the corpse may speak again")
+finally:
+    videoeye.log.removeHandler(_cap)
+    videoeye.log.setLevel(_saved_level)
+    videoeye.RECT_PATH = _REAL_DOOR
+    videoeye._last_expired_log = None
 
 app.destroy()
 print("veil-budget: %d failure(s)" % len(fails))
