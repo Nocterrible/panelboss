@@ -358,7 +358,7 @@ and the four hotkeys are bound with modifier ticks, not key chords.*
 ## PanelBoss Companion
 
 A browser extension that reports the playing video's rectangle to the app. That is
-all it does. It is on the Chrome Web Store as PanelBoss Companion, version 0.4.5,
+all it does. It is on the Chrome Web Store as PanelBoss Companion, version 0.4.6,
 approved:
 https://chromewebstore.google.com/detail/panelboss-companion/feolhiokchmpphlhllagimnilceldegk
 

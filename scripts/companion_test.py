@@ -592,9 +592,26 @@ check('lastError || !res || !res.ok' in _ct
       "content.js carries the ack-aware dedupe: the callback form "
       "rolls lastSent back on lastError / a missing / a not-ok ack")
 check('timeupdate' in _ct and 'push(false)' in _ct
-      and 'setInterval' not in _ct,
-      "content.js rides the timeupdate heartbeat (playing-only, the "
-      "same push(false) dedupe path) and writes NO setInterval")
+      and 'setInterval(beat, 10000)' in _ct,
+      "content.js rides BOTH heartbeats: the timeupdate event lane "
+      "(playing-only, the same push(false) dedupe path) and the "
+      "v0.4.6 UNCONDITIONAL beat - its setInterval(beat, 10000) is "
+      "the file's only timer (the no-setInterval ban flipped with "
+      "the boot-trust cure: the app's boot law reads the mtime, so "
+      "the stamp must stay alive while a movie is)")
+# v0.4.6 (the boot-trust cure) the beat's own law, pinned verbatim.
+_BEAT = _ct[_ct.index("function beat"):_ct.index("setInterval(beat")]
+check("lastSent" not in _BEAT and "sendRow(row)" in _BEAT
+      and "row.paused = true" in _BEAT,
+      "the heartbeat branch carries NO lastSent judgement (it calls "
+      "sendRow - the refresh is the message) and the frozen clock "
+      "else-branch TESTIFIES paused:true against the receipt (the "
+      "owner's restored-tab freeze)")
+check('"pagehide"' in _ct and "visibilitychange" in _ct
+      and "document.hidden" in _ct,
+      "the goodbye goes out when the tab hides: pagehide and "
+      "visibilitychange->hidden send paused:true (the hidden GX "
+      "sleeping-tab class, the Oct 26 incident)")
 _vb = _bg[_bg.index('msg.op === "veil"'):]   # the AUTOMATIC branch,
                                              # not the popup's "veil_"
 check('sendResponse({ ok: ok === true })' in _vb and 'return true;'

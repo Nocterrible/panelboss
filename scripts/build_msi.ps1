@@ -40,7 +40,7 @@ if ($Help) {
 $py = Join-Path $repo '.venv\Scripts\python.exe'
 
 # the canonical version: the app's own constant (panelboss/
-# __init__.py's __version__). The companion extension's 0.4.5 is a
+# __init__.py's __version__). The companion extension's 0.4.6 is a
 # SEPARATE constant (extension\manifest.json) and is NOT used here.
 Push-Location $repo
 $version = (& $py -c "import panelboss; print(panelboss.__version__)").Trim()

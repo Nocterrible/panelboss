@@ -1,5 +1,5 @@
 /* PanelBoss Companion - the AUTOMATIC lane + the measure for the test
- * button, v0.4.2 (the page REPORTS its window origin - screenX/screenY
+ * button, v0.4.6 (the page REPORTS its window origin - screenX/screenY
  * - so the fold stops guessing the borders, and the scroll listener
  * rides the CAPTURE phase so inner scrollers reach it too).
  *
@@ -16,17 +16,27 @@
  * word lives here and in the README rather than in a feature: the
  * iframe lane rides the DRM dossier, not this wave.
  *
- * EVENT-DRIVEN, no timers, no pumps: a video "play" event is exactly
- * the timer this extension is NOT allowed to write. On play it measures
- * and sends the row to the background (chrome.runtime.sendMessage - the
+ * EVENT-DRIVEN, plus ONE CLOCK (v0.4.6, the boot-trust cure): the
+ * app's boot law reads the doorway file's mtime against the machine's
+ * uptime, so the stamp must stay ALIVE while a movie is - a stale row
+ * is no longer a rumor, it is a corpse. A declared 10 s setInterval
+ * beats while a video plays: if the media clock ADVANCED since the
+ * last beat the row re-sends WITHOUT the dedupe judgement (the
+ * refresh itself is the message: a real steady movie rewrites the
+ * file every ten seconds); if the clock FROZE while the state said
+ * playing, paused:true goes out - TESTIMONY against the RECEIPT, the
+ * owner's restored-tab freeze (the state word lies, the media clock
+ * cannot), and a frozen playback lifts within a beat instead of
+ * haunting the desk until a manual resync. On play it measures and
+ * sends the row to the background (chrome.runtime.sendMessage - the
  * background folds in the window bounds and hands it to the native
- * host). On pause/ended it sends the same row with paused:true - the
+ * host). On pause/ended it sends
+ * the same row with paused:true - the
  * app's eye skips a paused row, so the veil lifts on the next tick,
  * faster than the grace ever could. The ring's hole FOLLOWS the video
  * (the owner's first-UAT clip, Oct-16): resize, scroll, fullscreen and
  * the SPA's DOM churn all re-measure; the push dedupes on identical
- * rows, so the tracking is event law, not a poll, and noise is one
- * string compare.
+ * rows, so the noise stays one string compare.
  */
 
 // the measure - the SAME row shape every lane ships, so the app's fold
@@ -77,15 +87,13 @@ function currentVideo() {
 // word (play false, pause/ended true); null means "trust the
 // measured state" - the motion pushes, where no play/pause happened.
 let lastSent = "";
-function push(paused) {
-  const row = measure();
-  if (!row) return;
-  if (paused != null) row.paused = paused;   // != null covers both
-                                             // undefined and null (the
-                                             // measured state stands)
-  const wire = JSON.stringify(row);
-  if (wire === lastSent) return;
-  lastSent = wire;
+// THE HOP, SPLIT (v0.4.6): sendRow is the transport - the ack
+// rollback lives HERE, so a refused delivery un-commits the dedupe
+// whichever lane sent it - and push keeps the DEDUPE JUDGEMENT for
+// the event path (exactly today's law). The beat calls sendRow
+// directly: it re-sends on purpose, the refresh itself is its
+// message.
+function sendRow(row) {
   try {
     // ACK-AWARE (dossier H): the commit happens BEFORE the send, and
     // the CALLBACK form is the refusal detector - the background acks
@@ -101,6 +109,17 @@ function push(paused) {
   } catch (e) {
     lastSent = "";
   }
+}
+function push(paused) {
+  const row = measure();
+  if (!row) return;
+  if (paused != null) row.paused = paused;   // != null covers both
+                                             // undefined and null (the
+                                             // measured state stands)
+  const wire = JSON.stringify(row);
+  if (wire === lastSent) return;             // the judgement stays
+  lastSent = wire;                           // here, event-path only
+  sendRow(row);
 }
 
 // attach to every video, once; listen for the events that matter. No
@@ -165,6 +184,42 @@ function wire() {
   for (const v of document.querySelectorAll("video")) {
     if (!v.paused && v.readyState >= 2) push(false);
   }
+  // THE UNCONDITIONAL BEAT (v0.4.6, the boot-trust cure): the app's
+  // boot law reads the doorway's mtime against the uptime, so the
+  // stamp must stay alive while a movie is. Ten seconds, playing
+  // only, and NO dedupe judgement on this branch - the refresh is
+  // itself the message (the pins hold the shape). A clock FROZEN
+  // while the state says playing is the owner's restored-tab freeze:
+  // the state word is the receipt, the media clock is the testimony,
+  // and testimony wins - paused:true goes out and the veil lifts
+  // within a beat instead of haunting the desk until a manual
+  // resync.
+  let lastBeatTime = -1;
+  function beat() {
+    const v = currentVideo();
+    if (!v || v.paused || v.readyState < 2) return;   // nothing to prove
+    const row = measure();
+    if (!row) return;
+    if (v.currentTime !== lastBeatTime) {
+      lastBeatTime = v.currentTime;
+      sendRow(row);                                   // the beat lands
+    } else {
+      row.paused = true;
+      sendRow(row);                                   // the clock spoke
+    }
+  }
+  // GOODBYE (v0.4.6, the Oct 26 incident, the hidden GX sleeping-tab
+  // class): a tab Chromium hides sleeps and fires no pause - it must
+  // go to sleep SAYING paused, or the desk keeps a ring around a
+  // movie no eye can see until the app restarts.
+  function goodbye() {
+    const row = measure();
+    if (row) { row.paused = true; sendRow(row); }
+  }
+  window.addEventListener("pagehide", goodbye);
+  document.addEventListener("visibilitychange",
+                            () => { if (document.hidden) goodbye(); });
+  setInterval(beat, 10000);
 }
 
 // the test button's question (background.js --> this page): measure
