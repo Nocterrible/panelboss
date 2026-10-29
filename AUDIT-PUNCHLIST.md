@@ -2366,3 +2366,20 @@ Next on the owner roadmap: MSI wave (six laws in the earlier block), profile-wip
   sha256s, desk upgrades through the real version path. Final-gate
   dispatch: architect recommends the receipt chain instead (every
   commit gate-passed; gauntlet independent); owner's call.
+
+## 0.3.7 RELEASED (Oct 29): tag 6fba0dc-tree, dual assets live
+
+- MSI sha256 92504E4B8B7DF4762B9ADF790C437333ACC69CD5A1AF8E1C088DCAE89A86076C
+- ZIP sha256 c0ab7811bc8c968d0bc6937bb1ab5c54b81e70dd9cb319f35a6bc6bde640f1e1
+- Gauntlet ALL GREEN (complete) with the app DOWN (first complete-stamp
+  release gate), msiexec rc 0, desk relaunched pid 52972. Notes in the
+  plain voice, five stories; title typo (0.3.6) caught and corrected
+  before anyone saw it; assets verified anonymously on the tag page.
+- The veil boot law shipped the SAME DAY as the owner's bug report
+  (screenshot 11:45 -> release ~13:05): reboot-resurrected corpse rows
+  now die by age-vs-uptime, log one confession per minute, and the
+  cache seam is pinned; extension 0.4.6 (unconditional beat +
+  frozen-clock testimony + goodbye) awaits the owner's store upload.
+- FINAL GATE: not dispatched (owner-gate; architect recommendation
+  accepted by shipping this note - the gate-pass chain + complete
+  gauntlet is the authority record).
