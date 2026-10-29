@@ -122,8 +122,9 @@ function push(paused) {
   sendRow(row);
 }
 
-// attach to every video, once; listen for the events that matter. No
-// interval, no polling - a play is an event, and events are free.
+// attach to every video, once; listen for the events that matter -
+// plus the one declared beat below (v0.4.6: a playing claim must
+// refresh the doorway's clock, or a frozen restore reads alive).
 function wire() {
   const seen = new WeakSet();
   function arm() {

@@ -12,8 +12,10 @@ viewport, window origin - asked of the page's own content script
 through the same open `{op:"measure"}` API), plus the demoted *test*
 button - one click measures RIGHT NOW, no waiting, and the button
 echoes the host's word back in place of the old badge gesture.
-No timers, no pumps, no banner, no network, no eval, and — the big win
-of v0.4 — **no `scripting`, no `activeTab`, no `<all_urls>`**: the
+No timers, no pumps, no banner, no network, no eval - and, since
+v0.4.6, exactly ONE declared clock: the playing-only heartbeat below,
+because the boot incident taught that an aliveness signal must carry
+evidence of aliveness. And the big win of v0.4: **no `scripting`, no `activeTab`, no `<all_urls>`**: the
 measure lives in the content script, so the manifest asks for
 `nativeMessaging` and nothing else.
 

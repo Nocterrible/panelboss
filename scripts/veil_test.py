@@ -394,6 +394,17 @@ try:
     videoeye._read(661.0, _W)                   # ...past 60 they owe
     check(len(_words) == 2,                     # a fresh minute
           "a minute later the corpse may speak again")
+
+    # (e) THE CACHE SEAM (the gate's named gap, Oct 29): the boot law
+    # must keep the corpse OUT of the ingested view - the incident,
+    # one layer up, is a row that dims from memory after the file
+    # died. Empty in, empty stored: tick ingests nothing it rejected.
+    videoeye._STATE.clear()
+    _door_with_age(1200.0)
+    videoeye.tick({}, 600.0)
+    check(videoeye._STATE == {},
+          "a corpse at the door never enters the cache: tick's view "
+          "stays empty (the boot law guards the seam, not just the read)")
 finally:
     videoeye.log.removeHandler(_cap)
     videoeye.log.setLevel(_saved_level)

@@ -602,11 +602,14 @@ check('timeupdate' in _ct and 'push(false)' in _ct
 # v0.4.6 (the boot-trust cure) the beat's own law, pinned verbatim.
 _BEAT = _ct[_ct.index("function beat"):_ct.index("setInterval(beat")]
 check("lastSent" not in _BEAT and "sendRow(row)" in _BEAT
-      and "row.paused = true" in _BEAT,
+      and "row.paused = true" in _BEAT
+      and _ct.count("row.paused = true") >= 2,
       "the heartbeat branch carries NO lastSent judgement (it calls "
       "sendRow - the refresh is the message) and the frozen clock "
       "else-branch TESTIFIES paused:true against the receipt (the "
-      "owner's restored-tab freeze)")
+      "owner's restored-tab freeze; the count pins TWO testimonies - "
+      "the beat's and the goodbye's - so neither branch alone can "
+      "satisfy the slice - the gate's finding)")
 check('"pagehide"' in _ct and "visibilitychange" in _ct
       and "document.hidden" in _ct,
       "the goodbye goes out when the tab hides: pagehide and "
