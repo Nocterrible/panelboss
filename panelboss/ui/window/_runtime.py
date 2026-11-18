@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import queue
 import time
+import tkinter as tk
 
 from ... import wm
 from ._widgets import set_text
@@ -342,34 +343,49 @@ class _RuntimeMixin:
         # must cost nothing (the 0.4 s tick repaint, profiled)
         chip = {"text": state}
         color = self.skin.chip(state)
-        sink = getattr(self.monitor, "tray_sink", None)
-        if sink is not None:
-            sink(state)                      # the tray recolors on the
-                                             # same truth the chip
-                                             # paints (diff-guarded)
-        if self.chip.cget("fg_color") != color:
-            chip["fg_color"] = color
-        if len(chip) == 1:
-            set_text(self.chip, state)      # text-only: diff-guarded
-        else:
-            self.chip.configure(**chip)     # color moved: whole repaint
-        idle = self._idle()
-        age = "never" if slot is None else "%.1f s" % (now - slot[3])
-        set_text(self.idle_label,
-                 "idle %.0f s · frame %s old · %d seen"
-                 % (idle, age, len(slot[1]) if slot else 0))
-        set_text(self.pause_button,
-                 "Resume" if self.monitor.paused else "Pause")
-        paused_re = getattr(self.monitor, "re_off_paused", False)
-        set_text(self.reoff_label,
-                 "PAUSED (camera slipped?)" if paused_re else "on")
-        self.reoff_button.configure(
-            state="normal" if paused_re else "disabled")
-        self._update_blockers()
-        want = self._detect_mode_label(self.cfg)   # a tray flip lands here
-        if self.mode_button.get() != want:      # through the shared cfg
-            self.mode_button.set(want)          # dict; set() fires no command
-            self._show_mode_rows()               # and the rows follow suit
+        # the teardown guard (Nov 17/18 faults): the destruction sweep
+        # takes the status-area siblings in unconstrained order - the
+        # dumps show idle_label dead while the tick ran - so the chip
+        # cannot proxy for the area, and the method body below rides
+        # one TclError catch, the same class the _scroll law uses
+        # ("canvas gone mid-teardown"). A LIVE widget's real error
+        # still speaks: the catch is the class, not Exception.
+        try:
+            if not self.chip.winfo_exists():
+                return                    # the area is gone: no paint
+        except tk.TclError:
+            return
+        try:
+            sink = getattr(self.monitor, "tray_sink", None)
+            if sink is not None:
+                sink(state)               # the tray recolors on the
+                                          # same truth the chip
+                                          # paints (diff-guarded)
+            if self.chip.cget("fg_color") != color:
+                chip["fg_color"] = color
+            if len(chip) == 1:
+                set_text(self.chip, state)   # text-only: diff-guarded
+            else:
+                self.chip.configure(**chip)  # color moved: whole repaint
+            idle = self._idle()
+            age = "never" if slot is None else "%.1f s" % (now - slot[3])
+            set_text(self.idle_label,
+                     "idle %.0f s · frame %s old · %d seen"
+                     % (idle, age, len(slot[1]) if slot else 0))
+            set_text(self.pause_button,
+                     "Resume" if self.monitor.paused else "Pause")
+            paused_re = getattr(self.monitor, "re_off_paused", False)
+            set_text(self.reoff_label,
+                     "PAUSED (camera slipped?)" if paused_re else "on")
+            self.reoff_button.configure(
+                state="normal" if paused_re else "disabled")
+            self._update_blockers()
+            want = self._detect_mode_label(self.cfg)  # a tray flip lands
+            if self.mode_button.get() != want:        # here through the
+                self.mode_button.set(want)            # shared cfg dict;
+                self._show_mode_rows()                # set() fires no
+        except tk.TclError:                           # command, rows
+            pass                                      # follow the suit
 
 
     def _update_blockers(self):

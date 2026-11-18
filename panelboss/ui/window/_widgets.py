@@ -29,7 +29,15 @@ def set_text(widget, text):
             return
     except Exception:
         pass                        # exotic widget: write blindly
-    widget.configure(text=text)
+    try:
+        widget.configure(text=text)
+    except tk.TclError:
+        # the teardown race, closed (both faults of Nov 17/18 were a
+        # status tick painting a label the window had already closed):
+        # the class, not Exception - a live widget's real configure
+        # error keeps its voice (the fleet's loud-failure law; the
+        # _scroll teardown precedent writes the same catch).
+        pass
 
 
 def _fresh_pin_edit():
