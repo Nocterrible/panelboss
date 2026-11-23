@@ -7,8 +7,20 @@ before any of this process's NIM_ calls: the spy asserts that every
 call it sees carries uID=1 and, while the tray says the Shell accepts
 it, the NIF_GUID flag - stamped with a TEST guid (the production slot
 is checked as data, not by touching it, so a running app's icon can
-never be deleted by this test's NIM_DELETE)."""
+never be deleted by this test's NIM_DELETE).
+The spy scenario (Nov 21 twin-icon incident): after the live run, a
+test double of the wrapped inner refuses every GUID-stamped NIM_ADD
+(the first mirrors the live E_FAIL; the retry ladder loses the same
+race, so the ladder and the GUID-less fallback both run for real) and
+lets every GUID-less call land. It is installed at the module level
+BEFORE tray's wrapper binds its closure, so tray's own code - never
+this script - is what calls it; the Oct 12 vacuous-pass guard applies
+with the force of a class. Its ledger is then asserted: both delete
+identities issued before the fallback ADD, the fallback ADD without
+NIF_GUID, a warning line per abnormal transition, and the re-claim
+hook pinned in the message-handler registration."""
 import ctypes
+import logging
 import os
 import sys
 import threading
@@ -135,6 +147,177 @@ for code, uid, flags, gbytes, result, err, live_at_call in nim_calls:
     if has_guid and gbytes != test_guid.bytes:
         print("identity FAIL: %s carried the wrong GUID bytes" % hex(code))
         ok = False
+# ------------------------------------------------------------- spy scene ---
+# The double and the pinned handlers below; the assertions come after
+# the live run has stopped (the scene is driven without a pump, see
+# the run function).
+class spy_icon:
+    _message_handlers = {}
+
+
+def make_failed_first_add_spies():
+    """Install the test double as the innermost layer and pin fake
+    message handlers onto a stand-in icon (the vacuous-pass guard:
+    tray.py's own code calls the double, this script only reads the
+    ledgers). Returns (the double, the live spy, the pinned table)."""
+    class _shell_double:
+        calls = []
+
+        def __call__(self, code, data):
+            d = self.calls
+            if code == win32.NIM_ADD and (data.uFlags & win32.NIF_GUID):
+                # a GUID-blind Shell: the first add is refused like
+                # the live Nov 21 E_FAIL and every retry-ladder
+                # re-ADD loses the same race
+                d.append((code, data.uID, data.uFlags,
+                          _guid_bytes(data.guidItem), False,
+                          0x80040150))
+                return 0
+            if code == win32.NIM_ADD:
+                # the fallback's GUID-less add is the one that lands
+                d.append((code, data.uID, data.uFlags,
+                          _guid_bytes(data.guidItem), True, 0))
+                return 1
+            # DELETEs miss (no slot yet): the legitimate FALSE the
+            # sweep comments call for
+            d.append((code, data.uID, data.uFlags,
+                      _guid_bytes(data.guidItem), False, 0))
+            return 0
+
+    double = _shell_double()
+    outer = win32.Shell_NotifyIcon          # the live spy (wraps the
+                                            # wrapped inner it caught)
+    win32.Shell_NotifyIcon = double
+    tray._wrap_shell_notify()               # the wrap rebinds its
+                                            # closure to the double: the
+                                            # scene then runs tray's REAL
+                                            # stamped code (ghost sweep,
+                                            # ladder, fallback, twin
+                                            # kill) end to end, with the
+                                            # shell replaced
+
+    handlers = dict(spy_icon._message_handlers)
+    for code in (win32.WM_TASKBARCREATED, win32.WM_DISPLAYCHANGE):
+        handlers[code] = (code, spy_icon())
+
+    tray._RECLAIM_HOOKED = True             # _ready's one-shot wrap
+                                            # must not replace the pins
+    return double, outer, handlers
+
+
+class _warn_capture(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.lines = []
+
+    def emit(self, record):
+        if record.name == "tray" and record.levelno >= logging.WARNING:
+            self.lines.append(record.getMessage())
+
+
+capture = _warn_capture()
+logging.getLogger("tray").addHandler(capture)
+double, outer, pinned = make_failed_first_add_spies()
+
+
+def run_spy_scene():
+    data = win32.NOTIFYICONDATAW()
+    data.hWnd = 12345          # any window: the double never touches
+                               # the Shell, the value only rides the
+                               # struct
+    # uFlags stays 0: the stamping layer and the double only look at
+    # uID / NIF_GUID / guidItem, and pystray's win32 module defines no
+    # NIM_MESSAGE constant to OR in
+    win32.Shell_NotifyIcon(win32.NIM_ADD, data)   # the first ADD of a
+                                                 # fresh process: ghost
+                                                 # sweep + add, exactly
+                                                 # the path pystray's
+                                                 # _show drives
+    win32.Shell_NotifyIcon = outer               # restore the live
+                                                 # spy for what follows
+
+
+run_spy_scene()
+
+# the spy's per-call latch assertion needs one relaxation, named: the
+# twin kill deletes under a TEST guid while the latch is down, on
+# purpose (windows-rs #5284, module doc) - the flag/latch consistency
+# is enforced for every call that does not carry the TEST guid
+for code, uid, flags, gbytes, result, err, live_at_call in nim_calls:
+    has_guid = bool(flags & win32.NIF_GUID)
+    if has_guid != live_at_call and gbytes == test_guid.bytes:
+        if not (code == win32.NIM_DELETE
+                and gbytes == _guid_bytes(tray._guid_item(test_guid))):
+            print("identity FAIL: %s NIF_GUID=%s but the latch said %s "
+                  "at that call" % (hex(code), has_guid, live_at_call))
+            ok = False
+# ------------------------------------------------------------ spy asserts ---
+if ok:
+    dcalls = double.calls
+    if not dcalls:
+        ok = False
+        print("spy FAIL: the double was never called from tray.py - "
+              "the vacuous pass (Oct 12 guard class)")
+    else:
+        fadd = None
+        for i, (code, uid, flags, gbytes, result, err) in enumerate(dcalls):
+            if fadd is None and code == win32.NIM_ADD \
+                    and not (flags & win32.NIF_GUID):
+                fadd = i
+        if fadd is None:
+            ok = False
+            print("spy FAIL: no GUID-less ADD reached the double - the "
+                  "fallback never ran")
+        else:
+            # (a) BOTH delete identities were issued before the
+            #     fallback ADD: the GUID-stamped sweep and the
+            #     (hWnd, uID=1) sweep
+            pre = dcalls[:fadd]
+            both = any(code == win32.NIM_DELETE and (flags & win32.NIF_GUID)
+                       for code, _u, flags, _g, _r, _e in pre) \
+                and any(code == win32.NIM_DELETE
+                        and not (flags & win32.NIF_GUID)
+                        for code, _u, flags, _g, _r, _e in pre)
+            if not both:
+                ok = False
+                print("spy FAIL: the pre-fallback sweep did not issue "
+                      "BOTH delete identities (got: %s)" % pre)
+            else:
+                print("spy PASS: both delete identities issued before "
+                      "the fallback ADD")
+            # (b) the fallback ADD went without NIF_GUID and landed
+            c, u, fl, gb, r, _e = dcalls[fadd]
+            if fl & win32.NIF_GUID or u != 1 or not r:
+                ok = False
+                print("spy FAIL: the first non-GUID ADD is not the "
+                      "landing fallback ADD: %s" % (dcalls[fadd],))
+            else:
+                print("spy PASS: the fallback ADD went without NIF_GUID "
+                      "(uID=1) and landed")
+            # (c) at least one warning line per abnormal transition:
+            #     every refused NIM_ call the double saw, the latch
+            #     drop, and the named landing-identity line
+            refused = sum(1 for _c, _u, _f, _g, r, _e in dcalls
+                          if not r)
+            if len(capture.lines) < refused:
+                ok = False
+                print("spy FAIL: %d warning lines for %d refused calls "
+                      "wanted" % (len(capture.lines), refused))
+            if not any("the Shell refused the NIF_GUID add" in l
+                       for l in capture.lines):
+                ok = False
+                print("spy FAIL: the latch-drop warning never fired")
+            if not any("registered under (hWnd,uID=1)" in l
+                       for l in capture.lines):
+                ok = False
+                print("spy FAIL: the landing-identity warning never "
+                      "fired")
+            if ok:
+                print("spy PASS: a warning line per abnormal transition "
+                      "(%d lines, %d refusals)" %
+                      (len(capture.lines), refused))
+# (d) the re-claim-hook pin lands with the re-claim itself, stage 2
+
 print("calls:", nim_calls)
 print("identity OK" if ok else "identity BROKEN")
 sys.exit(0 if ok else 1)

@@ -26,11 +26,27 @@ pystray traps, all measured the hard way:
   frozen exe is a third path, and each one invented a fresh un-pinned
   slot. _stamp_identity below fixes the identity at the one choke point
   every NIM_* call passes; pystray's own files are never touched
+ * THE TWIN LAWS (owner, Nov 23; the Nov 21 twin-icon incident - every
+  clause below carries its citation, no new law without one): a
+  REFUSED GUID-stamped NIM_ADD may still COMMIT ASYNCHRONOUSLY
+  (windows-rs issue #5284: do not follow a failed GUID add with a
+  blind DELETE); the GUID identity and the (hWnd, uID) identity are
+  SEPARATE Shell keys (MSDN NOTIFYICONDATA: NIF_GUID + guidItem keys
+  the slot apart from the window/id pair), so the fallback that keeps
+  uID=1 and drops the GUID lands a SECOND, coexisting registration -
+  two live icons, the Nov 21 twin. The fallback never uses uID=0
+  (uID=0 is the un-pinned churn this whole shim exists to kill); the
+  ghost sweep deletes under BOTH identities, and the latch's
+  _reclaim_guid re-claim (fired from pystray's _message_handlers on
+  WM_TASKBARCREATED / the first WM_DISPLAYCHANGE) is the
+  reconciliation path back to the single GUID identity
 """
 
 from __future__ import annotations
 
 from importlib import metadata
+
+import ctypes
 
 import logging
 import os
@@ -60,6 +76,13 @@ log = logging.getLogger("tray")
 _GUID = uuid.uuid5(uuid.NAMESPACE_DNS, "panelboss.tray")
 
 
+def _last_err():
+    """The last Win32 error code, for the refused-NIM warning lines
+    (the zero silent transitions law, DELTA 3): pystray's win32 module
+    imports ctypes without a kernel32 alias, so fetch it here."""
+    return ctypes.windll.kernel32.GetLastError()
+
+
 def _guid_item(guid):
     """A NOTIFYICONDATAW.GUID holding `guid`'s sixteen bytes:
     mixed-endian - the first three fields are read big-endian from the
@@ -77,7 +100,10 @@ def _guid_item(guid):
 
 _GUID_ITEM = _guid_item(_GUID)
 
-_guid_live = True           # cleared by the NIM_ADD rejection fallback
+_guid_live = True           # cleared by the NIM_ADD rejection fallback;
+                            # NOT permanent - the _reclaim_guid re-claim
+                            # restores it (the twin-law reconciliation
+                            # path, module doc)
 try:
     # pystray binds this API with an errcheck that RAISES when the
     # registration returns 0, so the "Shell could not register" case
@@ -93,7 +119,9 @@ def _stamp_identity(data):
     """uID=1 on every call, plus the NIF_GUID stamp while the Shell
     accepts it. pystray sends no uID at all (its hID kwarg is not a
     field of the struct and ctypes drops it), so without this every
-    call carries uID=0 and each new process image gets a new slot."""
+    call carries uID=0 and each new process image gets a new slot.
+    uID=1 is stamped unconditionally - the twin-law fallback rests on
+    it (the fallback never uses uID=0)."""
     data.uID = 1
     if _guid_live:
         data.uFlags |= win32.NIF_GUID
@@ -121,11 +149,28 @@ def _wrap_shell_notify():
             # entry is the one shell state that dedupes a live one.
             # Delete our identity before the first ADD of the process
             # (a missing slot is a legitimate FALSE), then add clean.
+            # DUAL-IDENTITY SWEEP (twin laws, module doc): the GUID
+            # slot and the (hWnd, uID=1) slot are SEPARATE Shell keys,
+            # and a forced-killed process that had fallen back to
+            # uID-only leaves that second slot behind too - sweep both
+            # before the first ADD.
             stamped._added_once = True
-            inner(win32.NIM_DELETE, data)
+            if not inner(win32.NIM_DELETE, data):
+                log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
+                            "DELETE", _last_err(), _guid_live)
+            unkeyed = win32.NOTIFYICONDATAW.from_buffer_copy(bytes(data))
+            unkeyed.uFlags &= ~win32.NIF_GUID
+            unkeyed.guidItem = win32.NOTIFYICONDATAW.GUID()
+            if not inner(win32.NIM_DELETE, unkeyed):
+                log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
+                            "DELETE", _last_err(), _guid_live)
             time.sleep(0.05)
         ok = bool(inner(code, data))
         if not ok and code == win32.NIM_ADD and _guid_live:
+            # zero silent transitions: this refusal is the moment the
+            # retry-ladder and fallback decisions below are made
+            log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
+                        "ADD", _last_err(), _guid_live)
             # the common refused ADD is our OWN hide-then-show race
             # (display change: NIM_DELETE then immediate NIM_ADD while
             # the Shell still holds the GUID slot -> already-exists),
@@ -134,24 +179,65 @@ def _wrap_shell_notify():
             # legitimate FALSE), breathe, re-ADD unchanged - only
             # after two refusals treat the Shell as GUID-blind.
             for _attempt in range(2):
-                inner(win32.NIM_DELETE, data)
+                if not inner(win32.NIM_DELETE, data):
+                    log.warning("tray: NIM_%s refused (err=%s, "
+                                "guid_live=%s)", "DELETE",
+                                _last_err(), _guid_live)
                 time.sleep(0.05)
                 ok = bool(inner(code, data))
+                if not ok:
+                    log.warning("tray: NIM_%s refused (err=%s, "
+                                "guid_live=%s)", "ADD",
+                                _last_err(), _guid_live)
                 if ok:
                     log.info("tray: reclaimed the GUID slot after a "
                              "refused add (the Shell was mid-release)")
                     return True
             # still refused: a Shell that predates NIF_GUID (or a test
             # double). The identity then rests on uID alone - keep
-            # uID=1, drop the GUID, say so once, retry. The latch is
-            # never raised again: a GUID-less registration must not
-            # get GUID-stamped MODIFYs.
+            # uID=1 (never uID=0: that is the un-pinned churn), drop
+            # the GUID, say so once, retry. The latch now has a
+            # reconciliation path, not a lifetime: the _reclaim_guid
+            # re-claim (twin laws, module doc) re-stamps the GUID at
+            # the next WM_TASKBARCREATED / first WM_DISPLAYCHANGE, and
+            # a GUID-less registration must not get GUID-stamped
+            # MODIFYs until it does.
             _guid_live = False
             log.warning("the Shell refused the NIF_GUID add; the tray "
                         "identity now rests on uID=1 alone")
             data.uFlags &= ~win32.NIF_GUID
             data.guidItem = win32.NOTIFYICONDATAW.GUID()
             ok = bool(inner(code, data))
+            if not ok:
+                log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
+                            "ADD", _last_err(), _guid_live)
+            else:
+                log.warning("tray: registered under (hWnd,uID=1) after "
+                            "GUID refusal")
+                # TWIN KILL (windows-rs #5284, module doc): the refused
+                # GUID ADD may still commit ASYNCHRONOUSLY - the Shell
+                # would then hold BOTH identities, both live, and no
+                # MODIFY or DELETE from this process could reach the
+                # GUID twin while the latch is down. Delete under the
+                # GUID identity now, then once more after the sleep
+                # ladder's beat to catch the late commit.
+                twin = win32.NOTIFYICONDATAW.from_buffer_copy(bytes(data))
+                twin.uFlags |= win32.NIF_GUID
+                twin.guidItem = _GUID_ITEM
+                if not inner(win32.NIM_DELETE, twin):
+                    log.warning("tray: NIM_%s refused (err=%s, "
+                                "guid_live=%s)", "DELETE",
+                                _last_err(), _guid_live)
+                time.sleep(0.05)
+                if not inner(win32.NIM_DELETE, twin):
+                    log.warning("tray: NIM_%s refused (err=%s, "
+                                "guid_live=%s)", "DELETE",
+                                _last_err(), _guid_live)
+        # a non-ADD refusal falling through here (pystray's
+        # before-the-ADD NIM_MODIFY on the first show, which always
+        # misses because the icon is not registered yet) is setup,
+        # not a transition: the word rule (DELTA 3) covers the calls
+        # whose result changes what this module does
         return ok
 
     win32.Shell_NotifyIcon = stamped
