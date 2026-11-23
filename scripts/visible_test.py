@@ -152,7 +152,11 @@ for code, uid, flags, gbytes, result, err, live_at_call in nim_calls:
 # the live run has stopped (the scene is driven without a pump, see
 # the run function).
 class spy_icon:
+    """The stand-in icon for the re-claim pin: the shape tray's
+    handler code touches (_message_handlers, _hwnd) and nothing
+    that could reach the live Shell."""
     _message_handlers = {}
+    _hwnd = 12345
 
 
 def make_failed_first_add_spies():
@@ -233,8 +237,9 @@ def run_spy_scene():
                                                  # sweep + add, exactly
                                                  # the path pystray's
                                                  # _show drives
-    win32.Shell_NotifyIcon = outer               # restore the live
-                                                 # spy for what follows
+    # the live spy is NOT restored here: the re-claim pin below must
+    # run while the double is still the innermost layer, so nothing
+    # the pin does can touch the live Shell
 
 
 run_spy_scene()
@@ -316,7 +321,83 @@ if ok:
                 print("spy PASS: a warning line per abnormal transition "
                       "(%d lines, %d refusals)" %
                       (len(capture.lines), refused))
-# (d) the re-claim-hook pin lands with the re-claim itself, stage 2
+# (d) the re-claim hook is wired - static: the re-claim function
+# name appears in the message-handler registration in tray.py
+src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        os.pardir, "panelboss", "tray.py"),
+           encoding="utf-8").read()
+if ("_message_handlers[_msg] = " not in src
+        or "_reclaim_chained" not in src):
+    ok = False
+    print("spy FAIL: the re-claim hook is not pinned in the "
+          "message-handler registration")
+else:
+    print("spy PASS: the re-claim hook is wired in the "
+          "message-handler registration")
+# and functional, still on the double (no live Shell): the re-claim's
+# FAILURE path - the double is GUID-blind, so the GUID add is refused
+# and the icon must re-land on uID=1, latch still down
+def _fake_prev(wparam, lparam):
+    return 0
+
+
+pinfake = spy_icon()
+n0 = len(double.calls)
+for msg in (win32.WM_TASKBARCREATED, win32.WM_DISPLAYCHANGE):
+    pinfake._message_handlers[msg] = \
+        tray._reclaim_chained(msg, _fake_prev, pinfake)
+pinfake._message_handlers[win32.WM_TASKBARCREATED](0, 0)
+pinfake._message_handlers[win32.WM_DISPLAYCHANGE](0, 0)
+if ok:
+    pincalls = double.calls[n0:]
+    want = [(win32.NIM_DELETE, 1, 0), (win32.NIM_ADD, 1, 0x20),
+            (win32.NIM_ADD, 1, 0),
+            (win32.NIM_DELETE, 1, 0), (win32.NIM_ADD, 1, 0x20),
+            (win32.NIM_ADD, 1, 0)]
+    got = [(code, uid, flags) for code, uid, flags, _g, _r, _e
+           in pincalls]
+    if got != want:
+        ok = False
+        print("spy FAIL: the re-claim pin did not issue the expected "
+              "sequence: %s" % (got,))
+    else:
+        print("spy PASS: the re-claim pin issued DELETE(uID) + "
+              "ADD(GUID) + ADD(uID) on both triggers")
+    if pincalls[1][4] or not pincalls[2][4]:
+        ok = False
+        print("spy FAIL: the re-claim add outcomes are wrong: %s"
+              % (pincalls[1:3],))
+    if pincalls[2][4] and tray._guid_live:
+        ok = False
+        print("spy FAIL: the latch came up on a GUID-blind double")
+    if not any("re-landed on uID=1" in l for l in capture.lines):
+        ok = False
+        print("spy FAIL: the re-claim failure warning never fired")
+    if ok:
+        print("spy PASS: the re-claim failure path re-landed the "
+              "icon on uID=1, latch down")
+# the display trigger is single-shot: a second display change is a
+# no-op while the taskbar trigger re-arms per rebirth
+n1 = len(double.calls)
+pinfake._message_handlers[win32.WM_DISPLAYCHANGE](0, 0)
+if len(double.calls) != n1:
+    ok = False
+    print("spy FAIL: the second WM_DISPLAYCHANGE fired the re-claim "
+          "again (the display shot is single-shot)")
+else:
+    print("spy PASS: the second WM_DISPLAYCHANGE is a no-op")
+n2 = len(double.calls)
+pinfake._message_handlers[win32.WM_TASKBARCREATED](0, 0)
+if len(double.calls) - n2 != 3:
+    ok = False
+    print("spy FAIL: the second WM_TASKBARCREATED did not re-arm the "
+          "re-claim")
+else:
+    print("spy PASS: the second WM_TASKBARCREATED re-arms the "
+          "re-claim")
+
+win32.Shell_NotifyIcon = outer           # restore the live spy now
+                                          # that the pin has run
 
 print("calls:", nim_calls)
 print("identity OK" if ok else "identity BROKEN")

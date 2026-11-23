@@ -255,6 +255,92 @@ if _PS_VERSION != "0.19.5":
                 "0.19.5, running %s: check that the Shell_NotifyIcon "
                 "wrap still fits" % _PS_VERSION)
 
+# ------------------------------------------------- twin-law re-claim ---
+# The fallback's reconciliation path (twin laws, module doc): while
+# the latch is down the icon lives on (hWnd, uID=1) - and a refused
+# GUID ADD may still be born asynchronously (windows-rs #5284). At
+# the next Shell rebirth (explorer restart broadcasts
+# WM_TASKBARCREATED to our window class; a first display change
+# re-registers too) we move the registration back onto the GUID
+# identity. pystray's _message_handlers table is the hook idiom
+# (see _MENU_READY in _ready): chained, never replacing - pystray
+# keeps re-showing the icon on both messages.
+_RECLAIM_HOOKED = False
+_RECLAIM_DISPLAY_SHOT = False      # the display trigger is single-shot
+                                   # (the first WM_DISPLAYCHANGE); the
+                                   # taskbar trigger re-arms per
+                                   # rebirth until the latch is up
+
+
+def _reclaim_guid(icon):
+    """One re-claim attempt: delete the (hWnd, uID=1) registration,
+    add the GUID identity; if that add is refused again, re-add the
+    uID identity immediately so the icon never dies on the attempt
+    (the failure path: the latch stays down, the next trigger
+    re-tries). On success both settings records re-merge onto the
+    GUID identity: the uID slot is deleted, the GUID slot holds the
+    live registration. Runs on the pump thread (the handlers table),
+    so no new locks: the pump owns these calls."""
+    global _guid_live
+    if _guid_live:
+        return
+    data = win32.NOTIFYICONDATAW()
+    data.cbSize = ctypes.sizeof(win32.NOTIFYICONDATAW)
+    data.hWnd = icon._hwnd
+    data.uID = 1
+    if not win32.Shell_NotifyIcon(win32.NIM_DELETE, data):
+        log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
+                    "DELETE", _last_err(), _guid_live)
+    data.uFlags |= win32.NIF_GUID
+    data.guidItem = _GUID_ITEM
+    ok = bool(win32.Shell_NotifyIcon(win32.NIM_ADD, data))
+    if ok:
+        _guid_live = True
+        log.warning("tray: the re-claim restored the GUID identity "
+                    "(the (hWnd,uID=1) twin is deleted; both settings "
+                    "records re-merged onto the GUID slot)")
+    else:
+        log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
+                    "ADD", _last_err(), _guid_live)
+        data.uFlags &= ~win32.NIF_GUID
+        data.guidItem = win32.NOTIFYICONDATAW.GUID()
+        ok = bool(win32.Shell_NotifyIcon(win32.NIM_ADD, data))
+        if not ok:
+            log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
+                        "ADD", _last_err(), _guid_live)
+        else:
+            log.warning("tray: the re-claim's GUID add was refused "
+                        "again; the icon re-landed on uID=1, the next "
+                        "Shell rebirth re-tries")
+
+
+def _reclaim_chained(msg, prev, icon):
+    """The message-handler wrap (same idiom as _MENU_READY in
+    _ready): pystray's own handler first - it re-shows the icon on
+    its own message - then, while the latch is down, the re-claim.
+    Wparam/lparam are irrelevant to both, so prev is called with
+    (0, 0)."""
+    def chained(wparam, lparam):
+        try:
+            prev(0, 0)
+        except Exception:
+            log.exception("tray: the %s re-show handler failed before "
+                          "the re-claim" % hex(msg))
+        if _guid_live:
+            return
+        global _RECLAIM_DISPLAY_SHOT
+        if msg == win32.WM_DISPLAYCHANGE:
+            if _RECLAIM_DISPLAY_SHOT:
+                return
+            _RECLAIM_DISPLAY_SHOT = True
+        try:
+            _reclaim_guid(icon)
+        except Exception:
+            log.exception("tray: the re-claim failed; the icon stays "
+                          "on uID=1 until the next trigger")
+    return chained
+
+
 # ------------------------------------------------------------- modal menu ---
 # The warm-worker swap (_warm_menu -> _try_swap) must not destroy the
 # HMENU a TrackPopupMenuEx is showing: its modal loop pumps this
@@ -446,6 +532,7 @@ class Tray(threading.Thread):
                 self.monitor.events.put(("quit", True))
 
     def _ready(self, icon):
+        global _RECLAIM_HOOKED
         with self._paint_lock:
             icon.visible = True   # pystray starts hidden; our setup
                                   # replaced the default one that shows it
@@ -462,6 +549,22 @@ class Tray(threading.Thread):
                              # a fake icon without the handlers table
                              # must not die in setup over it
             icon._message_handlers[_MENU_READY] = self._on_menu_ready
+        if not _RECLAIM_HOOKED:
+            # twin laws (module doc): chain the re-claim onto
+            # pystray's own handlers - the dispatcher looks this
+            # table up at message time, same idiom as _MENU_READY
+            # above
+            _RECLAIM_HOOKED = True
+            try:
+                for _msg in (win32.WM_TASKBARCREATED,
+                             win32.WM_DISPLAYCHANGE):
+                    _prev = icon._message_handlers[_msg]
+                    icon._message_handlers[_msg] = \
+                        _reclaim_chained(_msg, _prev, icon)
+            except Exception:
+                log.exception("tray: the re-claim hook did not land; "
+                              "the GUID fallback will not reconcile "
+                              "in this process")
         # the heavy submenus are built OFF the pump thread (blocking it
         # ~13 s would leave right-clicks dead until the camera probe
         # finished) and posted back for the swap when they are ready
