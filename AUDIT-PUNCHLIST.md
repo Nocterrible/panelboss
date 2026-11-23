@@ -2392,3 +2392,37 @@ manual-install copies adopt the store version silently). The frozen
 restored-tab class now lifts in ONE beat (<=10 s) instead of the
 two-beat app-side grace; goodbye-on-hide closes the Oct 26 sleeping-
 GX class for good.
+
+## Twin tray icons (Nov 23): identity latch refactored, merged c079d1a
+
+- SYMPTOM: two live tray icons, one process. Root cause (cappy,
+  confirmed-with-correction): Nov 21 boot raced a 22-second-old
+  Explorer - GUID-stamped NIM_ADD REFUSED but committed
+  asynchronously; retry ladder lost the 50 ms race; deep fallback
+  registered under (hWnd,uID=1) - Shell keys GUID and (hWnd,uID)
+  as SEPARATE icons -> twins, and the one-way _guid_live=False
+  latch made the GUID twin unmanageable for the process lifetime.
+  Registry proof: two NotifyIconSettings records, two paint
+  histories. Quit reaps both (Shell watchdog) - twin is cosmetic,
+  never a permanent ghost. Prior art: windows-rs #5284/#5404.
+- FIX (tray.py refactor, REFACTOR verdict - third bug in this
+  file's identity block; natural seam for a future
+  tray_identity.py split noted, not demanded): dual-identity ghost
+  sweep pre-ADD (uID arm best-effort per finding 3, INFO not
+  WARNING per finding 2 - janitor misses must not cry wolf every
+  boot); twin-kill DELETE(GUID) after the fallback ADD x2
+  (async-commit catcher); RE-CLAIM replaces the one-way latch: at
+  first WM_DISPLAYCHANGE / each WM_TASKBARCREATED, chained over
+  pystray's OWN re-show handlers (never replaced), DELETE(GUID) ->
+  DELETE(uID) -> ADD(GUID) [gate finding 1: clearing the slot
+  FIRST is what makes it not-a-no-op on the live-twin state],
+  failure path re-lands uID so the icon never dies on the attempt;
+  zero-silent-transitions at every NIM_* refusal; spy suite
+  (visible_test) grew a refusal-scenario double + functional pin
+  of the new four-call sequence + pinned-table assertion.
+- Process: first coder wave under the WORKTREE LAW (wt-tray-twin,
+  collapsed after ff-merge); V PASS 7 suites + gate
+  SHIP-WITH-FIXES all four findings folded before merge; merged
+  re-verified on main checkout; a36154d..c079d1a pushed.
+- PENDING: desk install (same-version /i replace) carries this +
+  the Nov 18 teardown guard; log retention bump (3->7) banked.
