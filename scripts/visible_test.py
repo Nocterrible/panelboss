@@ -301,9 +301,14 @@ if ok:
                       "(uID=1) and landed")
             # (c) at least one warning line per abnormal transition:
             #     every refused NIM_ call the double saw, the latch
-            #     drop, and the named landing-identity line
-            refused = sum(1 for _c, _u, _f, _g, r, _e in dcalls
-                          if not r)
+            #     drop, and the named landing-identity line. The two
+            #     refused DELETEs at the head of the ledger are the
+            #     ghost sweep - janitor misses, INFO by law (the
+            #     gate's finding 2), not transitions, so exempted by
+            #     position and by class both ways for clarity.
+            refused = sum(1 for _i, (_c, _u, _f, _g, r, _e)
+                          in enumerate(dcalls)
+                          if not r and not (_i < 2 and _c == 2))
             if len(capture.lines) < refused:
                 ok = False
                 print("spy FAIL: %d warning lines for %d refused calls "
@@ -323,6 +328,14 @@ if ok:
                       (len(capture.lines), refused))
 # (d) the re-claim hook is wired - static: the re-claim function
 # name appears in the message-handler registration in tray.py
+if not all(isinstance(pinned.get(_c), tuple) and len(pinned[_c]) == 2
+           for _c in (win32.WM_TASKBARCREATED, win32.WM_DISPLAYCHANGE)):
+    ok = False                       # the gate's finding 4: a pinned
+    print("spy FAIL: the pinned table does not carry pin tuples at "
+          "exactly the two re-claim triggers")   # table that names no
+else:                                          # triggers is the same
+    print("spy PASS: the pinned table carries the two re-claim "
+          "trigger pins")                        # vacuous-pass class
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         os.pardir, "panelboss", "tray.py"),
            encoding="utf-8").read()
@@ -350,10 +363,8 @@ pinfake._message_handlers[win32.WM_TASKBARCREATED](0, 0)
 pinfake._message_handlers[win32.WM_DISPLAYCHANGE](0, 0)
 if ok:
     pincalls = double.calls[n0:]
-    want = [(win32.NIM_DELETE, 1, 0), (win32.NIM_ADD, 1, 0x20),
-            (win32.NIM_ADD, 1, 0),
-            (win32.NIM_DELETE, 1, 0), (win32.NIM_ADD, 1, 0x20),
-            (win32.NIM_ADD, 1, 0)]
+    want = [(win32.NIM_DELETE, 1, 0x20), (win32.NIM_DELETE, 1, 0),
+            (win32.NIM_ADD, 1, 0x20), (win32.NIM_ADD, 1, 0)] * 2
     got = [(code, uid, flags) for code, uid, flags, _g, _r, _e
            in pincalls]
     if got != want:
@@ -361,12 +372,12 @@ if ok:
         print("spy FAIL: the re-claim pin did not issue the expected "
               "sequence: %s" % (got,))
     else:
-        print("spy PASS: the re-claim pin issued DELETE(uID) + "
-              "ADD(GUID) + ADD(uID) on both triggers")
-    if pincalls[1][4] or not pincalls[2][4]:
+        print("spy PASS: the re-claim pin issued DELETE(GUID) + "
+              "DELETE(uID) + ADD(GUID) + re-ADD(uID) on both triggers")
+    if pincalls[2][4] or not pincalls[3][4]:
         ok = False
         print("spy FAIL: the re-claim add outcomes are wrong: %s"
-              % (pincalls[1:3],))
+              % (pincalls[2:4],))
     if pincalls[2][4] and tray._guid_live:
         ok = False
         print("spy FAIL: the latch came up on a GUID-blind double")
@@ -388,7 +399,7 @@ else:
     print("spy PASS: the second WM_DISPLAYCHANGE is a no-op")
 n2 = len(double.calls)
 pinfake._message_handlers[win32.WM_TASKBARCREATED](0, 0)
-if len(double.calls) - n2 != 3:
+if len(double.calls) - n2 != 4:
     ok = False
     print("spy FAIL: the second WM_TASKBARCREATED did not re-arm the "
           "re-claim")

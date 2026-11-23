@@ -156,14 +156,25 @@ def _wrap_shell_notify():
             # before the first ADD.
             stamped._added_once = True
             if not inner(win32.NIM_DELETE, data):
-                log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
-                            "DELETE", _last_err(), _guid_live)
+                # a missing slot is a legitimate FALSE (the comment
+                # above): the sweep is a janitor, not a transition,
+                # and every healthy boot would otherwise cry wolf -
+                # the gate's finding 2. Info level, still on the
+                # record for the forensic boot.
+                log.info("tray: ghost-sweep GUID delete missed (err=%s)"
+                         " - benign", _last_err())
             unkeyed = win32.NOTIFYICONDATAW.from_buffer_copy(bytes(data))
             unkeyed.uFlags &= ~win32.NIF_GUID
             unkeyed.guidItem = win32.NOTIFYICONDATAW.GUID()
             if not inner(win32.NIM_DELETE, unkeyed):
-                log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
-                            "DELETE", _last_err(), _guid_live)
+                # best-effort (gate finding 3): this can only reach a
+                # same-path uID ghost if the Shell keys DELETEs by
+                # (path,uID) like the ADD dedup - measured for the
+                # ADD (Oct 15 UAT), INFERRED here. Windows reaps
+                # dead-owner registrations anyway, so a miss is the
+                # expected, harmless answer.
+                log.info("tray: ghost-sweep uID delete missed (err=%s)"
+                         " - benign", _last_err())
             time.sleep(0.05)
         ok = bool(inner(code, data))
         if not ok and code == win32.NIM_ADD and _guid_live:
@@ -288,11 +299,23 @@ def _reclaim_guid(icon):
     data.cbSize = ctypes.sizeof(win32.NOTIFYICONDATAW)
     data.hWnd = icon._hwnd
     data.uID = 1
-    if not win32.Shell_NotifyIcon(win32.NIM_DELETE, data):
-        log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
-                    "DELETE", _last_err(), _guid_live)
+    # the gate's corner (finding 1): a live GUID twin - the exact
+    # state that motivates the re-claim - makes ADD(GUID) refuse
+    # "already exists" and the failure path re-lands uID: a no-op
+    # that burns the display single-shot. So clear the GUID slot
+    # FIRST: delete the identity we are re-claiming, then add it.
     data.uFlags |= win32.NIF_GUID
     data.guidItem = _GUID_ITEM
+    if not win32.Shell_NotifyIcon(win32.NIM_DELETE, data):
+        log.info("tray: re-claim GUID-delete missed the slot (err=%s) "
+                 "- benign, the ADD below defines the identity",
+                 _last_err())
+    data_noguid = win32.NOTIFYICONDATAW.from_buffer_copy(bytes(data))
+    data_noguid.uFlags &= ~win32.NIF_GUID
+    data_noguid.guidItem = win32.NOTIFYICONDATAW.GUID()
+    if not win32.Shell_NotifyIcon(win32.NIM_DELETE, data_noguid):
+        log.warning("tray: NIM_%s refused (err=%s, guid_live=%s)",
+                    "DELETE", _last_err(), _guid_live)
     ok = bool(win32.Shell_NotifyIcon(win32.NIM_ADD, data))
     if ok:
         _guid_live = True
